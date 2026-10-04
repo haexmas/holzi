@@ -1,21 +1,118 @@
 //! holzi's [`Desktop`] for extensions in the running app (spec 017, US8): the system's browser
-//! through `tauri-plugin-opener`, and system notifications. On Linux and the BSDs they go straight
-//! to the notification server (`notify-rust`), which reports clicks (research R20, T099); elsewhere
-//! `tauri-plugin-notification` shows them and no click comes back.
+//! through `tauri-plugin-opener`, and system notifications through `tauri-plugin-notification` on
+//! every platform. Clicks come back through the plugin's `on_action` (research R20, T099); the
+//! plugin is pinned to a fork that reports them on desktop too (Cargo.toml `[patch.crates-io]`).
 
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+
+use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager, Runtime};
+use tauri_plugin_notification::{Action, ActionPerformed, ActionType, NotificationExt};
 use tauri_plugin_opener::OpenerExt;
 
 use super::host::Desktop;
-use super::notifications::{NotificationSpec, Respond, ShownNotification};
+use super::notifications::{NotificationResponse, NotificationSpec, Respond, ShownNotification};
+use crate::sync::keys::hex;
+
+/// The plugin's action id of a click on the notification itself.
+const TAP: &str = "tap";
+/// Buttons get their own key space, so a button named `tap` stays a button.
+const BUTTON: &str = "button:";
+
+/// A shown notification that waits for its response, and its buttons.
+struct Waiting {
+    respond: Respond,
+    buttons: Option<ActionType>,
+}
+
+#[derive(Default)]
+struct Shown {
+    waiting: Mutex<HashMap<i32, Waiting>>,
+}
+
+impl Shown {
+    fn lock(&self) -> MutexGuard<'_, HashMap<i32, Waiting>> {
+        self.waiting.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The action types of every waiting notification: iOS replaces the whole set on each
+    /// registration, so it is always registered complete.
+    fn action_types(&self) -> Vec<ActionType> {
+        self.lock()
+            .values()
+            .filter_map(|w| w.buttons.clone())
+            .collect()
+    }
+}
 
 pub struct AppDesktop<R: Runtime> {
     app: AppHandle<R>,
+    shown: Arc<Shown>,
+    next_id: AtomicI32,
 }
 
 impl<R: Runtime> AppDesktop<R> {
+    /// Also starts listening to the plugin's actions; call it once, after the plugin was added.
     pub fn new(app: AppHandle<R>) -> Self {
-        Self { app }
+        let shown = Arc::new(Shown::default());
+        let waiting = Arc::clone(&shown);
+        let listening = app.notification().on_action(move |performed| {
+            let Some(id) = performed.notification().map(|n| n.id()) else {
+                return;
+            };
+            let Some(entry) = waiting.lock().remove(&id) else {
+                return;
+            };
+            (entry.respond)(response(performed));
+        });
+        if let Err(error) = listening {
+            log::warn!("extensions: notification clicks are not reported: {error}");
+        }
+        Self {
+            app,
+            shown,
+            next_id: AtomicI32::new(1),
+        }
+    }
+}
+
+fn response(performed: &ActionPerformed) -> NotificationResponse {
+    match performed.action_id() {
+        TAP => NotificationResponse::Body,
+        action => match action.strip_prefix(BUTTON) {
+            Some(button) => NotificationResponse::Button(button.to_owned()),
+            None => NotificationResponse::Body,
+        },
+    }
+}
+
+/// The icon as a file the notification system can read, named by its content.
+fn icon_file(bytes: &[u8], extension: &str) -> Option<PathBuf> {
+    let dir = std::env::temp_dir().join("holzi-notification-icons");
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join(format!("{}.{extension}", hex(&Sha256::digest(bytes))));
+    if !path.exists() {
+        std::fs::write(&path, bytes).ok()?;
+    }
+    Some(path)
+}
+
+/// A notification of the plugin; removing it also forgets its response.
+struct PluginNotification<R: Runtime> {
+    app: AppHandle<R>,
+    shown: Arc<Shown>,
+    id: i32,
+}
+
+impl<R: Runtime> ShownNotification for PluginNotification<R> {
+    fn close(self: Box<Self>) {
+        self.shown.lock().remove(&self.id);
+        if let Err(error) = self.app.notification().remove_active(vec![self.id]) {
+            log::warn!("extensions: a notification could not be removed: {error}");
+        }
     }
 }
 
@@ -27,34 +124,50 @@ impl<R: Runtime> Desktop for AppDesktop<R> {
             .map_err(|e| e.to_string())
     }
 
-    #[cfg(all(
-        unix,
-        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
-    ))]
     fn show_notification(
         &self,
-        notification: &NotificationSpec,
+        spec: &NotificationSpec,
         respond: Respond,
     ) -> Result<Box<dyn ShownNotification>, String> {
-        xdg::show(notification, respond)
-    }
-
-    #[cfg(not(all(
-        unix,
-        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
-    )))]
-    fn show_notification(
-        &self,
-        notification: &NotificationSpec,
-        _respond: Respond,
-    ) -> Result<Box<dyn ShownNotification>, String> {
-        use tauri_plugin_notification::NotificationExt;
-        let mut builder = self.app.notification().builder().title(&notification.title);
-        if let Some(body) = &notification.body {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let notifications = self.app.notification();
+        let mut builder = notifications.builder().id(id).title(&spec.title);
+        if let Some(body) = &spec.body {
             builder = builder.body(body);
         }
-        builder.show().map_err(|e| e.to_string())?;
-        Ok(Box::new(Untracked))
+        if let Some(path) = spec
+            .icon
+            .as_ref()
+            .and_then(|(bytes, extension)| icon_file(bytes, extension))
+        {
+            builder = builder.icon(path.to_string_lossy());
+        }
+        let buttons = (!spec.buttons.is_empty()).then(|| {
+            ActionType::builder(format!("holzi-{id}"))
+                .actions(
+                    spec.buttons
+                        .iter()
+                        .map(|b| Action::builder(format!("{BUTTON}{}", b.id), &b.label).build())
+                        .collect(),
+                )
+                .build()
+        });
+        if let Some(buttons) = &buttons {
+            builder = builder.action_type_id(buttons.id());
+        }
+        self.shown.lock().insert(id, Waiting { respond, buttons });
+        let shown = notifications
+            .register_action_types(self.shown.action_types())
+            .and_then(|()| builder.show());
+        if let Err(error) = shown {
+            self.shown.lock().remove(&id);
+            return Err(error.to_string());
+        }
+        Ok(Box::new(PluginNotification {
+            app: self.app.clone(),
+            shown: Arc::clone(&self.shown),
+            id,
+        }))
     }
 
     fn focus_window(&self) {
@@ -63,103 +176,5 @@ impl<R: Runtime> Desktop for AppDesktop<R> {
             let _ = window.show();
             let _ = window.set_focus();
         }
-    }
-}
-
-/// A notification holzi cannot remove again.
-#[cfg(not(all(
-    unix,
-    not(any(target_os = "macos", target_os = "ios", target_os = "android"))
-)))]
-struct Untracked;
-
-#[cfg(not(all(
-    unix,
-    not(any(target_os = "macos", target_os = "ios", target_os = "android"))
-)))]
-impl ShownNotification for Untracked {
-    fn close(self: Box<Self>) {}
-}
-
-#[cfg(all(
-    unix,
-    not(any(target_os = "macos", target_os = "ios", target_os = "android"))
-))]
-mod xdg {
-    use std::path::PathBuf;
-
-    use sha2::{Digest, Sha256};
-
-    use crate::extensions::notifications::{
-        NotificationResponse, NotificationSpec, Respond, ShownNotification,
-    };
-    use crate::sync::keys::hex;
-
-    /// The action key of a click on the notification itself (Desktop Notifications spec).
-    const BODY: &str = "default";
-    /// Buttons get their own key space, so a button named `default` stays a button.
-    const BUTTON: &str = "button:";
-
-    struct Shown(notify_rust::NotificationHandle);
-
-    impl ShownNotification for Shown {
-        fn close(self: Box<Self>) {
-            self.0.close();
-        }
-    }
-
-    /// The icon as a file the notification server can read, named by its content.
-    fn icon_file(bytes: &[u8], extension: &str) -> Option<PathBuf> {
-        let dir = std::env::temp_dir().join("holzi-notification-icons");
-        std::fs::create_dir_all(&dir).ok()?;
-        let path = dir.join(format!("{}.{extension}", hex(&Sha256::digest(bytes))));
-        if !path.exists() {
-            std::fs::write(&path, bytes).ok()?;
-        }
-        Some(path)
-    }
-
-    pub(super) fn show(
-        spec: &NotificationSpec,
-        respond: Respond,
-    ) -> Result<Box<dyn ShownNotification>, String> {
-        let mut notification = notify_rust::Notification::new();
-        notification
-            .appname("holzi")
-            .summary(&spec.title)
-            .action(BODY, &spec.title);
-        if let Some(body) = &spec.body {
-            notification.body(body);
-        }
-        for button in &spec.buttons {
-            notification.action(&format!("{BUTTON}{}", button.id), &button.label);
-        }
-        if let Some(path) = spec
-            .icon
-            .as_ref()
-            .and_then(|(bytes, extension)| icon_file(bytes, extension))
-        {
-            notification.icon(&path.to_string_lossy());
-        }
-        let handle = notification.show().map_err(|e| e.to_string())?;
-        let id = handle.id();
-        std::thread::Builder::new()
-            .name("notification".into())
-            .spawn(move || {
-                let _ = notify_rust::handle_action(id, |response| {
-                    respond(match response {
-                        notify_rust::ActionResponse::Custom(BODY) => NotificationResponse::Body,
-                        notify_rust::ActionResponse::Custom(key) => {
-                            match key.strip_prefix(BUTTON) {
-                                Some(button) => NotificationResponse::Button(button.to_owned()),
-                                None => NotificationResponse::Body,
-                            }
-                        }
-                        notify_rust::ActionResponse::Closed(_) => NotificationResponse::Closed,
-                    });
-                });
-            })
-            .map_err(|e| e.to_string())?;
-        Ok(Box::new(Shown(handle)))
     }
 }

@@ -243,12 +243,6 @@ candle-transformers = { version = "0.10.2", optional = true }
 tokenizers = { version = "0.23.2", default-features = false, features = ["fancy-regex"], optional = true }
 tauri-plugin-notification = "2.5.1"
 
-# Spec 017 US8 (research R20, T099): notifications of extensions on Linux and the BSDs go straight
-# to the notification server, which reports clicks; tauri-plugin-notification does not hand them on.
-# The same version tauri-plugin-notification pulls in.
-[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))'.dependencies]
-notify-rust = "4.18.1"
-
 [target.'cfg(unix)'.dependencies]
 # Kills a whole process group (`kill(-pgid, SIGKILL)`) so a killed
 # `sh -c "..."` cannot leave behind a grandchild it forked — `Child::kill`
@@ -322,5 +316,11 @@ opt-level = 3
 # on tag wry-v0.57.0) guards them with `if (window === window.top)` and keeps them out of subframe
 # HTML on Android. Remove this patch once a wry release contains the fix (upstream PR to
 # tauri-apps/wry from branch fix/main-frame-only-scripts-dev, 226fd46).
+# Spec 017 US8 (T099, research R20): tauri-plugin-notification reports clicks on notifications only
+# on mobile. haexmas/plugins-workspace @ 3f9db5e (branch feat/notification-desktop-actions, on tag
+# notification-v2.5.1) reports them on desktop too and adds `Notification::on_action` for every
+# platform, so holzi has one way to show notifications and hear clicks. Remove once a release
+# contains it (upstream PR to tauri-apps/plugins-workspace, closes their #2150).
 [patch.crates-io]
 wry = { git = "https://github.com/haexmas/wry", rev = "47037ddc888b1576d0a558aa2a6d68346ce00735" }
+tauri-plugin-notification = { git = "https://github.com/haexmas/plugins-workspace", rev = "3f9db5e24719f3def67af4216863e9cc0a6b53b8" }

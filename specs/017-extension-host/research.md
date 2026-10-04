@@ -601,21 +601,16 @@ als Härtung); lexikalischer Abgleich wie HV.
   (HV `notifications/mod.rs:12-18`). Unter Linux über `notify-rust` (XDG-Aktionen, `wait_for_action`,
   `close`; vermutet), auf macOS und Windows, wo das System es zulässt — Aufgabe mit Machbarkeitsprüfung; wenn
   es nicht geht, kommt der Punkt zur Spec zurück (FR-052). Symbol nur als `data:`-URL oder Datei aus dem Bundle.
-- **Ergebnis der Machbarkeitsprüfung (T099, 2026-10-04)**: Unter Linux (COSMIC, `cosmic-notifications` 1.9,
-  Fähigkeiten `actions`, `persistence`) meldet `notify-rust` 4.18.1 über `handle_action(id)` einen Klick auf die
-  Benachrichtigung als `default` und ein Schließen durch `NotificationHandle::close` als `Closed`; ohne Klick kommt
-  nichts. holzi zeigt dort direkt über `notify-rust` (Knöpfe als `button:<id>`, damit ein Knopf `default` keiner
-  bleibt) und wartet je Benachrichtigung in einem Thread. `notify-rust` 4.18 hat `wait_for_action` auch für
-  Windows (WinRT-Aktivierung) und macOS (`NSUserNotificationCenter`, blockiert bis zur Antwort und braucht die
-  Hauptschleife); beides ist auf diesem Rechner nicht prüfbar. Bis dahin zeigt holzi dort und auf Android/iOS über
-  `tauri-plugin-notification` ohne Klickmeldung und ohne Entfernen; FR-052 liegt dafür beim Betreiber.
-- Schlüssel-Wert-Speicher in der Kerntabelle `extension_kv` nach ADR-0001 (Gerätekennung, gilt nur für das
-  Gerät), Größengrenzen; Aufrufer immer aus der Rahmensitzung. HV hängt die Daten an eine Fenster-Kennung, die
-  bei jedem Öffnen neu ist (`handlers/webStorage.ts:9`).
-- Protokolle: das SDK v3.7.0 hat dafür keinen Befehl; holzi nimmt die Namen von HV
-  (`extension_logging_write`/`_read`) an und speichert in `extension_logs_no_sync` als Ringpuffer je
-  Erweiterung; Anzeige in den Einstellungen. Konsolenausgabe im Entwicklermodus über
-  `window.parent.postMessage` des SDK (R13).
+- **Ergebnis der Machbarkeitsprüfung (T099, 2026-10-04/05)**: Unter Linux (COSMIC, `cosmic-notifications` 1.9,
+  Fähigkeiten `actions`, `persistence`) meldet `notify-rust` 4.18.1 einen Klick auf die Benachrichtigung als `default`
+  und ein Schließen als `Closed`; ohne Klick kommt nichts. `notify-rust` 4.18 meldet Klicks auch unter Windows
+  (WinRT-Aktivierung) und macOS (`NSUserNotificationCenter`, blockiert bis zur Antwort). Betreiber: eine einheitliche
+  Lösung, nicht je Betriebssystem. Deshalb nutzt holzi überall `tauri-plugin-notification` und hört Klicks über dessen
+  `Notification::on_action`; der Fork `haexmas/plugins-workspace` (Zweig `feat/notification-desktop-actions`)
+  ergänzt die Desktop-Seite (Aktionsarten als Knöpfe, `tap` für den Klick auf die Benachrichtigung,
+  `remove_active` unter Linux und den BSDs, Listener-Befehle), Upstream-PR zu tauri-apps/plugins-workspace#2150.
+  Schließen meldet das Plugin nicht; holzi begrenzt deshalb die offenen Benachrichtigungen je Erweiterung.
+  Klicks unter Windows und macOS sind gebaut, aber nicht von Hand geprüft.
 
 ## R21 — Passwörter, entfernter Speicher, Mail, Shell (L5)
 
