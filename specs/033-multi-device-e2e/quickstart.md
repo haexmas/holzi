@@ -24,4 +24,4 @@ Prerequisites: the Nix development shell, a real `pnpm install` in the worktree 
 
 ## Manual
 
-None. The manual section of the quickstart of spec 024 is replaced by a pointer to V4 once SC-002 holds (V4 in at least 19 of the 20 most recent CI runs on `main`, FR-011).
+None. The manual section of the quickstart of spec 024 is replaced by a pointer to V4 once SC-002 holds (each of the nine scenarios of V4 passes in at least 19 of the 20 most recent CI runs on `main`, FR-011).

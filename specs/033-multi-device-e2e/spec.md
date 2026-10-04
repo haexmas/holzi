@@ -295,9 +295,9 @@ result names the scenario and keeps the material of the failure.
 - **FR-010**: The servers scenario MUST switch off all Nostr servers, check that the devices no longer find
   each other and that local work goes on, switch them on again and check that they find each other and
   exchange what happened in between (M9).
-- **FR-011**: Once all nine scenarios pass in CI, the manual section of the quickstart of spec 024 MUST be
-  replaced by a pointer to the scenarios, and task T081 of spec 024 MUST be closed with the scenario run
-  as its record.
+- **FR-011**: Once the nine scenarios meet SC-002 in CI, the manual section of the quickstart of spec 024
+  MUST be replaced by a pointer to the scenarios, and task T081 of spec 024 MUST be closed with the
+  scenario run as its record.
 
 **Building blocks for several vaults and devices**
 
@@ -365,11 +365,12 @@ result names the scenario and keeps the material of the failure.
 - **SC-001**: All nine manual checks M1 to M9 have an automatic scenario, and 100 % of the expectations
   written for them in the quickstart of spec 024 are checked by one of them.
 - **SC-002**: Over the 20 most recent runs of the end-to-end job on `main`, each of the nine scenarios
-  passes in at least 19 of them, and every red run is listed with its cause. A red run caused by a
-  scenario or by the rig, not by the product, is fixed before the manual section of the quickstart is
-  retired; a defect of the product that a scenario found counts as the scenario doing its job. (First
-  worded as 20 runs in a row; with some 40 scenarios and a run per merge that is not a measurement
-  of the scenarios but of luck, and one flaky unrelated scenario would reset it for good.)
+  passes in at least 19 of them, and every failure of one of them is listed with its cause. A failure
+  caused by the scenario or by the rig, not by the product, has a merged fix before the manual section of
+  the quickstart is retired; a failure caused by a defect of the product counts as the scenario doing its
+  job and not against its 19. (First worded as 20 runs in a row; with some 40 scenarios and a run per
+  merge that measures luck rather than the scenarios, and every flaky unrelated scenario would start the
+  count again.)
 - **SC-003**: A reviewer who has not seen the helpers writes a scenario with two users with two devices
   each, in which one device is made unreachable and restored, in 60 lines or fewer, using only the
   documentation and the template.
