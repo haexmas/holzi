@@ -139,6 +139,12 @@
     { "length": 12, "value": "end" },
     { "length": 13, "error": "tooDeep" }
   ],
+  "_diamonds": "Each step I<n> holds <width> times {$<I(n+1)>:password}, <depth> steps deep, and the last step holds \"end\" repeated <leafRepeat> times (default 1). No cycle, but the work grows with width^depth: the resolution stops with an error instead of hanging.",
+  "diamonds": [
+    { "width": 2, "depth": 3, "value": "endendendendendendendend" },
+    { "width": 10, "depth": 12, "error": "tooDeep" },
+    { "width": 9, "depth": 2, "leafRepeat": 1000, "error": "tooDeep" }
+  ],
   "cycles": [
     {
       "name": "a new self reference",

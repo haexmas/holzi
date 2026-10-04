@@ -5,11 +5,14 @@
 //! or a custom field (`T`, `U`, `P`, `A`, `N`, `O`, case ignored) is understood; anything else, an
 //! ambiguous or missing match and a source skipped as a duplicate stay text and are counted. Pure.
 
+use std::collections::HashMap;
+use std::convert::Infallible;
+
 use super::ImportItem;
-use crate::passwords::references::{build_token, RefKind};
+use crate::passwords::references::{build_token, find_cycle, Field, RefKind};
 
 /// A text field of an imported entry that may hold references.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ImportField {
     Username,
     Password,
@@ -50,13 +53,18 @@ fn find_refs(text: &str) -> Vec<KeepassRef<'_>> {
         let body = &text[body_start..body_start + close];
         let mut chars = body.chars();
         let parsed = match (chars.next(), chars.next(), chars.next(), chars.next()) {
-            (Some(wanted), Some('@'), Some(search), Some(':')) => Some(KeepassRef {
-                start,
-                end: body_start + close + 1,
-                wanted: wanted.to_ascii_uppercase(),
-                search: search.to_ascii_uppercase(),
-                text: &body[4..],
-            }),
+            // Only ASCII letters are supported, and only then is `body[4..]` a char boundary.
+            (Some(wanted), Some('@'), Some(search), Some(':'))
+                if wanted.is_ascii() && search.is_ascii() =>
+            {
+                Some(KeepassRef {
+                    start,
+                    end: body_start + close + 1,
+                    wanted: wanted.to_ascii_uppercase(),
+                    search: search.to_ascii_uppercase(),
+                    text: &body[4..],
+                })
+            }
             _ => None,
         };
         match parsed {
@@ -134,6 +142,7 @@ fn source_of(items: &[ImportItem], reference: &KeepassRef<'_>) -> Option<usize> 
 /// for one that is not written (a skipped duplicate): a reference to it stays text.
 pub fn convert(items: &[ImportItem], ids: &[Option<String>]) -> Conversion {
     let mut conversion = Conversion::default();
+    let mut candidates: Vec<Candidate> = Vec::new();
     for (index, item) in items.iter().enumerate() {
         if ids.get(index).is_none_or(Option::is_none) {
             continue;
@@ -145,6 +154,7 @@ pub fn convert(items: &[ImportItem], ids: &[Option<String>]) -> Conversion {
             }
             let mut out = String::with_capacity(text.len());
             let mut last = 0;
+            let mut converted_here = 0u32;
             for reference in &refs {
                 out.push_str(&text[last..reference.start]);
                 let kind = match reference.wanted {
@@ -161,6 +171,7 @@ pub fn convert(items: &[ImportItem], ids: &[Option<String>]) -> Conversion {
                     Some(token) => {
                         out.push_str(&token);
                         conversion.converted += 1;
+                        converted_here += 1;
                     }
                     None => {
                         out.push_str(&text[reference.start..reference.end]);
@@ -171,9 +182,119 @@ pub fn convert(items: &[ImportItem], ids: &[Option<String>]) -> Conversion {
             }
             out.push_str(&text[last..]);
             if out != text {
-                conversion.rewrites.push((index, field, out));
+                candidates.push((index, field, out, converted_here));
             }
         }
     }
+    accept_without_cycles(items, ids, candidates, &mut conversion);
     conversion
+}
+
+/// A rewrite before the cycle check, with the number of references it converts.
+type Candidate = (usize, ImportField, String, u32);
+
+/// Takes the rewrites one by one and keeps a rewrite only when the entry's texts then lead back to
+/// none of its own fields (spec 036, FR-046: a cycle is refused on save, and KeePass tolerates
+/// them). A rewrite that would close a cycle stays text, and its references count as left.
+fn accept_without_cycles(
+    items: &[ImportItem],
+    ids: &[Option<String>],
+    candidates: Vec<Candidate>,
+    conversion: &mut Conversion,
+) {
+    let by_id: HashMap<String, usize> = ids
+        .iter()
+        .enumerate()
+        .filter_map(|(index, id)| id.as_ref().map(|id| (id.to_ascii_lowercase(), index)))
+        .collect();
+    let mut accepted: HashMap<(usize, ImportField), String> = HashMap::new();
+    for (index, field, text, count) in candidates {
+        accepted.insert((index, field), text.clone());
+        let own = own_fields(items, index, &accepted);
+        let mut lookup = |id: &str, kind: &RefKind| -> Result<Option<String>, Infallible> {
+            Ok(by_id
+                .get(id)
+                .and_then(|&source| value_of(items, source, kind, &accepted)))
+        };
+        let item_id = ids[index]
+            .as_deref()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let cycle = match find_cycle(&item_id, &own, &mut lookup) {
+            Ok(found) => found.is_some(),
+            Err(never) => match never {},
+        };
+        if cycle {
+            accepted.remove(&(index, field));
+            conversion.converted -= count;
+            conversion.left_as_text += count;
+        } else {
+            conversion.rewrites.push((index, field, text));
+        }
+    }
+}
+
+/// The text of a field of entry `index`, with the rewrites accepted so far.
+fn text_of(
+    items: &[ImportItem],
+    index: usize,
+    field: ImportField,
+    accepted: &HashMap<(usize, ImportField), String>,
+) -> Option<String> {
+    if let Some(text) = accepted.get(&(index, field)) {
+        return Some(text.clone());
+    }
+    let item = &items[index];
+    match field {
+        ImportField::Username => item.username.clone(),
+        ImportField::Password => item.password.clone(),
+        ImportField::Url => item.url.clone(),
+        ImportField::Note => item.note.clone(),
+        ImportField::KeyValue(position) => item.key_values.get(position)?.value.clone(),
+    }
+}
+
+/// The value a placeholder reaches in entry `index` (the first custom field with the key).
+fn value_of(
+    items: &[ImportItem],
+    index: usize,
+    kind: &RefKind,
+    accepted: &HashMap<(usize, ImportField), String>,
+) -> Option<String> {
+    let field = match kind {
+        RefKind::Username => ImportField::Username,
+        RefKind::Password => ImportField::Password,
+        RefKind::Extra(key) => ImportField::KeyValue(
+            items[index]
+                .key_values
+                .iter()
+                .position(|kv| &kv.key == key)?,
+        ),
+    };
+    Some(text_of(items, index, field, accepted).unwrap_or_default())
+}
+
+/// The reference fields of entry `index` as the cycle check names them.
+fn own_fields(
+    items: &[ImportItem],
+    index: usize,
+    accepted: &HashMap<(usize, ImportField), String>,
+) -> Vec<(Field, String)> {
+    let mut out = Vec::new();
+    for (field, import_field) in [
+        (Field::Username, ImportField::Username),
+        (Field::Password, ImportField::Password),
+        (Field::Url, ImportField::Url),
+        (Field::Note, ImportField::Note),
+    ] {
+        if let Some(text) = text_of(items, index, import_field, accepted) {
+            out.push((field, text));
+        }
+    }
+    for (position, kv) in items[index].key_values.iter().enumerate() {
+        if let Some(text) = text_of(items, index, ImportField::KeyValue(position), accepted) {
+            out.push((Field::Extra(kv.key.clone()), text));
+        }
+    }
+    out
 }

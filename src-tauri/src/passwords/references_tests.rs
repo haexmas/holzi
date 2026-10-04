@@ -217,6 +217,33 @@ fn a_chain_of_twelve_resolves_and_thirteen_is_too_deep() {
 }
 
 #[test]
+fn a_wide_diamond_ends_with_an_error_instead_of_hanging() {
+    for case in vectors()["diamonds"].as_array().expect("diamonds") {
+        let width = case["width"].as_u64().expect("width") as usize;
+        let depth = case["depth"].as_u64().expect("depth") as u32;
+        let repeat = case["leafRepeat"].as_u64().unwrap_or(1) as usize;
+        let mut items = HashMap::new();
+        for i in 0..depth {
+            let next = format!("{{$<I{}>:password}}", i + 1).repeat(width);
+            items.insert(
+                uuid(&format!("I{i}")),
+                HashMap::from([("password".to_string(), expand(&next))]),
+            );
+        }
+        items.insert(
+            uuid(&format!("I{depth}")),
+            HashMap::from([("password".to_string(), "end".repeat(repeat))]),
+        );
+        let result = resolve_in(&items, &uuid("I0"), "password");
+        let expected = match case["value"].as_str() {
+            Some(value) => Ok(value.to_string()),
+            None => Err(error_of(case["error"].as_str().expect("error"))),
+        };
+        assert_eq!(result, expected, "width {width}, depth {depth}");
+    }
+}
+
+#[test]
 fn the_check_on_save_follows_the_vectors() {
     for case in vectors()["cycles"].as_array().expect("cycles") {
         let item = uuid(case["item"].as_str().expect("item"));

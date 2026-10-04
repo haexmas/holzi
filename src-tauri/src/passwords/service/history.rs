@@ -9,7 +9,7 @@ use crate::passwords::model::{
     HistorySecret, RestoreOutcome, RevealedSecret, SnapshotHeader, SnapshotView,
 };
 use crate::passwords::references::Field;
-use crate::passwords::references_db::{resolve_or_error, Reader};
+use crate::passwords::references_db::{resolve_or_error, stored_texts, validate, Reader};
 use crate::passwords::snapshots;
 use crate::storage::query::Query as _;
 
@@ -74,8 +74,13 @@ impl PasswordsService {
         require_user(caller)?;
         self.db()
             .write(move |tx| {
-                snapshots::restore(tx, &item_id, &snapshot_id, &expected_updated_at)
-                    .map_err(Into::into)
+                let outcome = snapshots::restore(tx, &item_id, &snapshot_id, &expected_updated_at)?;
+                // Spec 036, FR-046: a state from before another entry pointed back can close a
+                // cycle; the error rolls the restore back.
+                if let Some(texts) = stored_texts(tx, &item_id)? {
+                    validate(tx, &item_id, &texts)?;
+                }
+                Ok(outcome)
             })
             .await
     }

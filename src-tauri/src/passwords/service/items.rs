@@ -13,8 +13,8 @@ use crate::passwords::access::{
 use crate::passwords::ids::fold_for_search;
 use crate::passwords::items;
 use crate::passwords::model::{
-    AgentHeader, CopyField, ItemDetail, ItemHeader, ItemInput, ItemPatch, Overview, RevealedSecret,
-    SecretField, SecretItem, TotpCode,
+    AgentHeader, CopyField, ItemDetail, ItemHeader, ItemInput, ItemPatch, Overview, Patch,
+    RevealedSecret, SecretField, SecretItem, TotpCode,
 };
 use crate::passwords::references::contains_reference;
 use crate::passwords::references_db::{self, Reader};
@@ -236,8 +236,18 @@ impl PasswordsService {
         group_id: Option<String>,
     ) -> Result<String> {
         authorize_create(caller, grants, &input.tags)?;
+        let (caller, grants) = (caller.clone(), grants.to_vec());
         self.db()
             .write(move |tx| {
+                let reader = Reader {
+                    caller: &caller,
+                    grants: &grants,
+                };
+                let texts = [&input.username, &input.password, &input.url, &input.note]
+                    .into_iter()
+                    .filter_map(|text| text.as_deref())
+                    .chain(input.key_values.iter().filter_map(|kv| kv.value.as_deref()));
+                references_db::check_sources_visible(tx, reader, texts)?;
                 items::create_item(tx, &input, group_id.as_deref()).map_err(Into::into)
             })
             .await
@@ -288,6 +298,26 @@ impl PasswordsService {
                         return Err(HolziError::PasswordsNotFound.into());
                     }
                 }
+                // Spec 036, FR-047: only the values this patch sets; a placeholder the user stored
+                // earlier does not block an outside caller's change of another field.
+                let reader = Reader {
+                    caller: &caller,
+                    grants: &grants,
+                };
+                let set = [&patch.username, &patch.password, &patch.url, &patch.note]
+                    .into_iter()
+                    .filter_map(|value| match value {
+                        Patch::Set(text) => Some(text.as_str()),
+                        _ => None,
+                    })
+                    .chain(
+                        patch
+                            .key_values
+                            .iter()
+                            .flatten()
+                            .filter_map(|kv| kv.value.as_deref()),
+                    );
+                references_db::check_sources_visible(tx, reader, set)?;
                 // Spec 036, FR-046: no value may lead back to itself through references.
                 if let Some(texts) = references_db::texts_after_patch(tx, &item_id, &patch)? {
                     references_db::validate(tx, &item_id, &texts)?;

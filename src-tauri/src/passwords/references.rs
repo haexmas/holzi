@@ -7,6 +7,13 @@
 /// How many references a chain may follow (KeePass `SprEngine.MaxRecursionDepth`, research R4).
 pub const MAX_REFERENCE_DEPTH: usize = 12;
 
+/// How many source values one resolution may read. A placeholder used several times in each step
+/// of a chain is no cycle, but without a budget it would make the reads grow exponentially.
+pub const MAX_REFERENCE_LOOKUPS: usize = 256;
+
+/// The longest value (in bytes) one resolution may build.
+pub const MAX_RESOLVED_BYTES: usize = 64 * 1024;
+
 /// The value a placeholder points at.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RefKind {
@@ -53,7 +60,8 @@ pub enum ReferenceError {
     Missing,
     /// The chain comes back to a field it is reading.
     Cycle,
-    /// The chain is longer than [`MAX_REFERENCE_DEPTH`].
+    /// The chain is longer than [`MAX_REFERENCE_DEPTH`], or the resolution exceeds
+    /// [`MAX_REFERENCE_LOOKUPS`] or [`MAX_RESOLVED_BYTES`].
     TooDeep,
 }
 
@@ -194,20 +202,24 @@ pub fn replace(text: &str, found: &[Found], values: &[String]) -> String {
 
 /// Resolves every placeholder of `text`, which is the value of `origin`. The chain is a stack of
 /// the fields from `origin` to here (the same value twice side by side is no cycle); a chain longer
-/// than [`MAX_REFERENCE_DEPTH`] is `TooDeep`. One failing placeholder fails the whole value: the
-/// result is never a partial or an empty text because of an error (FR-046).
+/// than [`MAX_REFERENCE_DEPTH`] is `TooDeep`, and so is a resolution that needs more than
+/// [`MAX_REFERENCE_LOOKUPS`] reads or builds a value longer than [`MAX_RESOLVED_BYTES`]. One failing
+/// placeholder fails the whole value: the result is never a partial or an empty text because of an
+/// error (FR-046).
 pub fn resolve<E>(
     text: &str,
     origin: (String, Field),
     lookup: &mut impl FnMut(&str, &RefKind) -> Result<Lookup, E>,
 ) -> Result<Result<String, ReferenceError>, E> {
     let mut chain = vec![origin];
-    resolve_in(text, &mut chain, lookup)
+    let mut budget = MAX_REFERENCE_LOOKUPS;
+    resolve_in(text, &mut chain, &mut budget, lookup)
 }
 
 fn resolve_in<E>(
     text: &str,
     chain: &mut Vec<(String, Field)>,
+    budget: &mut usize,
     lookup: &mut impl FnMut(&str, &RefKind) -> Result<Lookup, E>,
 ) -> Result<Result<String, ReferenceError>, E> {
     let found = find(text);
@@ -224,19 +236,27 @@ fn resolve_in<E>(
         if chain.len() > MAX_REFERENCE_DEPTH {
             return Ok(Err(ReferenceError::TooDeep));
         }
+        if *budget == 0 {
+            return Ok(Err(ReferenceError::TooDeep));
+        }
+        *budget -= 1;
         let raw = match lookup(&hit.item_id, &hit.kind)? {
             Lookup::Value(raw) => raw,
             Lookup::Missing => return Ok(Err(ReferenceError::Missing)),
         };
         chain.push(node);
-        let value = resolve_in(&raw, chain, lookup)?;
+        let value = resolve_in(&raw, chain, budget, lookup)?;
         chain.pop();
         match value {
             Ok(value) => values.push(value),
             Err(error) => return Ok(Err(error)),
         }
     }
-    Ok(Ok(replace(text, &found, &values)))
+    let out = replace(text, &found, &values);
+    if out.len() > MAX_RESOLVED_BYTES {
+        return Ok(Err(ReferenceError::TooDeep));
+    }
+    Ok(Ok(out))
 }
 
 /// The check on save (research R4): whether one of the new texts of `item_id` reaches the same

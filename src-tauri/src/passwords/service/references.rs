@@ -72,10 +72,10 @@ impl PasswordsService {
                     "SELECT key FROM haex_passwords_item_key_values WHERE item_id = ?1 \
                      ORDER BY rowid",
                     params![item_id],
-                    |r| r.get::<_, String>(0),
+                    |r| r.get::<_, Option<String>>(0),
                 )?;
                 let mut unique: Vec<String> = Vec::new();
-                for key in keys {
+                for key in keys.into_iter().flatten() {
                     if !key.trim().is_empty() && !unique.contains(&key) {
                         unique.push(key);
                     }

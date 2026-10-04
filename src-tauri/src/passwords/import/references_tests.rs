@@ -85,6 +85,41 @@ fn other_wanted_fields_and_unknown_searches_stay_text() {
 }
 
 #[test]
+fn a_reference_that_closes_a_cycle_stays_text() {
+    // A points at itself; B and C point at each other: the first of B and C converts, the second
+    // would close the cycle and stays text.
+    let mut a = item("Selbst");
+    a.source_ref = Some(KONTO_REF.into());
+    a.password = Some(format!("{{REF:P@I:{KONTO_REF}}}"));
+    let b_ref = "11111111111111111111111111111111";
+    let c_ref = "22222222222222222222222222222222";
+    let mut b = item("B");
+    b.source_ref = Some(b_ref.into());
+    b.password = Some(format!("{{REF:P@I:{c_ref}}}"));
+    let mut c = item("C");
+    c.source_ref = Some(c_ref.into());
+    c.password = Some(format!("{{REF:P@I:{b_ref}}}"));
+    let ids = ids(3);
+    let conversion = convert(&[a, b, c], &ids);
+    assert_eq!(rewrite(&conversion, 0, ImportField::Password), None);
+    assert_eq!(
+        rewrite(&conversion, 1, ImportField::Password).map(str::to_string),
+        Some(format!("{{${}:password}}", ids[2].as_deref().expect("id")))
+    );
+    assert_eq!(rewrite(&conversion, 2, ImportField::Password), None);
+    assert_eq!((conversion.converted, conversion.left_as_text), (1, 2));
+}
+
+#[test]
+fn non_ascii_field_letters_stay_text_without_a_panic() {
+    let mut a = item("Konto");
+    a.password = Some("{REF:é@é:x}{REF:P@é:x}{REF:é@I:x}".into());
+    let conversion = convert(&[a], &ids(1));
+    assert!(conversion.rewrites.is_empty());
+    assert_eq!(conversion.converted, 0);
+}
+
+#[test]
 fn a_source_skipped_as_duplicate_leaves_the_reference_as_text() {
     let mut a = item("Konto");
     a.source_ref = Some(KONTO_REF.into());

@@ -46,7 +46,8 @@ fn column(q: &mut impl Query, item_id: &str, column: &'static str) -> Result<Zer
     Ok(Zeroizing::new(cell.unwrap_or_default()))
 }
 
-/// A custom field's key and value.
+/// A custom field's key and value. A stored row may have no key (no placeholder can reach it);
+/// it reads as the empty key, which the grammar never names.
 fn key_value(
     q: &mut impl Query,
     item_id: &str,
@@ -56,10 +57,18 @@ fn key_value(
         .query_row(
             "SELECT key, value FROM haex_passwords_item_key_values WHERE id = ?1 AND item_id = ?2",
             params![field_id, item_id],
-            |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)),
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                ))
+            },
         )?
         .ok_or(HolziError::PasswordsNotFound)?;
-    Ok((key, Zeroizing::new(cell.unwrap_or_default())))
+    Ok((
+        key.unwrap_or_default(),
+        Zeroizing::new(cell.unwrap_or_default()),
+    ))
 }
 
 /// A field of the entry with its placeholders resolved for the user (spec 036, FR-045): a
@@ -83,13 +92,16 @@ fn resolved_key_value(
     resolve_or_error(q, Reader::user(), item_id, Field::Extra(key), &raw)
 }
 
-/// The value of a secret field, for the moment the user asks to see it. The TOTP secret holds no
-/// references (FR-044).
+/// The value of a secret field, or the resolved value of a text field with references, for the
+/// moment the user asks to see it. The TOTP secret holds no references (FR-044).
 pub fn reveal(q: &mut impl Query, item_id: &str, field: &SecretField) -> Result<RevealedSecret> {
     let value = match field {
         SecretField::Password => resolved_column(q, item_id, "password", Field::Password)?,
         SecretField::OtpSecret => column(q, item_id, "otp_secret")?,
         SecretField::KeyValue { id } => resolved_key_value(q, item_id, id)?,
+        SecretField::Username => resolved_column(q, item_id, "username", Field::Username)?,
+        SecretField::Url => resolved_column(q, item_id, "url", Field::Url)?,
+        SecretField::Note => resolved_column(q, item_id, "note", Field::Note)?,
     };
     Ok(RevealedSecret { value })
 }
@@ -128,11 +140,14 @@ pub fn resolve_secret_item(
     }
     let mut kept = Vec::with_capacity(item.key_values.len());
     for entry in item.key_values.drain(..) {
-        let (Some(key), Some(raw)) = (entry.key.clone(), entry.value.clone()) else {
+        let Some(raw) = entry.value.clone() else {
             kept.push(entry);
             continue;
         };
-        if let Ok(resolved) = resolve_value(q, reader, &id, Field::Extra(key), &raw)? {
+        // A field without a key is resolved too (as the empty key, which no placeholder names), so
+        // its placeholder never leaves raw.
+        let field = Field::Extra(entry.key.clone().unwrap_or_default());
+        if let Ok(resolved) = resolve_value(q, reader, &id, field, &raw)? {
             kept.push(SecretKeyValue {
                 key: entry.key,
                 value: Some(resolved.to_string()),

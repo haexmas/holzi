@@ -118,6 +118,20 @@ pub fn create_group(
             return Err(invalid("target_in_trash"));
         }
     }
+    insert_group_row(tx, Some(name), description, icon, color, parent)
+}
+
+/// Writes a folder row as given, without the checks of [`create_group`]: for a copy (spec 036),
+/// which keeps a name as it is (also an empty one from an import or another device) and has checked
+/// the target itself.
+pub fn insert_group_row(
+    tx: &mut CrdtTransaction<'_>,
+    name: Option<&str>,
+    description: Option<&str>,
+    icon: Option<&str>,
+    color: Option<&str>,
+    parent: Option<&str>,
+) -> Result<String> {
     let id = Uuid::new_v4().to_string();
     let now = clock::now();
     tx.execute(

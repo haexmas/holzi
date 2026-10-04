@@ -275,6 +275,72 @@ fn a_folder_is_copied_with_every_subfolder_and_entry_and_attachments_share_the_b
 }
 
 #[test]
+fn folders_without_a_name_and_a_parent_loop_are_copied_as_they_are() {
+    let (_dir, db) = open_test_vault();
+    let root = write(&db, |tx| {
+        groups::create_group(tx, "Import", None, None, None, None)
+    })
+    .expect("root");
+    // An unnamed KeePass group and a folder from another device without a name.
+    let empty = write(&db, |tx| {
+        groups::insert_group_row(tx, Some(""), None, None, None, Some(&root))
+    })
+    .expect("empty");
+    write(&db, |tx| {
+        groups::insert_group_row(tx, None, None, None, None, Some(&empty))
+    })
+    .expect("null");
+    write(&db, |tx| {
+        groups::insert_group_row(tx, Some("  Work "), None, None, None, Some(&root))
+    })
+    .expect("spaces");
+    let report = write(&db, |tx| copy(tx, &[group_target(&root)], None, &suffix())).expect("copy");
+    assert_eq!(report.groups_created, 4);
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM haex_passwords_groups WHERE name = ''"
+        ),
+        2
+    );
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM haex_passwords_groups WHERE name IS NULL"
+        ),
+        2
+    );
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM haex_passwords_groups WHERE name = '  Work '"
+        ),
+        2
+    );
+
+    // Two folders that are each other's parent (concurrent moves): the copy ends.
+    let a = write(&db, |tx| {
+        groups::create_group(tx, "A", None, None, None, None)
+    })
+    .expect("a");
+    let b = write(&db, |tx| {
+        groups::create_group(tx, "B", None, None, None, Some(&a))
+    })
+    .expect("b");
+    write(&db, |tx| {
+        tx.execute(
+            "UPDATE haex_passwords_groups SET parent_id = ?1 WHERE id = ?2",
+            params![b, a],
+        )?;
+        Ok(())
+    })
+    .expect("loop");
+    let report =
+        write(&db, |tx| copy(tx, &[group_target(&a)], None, &suffix())).expect("copy loop");
+    assert_eq!(report.groups_created, 2);
+}
+
+#[test]
 fn the_history_is_taken_on_request() {
     let (_dir, db) = open_test_vault();
     let original = full_item(&db, "Mail", None);

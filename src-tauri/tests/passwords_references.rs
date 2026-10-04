@@ -438,3 +438,118 @@ async fn without_inlining_a_deleted_source_is_an_error_never_the_placeholder() {
         assert!(!text.contains("{$"), "{text}");
     }
 }
+
+#[tokio::test]
+async fn a_restore_that_would_close_a_cycle_is_refused() {
+    let f = fixture();
+    let (source, target) = f.pair().await;
+    f.update(
+        &target,
+        ItemPatch {
+            password: Patch::Set("plain".to_string()),
+            ..ItemPatch::default()
+        },
+    )
+    .await
+    .expect("plain");
+    // Now the source may point at the target, which no longer points back.
+    let back = f.token(&target, RefMarkKind::Password, None).await;
+    f.update(
+        &source,
+        ItemPatch {
+            password: Patch::Set(back),
+            ..ItemPatch::default()
+        },
+    )
+    .await
+    .expect("back");
+    let states = f
+        .service
+        .history_list(&Caller::User, target.clone())
+        .await
+        .expect("history");
+    let first = states.last().expect("the first state");
+    let token = f.updated_at(&target).await;
+    let refused = f
+        .service
+        .history_restore(&Caller::User, target.clone(), first.id.clone(), token)
+        .await;
+    assert!(
+        matches!(&refused, Err(HolziError::PasswordsReferenceCycle { .. })),
+        "{refused:?}"
+    );
+    assert_eq!(f.reveal_password(&target).await.expect("reveal"), "plain");
+}
+
+#[tokio::test]
+async fn a_caller_from_outside_cannot_point_at_an_entry_outside_its_scope() {
+    let f = fixture();
+    let (source, target) = f.pair().await;
+    let password = f.token(&source, RefMarkKind::Password, None).await;
+    let caller = Caller::Extension {
+        id: "ext".to_string(),
+    };
+    let grants = vec![Grant::new(GrantAction::ReadWrite, Scope::tags(["dst"]))];
+    let created = f
+        .service
+        .create_item(
+            &caller,
+            &grants,
+            ItemInput {
+                title: Some("Fremd".to_string()),
+                password: Some(password.clone()),
+                tags: vec!["dst".to_string()],
+                ..ItemInput::default()
+            },
+            None,
+        )
+        .await;
+    assert!(
+        matches!(&created, Err(HolziError::PasswordsReference { reason }) if reason == "missing"),
+        "{created:?}"
+    );
+    let token = f.updated_at(&target).await;
+    let updated = f
+        .service
+        .update_item(
+            &caller,
+            &grants,
+            target.clone(),
+            token.clone(),
+            ItemPatch {
+                note: Patch::Set(password),
+                ..ItemPatch::default()
+            },
+        )
+        .await;
+    assert!(
+        matches!(&updated, Err(HolziError::PasswordsReference { reason }) if reason == "missing"),
+        "{updated:?}"
+    );
+    // A change of another field is not blocked by the user's own references to the source.
+    f.service
+        .update_item(
+            &caller,
+            &grants,
+            target,
+            token,
+            ItemPatch {
+                note: Patch::Set("ok".to_string()),
+                ..ItemPatch::default()
+            },
+        )
+        .await
+        .expect("other field");
+}
+
+#[tokio::test]
+async fn a_user_name_with_a_reference_is_revealed_resolved() {
+    let f = fixture();
+    let (_source, target) = f.pair().await;
+    let revealed = f
+        .service
+        .reveal(&Caller::User, target, SecretField::Username)
+        .await
+        .expect("reveal");
+    assert_eq!(revealed.value.as_str(), "anna");
+}

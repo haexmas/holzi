@@ -259,15 +259,16 @@ struct FolderRow {
 }
 
 /// The folder and every folder below it, parents before children. Read before anything is
-/// written, so a folder copied into its own subtree does not copy its copy.
+/// written, so a folder copied into its own subtree does not copy its copy. The recursion runs on
+/// the id alone, so `UNION` ends it even on a parent loop (see `groups.rs`); the order is made here.
 fn subtree(q: &mut impl Query, root: &str) -> Result<Vec<FolderRow>> {
-    q.query_map(
-        "WITH RECURSIVE below(id, depth) AS ( \
-           SELECT ?1, 0 \
+    let rows = q.query_map(
+        "WITH RECURSIVE below(id) AS ( \
+           SELECT ?1 \
            UNION \
-           SELECT g.id, b.depth + 1 FROM haex_passwords_groups g JOIN below b ON g.parent_id = b.id) \
+           SELECT g.id FROM haex_passwords_groups g JOIN below b ON g.parent_id = b.id) \
          SELECT g.id, g.name, g.description, g.icon, g.color, g.parent_id \
-         FROM below b JOIN haex_passwords_groups g ON g.id = b.id ORDER BY b.depth, g.rowid",
+         FROM below b JOIN haex_passwords_groups g ON g.id = b.id ORDER BY g.rowid",
         params![root],
         |r| {
             Ok(FolderRow {
@@ -279,8 +280,31 @@ fn subtree(q: &mut impl Query, root: &str) -> Result<Vec<FolderRow>> {
                 parent_id: r.get(5)?,
             })
         },
-    )
-    .map_err(Into::into)
+    )?;
+    Ok(parents_first(rows, root))
+}
+
+/// `rows` from `root` down, each folder after its parent (breadth first, rowid order among
+/// siblings); a folder reached twice through a loop comes once.
+fn parents_first(mut rows: Vec<FolderRow>, root: &str) -> Vec<FolderRow> {
+    let mut ordered: Vec<FolderRow> = Vec::with_capacity(rows.len());
+    if let Some(position) = rows.iter().position(|row| row.id == root) {
+        ordered.push(rows.remove(position));
+    }
+    let mut next = 0;
+    while next < ordered.len() {
+        let parent = ordered[next].id.clone();
+        let mut index = 0;
+        while index < rows.len() {
+            if rows[index].parent_id.as_deref() == Some(parent.as_str()) {
+                ordered.push(rows.remove(index));
+            } else {
+                index += 1;
+            }
+        }
+        next += 1;
+    }
+    ordered
 }
 
 fn items_of(q: &mut impl Query, group_id: &str) -> Result<Vec<String>> {
@@ -317,15 +341,19 @@ fn copy_group(
                     .map(|(_, new)| new.clone())
             })
         };
-        let base = folder.name.clone().unwrap_or_default();
+        // Names as they are: a folder without a name (import, another device) stays so, and only
+        // the copied folder itself gets the suffix.
         let name = if folder.id == root {
-            format!("{base}{suffix}")
+            Some(format!(
+                "{}{suffix}",
+                folder.name.as_deref().unwrap_or_default()
+            ))
         } else {
-            base
+            folder.name.clone()
         };
-        let created = groups::create_group(
+        let created = groups::insert_group_row(
             tx,
-            &name,
+            name.as_deref(),
             folder.description.as_deref(),
             folder.icon.as_deref(),
             folder.color.as_deref(),

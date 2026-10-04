@@ -409,7 +409,14 @@ impl fmt::Debug for ItemPatch {
 pub enum SecretField {
     Password,
     OtpSecret,
-    KeyValue { id: String },
+    KeyValue {
+        id: String,
+    },
+    /// User name, address and note are no secrets, but with a placeholder their resolved value can
+    /// hold one (spec 036, FR-045, FR-047), so it is revealed like a secret.
+    Username,
+    Url,
+    Note,
 }
 
 /// A secret on its way to the user's eyes: the one type that serialises a value to the webview.

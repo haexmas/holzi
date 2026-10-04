@@ -130,8 +130,9 @@ pub struct FieldTexts {
     pub password: Option<String>,
     pub url: Option<String>,
     pub note: Option<String>,
-    /// Key and value of every custom field.
-    pub key_values: Vec<(String, String)>,
+    /// Key and value of every custom field, in the order the rows have after the save (a stored
+    /// row may have no key; no placeholder can reach it).
+    pub key_values: Vec<(Option<String>, String)>,
 }
 
 impl FieldTexts {
@@ -155,15 +156,39 @@ impl FieldTexts {
                 fields.push((field, text.clone()));
             }
         }
-        // The first field with a key is the one a placeholder reaches.
-        let mut seen = HashSet::new();
+        // Every custom field is checked, also a second one with the same key: a placeholder reaches
+        // the first of them (`find_cycle` takes the first own text of a field), but the text of any
+        // of them can lead back.
         for (key, value) in &self.key_values {
-            if seen.insert(key.clone()) {
+            if let Some(key) = key {
                 fields.push((Field::Extra(key.clone()), value.clone()));
             }
         }
         fields
     }
+}
+
+/// For a caller other than the user (FR-047: a reference grants no access): every placeholder in
+/// `texts` must point at an entry this caller may read, or the write is refused as a reference
+/// whose source is missing, the same answer as for an entry that does not exist. Without this a
+/// caller could point at an entry outside its scope, and turning references into own values before
+/// a delete for good would copy that secret into its scope.
+pub fn check_sources_visible<'t>(
+    q: &mut impl Query,
+    reader: Reader<'_>,
+    texts: impl IntoIterator<Item = &'t str>,
+) -> Result<()> {
+    if matches!(reader.caller, Caller::User) {
+        return Ok(());
+    }
+    for text in texts {
+        for hit in find(text) {
+            if !visible(q, reader, &hit.item_id)? {
+                return Err(ReferenceError::Missing.into());
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The check on save (research R4): refuses texts that lead back to the same field of the entry,
@@ -203,7 +228,7 @@ pub fn stored_texts(q: &mut impl Query, item_id: &str) -> Result<Option<FieldTex
         params![item_id],
         |r| {
             Ok((
-                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(0)?,
                 r.get::<_, Option<String>>(1)?.unwrap_or_default(),
             ))
         },
@@ -235,8 +260,9 @@ pub fn texts_after_patch(
     let key_values = match &patch.key_values {
         None => stored.key_values,
         Some(fields) => {
-            let ids = q.query_map(
-                "SELECT id, value FROM haex_passwords_item_key_values WHERE item_id = ?1",
+            let stored_rows = q.query_map(
+                "SELECT id, value FROM haex_passwords_item_key_values WHERE item_id = ?1 \
+                 ORDER BY rowid",
                 params![item_id],
                 |r| {
                     Ok((
@@ -245,21 +271,37 @@ pub fn texts_after_patch(
                     ))
                 },
             )?;
-            fields
+            let sent: Vec<_> = fields
                 .iter()
                 .filter(|field| !field.key.trim().is_empty())
-                .map(|field| {
+                .collect();
+            // `items::replace_key_values` keeps the rows it knows (in their rowid order) and
+            // appends the new ones in the order sent, so a placeholder reaches the same first
+            // field here as after the save.
+            let mut out = Vec::with_capacity(sent.len());
+            for (stored_id, stored_value) in &stored_rows {
+                if let Some(field) = sent
+                    .iter()
+                    .find(|field| field.id.as_deref() == Some(stored_id.as_str()))
+                {
                     // A field sent without a value keeps the stored one.
-                    let value = field.value.clone().or_else(|| {
-                        field.id.as_ref().and_then(|id| {
-                            ids.iter()
-                                .find(|(stored_id, _)| stored_id == id)
-                                .map(|(_, value)| value.clone())
-                        })
-                    });
-                    (field.key.clone(), value.unwrap_or_default())
-                })
-                .collect()
+                    let value = field.value.clone().unwrap_or_else(|| stored_value.clone());
+                    out.push((Some(field.key.clone()), value));
+                }
+            }
+            for field in &sent {
+                let known = field
+                    .id
+                    .as_deref()
+                    .is_some_and(|id| stored_rows.iter().any(|(stored_id, _)| stored_id == id));
+                if !known {
+                    out.push((
+                        Some(field.key.clone()),
+                        field.value.clone().unwrap_or_default(),
+                    ));
+                }
+            }
+            out
         }
     };
     Ok(Some(FieldTexts {
@@ -405,8 +447,10 @@ pub fn targets_of(q: &mut impl Query, sources: &[String]) -> Result<Vec<Referenc
         .collect())
 }
 
-/// `text` with every placeholder on one of `sources` replaced by its value for the user; a
-/// placeholder that does not resolve stays. `None` when nothing changed.
+/// `text` with every placeholder on one of `sources` replaced by its value for the user. A
+/// placeholder whose chain does not resolve (a source further on is gone, or a cycle that came by
+/// sync) takes the raw value of the source instead, so it does not point at a deleted entry; only a
+/// placeholder whose own source field is already missing stays. `None` when nothing changed.
 fn inline_text(
     q: &mut impl Query,
     sources: &HashSet<String>,
@@ -427,7 +471,7 @@ fn inline_text(
         }
         match resolve_value(q, Reader::user(), item_id, field.clone(), &original)? {
             Ok(value) => values.push(value.to_string()),
-            Err(_) => values.push(original),
+            Err(_) => values.push(raw_value(q, &hit.item_id, &hit.kind)?.unwrap_or(original)),
         }
     }
     let next = replace(text, &found, &values);
@@ -436,8 +480,8 @@ fn inline_text(
 
 /// Replaces in every entry that points at `sources` each such placeholder by today's value for the
 /// user, and takes a state of each changed entry (research R12). Runs in the transaction that then
-/// deletes the sources, so a deleted source never leaves a placeholder behind. Returns the number
-/// of entries changed.
+/// deletes the sources, so a deleted source leaves no placeholder behind unless the value it pointed
+/// at was already missing (see [`inline_text`]). Returns the number of entries changed.
 pub fn inline_all(tx: &mut CrdtTransaction<'_>, sources: &[String]) -> Result<u32> {
     let source_set: HashSet<String> = sources.iter().map(|s| s.to_ascii_lowercase()).collect();
     let mut changed = 0u32;
@@ -467,13 +511,15 @@ pub fn inline_all(tx: &mut CrdtTransaction<'_>, sources: &[String]) -> Result<u3
             |r| {
                 Ok((
                     r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
+                    r.get::<_, Option<String>>(1)?,
                     r.get::<_, Option<String>>(2)?.unwrap_or_default(),
                 ))
             },
         )?;
         for (id, key, value) in fields {
-            if let Some(next) = inline_text(tx, &source_set, &target, Field::Extra(key), &value)? {
+            // A row without a key cannot be reached by a placeholder; an empty key stands for it.
+            let field = Field::Extra(key.unwrap_or_default());
+            if let Some(next) = inline_text(tx, &source_set, &target, field, &value)? {
                 tx.execute(
                     "UPDATE haex_passwords_item_key_values SET value = ?1, updated_at = ?2 \
                      WHERE id = ?3",
