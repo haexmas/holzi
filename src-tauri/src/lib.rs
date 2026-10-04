@@ -222,6 +222,11 @@ pub fn run() {
             app.manage(presence);
             // Spec 032: actions of a model's tool call go out as events; `ChatState` is managed
             // without an `AppHandle`, so the emitter is set here.
+            // Spec 017, US9: holzi's protected places, known places and dialogs for extensions.
+            app.state::<AppState>()
+                .extensions()
+                .fs
+                .set_environment(extensions::fs::environment_for(app.handle()));
             let handle = app.handle().clone();
             app.state::<ChatState>()
                 .action_bridge

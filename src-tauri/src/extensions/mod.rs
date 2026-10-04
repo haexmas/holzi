@@ -8,6 +8,7 @@ pub mod bridge;
 pub mod bundle;
 pub mod commands;
 pub mod error;
+pub mod fs;
 pub mod host;
 pub mod ids;
 pub mod kv;

@@ -12,7 +12,7 @@ use super::frames::FrameSession;
 use super::{database, methods, permissions};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
-use crate::extensions::{kv, logs};
+use crate::extensions::{fs, kv, logs};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -123,16 +123,109 @@ pub static METHODS: &[Method] = &[
         handler: logs::read_own,
         module: logs::MODULE,
     },
+    Method {
+        name: "extension_permissions_check_filesystem",
+        handler: fs::check,
+        module: fs::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_save_file",
+        handler: fs::dialogs::save_file,
+        module: fs::dialogs::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_open_file",
+        handler: fs::dialogs::open_file,
+        module: fs::dialogs::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_show_image",
+        handler: fs::dialogs::show_image,
+        module: fs::dialogs::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_select_folder",
+        handler: fs::dialogs::select_folder,
+        module: fs::dialogs::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_select_file",
+        handler: fs::dialogs::select_file,
+        module: fs::dialogs::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_read_file",
+        handler: fs::ops::read_file,
+        module: fs::ops::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_write_file",
+        handler: fs::ops::write_file,
+        module: fs::ops::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_read_dir",
+        handler: fs::ops::read_dir,
+        module: fs::ops::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_mkdir",
+        handler: fs::ops::mkdir,
+        module: fs::ops::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_remove",
+        handler: fs::ops::remove,
+        module: fs::ops::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_exists",
+        handler: fs::ops::exists,
+        module: fs::ops::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_stat",
+        handler: fs::ops::stat,
+        module: fs::ops::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_rename",
+        handler: fs::ops::rename,
+        module: fs::ops::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_copy",
+        handler: fs::ops::copy,
+        module: fs::ops::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_known_paths",
+        handler: fs::ops::known_paths,
+        module: fs::ops::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_watch",
+        handler: fs::watch::watch,
+        module: fs::watch::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_unwatch",
+        handler: fs::watch::unwatch,
+        module: fs::watch::MODULE,
+    },
+    Method {
+        name: "extension_filesystem_is_watching",
+        handler: fs::watch::is_watching,
+        module: fs::watch::MODULE,
+    },
 ];
 
 /// Methods of later deliveries (research R1): they answer 8001 until they land.
 const LATER: &[&str] = &[
     "extension_permissions_check_web",
-    "extension_permissions_check_filesystem",
     "extension_web_fetch",
     "extension_web_open",
     "extension_notifications_",
-    "extension_filesystem_",
     "extension_password_",
     "extension_remote_storage_",
     "extension_mail_",

@@ -131,7 +131,7 @@ fn unlisted_methods_are_not_supported_and_later_ones_not_available() {
         assert_eq!(code(call(&s.ctx, method, &Value::Null)), 8000, "{method}");
     }
     for method in [
-        "extension_filesystem_read_file",
+        "extension_notifications_show",
         "extension_web_fetch",
         "extension_shell_create",
         "extension_mail_list_accounts",
