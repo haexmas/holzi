@@ -916,7 +916,9 @@
         "unsupported_format": "The format is not supported.",
         "encrypted_export": "The export is encrypted and cannot be read without its password.",
         "cancelled": "The import was cancelled.",
-        "unwritable": "The file could not be written."
+        "unwritable": "The file could not be written.",
+        "haex_vault_locked": "The vault password does not match, or the file is no haex-vault vault.",
+        "no_passwords": "This vault holds no passwords."
       }
     },
     "extensions": {
@@ -1367,12 +1369,14 @@
       "sources": {
         "keepass": "KeePass (kdbx)",
         "bitwarden": "Bitwarden (JSON or CSV)",
-        "lastpass": "LastPass (CSV)"
+        "lastpass": "LastPass (CSV)",
+        "haexvault": "haex-vault (vault file)"
       },
       "hints": {
         "keepass": "A database from KeePass or KeePassXC, with its password and optionally a key file.",
         "bitwarden": "An unencrypted export from the vault (JSON holds more than CSV).",
-        "lastpass": "The CSV export from the vault."
+        "lastpass": "The CSV export from the vault.",
+        "haexvault": "The vault file (.db) of haex-vault with its vault password. The file is only read, never changed."
       },
       "noFile": "No file chosen yet",
       "chooseFile": "Choose file",
@@ -1391,7 +1395,9 @@
         "historyStates": "History states",
         "attachments": "Attachments",
         "passkeys": "Passkeys",
-        "duplicates": "Entries that already exist"
+        "duplicates": "Entries that already exist",
+        "tags": "Tags",
+        "presets": "Generator presets"
       },
       "warnings": "Notes",
       "warningKinds": {
@@ -1403,7 +1409,13 @@
         "totp_invalid": "A TOTP secret is not valid and is taken over as it is.",
         "icon_not_mapped": "An icon of the source could not be matched.",
         "value_not_storable": "A value could not be stored.",
-        "source_setting": "Settings of the source are not taken over."
+        "source_setting": "Settings of the source are not taken over.",
+        "haex_vault_close_first": "Close haex-vault before you copy the file; otherwise the latest changes may be missing.",
+        "haex_pass_tables_ignored": "The file also holds data of the old haex-pass extension; it is not taken over.",
+        "history_unreadable": "A history state could not be read.",
+        "group_reparented": "A folder pointed at a missing parent folder and goes to the top.",
+        "tag_merged": "Tags that only differ in spelling become one.",
+        "unknown_source_data": "The source holds data holzi does not know; it is not taken over."
       },
       "onDuplicate": "If an entry already exists",
       "skip": "Skip",
@@ -1447,7 +1459,11 @@
         "totp_invalid": "The TOTP secret is not valid and stands in the entry as it was.",
         "icon_not_mapped": "The icon of the source could not be matched.",
         "value_not_storable": "A value could not be stored.",
-        "source_setting": "Settings of the source (search, Auto-Type per group, quality check) were not taken over."
+        "source_setting": "Settings of the source (search, Auto-Type per group, quality check) were not taken over.",
+        "history_unreadable": "The history state of {field} could not be read and is missing.",
+        "group_reparented": "Folder “{field}” pointed at a missing parent folder and now sits at the top.",
+        "tag_merged": "The tags “{field}” only differ in spelling and became one.",
+        "unknown_source_data": "“{field}” of the source is unknown to holzi; the value was not taken over."
       }
     },
     "stale": {

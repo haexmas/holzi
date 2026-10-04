@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * The import (spec 034, US7, FR-023) at `/import`: choose the source and the file (KeePass also
- * asks for the password and an optional key file), look at what the file holds (counts, folders,
+ * asks for the password and an optional key file, haex-vault for its vault password, spec 037),
+ * look at what the file holds (counts, folders,
  * trashed entries, history states, attachments, passkeys, duplicates, warnings), choose what to do
  * with duplicates, watch the progress (with cancel; a cancel or a fatal error removes what was
  * written, shown as its own phase), and read the report: the numbers and the places to rework by
@@ -19,9 +20,11 @@ import type { OnDuplicate } from '@bindings/OnDuplicate'
 import type { Progress } from '@bindings/Progress'
 import {
   baseName,
+  canPreviewImport,
   groupReport,
   importFailureReason,
   progressPercent,
+  sourceSecrets,
 } from '~/lib/passwords/importReport'
 
 type Step = 'choose' | 'preview' | 'running' | 'done'
@@ -30,6 +33,7 @@ const SOURCES: { id: ImportSource; extensions: string[] }[] = [
   { id: 'keepass', extensions: ['kdbx'] },
   { id: 'bitwarden', extensions: ['json', 'csv'] },
   { id: 'lastpass', extensions: ['csv'] },
+  { id: 'haexvault', extensions: ['db'] },
 ]
 const LIMIT_MIB = 25
 
@@ -62,12 +66,14 @@ const cancelling = ref(false)
 const extensions = computed(
   () => SOURCES.find((s) => s.id === source.value)?.extensions ?? [],
 )
-const canPreview = computed(
-  () =>
-    path.value !== null &&
-    (source.value !== 'keepass' ||
-      password.value !== '' ||
-      keyFilePath.value !== null),
+const secrets = computed(() => sourceSecrets(source.value))
+const canPreview = computed(() =>
+  canPreviewImport(
+    source.value,
+    path.value !== null,
+    password.value !== '',
+    keyFilePath.value !== null,
+  ),
 )
 const percent = computed(() =>
   progress.value
@@ -199,6 +205,8 @@ const countKeys = [
   'historyStates',
   'attachments',
   'passkeys',
+  'tags',
+  'presets',
   'duplicates',
 ] as const
 
@@ -281,8 +289,9 @@ onBeforeUnmount(() => {
               {{ t('passwords.import.chooseFile') }}
             </UiButton>
           </SettingsRow>
-          <template v-if="source === 'keepass'">
+          <template v-if="secrets.password || secrets.keyFile">
             <SettingsRow
+              v-if="secrets.password"
               :title="t('passwords.import.password')"
               icon="lucide:key-round"
             >
@@ -295,6 +304,7 @@ onBeforeUnmount(() => {
               />
             </SettingsRow>
             <SettingsRow
+              v-if="secrets.keyFile"
               :title="
                 keyFilePath
                   ? baseName(keyFilePath)
