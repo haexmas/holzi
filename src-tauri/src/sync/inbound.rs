@@ -392,7 +392,11 @@ impl Inbox {
         }
         // Parked groups count as received: stored in the write that moves
         // progress past them, with the state of an extension at its limit.
-        if !updates.is_empty() || !parked.is_empty() || !newly_full.is_empty() {
+        if !updates.is_empty()
+            || !parked.is_empty()
+            || !newly_full.is_empty()
+            || !self.full_prefixes.is_empty()
+        {
             let now_ms = crate::passwords::clock::unix_millis(std::time::SystemTime::now());
             let full_prefixes: Vec<String> = self.full_prefixes.iter().cloned().collect();
             db.write(|tx| {
