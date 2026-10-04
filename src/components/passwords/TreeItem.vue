@@ -9,6 +9,7 @@
  */
 import type { GroupRow } from '@bindings/GroupRow'
 import { FOLDER_MIME, ITEMS_MIME, parseItemsPayload } from '~/lib/passwords/dnd'
+import { displayTitle } from '~/lib/passwords/format'
 import { buildMenu, type MenuCommand } from '~/lib/passwords/menus'
 import type { TreeNode } from '~/lib/passwords/tree'
 
@@ -33,6 +34,9 @@ const { t } = useI18n()
 const clipboard = usePasswordsClipboardStore()
 
 const group = computed(() => props.node.group)
+const name = computed(
+  () => displayTitle(group.value.name) ?? t('passwords.folders.unknown'),
+)
 const isOpen = computed(() => expanded.value.has(group.value.id))
 const hasChildren = computed(() => props.node.children.length > 0)
 const position = computed(() => props.siblingIds.indexOf(group.value.id))
@@ -135,14 +139,14 @@ function onDrop(event: DragEvent) {
           >
             <PasswordsEntryIcon :value="group.icon" fallback="lucide:folder" />
           </span>
-          <span class="min-w-0 flex-1 truncate">{{ group.name }}</span>
+          <span class="min-w-0 flex-1 truncate">{{ name }}</span>
           <span v-if="node.itemCount" class="text-xs text-muted-foreground">{{
             node.itemCount
           }}</span>
         </button>
         <PasswordsEntryMenuButton
           :entries="menuEntries"
-          :label="t('passwords.folders.menu', { name: group.name ?? '' })"
+          :label="t('passwords.folders.menu', { name })"
           tabindex="0"
           :data-testid="`passwords-folder-menu-${group.id}`"
           @run="emit('menu', $event, group)"

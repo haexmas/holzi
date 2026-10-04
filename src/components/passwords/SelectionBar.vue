@@ -7,6 +7,7 @@
  * action names the number it touches and asks before it runs.
  */
 import { toast } from 'vue-sonner'
+import { displayTitle } from '~/lib/passwords/format'
 import { selectAllState } from '~/lib/passwords/selection'
 import { buildTree, flattenFolders } from '~/lib/passwords/tree'
 
@@ -178,7 +179,7 @@ const targetOptions = computed(() => [
   { value: TOP_LEVEL, label: t('passwords.selection.topLevel') },
   ...folders.value.map((folder) => ({
     value: folder.id,
-    label: `${'– '.repeat(folder.depth)}${folder.name}`,
+    label: `${'– '.repeat(folder.depth)}${displayTitle(folder.name) ?? t('passwords.folders.unknown')}`,
   })),
 ])
 const tagOptions = computed(() =>
