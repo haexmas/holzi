@@ -1,13 +1,14 @@
 <script setup lang="ts">
 /**
- * The editor of an entry (spec 034, US1, FR-001..FR-003, FR-005, research R7 and R15): create at
- * `/entry/new`, edit at `/entry/:id?edit`. The title is optional. The password area shows
- * `••••` with "Ersetzen" for a stored entry and sends a password only when it was replaced; the
- * custom fields likewise keep their stored value until the user types a new one. An invalid TOTP
- * value is refused with a message at its field. A save that finds the entry changed or deleted
- * meanwhile asks what to do instead of overwriting (`ConflictDialog`), and leaving with unsaved
- * changes asks too (`UnsavedDialog`). The draft is a local object that the quiet reload of the store
- * never touches.
+ * The editor of an entry (spec 034, US1, FR-001..FR-003, FR-005, research R7 and R15; spec 036,
+ * US1): create at `/entry/new`, edit at `/entry/:id?edit`, in the tabs Details and Extra (the
+ * fields live in `EditorDetails.vue` and `EditorExtra.vue`; Verlauf is for the saved entry and is
+ * not offered here). The title is optional. A save that fails at a field jumps to the tab holding
+ * it. The password area sends a password only when it was replaced; the custom fields likewise
+ * keep their stored value until the user types a new one. A save that finds the entry changed or
+ * deleted meanwhile asks what to do instead of overwriting (`ConflictDialog`), and leaving with
+ * unsaved changes asks too (`UnsavedDialog`). The draft is a local object that the quiet reload of
+ * the store never touches.
  */
 import { toast } from 'vue-sonner'
 import type { ItemDetail } from '@bindings/ItemDetail'
@@ -20,7 +21,7 @@ import {
   toPatch,
   type Draft,
 } from '~/lib/passwords/draft'
-import { ENTRY_COLORS, ENTRY_ICONS } from '~/lib/passwords/icons'
+import { entryTab, withEntryTab, type EntryTab } from '~/lib/passwords/registry'
 
 const props = defineProps<{
   /** `null` creates a new entry. */
@@ -28,13 +29,27 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const fieldLabels = useFieldLabels()
 const { errString } = useErrorString()
 const router = useTabRouter()
 const tab = useWmTab()
 const store = usePasswordsStore()
 const { getItemAsync, createItemAsync, updateItemAsync, revealAsync } =
   usePasswords()
+
+const TABS: readonly EntryTab[] = ['details', 'extra']
+const activeTab = computed<EntryTab>({
+  get: () => {
+    const shown = entryTab({
+      path: router.route.path,
+      query: router.route.query,
+    })
+    return shown === 'extra' ? 'extra' : 'details'
+  },
+  set: (next) =>
+    router.replace(
+      withEntryTab(props.itemId ?? 'new', next, router.route.query),
+    ),
+})
 
 const detail = ref<ItemDetail | null>(null)
 const initial = ref<Draft>(emptyDraft())
@@ -46,9 +61,6 @@ const otpError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const conflict = ref<'changed' | 'deleted' | null>(null)
 const askingToLeave = ref(false)
-const tagInput = ref('')
-const replacingOtp = ref(false)
-const generatorOpen = ref(false)
 
 const isNew = computed(() => props.itemId === null)
 const dirty = computed(() => isDirty(initial.value, draft.value))
@@ -96,8 +108,13 @@ function viewPath(id: string): string {
   return `/entry/${id}`
 }
 
+/** The saved entry on the tab the user was on. */
+function viewPlace(id: string) {
+  return withEntryTab(id, activeTab.value, {})
+}
+
 function leave() {
-  if (props.itemId !== null) router.replace(viewPath(props.itemId))
+  if (props.itemId !== null) router.replace(viewPlace(props.itemId))
   else if (router.canGoBack) router.back()
   else router.replace('/')
 }
@@ -134,7 +151,7 @@ async function saveAsync(): Promise<boolean> {
     }
     // Reset the baseline so the guard does not fire on the way out.
     initial.value = cloneDraft(draft.value)
-    router.replace(viewPath(props.itemId))
+    router.replace(viewPlace(props.itemId))
     return true
   } catch (cause) {
     const error = cause as { kind?: string; reason?: string }
@@ -143,6 +160,8 @@ async function saveAsync(): Promise<boolean> {
       OTP_FIELD_ERRORS.has(error.reason ?? '')
     ) {
       otpError.value = t(`passwords.editor.otpErrors.${error.reason}`)
+      // The TOTP inputs are on the tab Details.
+      activeTab.value = 'details'
     } else if (error.kind === 'PasswordsConflict') {
       conflict.value = error.reason === 'deleted' ? 'deleted' : 'changed'
     } else {
@@ -217,70 +236,8 @@ async function saveAsNewAsync() {
 async function takeCurrentAsync() {
   conflict.value = null
   await loadAsync()
-  if (props.itemId) router.replace(viewPath(props.itemId))
+  if (props.itemId) router.replace(viewPlace(props.itemId))
 }
-
-function addTag() {
-  const name = tagInput.value.trim()
-  tagInput.value = ''
-  if (!name) return
-  const known = draft.value.tags.some(
-    (tag) => tag.toLowerCase() === name.toLowerCase(),
-  )
-  if (!known) draft.value.tags = [...draft.value.tags, name]
-}
-
-function removeTag(name: string) {
-  draft.value.tags = draft.value.tags.filter((tag) => tag !== name)
-}
-
-function startReplacingPassword() {
-  draft.value.password = { mode: 'set', value: '' }
-}
-
-function startReplacingOtp() {
-  replacingOtp.value = true
-  draft.value.otp = {
-    mode: 'set',
-    text: '',
-    digits: null,
-    period: null,
-    algorithm: null,
-  }
-}
-
-function removeOtp() {
-  replacingOtp.value = false
-  draft.value.otp = { mode: 'clear' }
-}
-
-function otpText(): string {
-  return draft.value.otp.mode === 'set' ? draft.value.otp.text : ''
-}
-
-function setOtpText(text: string) {
-  if (draft.value.otp.mode === 'set') draft.value.otp.text = text
-  else
-    draft.value.otp = {
-      mode: 'set',
-      text,
-      digits: null,
-      period: null,
-      algorithm: null,
-    }
-}
-
-const passwordValue = computed({
-  get: () =>
-    draft.value.password.mode === 'set' ? draft.value.password.value : '',
-  set: (value: string) => {
-    draft.value.password = { mode: 'set', value }
-  },
-})
-
-const showOtpInput = computed(
-  () => isNew.value || !detail.value?.hasOtpSecret || replacingOtp.value,
-)
 
 watch(saveError, (message) => {
   if (message) toast.error(message)
@@ -337,296 +294,26 @@ watch(saveError, (message) => {
       </div>
 
       <template v-else>
-        <SettingsGroup>
-          <li class="px-4 py-3">
-            <UiInput
-              id="pw-title"
-              v-model="draft.title"
-              :label="t('passwords.fields.title')"
-              :placeholder="t('passwords.untitled')"
-              :labels="fieldLabels.input.value"
-              label-bg="var(--muted)"
-              data-testid="passwords-field-title"
+        <PasswordsEntryTabs v-model="activeTab" :tabs="TABS">
+          <template #details>
+            <PasswordsEditorDetails
+              v-model="draft"
+              :item-id="itemId"
+              :detail="detail"
+              :otp-error="otpError"
             />
-          </li>
-          <li class="px-4 py-3">
-            <UiInput
-              id="pw-username"
-              v-model="draft.username"
-              :label="t('passwords.fields.username')"
-              :labels="fieldLabels.input.value"
-              label-bg="var(--muted)"
-              autocomplete="off"
-              copyable
-              data-testid="passwords-field-username"
+          </template>
+          <template #extra>
+            <PasswordsEditorExtra
+              v-model="draft"
+              :item-id="itemId"
+              :detail="detail"
+              @changed="reloadAttachmentsAsync"
             />
-          </li>
-          <li class="flex flex-col gap-1.5 px-4 py-3">
-            <ShadcnLabel
-              v-if="draft.password.mode === 'keep'"
-              for="pw-password"
-              >{{ t('passwords.fields.password') }}</ShadcnLabel
-            >
-            <div
-              v-if="draft.password.mode === 'keep'"
-              class="flex items-center gap-2"
-            >
-              <PasswordsMaskedValue
-                v-if="itemId"
-                :fetch="
-                  async () =>
-                    (await revealAsync(itemId!, { kind: 'password' })).value
-                "
-                :identity="`${itemId}:password`"
-                kind="password"
-                :present="detail?.hasPassword ?? false"
-                :label="t('passwords.fields.password')"
-                class="flex-1"
-              />
-              <UiButton
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="passwords-replace-password"
-                @click="startReplacingPassword"
-              >
-                {{ t('passwords.editor.replace') }}
-              </UiButton>
-            </div>
-            <div v-else class="flex items-center gap-2">
-              <UiInputPassword
-                id="pw-password"
-                v-model="passwordValue"
-                :label="t('passwords.fields.password')"
-                :labels="fieldLabels.password.value"
-                label-bg="var(--muted)"
-                autocomplete="new-password"
-                class="flex-1"
-                data-testid="passwords-field-password"
-              />
-              <UiButton
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="passwords-generate"
-                @click="generatorOpen = true"
-              >
-                <Icon name="lucide:wand-sparkles" class="size-4" />
-                {{ t('passwords.generator.open') }}
-              </UiButton>
-            </div>
-          </li>
-          <li class="px-4 py-3">
-            <UiInput
-              id="pw-url"
-              v-model="draft.url"
-              :label="t('passwords.fields.url')"
-              :labels="fieldLabels.input.value"
-              label-bg="var(--muted)"
-              type="url"
-              inputmode="url"
-              copyable
-              data-testid="passwords-field-url"
-            />
-          </li>
-        </SettingsGroup>
-
-        <SettingsGroup :label="t('passwords.fields.totp')">
-          <li class="flex flex-col gap-1.5 px-4 py-3">
-            <UiInput
-              v-if="showOtpInput"
-              id="pw-otp"
-              :model-value="otpText()"
-              :label="t('passwords.editor.otpLabel')"
-              :labels="fieldLabels.input.value"
-              label-bg="var(--muted)"
-              :error="otpError ?? undefined"
-              autocomplete="off"
-              spellcheck="false"
-              :placeholder="t('passwords.editor.otpPlaceholder')"
-              data-testid="passwords-field-otp"
-              @update:model-value="setOtpText(String($event ?? ''))"
-            />
-            <div v-else class="flex flex-wrap items-center gap-2">
-              <span
-                class="min-w-0 flex-1 text-sm"
-                :class="
-                  detail?.otpState === 'invalid' ? 'text-destructive' : ''
-                "
-              >
-                {{
-                  detail?.otpState === 'invalid'
-                    ? t('passwords.totp.invalid')
-                    : t('passwords.editor.otpSet')
-                }}
-              </span>
-              <UiButton
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="passwords-replace-otp"
-                @click="startReplacingOtp"
-              >
-                {{ t('passwords.editor.replace') }}
-              </UiButton>
-              <UiButton
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="passwords-remove-otp"
-                @click="removeOtp"
-              >
-                {{ t('passwords.totp.remove') }}
-              </UiButton>
-            </div>
-            <p
-              v-if="draft.otp.mode === 'clear'"
-              class="text-sm text-muted-foreground"
-            >
-              {{ t('passwords.editor.otpWillBeRemoved') }}
-            </p>
-          </li>
-        </SettingsGroup>
-
-        <SettingsGroup :label="t('passwords.fields.custom')">
-          <li class="px-4 py-3">
-            <PasswordsKeyValues v-model="draft.keyValues" />
-          </li>
-        </SettingsGroup>
-
-        <SettingsGroup>
-          <li class="px-4 py-3">
-            <UiTextarea
-              id="pw-note"
-              v-model="draft.note"
-              :label="t('passwords.fields.note')"
-              label-bg="var(--muted)"
-              rows="4"
-              data-testid="passwords-field-note"
-            />
-          </li>
-          <li class="px-4 py-3">
-            <div class="w-48">
-              <UiInput
-                id="pw-expires"
-                v-model="draft.expiresAt"
-                :label="t('passwords.fields.expires')"
-                :labels="fieldLabels.input.value"
-                label-bg="var(--muted)"
-                type="date"
-                data-testid="passwords-field-expires"
-              />
-            </div>
-          </li>
-          <li class="flex flex-col gap-2 px-4 py-3">
-            <div v-if="draft.tags.length" class="flex flex-wrap gap-1.5">
-              <ShadcnBadge
-                v-for="tag in draft.tags"
-                :key="tag"
-                variant="secondary"
-                class="gap-1"
-              >
-                {{ tag }}
-                <button
-                  type="button"
-                  class="rounded-full hover:text-destructive"
-                  :aria-label="t('passwords.editor.removeTag', { tag })"
-                  @click="removeTag(tag)"
-                >
-                  <Icon name="lucide:x" class="size-3" />
-                </button>
-              </ShadcnBadge>
-            </div>
-            <UiInput
-              id="pw-tag"
-              v-model="tagInput"
-              :label="t('passwords.fields.tags')"
-              :labels="fieldLabels.input.value"
-              label-bg="var(--muted)"
-              :placeholder="t('passwords.editor.tagPlaceholder')"
-              data-testid="passwords-field-tag"
-              @keydown.enter.prevent="addTag"
-              @blur="addTag"
-            />
-          </li>
-        </SettingsGroup>
-
-        <!-- An attachment is saved at once and does not touch the draft or the update token. -->
-        <PasswordsAttachments
-          v-if="itemId !== null && detail"
-          :item-id="itemId"
-          :attachments="detail.attachments"
-          @changed="reloadAttachmentsAsync"
-        />
-
-        <SettingsGroup :label="t('passwords.editor.look')">
-          <li class="flex flex-col gap-3 px-4 py-3">
-            <div
-              class="flex flex-wrap gap-1.5"
-              role="radiogroup"
-              :aria-label="t('passwords.fields.icon')"
-            >
-              <button
-                v-for="name in ENTRY_ICONS"
-                :key="name"
-                type="button"
-                role="radio"
-                :aria-checked="draft.icon === name"
-                :aria-label="name.replace('lucide:', '')"
-                class="flex size-9 items-center justify-center rounded-lg border"
-                :class="
-                  draft.icon === name
-                    ? 'border-primary bg-primary/10'
-                    : 'border-transparent bg-background hover:bg-accent'
-                "
-                @click="draft.icon = draft.icon === name ? null : name"
-              >
-                <Icon :name="name" class="size-5" />
-              </button>
-            </div>
-            <div
-              class="flex flex-wrap gap-1.5"
-              role="radiogroup"
-              :aria-label="t('passwords.fields.color')"
-            >
-              <button
-                v-for="color in ENTRY_COLORS"
-                :key="color"
-                type="button"
-                role="radio"
-                :aria-checked="draft.color === color"
-                :aria-label="color"
-                class="size-7 rounded-full border-2"
-                :class="
-                  draft.color === color
-                    ? 'border-foreground'
-                    : 'border-transparent'
-                "
-                :style="{ backgroundColor: color }"
-                @click="draft.color = draft.color === color ? null : color"
-              />
-            </div>
-          </li>
-        </SettingsGroup>
+          </template>
+        </PasswordsEntryTabs>
       </template>
     </form>
-
-    <UiDrawerModal
-      v-model:open="generatorOpen"
-      :title="t('passwords.generator.title')"
-    >
-      <template #content>
-        <PasswordsGeneratorPanel
-          embedded
-          @use="
-            (password: string) => {
-              passwordValue = password
-              generatorOpen = false
-            }
-          "
-        />
-      </template>
-    </UiDrawerModal>
 
     <PasswordsConflictDialog
       :open="conflict !== null"

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
-import { createEntry, openPasswords } from '../lib/passwords.ts'
+import {
+  activeTab,
+  createEntry,
+  openPasswords,
+  selectTab,
+} from '../lib/passwords.ts'
 import { KEY, setSessionRestore } from '../lib/settings.ts'
 
 const MARKER = 'SECRET-MARKER-E2E-RESTORE'
@@ -36,12 +41,21 @@ scenario('passwords-session-restore', { timeoutMs: 240_000 }, async (ctx) => {
   )
   ctx.step('revealed')
 
+  // Spec 036 (FR-006): the tab is part of the place and comes back with the session.
+  await selectTab(page, 'extra')
+  await ctx.waitFor(
+    'the Extra tab',
+    async () => (await activeTab(page)) === 'extra',
+  )
+
   // The saved session names the place by its id and holds no value.
   const saved = (await ctx.waitFor(
     'the saved session to hold the entry place',
     async () => {
       const text = JSON.stringify(await page.invoke('wm_session_load'))
-      return text.includes(`/entry/${id}`) ? text : false
+      return text.includes(`/entry/${id}`) && text.includes('extra')
+        ? text
+        : false
     },
     { fixed: true, timeoutMs: 15_000 },
   )) as string
@@ -52,9 +66,15 @@ scenario('passwords-session-restore', { timeoutMs: 240_000 }, async (ctx) => {
   await device.restart()
   const restored = device.page
   await restored.waitForDisplayed('passwords-edit')
+  await ctx.waitFor(
+    'the Extra tab to come back',
+    async () => (await activeTab(restored)) === 'extra',
+    { fixed: true, timeoutMs: 15_000 },
+  )
   const text = await restored.exec<string>('return document.body.innerText')
   assert.ok(text.includes('Restore me'), 'the entry is shown again')
   assert.ok(!text.includes(MARKER), 'the password is shown after a restart')
+  await selectTab(restored, 'details')
   await restored.waitForDisplayed('passwords-reveal-password')
   ctx.step('restored at the same place, password masked')
 })

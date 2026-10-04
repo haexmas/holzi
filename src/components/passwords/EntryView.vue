@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
- * The view of one entry (spec 034, US1, FR-002, FR-003, FR-005, FR-006): its fields with copy
- * buttons, the password and the custom fields masked until the user asks, the live TOTP block and
- * the passkeys. The detail the backend sends holds flags, never a secret; the tab title stays the
- * static place title, never an entry value (FR-040).
+ * The view of one entry (spec 034, US1, FR-002, FR-003, FR-005, FR-006; spec 036, US1): the header,
+ * the stale banner and the tabs Details and Extra with the fields, copy buttons, masked values, the
+ * live TOTP block, attachments and passkeys. The detail the backend sends holds flags, never a
+ * secret; the tab title stays the static place title, never an entry value (FR-040). The chosen
+ * tab is part of the place (`?tab=`), so back, forward and a restored session find it again.
  */
 import { DEFAULT_ENTRY_ICON } from '~/lib/passwords/icons'
 import { toast } from 'vue-sonner'
@@ -11,6 +12,7 @@ import type { CopyField } from '@bindings/CopyField'
 import type { ItemDetail } from '@bindings/ItemDetail'
 import { displayTitle, isExpired, localDay } from '~/lib/passwords/format'
 import { entryFreshness, type EntryFreshness } from '~/lib/passwords/remote'
+import { entryTab, withEntryTab, type EntryTab } from '~/lib/passwords/registry'
 
 const props = defineProps<{
   itemId: string
@@ -20,8 +22,14 @@ const { t } = useI18n()
 const { errString } = useErrorString()
 const router = useTabRouter()
 const store = usePasswordsStore()
-const { getItemAsync, copyFieldAsync, updateItemAsync, revealAsync } =
-  usePasswords()
+const { getItemAsync, copyFieldAsync, updateItemAsync } = usePasswords()
+
+const TABS: readonly EntryTab[] = ['details', 'extra', 'history']
+const activeTab = computed<EntryTab>({
+  get: () => entryTab({ path: router.route.path, query: router.route.query }),
+  set: (tab) =>
+    router.replace(withEntryTab(props.itemId, tab, router.route.query)),
+})
 
 const detail = ref<ItemDetail | null>(null)
 const deleteOpen = ref(false)
@@ -102,8 +110,14 @@ async function copyAsync(field: CopyField, label: string) {
   }
 }
 
+/** A restored state is the entry now: show it on Details. */
+async function onRestored() {
+  activeTab.value = 'details'
+  await loadAsync()
+}
+
 function edit() {
-  router.push(`/entry/${props.itemId}?edit`)
+  router.push(withEntryTab(props.itemId, activeTab.value, { edit: '' }))
 }
 
 /** Removes an invalid TOTP secret without touching anything else of the entry. */
@@ -164,18 +178,6 @@ async function removeOtpAsync() {
         >
           <Icon name="lucide:pencil" class="size-4" />
           {{ t('passwords.edit') }}
-        </UiButton>
-        <UiButton
-          v-if="detail"
-          variant="ghost"
-          size="icon"
-          class="shrink-0"
-          :aria-label="t('passwords.history.open')"
-          :tooltip="t('passwords.history.open')"
-          data-testid="passwords-history"
-          @click="router.push(`/entry/${itemId}/history`)"
-        >
-          <Icon name="lucide:history" class="size-4" />
         </UiButton>
         <UiButton
           v-if="detail"
@@ -244,156 +246,33 @@ async function removeOtpAsync() {
           {{ t('passwords.expiredOn', { date: detail.expiresAt }) }}
         </ShadcnBadge>
 
-        <SettingsGroup>
-          <SettingsRow
-            v-if="detail.username"
-            :title="t('passwords.fields.username')"
-          >
-            <span
-              class="min-w-0 truncate"
-              data-testid="passwords-value-username"
-              >{{ detail.username }}</span
-            >
-            <UiButton
-              variant="ghost"
-              size="icon"
-              :aria-label="
-                t('passwords.copy', { field: t('passwords.fields.username') })
-              "
-              data-testid="passwords-copy-username"
-              @click="
-                copyAsync({ kind: 'username' }, t('passwords.fields.username'))
-              "
-            >
-              <Icon name="lucide:copy" class="size-4" />
-            </UiButton>
-          </SettingsRow>
-          <SettingsRow :title="t('passwords.fields.password')">
-            <PasswordsMaskedValue
-              :fetch="
-                async () =>
-                  (await revealAsync(itemId, { kind: 'password' })).value
-              "
-              :identity="`${itemId}:password`"
-              kind="password"
-              :present="detail.hasPassword"
-              :label="t('passwords.fields.password')"
-            />
-            <UiButton
-              v-if="detail.hasPassword"
-              variant="ghost"
-              size="icon"
-              :aria-label="
-                t('passwords.copy', { field: t('passwords.fields.password') })
-              "
-              data-testid="passwords-copy-password"
-              @click="
-                copyAsync({ kind: 'password' }, t('passwords.fields.password'))
-              "
-            >
-              <Icon name="lucide:copy" class="size-4" />
-            </UiButton>
-          </SettingsRow>
-          <SettingsRow v-if="detail.url" :title="t('passwords.fields.url')">
-            <span class="min-w-0 truncate" data-testid="passwords-value-url">{{
-              detail.url
-            }}</span>
-          </SettingsRow>
-          <SettingsRow
-            v-if="detail.expiresAt"
-            :title="t('passwords.fields.expires')"
-          >
-            <span>{{ detail.expiresAt }}</span>
-          </SettingsRow>
-        </SettingsGroup>
-
-        <SettingsGroup
-          v-if="detail.otpState !== 'none'"
-          :label="t('passwords.fields.totp')"
-        >
-          <li class="px-4 py-3">
-            <PasswordsTotpCode
+        <PasswordsEntryTabs v-model="activeTab" :tabs="TABS">
+          <template #details>
+            <PasswordsViewDetails
               :item-id="itemId"
-              :state="detail.otpState"
-              @copy="copyAsync({ kind: 'totp' }, t('passwords.fields.totp'))"
-              @replace="edit"
-              @remove="removeOtpAsync"
+              :detail="detail"
+              @copy="copyAsync"
+              @edit="edit"
+              @remove-otp="removeOtpAsync"
             />
-          </li>
-        </SettingsGroup>
-
-        <SettingsGroup
-          v-if="detail.keyValues.length"
-          :label="t('passwords.fields.custom')"
-        >
-          <SettingsRow
-            v-for="field in detail.keyValues"
-            :key="field.id"
-            :title="field.key ?? ''"
-          >
-            <PasswordsMaskedValue
-              :fetch="
-                async () =>
-                  (
-                    await revealAsync(itemId, {
-                      kind: 'keyValue',
-                      id: field.id,
-                    })
-                  ).value
-              "
-              :identity="`${itemId}:${field.id}`"
-              kind="keyValue"
-              :present="field.hasValue"
-              :label="field.key ?? ''"
+          </template>
+          <template #extra>
+            <PasswordsViewExtra
+              :item-id="itemId"
+              :detail="detail"
+              @copy="copyAsync"
+              @changed="loadAsync"
             />
-            <UiButton
-              v-if="field.hasValue"
-              variant="ghost"
-              size="icon"
-              :aria-label="t('passwords.copy', { field: field.key ?? '' })"
-              @click="
-                copyAsync({ kind: 'keyValue', id: field.id }, field.key ?? '')
-              "
-            >
-              <Icon name="lucide:copy" class="size-4" />
-            </UiButton>
-          </SettingsRow>
-        </SettingsGroup>
-
-        <SettingsGroup v-if="detail.note" :label="t('passwords.fields.note')">
-          <li
-            class="px-4 py-3 text-sm whitespace-pre-wrap"
-            data-testid="passwords-value-note"
-          >
-            {{ detail.note }}
-          </li>
-        </SettingsGroup>
-
-        <div
-          v-if="detail.tags.length"
-          class="flex flex-wrap gap-1.5"
-          data-testid="passwords-entry-tags"
-        >
-          <ShadcnBadge
-            v-for="tag in detail.tags"
-            :key="tag.id"
-            variant="secondary"
-          >
-            {{ tag.name }}
-          </ShadcnBadge>
-        </div>
-
-        <PasswordsAttachments
-          :item-id="itemId"
-          :attachments="detail.attachments"
-          @changed="loadAsync"
-        />
-
-        <PasswordsPasskeys
-          :item-id="itemId"
-          :passkeys="detail.passkeys"
-          @changed="loadAsync"
-        />
+          </template>
+          <template #history>
+            <PasswordsHistoryTab
+              :item-id="itemId"
+              :updated-at="detail.updatedAt"
+              :active="activeTab === 'history'"
+              @restored="onRestored"
+            />
+          </template>
+        </PasswordsEntryTabs>
       </template>
     </div>
   </div>

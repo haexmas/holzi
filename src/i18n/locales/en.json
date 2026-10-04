@@ -1327,7 +1327,11 @@
         "tags": "Tags",
         "keyValues": "Custom fields",
         "attachments": "Attachments"
-      }
+      },
+      "savedAt": "Saved on {when}",
+      "nothingOlder": "Nothing older: this is the first state of the entry.",
+      "restoreTitle": "Restore this state?",
+      "restoreBody": "The entry takes the values of this state. The state it replaces stays in the history."
     },
     "attachments": {
       "title": "Attachments",
@@ -1438,6 +1442,12 @@
       "deleted": "This entry was deleted on another device.",
       "reload": "Reload",
       "back": "Back"
+    },
+    "tabs": {
+      "label": "Sections of the entry",
+      "details": "Details",
+      "extra": "Extra",
+      "history": "History"
     }
   },
   "extensions": {
