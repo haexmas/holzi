@@ -9,13 +9,36 @@
 import type { SnapshotHeader } from '@bindings/SnapshotHeader'
 import { relativeTime } from '~/lib/passwords/format'
 
-defineProps<{
+const props = defineProps<{
   states: readonly SnapshotHeader[]
   selectedId: string | null
 }>()
 const emit = defineEmits<{ select: [id: string] }>()
 
 const { t, d, locale } = useI18n()
+
+function selectWithArrow(event: KeyboardEvent, index: number) {
+  const direction =
+    event.key === 'ArrowDown' || event.key === 'ArrowRight'
+      ? 1
+      : event.key === 'ArrowUp' || event.key === 'ArrowLeft'
+        ? -1
+        : 0
+  if (direction === 0 || props.states.length === 0) return
+  event.preventDefault()
+  const nextIndex =
+    (index + direction + props.states.length) % props.states.length
+  const next = props.states[nextIndex]
+  if (!next) return
+  emit('select', next.id)
+  void nextTick(() => {
+    timeline.value
+      ?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
+      [nextIndex]?.focus()
+  })
+}
+
+const timeline = ref<HTMLOListElement | null>(null)
 
 function exact(stamp: string | null): string {
   if (!stamp) return '–'
@@ -40,6 +63,7 @@ function changedLabel(names: readonly string[]): string {
 
 <template>
   <ol
+    ref="timeline"
     class="flex gap-2 overflow-x-auto @md:flex-col @md:gap-0 @md:overflow-visible"
     role="radiogroup"
     :aria-label="t('passwords.history.states')"
@@ -63,8 +87,12 @@ function changedLabel(names: readonly string[]): string {
         :title="exact(state.modifiedAt)"
         class="flex w-full min-w-0 items-start gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         :class="selectedId === state.id ? 'bg-accent' : ''"
+        :tabindex="
+          selectedId === state.id || (!selectedId && index === 0) ? 0 : -1
+        "
         :data-testid="`passwords-history-state-${state.id}`"
         @click="emit('select', state.id)"
+        @keydown="selectWithArrow($event, index)"
       >
         <span
           class="relative z-10 mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border bg-background"

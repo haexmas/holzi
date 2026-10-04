@@ -165,6 +165,15 @@ scenario('passwords-tabs', {}, async (ctx) => {
     `passwords-history-state-${states[0]}`,
     'the newest state is chosen first',
   )
+  await instance.type(`passwords-history-state-${states[0]}`, KEY.arrowDown)
+  await ctx.waitFor(
+    'the next history state by arrow key',
+    async () =>
+      (await instance.exec<string | null>(
+        `const on = document.querySelector('[data-testid^="passwords-history-state-"][aria-checked="true"]')
+         return on ? on.getAttribute('data-testid') : null`,
+      )) === `passwords-history-state-${states[1]}`,
+  )
   ctx.step('the timeline shows every state, newest chosen')
 
   // A secret of a state hides again when the tab is left.

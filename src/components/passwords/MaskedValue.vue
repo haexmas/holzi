@@ -68,7 +68,7 @@ onBeforeUnmount(hide)
 </script>
 
 <template>
-  <span class="flex min-w-0 items-center gap-2">
+  <span class="flex min-w-0 items-center gap-2" data-no-swipe>
     <span
       class="min-w-0 flex-1 truncate font-mono text-sm"
       :class="value === null ? 'text-muted-foreground' : ''"
