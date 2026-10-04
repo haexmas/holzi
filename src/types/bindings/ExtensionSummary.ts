@@ -56,6 +56,6 @@ status: string,
  */
 error?: string, }>,
 /**
- * A development version on this device (US12): listed while developer mode is on.
+ * A development version on this device (US12): enabled only while developer mode is on.
  */
 dev: boolean, };

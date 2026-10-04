@@ -197,11 +197,29 @@ scenario('extension-dev-mode', { timeoutMs: 300_000 }, async (ctx) => {
       ),
       'its tab is gone',
     )
-    assert.ok(
-      !JSON.stringify(await page.invoke('extension_list')).includes(id),
-      'not listed while developer mode is off',
+    // Still listed, so the settings can unload it, but not enabled: no launcher entry, no tab.
+    const listed = unwrap<Array<{ id: string; enabled: boolean }>>(
+      'extension_list',
+      await page.invoke('extension_list'),
+    ).find((e) => e.id === id)
+    assert.equal(
+      listed?.enabled,
+      false,
+      'not enabled while developer mode is off',
     )
-    ctx.step('developer mode off: the development version is gone')
+    await openSettings(page)
+    await page.click('settings-category-extensions')
+    await page.waitForDisplayed('extension-dev-unload', 5_000)
+    await page.click('extension-dev-unload')
+    await ctx.waitFor(
+      'the development version unloaded',
+      async () =>
+        !JSON.stringify(await page.invoke('extension_list')).includes(id),
+      { timeoutMs: 10_000 },
+    )
+    ctx.step(
+      'developer mode off: the development version is gone, unloaded from the settings',
+    )
   } finally {
     server.close()
   }

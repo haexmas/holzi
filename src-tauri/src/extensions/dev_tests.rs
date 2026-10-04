@@ -340,3 +340,28 @@ fn a_frame_of_a_development_version_runs_only_while_developer_mode_is_on() {
     let refused = call(&frame, "extension_get_info", &Value::Null).unwrap_err();
     assert_eq!(refused.code.as_u16(), 8002);
 }
+
+#[test]
+fn with_developer_mode_off_a_loaded_version_stays_listed_for_unloading_but_not_enabled() {
+    let s = setup();
+    s.mode(true);
+    let dir = project(&manifest(&key(), "draft"), "localhost");
+    let id = confirm(&s.vault, dir.path(), vec![], s.device, 1).unwrap();
+    let device = s.device;
+    let listed = |s: &Setup| {
+        s.vault
+            .read_blocking(move |q| {
+                crate::extensions::registry::list::list(q, device).map_err(Into::into)
+            })
+            .unwrap()
+            .into_iter()
+            .find(|e| e.id == id.to_string())
+            .map(|e| (e.dev, e.enabled))
+    };
+    assert_eq!(listed(&s), Some((true, true)));
+
+    s.mode(false);
+    assert_eq!(listed(&s), Some((true, false)));
+    unload(&s.vault, id).unwrap();
+    assert_eq!(listed(&s), None);
+}

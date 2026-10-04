@@ -152,7 +152,11 @@ fn follow(
             purge_hlc: purge_hlc.clone(),
         };
         let check = removal.clone();
-        if db.read_blocking(move |q| purge::due(q, &check))? {
+        // The tables of that prefix here are a development version's (US12): the clear-up waits
+        // until it is unloaded, which reconciles again.
+        if db.read_blocking(move |q| purge::due(q, &check))?
+            && !starting::dev_prefix_here(db, prefix).unwrap_or(true)
+        {
             purge::run(db, &removal, device)?;
             host.forget_effective(extension.id);
         }

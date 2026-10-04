@@ -241,12 +241,15 @@ export function useExtensionFrame(
     stopInit()
     for (const attempt of attempts) attempt.port1.close()
     attempts = []
+    // Events wait for the probe: a new document gets them on its channel, otherwise the old one.
+    events.reset()
     offerPort()
     initTimer = setInterval(offerPort, INIT_INTERVAL_MS)
     initDeadline = setTimeout(() => {
       stopInit()
       for (const attempt of attempts) attempt.port1.close()
       attempts = []
+      events.ready()
     }, INIT_TIMEOUT_MS)
   }
 

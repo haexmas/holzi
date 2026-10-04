@@ -74,7 +74,7 @@ pub struct ExtensionSummary {
     /// imports nothing (the check scripts load it with Node's own module rules).
     #[ts(inline)]
     pub devices: Vec<DeviceState>,
-    /// A development version on this device (US12): listed while developer mode is on.
+    /// A development version on this device (US12): enabled only while developer mode is on.
     pub dev: bool,
 }
 
@@ -210,19 +210,24 @@ pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
             dev: false,
         });
     }
-    if crate::extensions::dev::mode(q, device)? {
-        out.extend(
-            crate::extensions::dev::registrations(q, device)?
-                .into_iter()
-                .map(dev_summary),
-        );
-    }
+    // Also while developer mode is off, so the settings can still unload a development version
+    // that holds its prefix (a synced install waits for it); it is not enabled then, so neither
+    // the launcher nor a tab shows it.
+    let mode = crate::extensions::dev::mode(q, device)?;
+    out.extend(
+        crate::extensions::dev::registrations(q, device)?
+            .into_iter()
+            .map(|registration| dev_summary(registration, mode)),
+    );
     out.sort_by_key(|e| e.title.to_lowercase());
     Ok(out)
 }
 
 /// A development version as the launcher and the settings show it; what its manifest says now.
-fn dev_summary(registration: crate::extensions::dev::DevRegistration) -> ExtensionSummary {
+fn dev_summary(
+    registration: crate::extensions::dev::DevRegistration,
+    mode: bool,
+) -> ExtensionSummary {
     let manifest =
         crate::extensions::dev::read_project(std::path::Path::new(&registration.project_path))
             .ok()
@@ -236,7 +241,7 @@ fn dev_summary(registration: crate::extensions::dev::DevRegistration) -> Extensi
         description: manifest.as_ref().and_then(|m| m.description.clone()),
         version: manifest.as_ref().map(|m| m.version.to_string()),
         publisher_fingerprint: publisher_fingerprint(registration.prefix.public_key.as_str()),
-        enabled: true,
+        enabled: mode,
         state: "installed".to_owned(),
         kept_data_bytes: None,
         single_instance: manifest.as_ref().is_some_and(|m| m.single_instance),

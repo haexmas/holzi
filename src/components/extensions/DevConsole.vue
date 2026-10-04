@@ -10,8 +10,9 @@ const { t } = useI18n()
 const open = ref(false)
 const list = ref<HTMLElement | null>(null)
 
+// The array itself: at the limit a new line replaces an old one without changing the length.
 watch(
-  () => props.lines.length,
+  () => props.lines,
   async () => {
     if (!open.value) return
     await nextTick()

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * Developer mode in "Erweiterungen" (spec 017, US12, T096, FR-063): the switch for this device,
- * loading a project folder and the development versions loaded here with "Entladen". Switching
+ * loading a project folder and the development versions loaded here with "Entladen" (listed also
+ * while the mode is off, since a loaded one keeps its prefix until unloaded). Switching
  * reloads holzi's window, so its policy lets it frame development servers (research R16).
  */
 import { invoke } from '@tauri-apps/api/core'
@@ -72,34 +73,34 @@ onMounted(readAsync)
         @update:model-value="switchAsync($event === true)"
       />
     </SettingsRow>
-    <template v-if="enabled">
-      <SettingsRow
-        navigates
-        icon="lucide:folder-code"
-        :title="t('settings.extensions.dev.load')"
-        :description="t('settings.extensions.dev.loadHint')"
-        data-testid="extension-dev-load"
-        @select="loading = true"
-      />
-      <SettingsRow
-        v-for="extension in loaded"
-        :key="extension.id"
-        :title="extension.title"
-        :description="extension.version ?? ''"
-        :data-extension-id="extension.id"
-        data-testid="extension-dev-row"
+    <SettingsRow
+      v-if="enabled"
+      navigates
+      icon="lucide:folder-code"
+      :title="t('settings.extensions.dev.load')"
+      :description="t('settings.extensions.dev.loadHint')"
+      data-testid="extension-dev-load"
+      @select="loading = true"
+    />
+    <!-- Also while the mode is off: a loaded version still holds its prefix until unloaded. -->
+    <SettingsRow
+      v-for="extension in loaded"
+      :key="extension.id"
+      :title="extension.title"
+      :description="extension.version ?? ''"
+      :data-extension-id="extension.id"
+      data-testid="extension-dev-row"
+    >
+      <UiButton
+        size="sm"
+        variant="outline"
+        :disabled="busy"
+        data-testid="extension-dev-unload"
+        @click="unloadAsync(extension.id)"
       >
-        <UiButton
-          size="sm"
-          variant="outline"
-          :disabled="busy"
-          data-testid="extension-dev-unload"
-          @click="unloadAsync(extension.id)"
-        >
-          {{ t('settings.extensions.dev.unload') }}
-        </UiButton>
-      </SettingsRow>
-    </template>
+        {{ t('settings.extensions.dev.unload') }}
+      </UiButton>
+    </SettingsRow>
     <li v-if="failure" class="px-4 py-3 text-sm text-destructive" role="alert">
       {{ failure }}
     </li>

@@ -426,6 +426,13 @@ pub fn install(
 
     store_blobs(db, &bundle)?;
     let ids = db.write_blocking(move |tx| {
+        // Again in the write: a development version may have been loaded since the check above.
+        if crate::extensions::dev::prefixes(tx)?.contains(&prefix.to_string()) {
+            return Err(HolziError::ExtensionInstall {
+                reason: "dev_prefix_conflict".into(),
+            }
+            .into());
+        }
         let ids = write_registry_rows(tx, &bundle, &manifest, now_ms)?;
         apply_declarations(
             tx,
