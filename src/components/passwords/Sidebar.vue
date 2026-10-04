@@ -8,13 +8,15 @@
 import { toast } from 'vue-sonner'
 import type { GroupRow } from '@bindings/GroupRow'
 import type { Target } from '@bindings/Target'
-import { ITEMS_MIME, parseItemsPayload } from '~/lib/passwords/dnd'
+import { FOLDER_MIME, ITEMS_MIME, parseItemsPayload } from '~/lib/passwords/dnd'
+import { buildMenu, type MenuCommand } from '~/lib/passwords/menus'
 import {
   buildTree,
+  findNode,
   moveBefore,
   moveDown,
   moveUp,
-  type TreeNode,
+  TRASH_GROUP_ID,
 } from '~/lib/passwords/tree'
 
 const emit = defineEmits<{
@@ -26,7 +28,8 @@ const { t } = useI18n()
 const { errString } = useErrorString()
 const router = useTabRouter()
 const store = usePasswordsStore()
-const { reorderGroupsAsync, moveAsync } = usePasswords()
+const { reorderGroupsAsync } = usePasswords()
+const actions = usePasswordsActions()
 
 const tree = computed(() => buildTree(store.groups, store.headers))
 const expanded = ref(new Set<string>())
@@ -91,18 +94,6 @@ function siblingsOf(parentId: string | null): string[] {
   return level.map((node) => node.group.id)
 }
 
-function findNode(
-  nodes: TreeNode<GroupRow>[],
-  id: string,
-): TreeNode<GroupRow> | undefined {
-  for (const node of nodes) {
-    if (node.group.id === id) return node
-    const inner = findNode(node.children, id)
-    if (inner) return inner
-  }
-  return undefined
-}
-
 function parentOf(id: string): string | null {
   return store.groups.find((group) => group.id === id)?.parentId ?? null
 }
@@ -133,28 +124,70 @@ async function dropFolderAsync(dragged: string, target: string) {
   )
 }
 
+/** Entries and folders dropped on a folder or on "Alle Einträge" move there (spec 036, FR-020). */
 async function dropItemsAsync(groupId: string | null, ids: string[]) {
-  try {
-    const result = await moveAsync(
-      ids.map((id) => ({ kind: 'item' as const, id })),
-      groupId,
-    )
-    toast.success(t('passwords.moved', { count: result.moved }, result.moved))
-    await store.quietReloadAsync()
-  } catch (cause) {
-    toast.error(errString(cause))
+  await actions.moveIdsAsync(ids, groupId)
+}
+
+/** A command of a folder's menu in the tree (spec 036, FR-018). */
+async function runFolderCommand(command: MenuCommand, group: GroupRow) {
+  switch (command) {
+    case 'open':
+      go(`/folder/${group.id}`)
+      break
+    case 'edit':
+      editFolder(group)
+      break
+    case 'newSubfolder':
+      newFolder(group.id)
+      break
+    case 'moveUp':
+    case 'moveDown':
+      await moveFolderAsync(group.id, command === 'moveUp' ? 'up' : 'down')
+      break
+    case 'cut':
+      actions.cut([group.id])
+      break
+    case 'copy':
+      actions.copy([group.id])
+      break
+    case 'paste':
+      await actions.pasteAsync(group.id)
+      break
+    case 'delete':
+      askDeleteFolder(group)
+      break
+    default:
+      break
   }
 }
 
+const emptyTrashOpen = ref(false)
+const trashedFolders = computed(
+  () =>
+    tree.value.trash.groups.filter((group) => group.id !== TRASH_GROUP_ID)
+      .length,
+)
+const trashMenu = computed(() =>
+  buildMenu({
+    kind: 'trashNode',
+    trashEmpty: tree.value.trash.itemCount === 0 && trashedFolders.value === 0,
+  }),
+)
+
 function onRootDragOver(event: DragEvent) {
-  if (!event.dataTransfer?.types.includes(ITEMS_MIME)) return
+  const types = event.dataTransfer?.types ?? []
+  if (!types.includes(ITEMS_MIME) && !types.includes(FOLDER_MIME)) return
   event.preventDefault()
   rootDropping.value = true
 }
 
 async function onRootDrop(event: DragEvent) {
   rootDropping.value = false
-  const ids = parseItemsPayload(event.dataTransfer?.getData(ITEMS_MIME))
+  const folder = event.dataTransfer?.getData(FOLDER_MIME)
+  const ids = folder
+    ? [folder]
+    : parseItemsPayload(event.dataTransfer?.getData(ITEMS_MIME))
   if (ids.length === 0) return
   event.preventDefault()
   await dropItemsAsync(null, ids)
@@ -200,14 +233,9 @@ async function onRootDrop(event: DragEvent) {
         :depth="0"
         :sibling-ids="tree.roots.map((root) => root.group.id)"
         :active-id="activeFolderId"
-        can-delete
-        @select="go(`/folder/${$event}`)"
-        @edit="editFolder"
-        @new-child="newFolder"
-        @move="moveFolderAsync"
         @drop-folder="dropFolderAsync"
         @drop-items="dropItemsAsync"
-        @remove="askDeleteFolder"
+        @menu="runFolderCommand"
       />
     </ul>
 
@@ -243,23 +271,28 @@ async function onRootDrop(event: DragEvent) {
     </section>
 
     <div class="mt-auto flex flex-col gap-1">
-      <button
-        type="button"
-        class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
-        :class="place.kind === 'trash' ? 'bg-foreground/10 font-medium' : ''"
-        data-testid="passwords-trash"
-        @click="go('/trash')"
+      <PasswordsEntryMenu
+        :entries="trashMenu"
+        @run="(command) => command === 'emptyTrash' && (emptyTrashOpen = true)"
       >
-        <Icon name="lucide:trash-2" class="size-4 shrink-0" />
-        <span class="min-w-0 flex-1 truncate">{{
-          t('passwords.trash.title')
-        }}</span>
-        <span
-          v-if="tree.trash.itemCount"
-          class="text-xs text-muted-foreground"
-          >{{ tree.trash.itemCount }}</span
+        <button
+          type="button"
+          class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
+          :class="place.kind === 'trash' ? 'bg-foreground/10 font-medium' : ''"
+          data-testid="passwords-trash"
+          @click="go('/trash')"
         >
-      </button>
+          <Icon name="lucide:trash-2" class="size-4 shrink-0" />
+          <span class="min-w-0 flex-1 truncate">{{
+            t('passwords.trash.title')
+          }}</span>
+          <span
+            v-if="tree.trash.itemCount"
+            class="text-xs text-muted-foreground"
+            >{{ tree.trash.itemCount }}</span
+          >
+        </button>
+      </PasswordsEntryMenu>
       <UiButton
         variant="ghost"
         size="sm"
@@ -312,6 +345,11 @@ async function onRootDrop(event: DragEvent) {
       v-model:open="deleteOpen"
       :targets="deleteTargets"
       @done="afterFolderDelete"
+    />
+    <PasswordsEmptyTrashDialog
+      v-model:open="emptyTrashOpen"
+      :entries="tree.trash.itemCount"
+      :folders="trashedFolders"
     />
   </div>
 </template>

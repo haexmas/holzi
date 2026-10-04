@@ -1,3 +1,8 @@
+<script lang="ts">
+/** How many password manager frames are open, across all windows of the process. */
+let openFrames = 0
+</script>
+
 <script setup lang="ts">
 /**
  * The password manager frame (spec 034-password-manager, research R13), laid out like the chat and
@@ -12,6 +17,20 @@ const store = usePasswordsStore()
 onMounted(() => {
   void store.reloadAsync()
 })
+
+// Spec 036 (FR-021): the Ablage is shared by every window of the password manager and dropped when
+// the last one closes.
+const clipboard = usePasswordsClipboardStore()
+onMounted(() => {
+  openFrames += 1
+})
+onBeforeUnmount(() => {
+  openFrames -= 1
+  if (openFrames === 0) clipboard.clear()
+})
+
+// Spec 036 (FR-016): the list shortcuts act with the focus anywhere in this window.
+const { onKeydown } = providePasswordsShortcuts()
 
 const root = useTemplateRef<HTMLElement>('root')
 const sidebar = useTemplateRef<HTMLElement>('sidebar')
@@ -36,7 +55,12 @@ function onEscape() {
 </script>
 
 <template>
-  <div ref="root" class="@container flex h-full min-h-0 flex-col bg-muted/20">
+  <div
+    ref="root"
+    class="@container flex h-full min-h-0 flex-col bg-muted/20"
+    data-passwords-app
+    @keydown="onKeydown"
+  >
     <PasswordsToolbar
       class="h-13 shrink-0 px-2"
       :sidebar-visible="visible"

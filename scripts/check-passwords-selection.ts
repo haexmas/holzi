@@ -13,6 +13,7 @@ import {
   isSelected,
   pruneSelection,
   selectAll,
+  selectAllState,
   selectRange,
   toggle,
 } from '../src/lib/passwords/selection.ts'
@@ -82,4 +83,18 @@ test('the drag payload round trips ids and refuses anything else', () => {
   assert.deepEqual(parseItemsPayload('{"a":1}'), [])
   assert.deepEqual(parseItemsPayload('[1,2]'), [])
   assert.deepEqual(parseItemsPayload('["a",""]'), [])
+})
+
+test('the select-all box is empty, partly filled or full (spec 036, FR-012)', () => {
+  assert.equal(selectAllState([], VISIBLE), 'none')
+  assert.equal(selectAllState(['b'], VISIBLE), 'some')
+  assert.equal(selectAllState([...VISIBLE].reverse(), VISIBLE), 'all')
+  // What no longer shows does not count: all visible ones selected is "all".
+  assert.equal(selectAllState([...VISIBLE, 'gone'], VISIBLE), 'all')
+  assert.equal(selectAllState(['gone'], VISIBLE), 'none')
+  assert.equal(selectAllState([], []), 'none')
+})
+
+test('a drag of a selected folder row carries the selection with its entries (spec 036, FR-020)', () => {
+  assert.deepEqual(draggedIds('folder', ['a', 'folder']), ['a', 'folder'])
 })

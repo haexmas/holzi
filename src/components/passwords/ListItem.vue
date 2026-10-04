@@ -2,9 +2,12 @@
 /**
  * One entry in the list (spec 034, FR-001, FR-008, US1): icon, title (or the placeholder text of the
  * window for an entry without one), username, tag chips, a badge when it has expired and markers
- * for a TOTP and for passkeys. It holds a header only, never a secret.
+ * for a TOTP and for passkeys. It holds a header only, never a secret. Spec 036 adds the context
+ * menu and the menu button (FR-018), the dimming of a cut entry (FR-013) and the one tab stop of
+ * the list (arrow keys move it, FR-016).
  */
 import type { ItemHeader } from '@bindings/ItemHeader'
+import type { MenuCommand, MenuEntry } from '~/lib/passwords/menus'
 import { DEFAULT_ENTRY_ICON } from '~/lib/passwords/icons'
 import { draggedIds, ITEMS_MIME, itemsPayload } from '~/lib/passwords/dnd'
 import { displayTitle, isExpired, localDay } from '~/lib/passwords/format'
@@ -15,6 +18,11 @@ const props = defineProps<{
   selected?: boolean
   /** Whether a selection is going on (a plain click then toggles instead of opening). */
   selecting?: boolean
+  /** The entry lies cut in the Ablage. */
+  dimmed?: boolean
+  /** The row holds the one tab stop of the list. */
+  tabStop?: boolean
+  menuEntries: readonly MenuEntry[]
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +30,10 @@ const emit = defineEmits<{
   activate: [event: MouseEvent]
   /** A long press on a touch screen starts or extends the selection. */
   longPress: []
+  menu: [command: MenuCommand]
+  /** A menu of the row opens. */
+  menuOpen: []
+  focus: []
 }>()
 
 const { t } = useI18n()
@@ -41,6 +53,8 @@ function startPress(event: PointerEvent) {
   pressed = false
   pressTimer = setTimeout(() => {
     pressed = true
+    // A short buzz where the device has one (FR-011).
+    navigator.vibrate?.(15)
     emit('longPress')
   }, 500)
 }
@@ -67,83 +81,107 @@ function onDragStart(event: DragEvent) {
 </script>
 
 <template>
-  <li>
-    <button
-      type="button"
-      class="flex min-h-14 w-full items-center gap-4 px-4 py-3 text-left hover:bg-foreground/5"
-      :class="selected ? 'bg-primary/10' : ''"
-      :aria-pressed="selecting ? selected : undefined"
-      draggable="true"
-      :data-testid="`passwords-entry-${header.id}`"
-      @click="onClick"
-      @dragstart="onDragStart"
-      @pointerdown="startPress"
-      @pointerup="endPress"
-      @pointerleave="endPress"
-      @pointercancel="endPress"
+  <PasswordsEntryMenu
+    :entries="menuEntries"
+    @run="emit('menu', $event)"
+    @open="emit('menuOpen')"
+  >
+    <li
+      class="group flex items-center pr-2 hover:bg-foreground/5"
+      :class="[
+        selected ? 'bg-primary/10' : '',
+        dimmed ? 'opacity-50 grayscale' : '',
+      ]"
+      @contextmenu.stop
     >
-      <ShadcnCheckbox
-        v-if="selecting"
-        :model-value="selected"
-        class="pointer-events-none shrink-0"
-        tabindex="-1"
-        aria-hidden="true"
-      />
-      <span
-        class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background"
-        :style="header.color ? { color: header.color } : undefined"
-        aria-hidden="true"
+      <button
+        type="button"
+        class="flex min-h-14 min-w-0 flex-1 items-center gap-4 py-3 pl-4 text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
+        :aria-pressed="selecting ? selected : undefined"
+        :tabindex="tabStop ? 0 : -1"
+        draggable="true"
+        :data-row-id="header.id"
+        :data-testid="`passwords-entry-${header.id}`"
+        @click="onClick"
+        @focus="emit('focus')"
+        @dragstart="onDragStart"
+        @pointerdown="startPress"
+        @pointerup="endPress"
+        @pointerleave="endPress"
+        @pointercancel="endPress"
       >
-        <span class="size-5">
-          <PasswordsEntryIcon
-            :value="header.icon"
-            :fallback="DEFAULT_ENTRY_ICON"
-          />
-        </span>
-      </span>
-      <span class="flex min-w-0 flex-1 flex-col">
+        <ShadcnCheckbox
+          v-if="selecting"
+          :model-value="selected"
+          class="pointer-events-none shrink-0"
+          tabindex="-1"
+          aria-hidden="true"
+        />
         <span
-          class="truncate"
-          :class="title === null ? 'text-muted-foreground italic' : ''"
+          class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background"
+          :style="header.color ? { color: header.color } : undefined"
+          aria-hidden="true"
         >
-          {{ title ?? t('passwords.untitled') }}
+          <span class="size-5">
+            <PasswordsEntryIcon
+              :value="header.icon"
+              :fallback="DEFAULT_ENTRY_ICON"
+            />
+          </span>
         </span>
-        <span
-          v-if="header.username"
-          class="truncate text-sm text-muted-foreground"
-        >
-          {{ header.username }}
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span
+            class="truncate"
+            :class="title === null ? 'text-muted-foreground italic' : ''"
+          >
+            {{ title ?? t('passwords.untitled') }}
+          </span>
+          <span
+            v-if="header.username"
+            class="truncate text-sm text-muted-foreground"
+          >
+            {{ header.username }}
+          </span>
         </span>
-      </span>
-      <span class="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-        <ShadcnBadge v-if="expired" variant="destructive">
-          {{ t('passwords.expired') }}
-        </ShadcnBadge>
-        <span
-          v-if="header.hasTotp"
-          class="text-muted-foreground"
-          :title="t('passwords.markers.totp')"
-        >
-          <Icon name="lucide:timer" class="size-4" />
-          <span class="sr-only">{{ t('passwords.markers.totp') }}</span>
+        <span class="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <ShadcnBadge v-if="expired" variant="destructive">
+            {{ t('passwords.expired') }}
+          </ShadcnBadge>
+          <span
+            v-if="header.hasTotp"
+            class="text-muted-foreground"
+            :title="t('passwords.markers.totp')"
+          >
+            <Icon name="lucide:timer" class="size-4" />
+            <span class="sr-only">{{ t('passwords.markers.totp') }}</span>
+          </span>
+          <span
+            v-if="header.passkeyCount > 0"
+            class="text-muted-foreground"
+            :title="t('passwords.markers.passkey')"
+          >
+            <Icon name="lucide:fingerprint" class="size-4" />
+            <span class="sr-only">{{ t('passwords.markers.passkey') }}</span>
+          </span>
+          <ShadcnBadge
+            v-for="tag in header.tags"
+            :key="tag.id"
+            variant="secondary"
+            :style="tag.color ? { color: tag.color } : undefined"
+          >
+            {{ tag.name }}
+          </ShadcnBadge>
         </span>
-        <span
-          v-if="header.passkeyCount > 0"
-          class="text-muted-foreground"
-          :title="t('passwords.markers.passkey')"
-        >
-          <Icon name="lucide:fingerprint" class="size-4" />
-          <span class="sr-only">{{ t('passwords.markers.passkey') }}</span>
-        </span>
-        <ShadcnBadge
-          v-for="tag in header.tags"
-          :key="tag.id"
-          variant="secondary"
-          :style="tag.color ? { color: tag.color } : undefined"
-        >
-          {{ tag.name }}
-        </ShadcnBadge>
-      </span>
-    </button>
-  </li>
+      </button>
+      <PasswordsEntryMenuButton
+        :entries="menuEntries"
+        :label="
+          t('passwords.menu.button', { name: title ?? t('passwords.untitled') })
+        "
+        :data-testid="`passwords-entry-menu-${header.id}`"
+        @run="emit('menu', $event)"
+        @open="emit('menuOpen')"
+      />
+    </li>
+  </PasswordsEntryMenu>
 </template>

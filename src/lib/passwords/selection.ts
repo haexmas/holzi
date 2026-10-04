@@ -59,6 +59,18 @@ export function selectAll(visible: readonly string[]): SelectionState {
   return { selected: [...visible], anchor: visible.at(-1) ?? null }
 }
 
+/** The state of the "select all" box (spec 036, FR-012): none, some or all of the visible rows
+ * are selected; selected ids that do not show do not count. */
+export function selectAllState(
+  selected: readonly string[],
+  visible: readonly string[],
+): 'none' | 'some' | 'all' {
+  const chosen = new Set(selected)
+  const count = visible.filter((id) => chosen.has(id)).length
+  if (count === 0) return 'none'
+  return count === visible.length ? 'all' : 'some'
+}
+
 /** Drops ids that no longer exist (an entry deleted elsewhere, a filter that hides it). */
 export function pruneSelection(
   state: SelectionState,
