@@ -45,6 +45,10 @@ use hold::{settle, steps, Group, Settled};
 pub mod park;
 use park::{Context, Sorted};
 
+#[path = "inbound_receive_park.rs"]
+mod receive_park;
+use receive_park::Parking;
+
 /// haex-crdt's delete log, a synced table like any other.
 const DELETED_ROWS_TABLE: &str = "haex_deleted_rows";
 
@@ -208,7 +212,6 @@ impl Inbox {
         let mut context = query::read(db, |r| Context::read(r))?;
         context.extend_noted(&self.noted);
         let limits = query::read(db, |r| removal_limits(r))?;
-        let park_limit = self.park_limit.unwrap_or(park::PARKED_LIMIT_BYTES);
 
         let mut received = Received {
             done: !page.more,
@@ -216,8 +219,7 @@ impl Inbox {
         };
         let mut arrived: Vec<Group> = Vec::new();
         let mut rejected: Vec<(Uuid, String)> = Vec::new();
-        let mut parked: Vec<(String, park::Parked, usize)> = Vec::new();
-        let mut newly_full: Vec<String> = Vec::new();
+        let mut parking = Parking::default();
         let mut group_updates = Vector::new();
         for (hlc, group) in groups {
             let origin = progress::origin_of(&hlc)
@@ -248,7 +250,7 @@ impl Inbox {
                 rejected.push((origin, hlc));
                 continue;
             }
-            let group = match sorted {
+            match sorted {
                 Sorted::Apply(columns) => {
                     self.noted.extend(context.note(&columns));
                     arrived.push(Group {
@@ -256,49 +258,16 @@ impl Inbox {
                         hlc,
                         columns,
                     });
-                    continue;
                 }
-                Sorted::Park(group) => group,
-            };
-            if let Some(snapshot) = &mut self.snapshot {
-                snapshot.rows.extend(
-                    group
-                        .columns
-                        .iter()
-                        .map(|c| (c.table_name.clone(), c.row_pks.clone())),
-                );
+                Sorted::Park(group) => {
+                    self.park_group(&mut context, &mut parking, origin, hlc, group, bytes);
+                }
             }
-            let full = self.full_prefixes.contains(&group.prefix)
-                || context.parked_bytes(&group.prefix).saturating_add(bytes) > park_limit;
-            if full {
-                if self.full_prefixes.insert(group.prefix.clone()) {
-                    newly_full.push(group.prefix.clone());
-                    log::warn!(
-                        "sync: parked groups of extension {} reached {park_limit} bytes; \
-                         its origin's progress waits until it is installed or removed",
-                        group.prefix
-                    );
-                }
-                if self
-                    .blocked
-                    .get(&origin)
-                    .is_none_or(|lowest| compare_hlc_strings(&hlc, lowest) == Ordering::Less)
-                {
-                    self.blocked.insert(origin, hlc);
-                }
-                continue;
-            }
-            log::info!(
-                "sync: parked a group for extension {} ({})",
-                group.prefix,
-                group.reason
-            );
-            context.add_parked(&group.prefix, &hlc, bytes);
-            received.parked_groups += 1;
-            parked.push((hlc, group, bytes));
         }
         let mut candidates = std::mem::take(&mut self.held);
         candidates.extend(arrived);
+        let candidates = self.park_with_parked(&mut context, &mut parking, candidates)?;
+        received.parked_groups = parking.parked.len();
         let Settled { apply, held } = settle(db, candidates, !page.more)?;
         let held_bytes = held.iter().try_fold(0usize, |total, group| {
             group_bytes(&group.columns).map(|bytes| total.saturating_add(bytes))
@@ -327,7 +296,8 @@ impl Inbox {
             }
         }
         let mut updates = Vector::new();
-        let parked_at = parked
+        let parked_at = parking
+            .parked
             .iter()
             .filter_map(|(hlc, _, _)| Some((progress::origin_of(hlc)?, hlc.clone())));
         for (origin, hlc) in rejected
@@ -393,14 +363,14 @@ impl Inbox {
         // Parked groups count as received: stored in the write that moves
         // progress past them, with the state of an extension at its limit.
         if !updates.is_empty()
-            || !parked.is_empty()
-            || !newly_full.is_empty()
+            || !parking.parked.is_empty()
+            || !parking.newly_full.is_empty()
             || !self.full_prefixes.is_empty()
         {
             let now_ms = crate::passwords::clock::unix_millis(std::time::SystemTime::now());
             let full_prefixes: Vec<String> = self.full_prefixes.iter().cloned().collect();
             db.write(|tx| {
-                park::store(tx, &parked, now_ms)?;
+                park::store(tx, &parking.parked, now_ms)?;
                 // A registry row can arrive on a later page than the group that filled the
                 // parking limit. Re-check every prefix already full in this Inbox so that page
                 // boundaries do not lose the status update.
