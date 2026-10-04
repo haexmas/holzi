@@ -517,6 +517,8 @@ des Entwicklermodus das Hauptfenster neu (vermutet, Prüfaufgabe). Der Rahmen be
 holzi nicht; ihre CSP ist Sache der Entwicklerin, Netzsperre und Inline-Hashes gelten im Entwicklermodus also
 nicht (Bewusste Grenze). Konsolenausgabe des Rahmens zeigt holzi in einem Bereich des Tabs.
 
+**Umsetzung (L3)**: Die Migrationen kommen nicht von der Platte, sondern aus `extension_database_register_migrations`, mit dem die Erweiterung sie ohnehin meldet (wie HV im Entwicklermodus): die Regeln für das Lesen von Migrationen aus einem Bundle liegen privat in `haex-bundle`, ein zweiter Leser in holzi wäre eine zweite Implementierung. Sie laufen durch dieselbe Prüfung und im lokalen Modus. Erlaubt sind nur `localhost` und `127.0.0.1`, weil eine CSP-Quelle keine IPv6-Adresse nennen kann. Das Hauptfenster wird in `setup` gebaut (`create: false`), damit es den Haken `on_web_resource_request` bekommt; im `tauri dev` mit Entwicklungsserver ruft Tauri ihn nicht auf, dort lädt der Rahmen einer Entwicklungsfassung also nicht. Nach dem Entsperren mit eingeschaltetem Modus lädt das Fenster einmal neu (das Dokument stammt von vor dem Entsperren); ein Merker in `sessionStorage` verhindert eine Schleife. Geprüft unter Linux (WebKitGTK, E2E-Szene `extension-dev-mode`); macOS und Windows sind noch offen.
+
 **Begründung**: geräteeigen per Bauart; keine SDK-Änderung; derselbe Ablauf wie HV über den Projektordner,
 aber ohne dessen synchronisierte Registrierung (HV `dev_server.rs:266, 301`).
 
