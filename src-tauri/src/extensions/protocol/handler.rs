@@ -96,11 +96,16 @@ pub fn serve(
     // frame still on an older version finds its own (content-hashed) chunks after an update.
     let mut bundles: Vec<Uuid> = Vec::new();
     match &token {
-        Some(session) => bundles.push(session.bundle_id),
+        Some(session) => bundles.extend(session.source.bundle()),
         None => {
-            for session in host.frames.of_extension(extension_id) {
-                if !bundles.contains(&session.bundle_id) {
-                    bundles.push(session.bundle_id);
+            for bundle in host
+                .frames
+                .of_extension(extension_id)
+                .into_iter()
+                .filter_map(|session| session.source.bundle())
+            {
+                if !bundles.contains(&bundle) {
+                    bundles.push(bundle);
                 }
             }
         }

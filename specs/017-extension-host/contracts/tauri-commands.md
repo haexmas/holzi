@@ -31,14 +31,15 @@ Ereignis `extension-permission-request` (siehe [permissions.md](./permissions.md
 
 ## Grenzwerte, Protokolle, Entwicklermodus (L3)
 
-| Command                                         | Eingabe                                   | Ausgabe                                                   |
-| ----------------------------------------------- | ----------------------------------------- | --------------------------------------------------------- |
-| `extension_limits_get` / `extension_limits_set` | `{extensionId}` / `{extensionId, limits}` | `ExtensionLimitsView {values, min, max}` / –              |
-| `extension_logs_read`                           | `{extensionId, level?, limit, before?}`   | `LogEntry[]`                                              |
-| `extension_dev_mode_set`                        | `{enabled}`                               | – (gerätebezogene Einstellung; lädt das Hauptfenster neu) |
-| `extension_dev_load`                            | `{projectPath}`                           | `InstallPreview`                                          |
-| `extension_dev_confirm`                         | `{projectPath, accepted}`                 | `ExtensionSummary`                                        |
-| `extension_dev_unload`                          | `{devExtensionId, deleteData}`            | –                                                         |
+| Command                                         | Eingabe                                   | Ausgabe                                                                                                    |
+| ----------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `extension_limits_get` / `extension_limits_set` | `{extensionId}` / `{extensionId, limits}` | `ExtensionLimitsView {values, min, max}` / –                                                               |
+| `extension_logs_read`                           | `{extensionId, level?, limit, before?}`   | `LogEntry[]`                                                                                               |
+| `extension_dev_mode_get`                        | –                                         | `DevModeState`; ist der Modus an und das Dokument ohne Freigabe geladen, lädt das Fenster einmal neu (R16) |
+| `extension_dev_mode_set`                        | `{enabled}`                               | `DevModeState {enabled, framesAllowed}` (gerätebezogene Einstellung; das Fenster lädt danach neu)          |
+| `extension_dev_load`                            | `{projectPath}`                           | `InstallPreview` (abgelehnt mit Grund, solange der Modus aus ist oder das Präfix belegt ist)               |
+| `extension_dev_confirm`                         | `{projectPath, accepted}`                 | Kennung der Entwicklungsfassung                                                                            |
+| `extension_dev_unload`                          | `{extensionId}`                           | – (löscht Registrierung, Berechtigungen, Speicher und Tabellen)                                            |
 
 `Limits` hat `maxRows`, `maxConcurrent`, `maxSqlBytes`, `timeoutMs` und `maxResponseBytes`. Nur holzi prüft die
 Grenzen und liefert sie mit, damit die Einstellungen sie anzeigen: Zeilen 1 bis 1.000.000, gleichzeitige Anfragen

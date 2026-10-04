@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use super::ast_check::{check, cte_names};
 use super::authorizer;
+use super::migrate::Tables;
 use super::parse::{parse_one, returns_rows, violation};
 use super::policy::SqlPolicy;
 use super::values::{encoded_size, to_json};
@@ -334,6 +335,18 @@ pub fn run(
     limits: &Limits,
     checked: Vec<Checked>,
 ) -> Result<SqlResult, BridgeError> {
+    run_in(db, policy, limits, checked, Tables::Synced)
+}
+
+/// [`run`] for a caller whose own tables are `tables`: a development version (US12) writes its
+/// tables without CRDT columns in haex-crdt's local mode, which still stamps every synced table.
+pub fn run_in(
+    db: &VaultDb,
+    policy: Arc<SqlPolicy>,
+    limits: &Limits,
+    checked: Vec<Checked>,
+    tables: Tables,
+) -> Result<SqlResult, BridgeError> {
     let guard = guard(policy, &checked, limits);
     let collector = RowCollector::new(*limits);
     if let [only] = checked.as_slice() {
@@ -356,7 +369,11 @@ pub fn run(
             });
         }
     }
-    db.write_guarded_blocking(&guard, GuardedWriteOptions::default(), |tx| {
+    let options = GuardedWriteOptions {
+        local: tables == Tables::DeviceLocal,
+        ..GuardedWriteOptions::default()
+    };
+    db.write_guarded_blocking(&guard, options, |tx| {
         let mut result = SqlResult::default();
         for statement in &checked {
             let params = sql_refs(&statement.params);
