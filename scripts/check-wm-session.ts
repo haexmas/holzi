@@ -161,7 +161,10 @@ type PortLog = {
   setRestore: boolean[]
 }
 
-function fakePort(load: SessionPort['load']): {
+function fakePort(
+  load: SessionPort['load'],
+  getRestore: SessionPort['getRestore'] = async () => OFF,
+): {
   port: SessionPort
   log: PortLog
 } {
@@ -176,17 +179,20 @@ function fakePort(load: SessionPort['load']): {
         log.setRestore.push(enabled)
         return { enabled }
       },
-      getRestore: async () => OFF,
+      getRestore,
       flushAsync: async () => {},
     },
   }
 }
 
-function makeSync(load: SessionPort['load']) {
+function makeSync(
+  load: SessionPort['load'],
+  getRestore?: SessionPort['getRestore'],
+) {
   const state = emptyState()
   const histories = new Map<string, TabHistory>()
   let restoredCalls = 0
-  const { port, log } = fakePort(load)
+  const { port, log } = fakePort(load, getRestore)
   const sync = createSessionSync({
     state,
     histories,
@@ -309,6 +315,64 @@ test('setRestoreAsync goes through the port and takes over the new setting', asy
   assert.equal(off.enabled, false)
   sync.saveNow()
   assert.equal(log.saveNow.length, 1, 'no save after turning off')
+})
+
+test('an app opened before the restore is opened again in the restored session', async () => {
+  let finishLoad: (value: {
+    restore: RestoreState
+    session: unknown
+  }) => void = () => {}
+  const { state, sync } = makeSync(
+    () =>
+      new Promise((resolve) => {
+        finishLoad = resolve
+      }),
+  )
+  const restoring = sync.restoreAsync()
+  const open = () => openApp(state, BETA.id, APPS)
+  sync.noteOpened(open)
+  open()
+  const session = savedSession()
+  session.windows[0]!.tabs = session.windows[0]!.tabs.filter(
+    (t) => t.appId === ALPHA.id,
+  )
+  session.windows[0]!.activeTabId = 't1'
+  finishLoad({ restore: ON, session: JSON.parse(JSON.stringify(session)) })
+  await restoring
+  assert.equal(sync.isRestored(), true)
+  const appIds = state.windows.flatMap((w) => w.tabs.map((t) => t.appId))
+  assert.deepEqual(
+    [...appIds].sort(),
+    [ALPHA.id, BETA.id].sort(),
+    'the saved session and the app opened meanwhile',
+  )
+  sync.noteOpened(() => assert.fail('nothing is noted after the restore'))
+})
+
+test('a setting turned on elsewhere is taken over and saves at once (spec 023 FR-024)', async () => {
+  const { state, sync, log } = makeSync(
+    async () => ({ restore: OFF, session: null }),
+    async () => ON,
+  )
+  await sync.refreshRestoreAsync()
+  assert.equal(sync.isEnabled(), false, 'not before the restore')
+  assert.equal(log.saveNow.length, 0, 'the empty start is never saved')
+  await sync.restoreAsync()
+  assert.equal(sync.isEnabled(), true, 'read again right after the restore')
+  openApp(state, ALPHA.id, APPS)
+  sync.saveNow()
+  assert.equal(log.saveNow.length, 2)
+})
+
+test('a setting turned off elsewhere stops saving', async () => {
+  const { sync, log } = makeSync(
+    async () => ({ restore: ON, session: savedSession() }),
+    async () => OFF,
+  )
+  await sync.restoreAsync()
+  await sync.refreshRestoreAsync()
+  sync.saveNow()
+  assert.equal(log.saveNow.length, 0)
 })
 
 test('the session restore action result fits its schema (one vault value, spec 023)', () => {
