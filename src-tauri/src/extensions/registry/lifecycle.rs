@@ -130,7 +130,7 @@ pub fn reconcile(
             Err(error) => log::warn!("extension {}: following failed: {error}", extension.id),
         }
     }
-    if let Err(error) = park::replay_ready(&db.database()) {
+    if let Err(error) = park::replay_ready(&db.database(), &|| false) {
         log::warn!("extensions: replaying parked sync groups failed: {error}");
     }
     Ok(changed)

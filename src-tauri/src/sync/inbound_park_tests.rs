@@ -8,7 +8,7 @@ use haex_crdt::{AuthContext, Authorization, GuardedWriteOptions, SqlGuard};
 use super::*;
 use crate::extensions::registry::status::{self, DeviceStatus, PARKED_LIMIT};
 use crate::extensions::sql::test_support::{own, t};
-use crate::storage::query;
+use crate::storage::query::{self, Query};
 use crate::sync::change::PAGE_BUDGET;
 use crate::sync::inbound::tests::{foreign_change, page_with};
 use crate::sync::inbound::Inbox;
@@ -106,7 +106,7 @@ fn rows_before_their_tables_are_parked_while_core_data_arrives() {
     assert_eq!(parked(&b).len(), 1);
 
     ddl(&b, PAGES);
-    let replayed = replay_ready(b.db()).expect("replay");
+    let replayed = replay_ready(b.db(), &|| false).expect("replay");
     assert_eq!(replayed.groups, 1);
     assert_eq!(
         count(&b, "SELECT COUNT(*) FROM t:pages WHERE body = 'one'"),
@@ -135,7 +135,7 @@ fn a_column_a_later_migration_adds_is_parked_and_nothing_is_skipped() {
     assert!(received.iter().all(|r| r.skipped_unknown_columns == 0));
 
     ddl(&b, "ALTER TABLE t:pages ADD COLUMN tag TEXT");
-    replay_ready(b.db()).expect("replay");
+    replay_ready(b.db(), &|| false).expect("replay");
     assert_eq!(
         count(&b, "SELECT COUNT(*) FROM t:pages WHERE tag = 'red'"),
         1
@@ -155,7 +155,7 @@ fn a_delete_marker_for_a_missing_table_is_parked_and_wins_after_replay() {
     assert_eq!(reasons, vec![MISSING_TABLE, MISSING_TABLE]);
 
     ddl(&b, PAGES);
-    replay_ready(b.db()).expect("replay");
+    replay_ready(b.db(), &|| false).expect("replay");
     assert_eq!(count(&b, "SELECT COUNT(*) FROM t:pages"), 0);
     assert!(parked(&b).is_empty());
 }
@@ -183,7 +183,7 @@ fn later_groups_of_an_extension_queue_behind_a_parked_one() {
     );
 
     ddl(&b, "ALTER TABLE t:pages ADD COLUMN tag TEXT");
-    let replayed = replay_ready(b.db()).expect("replay");
+    let replayed = replay_ready(b.db(), &|| false).expect("replay");
     assert_eq!(replayed.groups, 2);
     assert_eq!(
         count(
@@ -295,7 +295,7 @@ fn changes_older_than_a_purge_are_dropped_and_newer_ones_apply() {
     );
 
     cleared_up(&b);
-    let replayed = replay_ready(b.db()).expect("replay");
+    let replayed = replay_ready(b.db(), &|| false).expect("replay");
     assert_eq!(replayed.groups, 1);
     assert_eq!(
         count(&b, "SELECT COUNT(*) FROM t:pages WHERE id = 'new'"),
@@ -389,7 +389,7 @@ fn at_the_parking_limit_progress_waits_instead_of_dropping() {
     assert_ne!(stopped, b.replica.progress().expect("progress"));
 
     ddl(&b, PAGES);
-    replay_ready(b.db()).expect("replay");
+    replay_ready(b.db(), &|| false).expect("replay");
     assert_eq!(count(&b, "SELECT COUNT(*) FROM t:pages"), 2);
 }
 
@@ -529,3 +529,6 @@ fn a_snapshot_counts_parked_rows_as_carried() {
 
 #[path = "inbound_park_split_tests.rs"]
 mod split;
+
+#[path = "inbound_park_edge_tests.rs"]
+mod edges;
