@@ -19,6 +19,7 @@ use iroh::protocol::{AcceptError, ProtocolHandler, Router};
 use iroh::{Endpoint, EndpointAddr, RelayConfig, RelayMode, RelayUrl, SecretKey};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::task_tracker::TaskTrackerToken;
 use tokio_util::task::TaskTracker;
 
 use crate::sync::handshake::{self, local_schema, Local, Peer};
@@ -45,6 +46,11 @@ pub struct NodeConfig {
     /// Bind only this address instead of every interface; tests use
     /// loopback.
     pub bind_addr: Option<SocketAddr>,
+    /// A token of the vault gate's tracker, held until nothing of the node is
+    /// left: the router's accept loop and the sessions hold the replica, and
+    /// an aborted shutdown leaves them to end on their own. The drain then
+    /// waits for them, so the vault is not closed while the process exits.
+    pub session: Option<TaskTrackerToken>,
 }
 
 /// Why the node could not start or connect.
@@ -95,6 +101,9 @@ struct Inner {
     /// Devices this device's list does not name whose presence claimed a
     /// newer list, waiting to be dialed once to fetch it (FR-007).
     candidates: Mutex<HashMap<[u8; 32], EndpointAddr>>,
+    /// See [`NodeConfig::session`]. The last field, so it drops after the
+    /// replica.
+    _session: Option<TaskTrackerToken>,
 }
 
 /// Most devices kept as candidates at once, so a flood of meetings cannot
@@ -180,6 +189,7 @@ impl SyncNode {
             session_ended: Mutex::new(None),
             candidates: Mutex::new(HashMap::new()),
             dialing: Mutex::new(HashSet::new()),
+            _session: config.session,
         });
         let router = Router::builder(endpoint)
             .accept(SYNC_ALPN, SyncProtocol(Arc::clone(&inner)))

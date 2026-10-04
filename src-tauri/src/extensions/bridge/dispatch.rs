@@ -8,7 +8,7 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use super::frames::FrameSession;
+use super::frames::{FrameSession, FrameSource};
 use super::{database, methods, permissions};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
@@ -232,17 +232,23 @@ const LATER: &[&str] = &[
     "extension_shell_",
 ];
 
+/// Whether the caller may run host functions: an installed, enabled extension, or a development
+/// version while developer mode is on for this device (US12).
 fn is_enabled(ctx: &CallContext) -> Result<bool, BridgeError> {
-    let id = ctx.session.extension_id.to_string();
+    let id = ctx.session.extension_id;
+    let device = ctx.device;
+    let dev = ctx.session.source == FrameSource::DevServer;
     ctx.db
         .read_blocking(move |q| {
-            q.query_row(
+            if dev {
+                return Ok(crate::extensions::dev::start(q, id, device).is_ok());
+            }
+            Ok(q.query_row(
                 "SELECT enabled FROM extensions WHERE id = ?1 AND state = 'installed'",
-                &[&id],
+                &[&id.to_string()],
                 |r| r.get::<_, i64>(0),
-            )
+            )? == Some(1))
         })
-        .map(|enabled| enabled == Some(1))
         .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))
 }
 

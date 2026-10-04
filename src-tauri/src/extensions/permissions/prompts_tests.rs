@@ -42,3 +42,14 @@ fn held_decisions_replace_each_other_and_can_be_forgotten() {
     state.forget(ext, PermissionKind::Database, "read", &target);
     assert!(state.held(ext).is_empty());
 }
+
+#[test]
+fn an_unloaded_or_removed_extension_keeps_no_held_decision() {
+    let state = PermissionState::default();
+    let (ext, other) = (Uuid::new_v4(), Uuid::new_v4());
+    state.hold(&question(ext, "t"), PermissionStatus::Granted);
+    state.hold(&question(other, "t"), PermissionStatus::Granted);
+    state.forget_extension(ext);
+    assert!(state.temporary(ext, PermissionKind::Database).is_empty());
+    assert_eq!(state.held(other).len(), 1);
+}

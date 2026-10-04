@@ -304,5 +304,7 @@ async fn devices_connect_within_thirty_seconds_and_changes_show_within_five() {
         "SC-001: the 95th percentile is {p95:?}, over {SHOW_LIMIT:?}: {times:?}"
     );
 
+    // The node of a runtime held here would outlive the drain.
+    drop(main_runtime);
     tokio::join!(main.shutdown(), linked.shutdown());
 }

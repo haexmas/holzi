@@ -170,6 +170,12 @@ impl PermissionState {
             .unwrap_or_default()
     }
 
+    /// Drops every decision held for an extension: it was unloaded or removed, and its id comes
+    /// back when the same key and name are loaded or installed again.
+    pub fn forget_extension(&self, extension_id: Uuid) {
+        lock(&self.temporary).remove(&extension_id);
+    }
+
     /// Removes one held decision (settings: "Entfernen").
     pub fn forget(&self, extension_id: Uuid, kind: PermissionKind, action: &str, target: &str) {
         if let Some(list) = lock(&self.temporary).get_mut(&extension_id) {

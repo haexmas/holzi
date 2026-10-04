@@ -80,6 +80,7 @@ onBeforeUnmount(hide)
     </span>
     <UiButton
       v-if="present"
+      type="button"
       variant="ghost"
       size="icon"
       class="shrink-0"
