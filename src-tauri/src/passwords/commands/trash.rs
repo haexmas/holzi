@@ -18,6 +18,28 @@ pub struct TargetsArgs {
     pub targets: Vec<Target>,
 }
 
+/// What to delete for good; with `inline_references` the placeholders on the deleted entries are
+/// first replaced by their values in the entries that hold them (spec 036, FR-048).
+#[derive(Debug, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct DeletePermanentlyArgs {
+    pub targets: Vec<Target>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub inline_references: Option<bool>,
+}
+
+/// Emptying the trash, with `inline_references` as for deleting for good.
+#[derive(Debug, Default, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct EmptyTrashArgs {
+    #[serde(default)]
+    #[ts(optional)]
+    pub inline_references: Option<bool>,
+}
+
 /// How many entries and folders a trash command touched, folders counted with their content.
 #[derive(Debug, Serialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
@@ -54,17 +76,25 @@ pub async fn passwords_restore(
 #[tauri::command]
 pub async fn passwords_delete_permanently(
     state: State<'_, AppState>,
-    args: TargetsArgs,
+    args: DeletePermanentlyArgs,
 ) -> Result<AffectedResult> {
     let affected = service(&state)?
-        .delete_permanently(&Caller::User, args.targets)
+        .delete_permanently(
+            &Caller::User,
+            args.targets,
+            args.inline_references.unwrap_or(false),
+        )
         .await?;
     Ok(AffectedResult { affected })
 }
 
 /// Empties the trash; the window asks for confirmation first.
 #[tauri::command]
-pub async fn passwords_empty_trash(state: State<'_, AppState>) -> Result<AffectedResult> {
-    let affected = service(&state)?.empty_trash(&Caller::User).await?;
+pub async fn passwords_empty_trash(
+    state: State<'_, AppState>,
+    args: Option<EmptyTrashArgs>,
+) -> Result<AffectedResult> {
+    let inline = args.unwrap_or_default().inline_references.unwrap_or(false);
+    let affected = service(&state)?.empty_trash(&Caller::User, inline).await?;
     Ok(AffectedResult { affected })
 }

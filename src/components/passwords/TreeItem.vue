@@ -46,6 +46,7 @@ const menuEntries = computed(() =>
   buildMenu({
     kind: 'treeFolder',
     ablageFilled: clipboard.filled,
+    copyAvailable: true,
     canMoveUp: position.value > 0,
     canMoveDown:
       position.value !== -1 && position.value < props.siblingIds.length - 1,

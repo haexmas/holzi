@@ -917,7 +917,12 @@
         "encrypted_export": "The export is encrypted and cannot be read without its password.",
         "cancelled": "The import was cancelled.",
         "unwritable": "The file could not be written."
-      }
+      },
+      "referenceMissing": "The source of a reference is not available.",
+      "referenceCycle": "A reference loops or is nested too deep.",
+      "referenceCycleOnSave": "This reference would make a loop.",
+      "referenceCycleNamed": "This reference would lead back to itself through “{title}”.",
+      "intoTrash": "Nothing can be copied into the trash."
     },
     "extensions": {
       "install": "The extension could not be installed.",
@@ -1428,7 +1433,9 @@
         "imported": "Entries read",
         "trashed": "of them in the trash",
         "historyStates": "History states",
-        "skippedDuplicates": "Skipped duplicates"
+        "skippedDuplicates": "Skipped duplicates",
+        "referencesConverted": "KeePass references converted",
+        "referencesLeftAsText": "{count} left as text (no unique source)"
       },
       "needsAttention": "To rework by hand",
       "sourceGroup": "The source as a whole",
@@ -1506,6 +1513,40 @@
         "delete": "Del",
         "enter": "Enter"
       }
+    },
+    "references": {
+      "kind": {
+        "username": "Username",
+        "password": "Password",
+        "extra": "Field “{key}”"
+      },
+      "mark": "{value} of {source}",
+      "open": "Open the source",
+      "status": {
+        "missing": "Source not available",
+        "cycle": "Reference loop or too deep"
+      },
+      "insert": "Insert reference",
+      "remove": "Remove reference",
+      "searchEntry": "Search entries",
+      "pickValue": "Which value?",
+      "usage": "{count} entry uses values from here by reference. | {count} entries use values from here by reference.",
+      "inline": "Turn the references into own values",
+      "inlineOn": "The entries keep today’s values.",
+      "inlineOff": "The references will show “Source not available”.",
+      "passkeyLinks": "{count} passkey link goes away. | {count} passkey links go away."
+    },
+    "copyDialog": {
+      "title": "Paste a copy",
+      "suffix": " – Copy",
+      "suffixLabel": "Name suffix",
+      "history": "Take the history",
+      "historyHint": "Off: the copy starts with a first state of its own.",
+      "usernameReference": "Username as a reference to the original",
+      "passwordReference": "Password as a reference to the original",
+      "noPasskeys": "Passkeys are not copied.",
+      "confirm": "Copy",
+      "created": "{count} entry copied | {count} entries copied"
     }
   },
   "extensions": {

@@ -384,7 +384,7 @@ async fn deleting_for_good_leaves_one_delete_marker_per_removed_row() {
         .await
         .expect("trash");
     f.service
-        .delete_permanently(&Caller::User, target)
+        .delete_permanently(&Caller::User, target, false)
         .await
         .expect("delete");
     let markers = |table: &str| -> i64 {

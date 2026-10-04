@@ -216,11 +216,18 @@ export async function activeTab(
   )
 }
 
-/** Taps a tab of the open entry. */
+/** Taps a tab of the open entry, scrolled into the middle first: in a long editor the tab bar can
+ * sit under the top edge after typing further down. */
 export async function selectTab(
   instance: FlowInstance,
   tab: 'details' | 'extra' | 'history',
 ): Promise<void> {
+  await instance.waitForDisplayed(`entry-tab-${tab}`)
+  await instance.exec(
+    `document.querySelector('[data-testid="entry-tab-' + arguments[0] + '"]').scrollIntoView({ block: 'center' })
+     return true`,
+    [tab],
+  )
   await instance.click(`entry-tab-${tab}`)
 }
 

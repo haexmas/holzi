@@ -5,9 +5,8 @@
 Jede Entscheidung: **Entscheidung**, **Begründung**, **verworfene Alternativen**. Belege sind
 Dateien im Repository (Stand `main` am 2026-10-03, nach den PRs #228, #229, #234) und der
 Quellstand von haex-vault (`8dce379d94e18fcd42c3b73686a06f984ca3f574`); KeePass steht auf dem
-GitHub-Mirror `dlech/KeePass2.x`. **Nicht geprüft** wurde, ob die neuen Crates (`ciborium`,
-`psl`, `url`) in beiden Cargo-Konfigurationen bauen und die benötigten Funktionen haben; das
-klärt Aufgabe T003 (R8, R9). Ebenso nicht geprüft: das Verhalten der Wischgeste in der
+GitHub-Mirror `dlech/KeePass2.x`. Die neuen Crates (`ciborium`, `psl`, `url`) sind mit T003
+am 2026-10-04 geprüft (R8, R9). Nicht geprüft: das Verhalten der Wischgeste in der
 WebKit-Webview unter Linux und Android; das prüft der manuelle Quickstart (R1).
 
 ## R1 — Tab-Wischgeste: Swiper
@@ -190,6 +189,14 @@ Neue Abhängigkeiten: `ciborium` (CBOR für COSE-Schlüssel und Beglaubigung, ni
 `Cargo.lock`), `psl` (öffentliche Suffixe, R9) und `url` (steht transitiv im Lock; jetzt
 direkt).
 
+**Geprüft (T003, 2026-10-04)**: `ciborium 0.2.2`, `psl 2.1.239` und `url 2.5.8` lösen mit
+dem Lock auf und bauen in beiden Konfigurationen (Standard und `--no-default-features`). Ein
+Wegwerf-Test kodiert eine COSE-EC2-Schlüsselkarte mit `ciborium`, signiert und prüft ES256 als
+DER mit `p256` 0.14 (Feature `ecdsa` über die Standard-Features) und EdDSA mit
+`ed25519-dalek` 3, und `psl::suffix_str("example.co.uk")` ist `co.uk`. In `p256` 0.14 heißt
+`to_encoded_point` jetzt `to_sec1_point`. Die Abhängigkeiten kommen erst mit Stufe 4 in die
+`Cargo.toml`, wo sie gebraucht werden.
+
 **Begründung**: Der Rust-Bericht: `derive_public_key` kennt ES256, EdDSA und RS256 (hand-gebaut
 für RSA), aber es gibt weder Signieren noch CBOR; `p256` hat die Funktion `ecdsa` über die
 Standard-Features.
@@ -214,8 +221,8 @@ Standard-Abwehr (der Browser macht dasselbe). haex-vault nimmt `https://<Kennung
 und prüft nichts.
 
 **Verworfen**: Ohne Suffixliste, nur „mindestens zwei Labels“ (lässt `co.uk` durch).
-**Nicht geprüft**: ob die `psl`-Daten genügend aktuell gebündelt werden; dies klärt T003, die
-Liste wird mit einer Cargo-Aktualisierung erneuert.
+Die `psl`-Daten sind in die Crate kompiliert (Version 2.1.239 vom Stand der Prüfung, T003);
+die Liste wird mit einer Cargo-Aktualisierung erneuert.
 
 ## R10 — Ablage, Auswahl, Menüs, Kürzel
 
@@ -310,6 +317,12 @@ eigene Datei.
 
 **Verworfen**: Kennungen vor dem Schreiben festlegen (geht bei übersprungenen Duplikaten ins
 Leere).
+
+**Nachtrag (Umsetzung, 2026-10-04)**: Die übersprungenen Duplikate stehen schon vor dem
+Schreiben fest (`write_all` berechnet sie zuerst). Deshalb vergibt `import/apply_references.rs`
+die Kennungen doch vorab, nur für Einträge, die geschrieben werden, und wandelt die Verweise vor
+dem ersten Schreiben um. Ein zweiter Durchgang entfällt, und der Anfangsstand im Verlauf trägt
+schon die Platzhalter.
 
 ## R14 — Anhangskarten und Lightbox
 

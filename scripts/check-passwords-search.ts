@@ -117,3 +117,21 @@ test('5,000 headers are filtered well inside one second', () => {
   // A coarse sanity bound (SC-002), not a tight timing.
   assert.ok(elapsed < 1000, `took ${elapsed} ms`)
 })
+
+test('a reference placeholder is not searchable as text (spec 036)', () => {
+  const id = '7c1e0000-0000-4000-8000-000000000001'
+  const reference = header({
+    id: 'ref',
+    title: 'Zweit',
+    username: `admin-{$${id}:username}`,
+    url: `{$${id}:extra:a\\}b}`,
+  })
+  assert.equal(matchesQuery(reference, 'username'), false)
+  assert.equal(matchesQuery(reference, '7c1e'), false)
+  assert.equal(matchesQuery(reference, 'extra'), false)
+  assert.equal(matchesQuery(reference, 'admin'), true)
+  assert.equal(matchesQuery(reference, 'zweit'), true)
+  // Text that only looks like a placeholder stays searchable.
+  const plain = header({ id: 'plain', username: 'price {$ 5' })
+  assert.equal(matchesQuery(plain, '{$'), true)
+})

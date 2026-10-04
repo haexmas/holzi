@@ -1,5 +1,6 @@
 import type { ComputedRef, Ref } from 'vue'
 import type { ListCommand } from '~/lib/passwords/shortcuts'
+import type { CopyRequest } from '~/composables/usePasswordsActions'
 
 /**
  * The keyboard of the password manager's list (spec 036, US4, FR-016): one tab stop that the arrow
@@ -19,6 +20,8 @@ export function usePasswordsListKeys(options: {
   askDelete: (ids: readonly string[]) => void
   /** Where a paste goes (`null` is the top level), `undefined` where none goes. */
   pasteTarget: ComputedRef<string | null | undefined>
+  /** Opens the copy dialog of the window for a paste of a copied Ablage. */
+  openCopy: (request: CopyRequest) => void
 }) {
   const { area, list, visibleIds, isFolder } = options
   const selection = usePasswordsSelectionStore()
@@ -135,13 +138,18 @@ export function usePasswordsListKeys(options: {
         selection.clear()
         return true
       }
-      case 'copy':
-        // Kopieren comes with the copy dialog of stage 3; nothing goes to the system clipboard.
-        return false
+      case 'copy': {
+        // Into the Ablage; nothing goes to the system clipboard (FR-021).
+        const ids = commandIds()
+        if (ids.length === 0) return false
+        actions.copy(ids)
+        selection.clear()
+        return true
+      }
       case 'paste': {
         const target = options.pasteTarget.value
         if (!clipboard.filled || target === undefined) return false
-        void actions.pasteAsync(target)
+        void actions.pasteAsync(target, options.openCopy)
         return true
       }
       case 'delete': {

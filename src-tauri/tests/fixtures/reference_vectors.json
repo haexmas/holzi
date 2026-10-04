@@ -1,0 +1,185 @@
+{
+  "_comment": "Spec 036, contracts/references.md: test vectors for src/passwords/references.rs. <A> … <Z> stand for fixed UUIDs (references_tests.rs replaces them); a placeholder in upper case keeps its case in the text.",
+  "find": [
+    { "text": "plain text", "found": [] },
+    { "text": "{$<A>:password}", "found": [["A", "password", null]] },
+    { "text": "admin-{$<A>:extra:PIN}", "found": [["A", "extra", "PIN"]] },
+    { "text": "{$<A>:extra:a\\}b}", "found": [["A", "extra", "a}b"]] },
+    {
+      "text": "{$<A>:extra:back\\\\slash}",
+      "found": [["A", "extra", "back\\slash"]]
+    },
+    {
+      "text": "{$<A>:username}{$<A>:password}",
+      "found": [
+        ["A", "username", null],
+        ["A", "password", null]
+      ]
+    },
+    { "text": "{$<A>:url}", "found": [] },
+    { "text": "{$ABC:password}", "found": [] },
+    { "text": "{$<A>:extra:}", "found": [] },
+    { "text": "{$<A>:extra:open", "found": [] },
+    { "text": "ends with {$", "found": [] },
+    { "text": "{${$<A>:password}", "found": [["A", "password", null]] },
+    { "text": "{$<UPPER>:password}", "found": [["UPPER", "password", null]] }
+  ],
+  "tokens": [
+    {
+      "item": "A",
+      "kind": "username",
+      "key": null,
+      "token": "{$<A>:username}"
+    },
+    {
+      "item": "A",
+      "kind": "password",
+      "key": null,
+      "token": "{$<A>:password}"
+    },
+    {
+      "item": "A",
+      "kind": "extra",
+      "key": "a}b\\c",
+      "token": "{$<A>:extra:a\\}b\\\\c}"
+    },
+    { "item": "A", "kind": "extra", "key": "", "token": null },
+    { "item": "not-a-uuid", "kind": "password", "key": null, "token": null }
+  ],
+  "resolve": [
+    {
+      "name": "text without placeholder",
+      "items": { "A": { "password": "plain" } },
+      "read": ["A", "password"],
+      "value": "plain"
+    },
+    {
+      "name": "one reference",
+      "items": {
+        "A": { "password": "{$<B>:password}" },
+        "B": { "password": "secret" }
+      },
+      "read": ["A", "password"],
+      "value": "secret"
+    },
+    {
+      "name": "text mixed with a reference to a custom field",
+      "items": {
+        "A": { "username": "admin-{$<B>:extra:PIN}" },
+        "B": { "extra:PIN": "1234" }
+      },
+      "read": ["A", "username"],
+      "value": "admin-1234"
+    },
+    {
+      "name": "the same placeholder twice is no cycle",
+      "items": {
+        "A": { "password": "{$<B>:password}-{$<B>:password}" },
+        "B": { "password": "x" }
+      },
+      "read": ["A", "password"],
+      "value": "x-x"
+    },
+    {
+      "name": "another field of the same entry is no cycle",
+      "items": { "A": { "password": "{$<A>:extra:PIN}", "extra:PIN": "1234" } },
+      "read": ["A", "password"],
+      "value": "1234"
+    },
+    {
+      "name": "A to A",
+      "items": { "A": { "password": "{$<A>:password}" } },
+      "read": ["A", "password"],
+      "error": "cycle"
+    },
+    {
+      "name": "A to B to A",
+      "items": {
+        "A": { "password": "{$<B>:password}" },
+        "B": { "password": "{$<A>:password}" }
+      },
+      "read": ["A", "password"],
+      "error": "cycle"
+    },
+    {
+      "name": "a missing source",
+      "items": { "A": { "password": "{$<B>:password}" } },
+      "read": ["A", "password"],
+      "error": "missing"
+    },
+    {
+      "name": "a missing custom field",
+      "items": {
+        "A": { "password": "{$<B>:extra:PIN}" },
+        "B": { "password": "x" }
+      },
+      "read": ["A", "password"],
+      "error": "missing"
+    },
+    {
+      "name": "a source the caller may not see (trash or scope)",
+      "items": {
+        "A": { "password": "{$<B>:password}" },
+        "B": { "password": "x", "hidden": "yes" }
+      },
+      "read": ["A", "password"],
+      "error": "missing"
+    },
+    {
+      "name": "one failing part fails the whole value",
+      "items": {
+        "A": { "password": "{$<B>:password}{$<C>:password}" },
+        "B": { "password": "x" }
+      },
+      "read": ["A", "password"],
+      "error": "missing"
+    }
+  ],
+  "chains": [
+    { "length": 12, "value": "end" },
+    { "length": 13, "error": "tooDeep" }
+  ],
+  "cycles": [
+    {
+      "name": "a new self reference",
+      "item": "A",
+      "new": { "password": "{$<A>:password}" },
+      "stored": {},
+      "source": "A"
+    },
+    {
+      "name": "another own field is fine",
+      "item": "A",
+      "new": { "password": "{$<A>:extra:PIN}", "extra:PIN": "1234" },
+      "stored": {},
+      "source": null
+    },
+    {
+      "name": "a way back through another entry",
+      "item": "A",
+      "new": { "password": "{$<B>:password}" },
+      "stored": {
+        "B": { "password": "{$<C>:username}" },
+        "C": { "username": "{$<A>:password}" }
+      },
+      "source": "B"
+    },
+    {
+      "name": "the new own text counts, not the stored one",
+      "item": "A",
+      "new": { "password": "{$<B>:password}", "extra:PIN": "plain" },
+      "stored": {
+        "A": { "extra:PIN": "{$<A>:password}" },
+        "B": { "password": "{$<A>:extra:PIN}" }
+      },
+      "source": null
+    },
+    {
+      "name": "a reference to a missing entry is allowed",
+      "item": "A",
+      "new": { "password": "{$<Z>:password}" },
+      "stored": {},
+      "source": null
+    }
+  ]
+}

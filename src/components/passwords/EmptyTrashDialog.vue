@@ -8,6 +8,8 @@ import { toast } from 'vue-sonner'
 defineProps<{
   entries: number
   folders: number
+  /** The entries in the trash, for the references other entries hold on them (spec 036). */
+  itemIds: readonly string[]
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
@@ -17,11 +19,12 @@ const { errString } = useErrorString()
 const store = usePasswordsStore()
 const { emptyTrashAsync } = usePasswords()
 const busy = ref(false)
+const inlineReferences = ref(true)
 
 async function confirmAsync() {
   busy.value = true
   try {
-    await emptyTrashAsync()
+    await emptyTrashAsync(inlineReferences.value)
     await store.quietReloadAsync()
     open.value = false
   } catch (cause) {
@@ -46,6 +49,11 @@ async function confirmAsync() {
           {{ t('passwords.trash.emptyBody', { entries, folders }) }}
         </ShadcnAlertDialogDescription>
       </ShadcnAlertDialogHeader>
+      <PasswordsReferenceUsageNote
+        v-if="open"
+        v-model:inline="inlineReferences"
+        :item-ids="itemIds"
+      />
       <ShadcnAlertDialogFooter>
         <ShadcnAlertDialogCancel>{{
           t('passwords.cancel')

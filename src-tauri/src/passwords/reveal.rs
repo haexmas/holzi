@@ -10,6 +10,8 @@ use zeroize::Zeroizing;
 
 use super::items::otp_params_of;
 use super::model::{CopyField, RevealedSecret, SecretField, SecretItem, SecretKeyValue, TotpCode};
+use super::references::Field;
+use super::references_db::{resolve_or_error, resolve_value, Reader};
 use super::totp::{code_at, remaining_seconds};
 use crate::error::{HolziError, Result};
 use crate::storage::query::Query;
@@ -44,23 +46,50 @@ fn column(q: &mut impl Query, item_id: &str, column: &'static str) -> Result<Zer
     Ok(Zeroizing::new(cell.unwrap_or_default()))
 }
 
-fn key_value(q: &mut impl Query, item_id: &str, field_id: &str) -> Result<Zeroizing<String>> {
-    let cell = q
+/// A custom field's key and value.
+fn key_value(
+    q: &mut impl Query,
+    item_id: &str,
+    field_id: &str,
+) -> Result<(String, Zeroizing<String>)> {
+    let (key, cell) = q
         .query_row(
-            "SELECT value FROM haex_passwords_item_key_values WHERE id = ?1 AND item_id = ?2",
+            "SELECT key, value FROM haex_passwords_item_key_values WHERE id = ?1 AND item_id = ?2",
             params![field_id, item_id],
-            |r| r.get::<_, Option<String>>(0),
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)),
         )?
         .ok_or(HolziError::PasswordsNotFound)?;
-    Ok(Zeroizing::new(cell.unwrap_or_default()))
+    Ok((key, Zeroizing::new(cell.unwrap_or_default())))
 }
 
-/// The value of a secret field, for the moment the user asks to see it.
+/// A field of the entry with its placeholders resolved for the user (spec 036, FR-045): a
+/// placeholder that does not resolve is the error, never the text.
+fn resolved_column(
+    q: &mut impl Query,
+    item_id: &str,
+    name: &'static str,
+    field: Field,
+) -> Result<Zeroizing<String>> {
+    let raw = column(q, item_id, name)?;
+    resolve_or_error(q, Reader::user(), item_id, field, &raw)
+}
+
+fn resolved_key_value(
+    q: &mut impl Query,
+    item_id: &str,
+    field_id: &str,
+) -> Result<Zeroizing<String>> {
+    let (key, raw) = key_value(q, item_id, field_id)?;
+    resolve_or_error(q, Reader::user(), item_id, Field::Extra(key), &raw)
+}
+
+/// The value of a secret field, for the moment the user asks to see it. The TOTP secret holds no
+/// references (FR-044).
 pub fn reveal(q: &mut impl Query, item_id: &str, field: &SecretField) -> Result<RevealedSecret> {
     let value = match field {
-        SecretField::Password => column(q, item_id, "password")?,
+        SecretField::Password => resolved_column(q, item_id, "password", Field::Password)?,
         SecretField::OtpSecret => column(q, item_id, "otp_secret")?,
-        SecretField::KeyValue { id } => key_value(q, item_id, id)?,
+        SecretField::KeyValue { id } => resolved_key_value(q, item_id, id)?,
     };
     Ok(RevealedSecret { value })
 }
@@ -68,12 +97,50 @@ pub fn reveal(q: &mut impl Query, item_id: &str, field: &SecretField) -> Result<
 /// The value to put on the clipboard; for `Totp` the current code of this moment.
 pub fn copy_value(q: &mut impl Query, item_id: &str, field: &CopyField) -> Result<Copied> {
     let value = match field {
-        CopyField::Username => column(q, item_id, "username")?,
-        CopyField::Password => column(q, item_id, "password")?,
-        CopyField::KeyValue { id } => key_value(q, item_id, id)?,
+        CopyField::Username => resolved_column(q, item_id, "username", Field::Username)?,
+        CopyField::Password => resolved_column(q, item_id, "password", Field::Password)?,
+        CopyField::KeyValue { id } => resolved_key_value(q, item_id, id)?,
         CopyField::Totp => Zeroizing::new(totp_code(q, item_id, unix_now())?.code),
     };
     Ok(Copied(value))
+}
+
+/// Resolves the placeholders of a whole entry for a caller from outside (spec 036, FR-047): a field
+/// whose placeholder does not resolve for this caller (missing source, source outside its scope or
+/// in the trash, cycle, too deep) is left out of the answer, with no hint why.
+pub fn resolve_secret_item(
+    q: &mut impl Query,
+    reader: Reader<'_>,
+    item: &mut SecretItem,
+) -> Result<()> {
+    let id = item.id.clone();
+    for (field, value) in [
+        (Field::Username, &mut item.username),
+        (Field::Password, &mut item.password),
+        (Field::Url, &mut item.url),
+        (Field::Note, &mut item.note),
+    ] {
+        if let Some(raw) = value.take() {
+            *value = resolve_value(q, reader, &id, field, &raw)?
+                .ok()
+                .map(|resolved| resolved.to_string());
+        }
+    }
+    let mut kept = Vec::with_capacity(item.key_values.len());
+    for entry in item.key_values.drain(..) {
+        let (Some(key), Some(raw)) = (entry.key.clone(), entry.value.clone()) else {
+            kept.push(entry);
+            continue;
+        };
+        if let Ok(resolved) = resolve_value(q, reader, &id, Field::Extra(key), &raw)? {
+            kept.push(SecretKeyValue {
+                key: entry.key,
+                value: Some(resolved.to_string()),
+            });
+        }
+    }
+    item.key_values = kept;
+    Ok(())
 }
 
 /// The code of the entry at a Unix time with the seconds until it changes. `PasswordsNotFound` for

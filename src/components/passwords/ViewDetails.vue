@@ -29,9 +29,18 @@ const { revealAsync } = usePasswords()
         v-if="detail.username"
         :title="t('passwords.fields.username')"
       >
-        <span class="min-w-0 truncate" data-testid="passwords-value-username">{{
-          detail.username
-        }}</span>
+        <PasswordsReferenceValue
+          v-if="detail.references.username.length"
+          :marks="detail.references.username"
+          :text="detail.username"
+          kind="username"
+        />
+        <span
+          v-else
+          class="min-w-0 truncate"
+          data-testid="passwords-value-username"
+          >{{ detail.username }}</span
+        >
         <UiButton
           variant="ghost"
           size="icon"
@@ -47,6 +56,13 @@ const { revealAsync } = usePasswords()
         </UiButton>
       </SettingsRow>
       <SettingsRow :title="t('passwords.fields.password')">
+        <template v-if="detail.references.password.length" #below>
+          <PasswordsReferenceValue
+            :marks="detail.references.password"
+            :text="null"
+            kind="password"
+          />
+        </template>
         <PasswordsMaskedValue
           :fetch="
             async () => (await revealAsync(itemId, { kind: 'password' })).value
@@ -72,9 +88,18 @@ const { revealAsync } = usePasswords()
         </UiButton>
       </SettingsRow>
       <SettingsRow v-if="detail.url" :title="t('passwords.fields.url')">
-        <span class="min-w-0 truncate" data-testid="passwords-value-url">{{
-          detail.url
-        }}</span>
+        <PasswordsReferenceValue
+          v-if="detail.references.url.length"
+          :marks="detail.references.url"
+          :text="detail.url"
+          kind="url"
+        />
+        <span
+          v-else
+          class="min-w-0 truncate"
+          data-testid="passwords-value-url"
+          >{{ detail.url }}</span
+        >
       </SettingsRow>
       <SettingsRow
         v-if="detail.expiresAt"
@@ -104,7 +129,13 @@ const { revealAsync } = usePasswords()
         class="px-4 py-3 text-sm whitespace-pre-wrap"
         data-testid="passwords-value-note"
       >
-        {{ detail.note }}
+        <PasswordsReferenceValue
+          v-if="detail.references.note.length"
+          :marks="detail.references.note"
+          :text="detail.note"
+          kind="note"
+        />
+        <template v-else>{{ detail.note }}</template>
       </li>
     </SettingsGroup>
 

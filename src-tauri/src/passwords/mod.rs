@@ -24,6 +24,9 @@ pub mod clock;
 #[cfg(test)]
 mod clock_tests;
 pub mod commands;
+pub mod copy;
+#[cfg(test)]
+mod copy_tests;
 pub mod groups;
 #[cfg(test)]
 mod groups_tests;
@@ -36,6 +39,7 @@ pub mod items;
 mod items_tests;
 pub mod maintenance;
 pub mod model;
+pub mod model_references;
 #[cfg(test)]
 mod model_tests;
 pub mod passkeys;
@@ -44,6 +48,10 @@ mod passkeys_tests;
 pub mod presets;
 #[cfg(test)]
 mod presets_tests;
+pub mod references;
+pub mod references_db;
+#[cfg(test)]
+mod references_tests;
 pub mod reveal;
 #[cfg(test)]
 mod reveal_tests;

@@ -118,6 +118,8 @@ pub struct ItemDetail {
     pub key_values: Vec<KeyValueView>,
     pub attachments: Vec<AttachmentView>,
     pub passkeys: Vec<PasskeyView>,
+    /// The placeholders in the reference fields (spec 036); filled by the service.
+    pub references: super::model_references::ItemReferences,
 }
 
 /// What the built-in agent may see of an entry (FR-027): title, tag names, folder name and whether
@@ -210,6 +212,10 @@ pub struct ImportReport {
     pub trashed: u32,
     pub history_states: u32,
     pub skipped_duplicates: u32,
+    /// KeePass references that became holzi placeholders (spec 036, FR-050).
+    pub references_converted: u32,
+    /// KeePass references that stayed text (no unique source, or a field holzi cannot point at).
+    pub references_left_as_text: u32,
     pub needs_attention: Vec<AttentionRow>,
 }
 
