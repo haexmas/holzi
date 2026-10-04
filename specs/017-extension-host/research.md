@@ -326,6 +326,10 @@ Austauschs).
   `purge_data` und `purge_hlc` stehen.
 - **Empfang** (Ergänzung zu R10): Änderungen und Löschmarken an Tabellen einer mit `purge_data` entfernten
   Erweiterung mit HLC vor `purge_hlc` werden verworfen; bei „Daten behalten“ werden sie übernommen.
+  Neuere Gruppen werden geparkt (`awaiting_purge`), solange dieses Gerät für diesen `purge_hlc` noch nicht
+  aufgeräumt hat, auch wenn die Entfernung erst weiter vorn im selben Pull ankam; das Aufräumen verwirft
+  nur geparkte Gruppen bis `purge_hlc`. Sonst würde ein Gerät, das während Entfernen und Neuinstallation
+  offline war, die Zeilen der Neuinstallation mit den alten Tabellen löschen.
 - **Neuinstallation** nach dem Entfernen nutzt dieselbe abgeleitete Kennung; neuere HLCs gewinnen über das
   Lösch-Log.
 - Gerätezustand („bereit“, „wird übertragen“, „Migration fehlgeschlagen“ mit Fehler) als synchronisierte,

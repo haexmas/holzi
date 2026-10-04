@@ -9,8 +9,10 @@
 //! [`replay_ready`] applies parked groups as soon as their tables and columns exist.
 //!
 //! Changes to the tables of an extension removed with "delete data" that are older than its
-//! `purge_hlc` are dropped (R11). An unknown table without an extension prefix still aborts the
-//! pull, and an extension's device-local (`_no_sync`) table on the wire is a protocol error.
+//! `purge_hlc` are dropped (R11). Newer ones are parked until this device has cleared up for that
+//! removal, so the clear-up cannot drop them: they belong to a reinstall. An unknown table without
+//! an extension prefix still aborts the pull, and an extension's device-local (`_no_sync`) table on
+//! the wire is a protocol error.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -35,6 +37,10 @@ const PARKED_TABLE: &str = "sync_parked_groups_no_sync";
 pub(super) const MISSING_TABLE: &str = "missing_table";
 pub(super) const MISSING_COLUMN: &str = "missing_column";
 pub(super) const AFTER_PARKED: &str = "after_parked";
+pub(super) const AWAITING_PURGE: &str = "awaiting_purge";
+
+/// The registry table whose `purge_hlc` column records a removal.
+const EXTENSIONS_TABLE: &str = "extensions";
 
 /// What this device has, read once per page.
 #[derive(Debug, Default)]
@@ -48,6 +54,22 @@ pub(super) struct Context {
     parked: HashMap<String, (usize, String)>,
     /// `purge_hlc` per prefix of an extension removed with "delete data".
     purges: HashMap<String, String>,
+    /// The prefixes of [`Self::purges`] this device has not cleared up for yet.
+    pending: HashSet<String>,
+    /// Prefix and "delete data" per registered extension id, to read a removal from the wire.
+    registry: HashMap<String, (String, bool)>,
+    /// The last `purge_hlc` cleared up for, per extension id.
+    applied: HashMap<String, String>,
+}
+
+/// A removal read from a group that was applied: the `purge_hlc` of `prefix` and whether it
+/// deletes data.
+#[derive(Debug, Clone)]
+pub(super) struct Noted {
+    prefix: String,
+    extension_id: String,
+    purge_hlc: String,
+    purge_data: bool,
 }
 
 impl Context {
@@ -83,28 +105,122 @@ impl Context {
                 entry.1 = hlc;
             }
         }
-        let removed: Vec<(String, String, String)> = q.query_map(
-            "SELECT public_key, name, purge_hlc FROM extensions \
-             WHERE purge_data = 1 AND purge_hlc IS NOT NULL",
+        type Row = (String, String, String, bool, Option<String>);
+        let registered: Vec<Row> = q.query_map(
+            "SELECT id, public_key, name, purge_data, purge_hlc FROM extensions",
             &[],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
         )?;
-        let purges = removed
+        let applied: HashMap<String, String> = q
+            .query_map(
+                "SELECT extension_id, purge_hlc FROM extension_purges_applied_no_sync",
+                &[],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?
             .into_iter()
-            .filter_map(|(key, name, hlc)| {
-                let prefix = TablePrefix {
-                    public_key: PublicKey::parse_case_insensitive(&key).ok()?,
-                    name: ExtensionName::parse(&name).ok()?,
-                };
-                Some((prefix.to_string(), hlc))
-            })
             .collect();
-        Ok(Self {
+        let mut context = Self {
             synced,
             extension_tables,
             parked,
-            purges,
-        })
+            applied,
+            ..Self::default()
+        };
+        for (id, key, name, purge_data, purge_hlc) in registered {
+            let Some(prefix) = prefix_of(&key, &name) else {
+                continue;
+            };
+            context
+                .registry
+                .insert(id.clone(), (prefix.clone(), purge_data));
+            if let Some(purge_hlc) = purge_hlc {
+                context.set_purge(Noted {
+                    prefix,
+                    extension_id: id,
+                    purge_hlc,
+                    purge_data,
+                });
+            }
+        }
+        Ok(context)
+    }
+
+    /// Records the current removal of an extension.
+    fn set_purge(&mut self, removal: Noted) {
+        self.purges.remove(&removal.prefix);
+        self.pending.remove(&removal.prefix);
+        if !removal.purge_data {
+            return;
+        }
+        let cleared = self
+            .applied
+            .get(&removal.extension_id)
+            .is_some_and(|applied| {
+                compare_hlc_strings(&removal.purge_hlc, applied) != Ordering::Greater
+            });
+        if !cleared {
+            self.pending.insert(removal.prefix.clone());
+        }
+        self.purges.insert(removal.prefix, removal.purge_hlc);
+    }
+
+    /// Reads the removals an applied group writes, so later groups of the same pull already obey
+    /// them (the clear-up runs only after the pull); returns them for the pages still to come.
+    pub(super) fn note(&mut self, columns: &[ColumnChange]) -> Vec<Noted> {
+        let cell = |row: &str, column: &str| {
+            columns.iter().find(|c| {
+                c.table_name == EXTENSIONS_TABLE && c.row_pks == row && c.column_name == column
+            })
+        };
+        let mut noted = Vec::new();
+        for change in columns {
+            if change.table_name != EXTENSIONS_TABLE || change.column_name != "purge_hlc" {
+                continue;
+            }
+            let Some(purge_hlc) = change.value.as_str() else {
+                continue;
+            };
+            let Some(id) = serde_json::from_str::<serde_json::Value>(&change.row_pks)
+                .ok()
+                .and_then(|pks| pks.get("id")?.as_str().map(str::to_owned))
+            else {
+                continue;
+            };
+            let known = self.registry.get(&id).cloned();
+            let text = |column| cell(&change.row_pks, column).and_then(|c| c.value.as_str());
+            let prefix = match (text("public_key"), text("name")) {
+                (Some(key), Some(name)) => prefix_of(key, name),
+                _ => known.as_ref().map(|(prefix, _)| prefix.clone()),
+            };
+            let purge_data = cell(&change.row_pks, "purge_data")
+                .and_then(|c| c.value.as_i64().or(c.value.as_bool().map(i64::from)))
+                .map(|value| value != 0)
+                .or(known.map(|(_, purge_data)| purge_data));
+            let (Some(prefix), Some(purge_data)) = (prefix, purge_data) else {
+                continue;
+            };
+            let removal = Noted {
+                prefix,
+                extension_id: id,
+                purge_hlc: purge_hlc.to_owned(),
+                purge_data,
+            };
+            self.set_purge(removal.clone());
+            noted.push(removal);
+        }
+        noted
+    }
+
+    /// Takes over the removals earlier pages of the same pull noted.
+    pub(super) fn extend_noted(&mut self, noted: &[Noted]) {
+        for removal in noted {
+            let newer = self.purges.get(&removal.prefix).is_none_or(|current| {
+                compare_hlc_strings(&removal.purge_hlc, current) == Ordering::Greater
+            });
+            if newer || !removal.purge_data {
+                self.set_purge(removal.clone());
+            }
+        }
     }
 
     /// Whether `prefix` has parked groups.
@@ -150,6 +266,15 @@ pub(super) enum Sorted {
     /// Apply these changes (purged ones are gone; maybe none is left).
     Apply(Vec<ColumnChange>),
     Park(Parked),
+}
+
+/// The table prefix of an extension's key and name, as the registry stores them.
+fn prefix_of(key: &str, name: &str) -> Option<String> {
+    let prefix = TablePrefix {
+        public_key: PublicKey::parse_case_insensitive(key).ok()?,
+        name: ExtensionName::parse(name).ok()?,
+    };
+    Some(prefix.to_string())
 }
 
 /// The lower-case column names of a `CREATE TABLE` statement.
@@ -237,6 +362,8 @@ pub(super) fn sort(
         };
         let prefix = table.prefix.to_string();
         let reason = match context.extension_tables.get(&name.to_ascii_lowercase()) {
+            // Newer than a removal this device has not cleared up for: the clear-up would drop it.
+            _ if context.pending.contains(&prefix) => Some(AWAITING_PURGE),
             None => Some(MISSING_TABLE),
             Some(Some(known))
                 if change.table_name != DELETED_ROWS_TABLE
@@ -310,12 +437,26 @@ pub(super) fn store(
     Ok(())
 }
 
-/// Removes the parked groups of `prefix` ("delete data", R11).
-pub fn discard(tx: &mut CrdtTransaction<'_>, prefix: &TablePrefix) -> haex_crdt::Result<()> {
-    tx.execute(
-        &format!("DELETE FROM {PARKED_TABLE} WHERE extension_prefix = ?1"),
+/// Removes the parked groups of `prefix` that are not newer than `purge_hlc` ("delete data",
+/// R11); newer ones belong to a reinstall and stay.
+pub fn discard(
+    tx: &mut CrdtTransaction<'_>,
+    prefix: &TablePrefix,
+    purge_hlc: &str,
+) -> haex_crdt::Result<()> {
+    let groups: Vec<(i64, String)> = tx.query_map(
+        &format!("SELECT id, hlc FROM {PARKED_TABLE} WHERE extension_prefix = ?1"),
         params![prefix.to_string()],
+        |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
+    for (id, hlc) in groups {
+        if compare_hlc_strings(&hlc, purge_hlc) != Ordering::Greater {
+            tx.execute(
+                &format!("DELETE FROM {PARKED_TABLE} WHERE id = ?1"),
+                params![id],
+            )?;
+        }
+    }
     Ok(())
 }
 
@@ -337,21 +478,33 @@ pub fn replay_ready(db: &Database) -> haex_crdt::Result<Replayed> {
     let mut replayed = Replayed::default();
     loop {
         let context = query::read(db, |r| Context::read(r))?;
-        let rows: Vec<(i64, String, String, Vec<u8>)> = query::read(db, |r| {
+        // Up to the parking limit per extension: each group's changes are read when it is tried.
+        let rows: Vec<(i64, String, String)> = query::read(db, |r| {
             r.query_map(
-                &format!("SELECT id, extension_prefix, hlc, group_blob FROM {PARKED_TABLE}"),
+                &format!("SELECT id, extension_prefix, hlc FROM {PARKED_TABLE}"),
                 &[],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
         })?;
-        let mut by_prefix: HashMap<String, Vec<(i64, String, Vec<u8>)>> = HashMap::new();
-        for (id, prefix, hlc, blob) in rows {
-            by_prefix.entry(prefix).or_default().push((id, hlc, blob));
+        let mut by_prefix: HashMap<String, Vec<(i64, String)>> = HashMap::new();
+        for (id, prefix, hlc) in rows {
+            by_prefix.entry(prefix).or_default().push((id, hlc));
         }
         let mut progressed = false;
         for (prefix, mut groups) in by_prefix {
             groups.sort_by(|a, b| compare_hlc_strings(&a.1, &b.1));
-            for (id, hlc, blob) in groups {
+            for (id, hlc) in groups {
+                let blob: Option<Vec<u8>> = query::read(db, |r| {
+                    r.query_row(
+                        &format!("SELECT group_blob FROM {PARKED_TABLE} WHERE id = ?1"),
+                        params![id],
+                        |row| row.get(0),
+                    )
+                })?;
+                // Gone meanwhile: replayed by a concurrent run, or discarded.
+                let Some(blob) = blob else {
+                    continue;
+                };
                 let columns: Vec<ColumnChange> = serde_json::from_slice(&blob)
                     .map_err(|e| haex_crdt::Error::consumer(format!("parked group: {e}")))?;
                 // Another extension's earlier parked group comes first.

@@ -3,10 +3,12 @@
 //! The removing device sets `purge_hlc` (and `purge_data` for "delete data") on the extension's
 //! row. Every device, the removing one included, clears up once per new `purge_hlc` in one local
 //! write: always this device's key-value rows and the logs; with `purge_data` also the prefixed
-//! tables, the migration journal and the parked sync groups. The trigger is `purge_hlc`, not
-//! `state`: a device that was offline while the extension was removed and installed again only
-//! sees `state = installed`, yet must clear up. Changes older than `purge_hlc` that arrive later
-//! are dropped by the sync receiver (`sync::inbound::park`).
+//! tables, the migration journal and the parked sync groups older than the removal. Newer groups
+//! were parked by the sync receiver while this clear-up was due and apply after the migrations of
+//! a reinstall. The trigger is `purge_hlc`, not `state`: a device that was offline while the
+//! extension was removed and installed again only sees `state = installed`, yet must clear up.
+//! Changes older than `purge_hlc` that arrive later are dropped by the sync receiver
+//! (`sync::inbound::park`).
 
 use std::sync::Arc;
 
@@ -103,7 +105,7 @@ pub fn run(db: &VaultDb, removal: &Removal, device: Uuid) -> Result<()> {
                     &format!("DELETE FROM {MIGRATION_JOURNAL} WHERE extension_id = ?1"),
                     params![ext],
                 )?;
-                park::discard(tx, &removal.prefix)?;
+                park::discard(tx, &removal.prefix, &removal.purge_hlc)?;
             }
             tx.execute(
                 &format!("DELETE FROM {PURGES_APPLIED} WHERE extension_id = ?1"),

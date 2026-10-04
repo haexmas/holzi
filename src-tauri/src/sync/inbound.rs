@@ -123,6 +123,8 @@ pub struct Inbox {
     blocked: Vector,
     /// Parking limit per extension; `None` is [`park::PARKED_LIMIT_BYTES`].
     park_limit: Option<usize>,
+    /// Removals applied in earlier pages; a held group may not be written yet.
+    noted: Vec<park::Noted>,
 }
 
 /// What a snapshot pull carried, for pruning what it did not
@@ -204,6 +206,7 @@ impl Inbox {
 
         let groups = groups(join_parts(changes)?)?;
         let mut context = query::read(db, |r| Context::read(r))?;
+        context.extend_noted(&self.noted);
         let limits = query::read(db, |r| removal_limits(r))?;
         let park_limit = self.park_limit.unwrap_or(park::PARKED_LIMIT_BYTES);
 
@@ -246,6 +249,7 @@ impl Inbox {
             }
             let group = match sorted {
                 Sorted::Apply(columns) => {
+                    self.noted.extend(context.note(&columns));
                     arrived.push(Group {
                         origin,
                         hlc,

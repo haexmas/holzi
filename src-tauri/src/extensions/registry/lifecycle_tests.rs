@@ -369,6 +369,38 @@ fn a_device_offline_during_removal_and_reinstall_still_clears_up() {
 }
 
 #[test]
+fn rows_written_after_a_reinstall_survive_the_clear_up_of_a_device_that_was_offline() {
+    let (a, c) = (Node::new(), Node::new());
+    let v1 = bundle("1.0.0", &[INIT]);
+    let ext = a.install(&v1);
+    a.follow();
+    a.write("INSERT INTO `{t}` (id, label) VALUES ('old', 'before')");
+    c.pull(&a);
+    c.follow();
+
+    // C is offline while A removes with "delete data", installs again and writes; C gets all of
+    // it in one pull, before it clears up.
+    remove(&a.vault, ext, true, now()).expect("remove");
+    a.follow();
+    a.install(&v1);
+    a.follow();
+    a.write("INSERT INTO `{t}` (id, label) VALUES ('new', 'after')");
+
+    c.pull(&a);
+    c.follow();
+    assert!(ready(&c, ext));
+    assert_eq!(
+        c.count("SELECT COUNT(*) FROM `{t}` WHERE id = 'old'"),
+        Some(0)
+    );
+    assert_eq!(
+        c.count("SELECT COUNT(*) FROM `{t}` WHERE id = 'new'"),
+        Some(1),
+        "the clear-up drops only what is older than the removal"
+    );
+}
+
+#[test]
 fn keep_data_keeps_tables_journal_and_parked_groups_and_a_reinstall_does_not_migrate_again() {
     let (a, b) = (Node::new(), Node::new());
     let v1 = bundle("1.0.0", &[INIT]);

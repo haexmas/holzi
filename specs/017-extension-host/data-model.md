@@ -177,7 +177,7 @@ Ringpuffer: höchstens 5.000 Einträge je Erweiterung, älteste fallen weg.
 | `tables`           | TEXT                     | JSON-Liste der berührten Tabellen                                                             |
 | `group_blob`       | BLOB                     | die Gruppe, wie sie ankam                                                                     |
 | `bytes`            | INTEGER                  | Grenze je Erweiterung 256 MiB; an der Grenze hält der Empfang an, nichts wird verworfen (R10) |
-| `reason`           | TEXT                     | `missing_table` \| `missing_column`                                                           |
+| `reason`           | TEXT                     | `missing_table` \| `missing_column` \| `after_parked` \| `awaiting_purge` (R10, R11)          |
 | `parked_at`        | INTEGER                  |                                                                                               |
 
 ### `extension_purges_applied_no_sync` — ausgeführtes Aufräumen (lokal)

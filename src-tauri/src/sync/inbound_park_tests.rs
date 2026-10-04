@@ -255,6 +255,15 @@ fn purge_own(device: &Device) {
         .expect("purge");
 }
 
+/// Records on `device` that it cleared up for the removal of `purge_own`, as the clear-up does.
+fn cleared_up(device: &Device) {
+    write(
+        device,
+        "INSERT INTO extension_purges_applied_no_sync (extension_id, purge_hlc) \
+         SELECT id, purge_hlc FROM extensions WHERE id = 'ext'",
+    );
+}
+
 #[test]
 fn changes_older_than_a_purge_are_dropped_and_newer_ones_apply() {
     let (a, b) = (Device::new(), Device::new());
@@ -274,11 +283,64 @@ fn changes_older_than_a_purge_are_dropped_and_newer_ones_apply() {
     );
     assert!(parked(&b).is_empty(), "dropped, not parked");
 
+    // Newer than the removal, before B cleared up for it: the clear-up must not drop it.
     write(&a, "INSERT INTO t:pages (id, body) VALUES ('new', 'after')");
     b.pull_from(&a);
+    assert_eq!(count(&b, "SELECT COUNT(*) FROM t:pages"), 0);
+    assert_eq!(
+        parked(&b),
+        vec![(own().to_string(), AWAITING_PURGE.to_owned())]
+    );
+
+    cleared_up(&b);
+    let replayed = replay_ready(b.db()).expect("replay");
+    assert_eq!(replayed.groups, 1);
     assert_eq!(
         count(&b, "SELECT COUNT(*) FROM t:pages WHERE id = 'new'"),
         1
+    );
+
+    write(
+        &a,
+        "INSERT INTO t:pages (id, body) VALUES ('later', 'after')",
+    );
+    b.pull_from(&a);
+    assert_eq!(
+        count(&b, "SELECT COUNT(*) FROM t:pages WHERE id = 'later'"),
+        1,
+        "after the clear-up newer changes apply directly"
+    );
+}
+
+#[test]
+fn a_removal_earlier_in_the_same_pull_parks_the_newer_rows_of_its_extension() {
+    let (a, b) = (Device::new(), Device::new());
+    ddl(&a, PAGES);
+    ddl(&b, PAGES);
+    let prefix = own();
+    write(
+        &a,
+        &format!(
+            "INSERT INTO extensions (id, public_key, name, installed_at, updated_at) \
+             VALUES ('ext', '{}', '{}', 1, 1)",
+            prefix.public_key.as_str(),
+            prefix.name.as_str()
+        ),
+    );
+    b.pull_from(&a);
+
+    // One pull carries the removal and rows written after it (a reinstall elsewhere).
+    write(
+        &a,
+        "UPDATE extensions SET state = 'removed', purge_data = 1, \
+         purge_hlc = haex_hlc_no_sync WHERE id = 'ext'",
+    );
+    write(&a, "INSERT INTO t:pages (id, body) VALUES ('new', 'after')");
+    b.pull_from(&a);
+    assert_eq!(count(&b, "SELECT COUNT(*) FROM t:pages"), 0);
+    assert_eq!(
+        parked(&b),
+        vec![(own().to_string(), AWAITING_PURGE.to_owned())]
     );
 }
 
