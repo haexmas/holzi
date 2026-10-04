@@ -12,11 +12,10 @@ use super::park::{self, Context, Parked, Sorted};
 use super::{InboundError, Inbox};
 use crate::sync::change::group_bytes;
 
-/// The groups a page parks, and the extensions that reached their limit in it.
+/// The groups a page parks.
 #[derive(Default)]
 pub(super) struct Parking {
     pub parked: Vec<(String, Parked, usize)>,
-    pub newly_full: Vec<String>,
 }
 
 impl Inbox {
@@ -44,7 +43,6 @@ impl Inbox {
             || context.parked_bytes(&group.prefix).saturating_add(bytes) > limit;
         if full {
             if self.full_prefixes.insert(group.prefix.clone()) {
-                parking.newly_full.push(group.prefix.clone());
                 log::warn!(
                     "sync: parked groups of extension {} reached {limit} bytes; \
                      its origin's progress waits until it is installed or removed",
