@@ -45,8 +45,9 @@ Oberste Ebene (`accessor = None`):
 | alles andere                 | nie                                                                                              |
 
 Liest eine Anweisung keine Spalte einer Tabelle (`count(*)`, `SELECT 1`, `EXISTS`), meldet SQLite `Read` mit
-leerem Spaltennamen und ohne Datenbank; das zählt wie `main` (Erweiterungen erreichen kein anderes Schema), ein
-`WITH`-Name bleibt ein `WITH`-Name. Das gilt auch für Migrationen.
+leerem Spaltennamen und dem Schema, wie es in der Anweisung steht, ohne Qualifizierer also ohne Datenbank; das
+zählt wie `main` (Erweiterungen erreichen kein anderes Schema), ein `WITH`-Name bleibt ein `WITH`-Name und
+`json_each` und Verwandte bleiben erlaubt. Das gilt auch für Migrationen.
 
 In Triggern: erlaubt nur, wenn `accessor` `z_dirty_<T>_(insert|update|delete)` ist und T eine Tabelle, die
 diese Anweisung schreiben darf.

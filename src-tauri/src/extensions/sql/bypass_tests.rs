@@ -94,6 +94,8 @@ const ALLOWED: &[&str] = &[
     "SELECT 1 FROM t:pages",
     "SELECT id FROM t:pages p WHERE EXISTS (SELECT 1 FROM t:cache_no_sync)",
     "WITH c AS (SELECT id FROM t:pages) SELECT count(*) FROM c",
+    "SELECT count(*) FROM json_each('[1,2,3]')",
+    "SELECT 1 FROM t:pages p, json_each(p.body)",
 ];
 
 fn seeded() -> Setup {

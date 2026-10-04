@@ -37,8 +37,9 @@ fn in_main(context: &AuthContext<'_>) -> bool {
 }
 
 /// A table the statement reads no column of (`count(*)`, `SELECT 1`, `EXISTS`): SQLite reports it
-/// once, with an empty column name and without a database. Only names in `main` can be meant:
-/// extensions never qualify with another schema (pre-check) nor create or attach one.
+/// once, with an empty column name and the schema as written, so none when the name is not
+/// qualified (`main.` reads take the usual way). Only names in `main` can be meant: extensions
+/// never qualify with another schema (pre-check) nor create or attach one.
 fn tableless_read(context: &AuthContext<'_>) -> bool {
     context.database_name.is_none()
         && matches!(context.action, AuthAction::Read { column_name, .. } if column_name.is_empty())
@@ -102,17 +103,17 @@ pub fn runtime(
         match context.action {
             AuthAction::Select | AuthAction::Recursive => Authorization::Allow,
             AuthAction::Function { function_name } => allow(function_allowed(function_name)),
-            AuthAction::Read { table_name, .. } if context.database_name.is_none() => allow(
-                ctes.contains(&table_name.to_ascii_lowercase())
-                    || (tableless_read(context) && policy.allows(table_name, false)),
-            ),
             // `json_each` and friends are eponymous tables; what their arguments read is
-            // judged on its own.
+            // judged on its own. First, because `count(*)` over one comes without a database.
             AuthAction::Read { table_name, .. }
                 if TABLE_FUNCTIONS.contains(&table_name.to_ascii_lowercase().as_str()) =>
             {
                 Authorization::Allow
             }
+            AuthAction::Read { table_name, .. } if context.database_name.is_none() => allow(
+                ctes.contains(&table_name.to_ascii_lowercase())
+                    || (tableless_read(context) && policy.allows(table_name, false)),
+            ),
             AuthAction::Read { table_name, .. } => {
                 allow(in_main(context) && policy.allows(table_name, false))
             }
