@@ -29,12 +29,28 @@ fn a_confirmed_downgrade_keeps_running_on_every_device() {
     a.follow();
     assert!(ready(&a, extension), "A: {:?}", a.status(extension));
     assert_eq!(a.journal(), 2, "nothing is taken back on a downgrade");
+    a.write("INSERT INTO `{t}` (id, label, tag) VALUES ('r1', 'one', 'x')");
 
     b.pull(&a);
     b.follow();
     b.follow();
     assert!(ready(&b, extension), "B: {:?}", b.status(extension));
-    assert_eq!(b.journal(), 1, "B runs only the migrations of 1.0.0");
+    assert_eq!(
+        b.journal(),
+        2,
+        "B also runs the verified migration of the retired 1.1.0, as A kept it"
+    );
+    b.pull(&a);
+    b.follow();
+    assert_eq!(
+        b.parked(),
+        0,
+        "A's rows with the kept column do not wait parked"
+    );
+    assert_eq!(
+        b.count("SELECT COUNT(*) FROM `{t}` WHERE tag = 'x'"),
+        Some(1)
+    );
 }
 
 #[test]

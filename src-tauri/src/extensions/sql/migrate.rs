@@ -4,7 +4,7 @@
 //! all (FR-034). The journal (`extension_migrations_applied_no_sync`) belongs to this device.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use haex_crdt::rusqlite::params;
@@ -246,7 +246,20 @@ pub fn apply_pending(
     migrations: &[(String, String)],
     now_ms: i64,
 ) -> Result<Vec<String>, MigrationError> {
-    let _applying = APPLYING.lock().unwrap_or_else(PoisonError::into_inner);
+    let applying = APPLYING.lock().unwrap_or_else(PoisonError::into_inner);
+    apply_pending_locked(&applying, db, extension_id, own, migrations, now_ms)
+}
+
+/// [`apply_pending`] for a caller that already holds [`applying`], so a check it made under the
+/// lock still holds when the migrations run.
+pub(crate) fn apply_pending_locked(
+    _applying: &MutexGuard<'_, ()>,
+    db: &VaultDb,
+    extension_id: Uuid,
+    own: &TablePrefix,
+    migrations: &[(String, String)],
+    now_ms: i64,
+) -> Result<Vec<String>, MigrationError> {
     let offered = migrations.to_vec();
     let (pending, limits) = db
         .read_blocking(move |q| {

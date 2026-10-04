@@ -2,16 +2,20 @@
 //! §Zustände): it must be installed and enabled, its effective bundle complete and verifying, and
 //! its migrations applied; the outcome becomes its state on this device.
 
+use std::sync::PoisonError;
+
 use uuid::Uuid;
 
-use super::effective::{effective_bundle, is_downgrade};
+use super::effective::{effective_bundle, retired_above, EffectiveBundle};
 use super::status::{self, DeviceStatus};
 use crate::error::{HolziError, Result};
 use crate::extensions::bundle::store::{verify_stored_bundle, BundleIds, StoredBundleState};
 use crate::extensions::bundle::{Manifest, VerifiedBundle};
 use crate::extensions::ids::TablePrefix;
 use crate::extensions::protocol::{csp, prefix};
-use crate::extensions::sql::migrate::{apply_pending, check_applied_kept, MigrationError};
+use crate::extensions::sql::migrate::{
+    apply_pending_locked, applying, check_applied_kept, MigrationError,
+};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -77,7 +81,9 @@ pub(crate) struct Prepared {
     pub bundle: VerifiedBundle,
     pub manifest: Manifest,
     pub own: TablePrefix,
-    /// Its migrations (name, SQL) in order: the only SQL a device runs (FR-003).
+    /// The migrations (name, SQL) this device runs, in order: those of the bundle, and after a
+    /// confirmed downgrade those of the retired higher bundles it does not know. Only verified SQL
+    /// runs (FR-003).
     pub migrations: Vec<(String, String)>,
     /// It stands after a confirmed downgrade (research R11).
     pub downgrade: bool,
@@ -90,60 +96,89 @@ pub(crate) fn effective(db: &VaultDb, extension_id: Uuid) -> Result<Effective> {
     db.read_blocking(move |q| Ok(effective_in(q, extension_id)))?
 }
 
-fn effective_in(q: &mut impl Query, extension_id: Uuid) -> Result<Effective> {
-    let Some(chosen) = effective_bundle(q, extension_id)? else {
-        return Ok(Effective::Transferring(None));
-    };
-    let bundle = match verify_stored_bundle(q, chosen.bundle_id)? {
-        StoredBundleState::Transferring => {
-            return Ok(Effective::Transferring(Some(chosen.bundle_id)))
-        }
+/// A stored bundle that verifies and belongs to the row that names it.
+enum Checked {
+    Transferring,
+    SignatureFailed(String),
+    Ready(Box<VerifiedBundle>, Box<Manifest>),
+}
+
+fn check(q: &mut impl Query, extension_id: Uuid, row: &EffectiveBundle) -> Result<Checked> {
+    let bundle = match verify_stored_bundle(q, row.bundle_id)? {
+        StoredBundleState::Transferring => return Ok(Checked::Transferring),
         StoredBundleState::SignatureFailed(rejection) => {
-            return Ok(Effective::SignatureFailed(chosen.bundle_id, rejection.kind))
+            return Ok(Checked::SignatureFailed(rejection.kind))
         }
-        StoredBundleState::Ready(bundle) => *bundle,
+        StoredBundleState::Ready(bundle) => bundle,
     };
     let manifest = Manifest::from_verified(&bundle)?;
     let ids = BundleIds::of(&bundle, &manifest);
     if ids.extension_id != extension_id
-        || ids.bundle_id != chosen.bundle_id
-        || manifest.version != chosen.version
+        || ids.bundle_id != row.bundle_id
+        || manifest.version != row.version
     {
-        return Ok(Effective::SignatureFailed(
-            chosen.bundle_id,
-            "bundle_mismatch".to_owned(),
-        ));
+        return Ok(Checked::SignatureFailed("bundle_mismatch".to_owned()));
     }
-    let downgrade = is_downgrade(q, extension_id, &chosen)?;
+    Ok(Checked::Ready(bundle, Box::new(manifest)))
+}
+
+fn effective_in(q: &mut impl Query, extension_id: Uuid) -> Result<Effective> {
+    let Some(chosen) = effective_bundle(q, extension_id)? else {
+        return Ok(Effective::Transferring(None));
+    };
+    let (bundle, manifest) = match check(q, extension_id, &chosen)? {
+        Checked::Transferring => return Ok(Effective::Transferring(Some(chosen.bundle_id))),
+        Checked::SignatureFailed(kind) => {
+            return Ok(Effective::SignatureFailed(chosen.bundle_id, kind))
+        }
+        Checked::Ready(bundle, manifest) => (*bundle, *manifest),
+    };
+    let mut migrations: Vec<(String, String)> = bundle
+        .migrations
+        .iter()
+        .map(|m| (m.name.clone(), m.sql.clone()))
+        .collect();
+    // A device that applied a higher bundle keeps its migrations after a downgrade (US7-3) and
+    // syncs rows with their columns; every other device runs them too, so those rows do not wait
+    // parked for a column that never comes. A retired bundle that does not verify (yet) adds none.
+    let retired = retired_above(q, extension_id, &chosen)?;
+    for higher in &retired {
+        let Checked::Ready(higher_bundle, _) = check(q, extension_id, higher)? else {
+            continue;
+        };
+        for m in &higher_bundle.migrations {
+            if !migrations.iter().any(|(name, _)| *name == m.name) {
+                migrations.push((m.name.clone(), m.sql.clone()));
+            }
+        }
+    }
     Ok(Effective::Ready(Box::new(Prepared {
         bundle_id: chosen.bundle_id,
         own: TablePrefix {
             public_key: manifest.public_key.clone(),
             name: manifest.name.clone(),
         },
-        migrations: bundle
-            .migrations
-            .iter()
-            .map(|m| (m.name.clone(), m.sql.clone()))
-            .collect(),
-        downgrade,
+        migrations,
+        downgrade: !retired.is_empty(),
         bundle,
         manifest,
     })))
 }
 
-/// Checks that `prepared` keeps what this device applied and applies its pending migrations.
-/// Returns the names applied now. Blocking.
+/// Checks that `prepared` keeps what this device applied and applies its pending migrations, both
+/// under the migration lock. Returns the names applied now. Blocking.
 pub(crate) fn migrate(
     db: &VaultDb,
     extension_id: Uuid,
     prepared: &Prepared,
     now_ms: i64,
 ) -> std::result::Result<Vec<String>, MigrationError> {
+    let locked = applying().lock().unwrap_or_else(PoisonError::into_inner);
     let (offered, downgrade) = (prepared.migrations.clone(), prepared.downgrade);
     db.read_blocking(move |q| Ok(check_applied_kept(q, extension_id, &offered, downgrade)))
         .unwrap_or(Err(MigrationError::Unavailable))?;
-    apply_pending(
+    apply_pending_locked(
+        &locked,
         db,
         extension_id,
         &prepared.own,

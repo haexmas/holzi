@@ -311,7 +311,10 @@ Austauschs).
 - Vor dem Wechsel prüft ein Gerät, dass die Migrationen der neuen Fassung eine Obermenge der angewendeten
   (Name, SHA-256) sind; sonst startet die Erweiterung dort nicht. Ausnahme bestätigtes Downgrade: die
   Migrationen der älteren Fassung müssen mit den angewendeten übereinstimmen, soweit sie dieselben Namen haben;
-  angewendete, die die ältere Fassung nicht kennt, bleiben (nichts wird zurückgenommen, US7-3).
+  angewendete, die die ältere Fassung nicht kennt, bleiben (nichts wird zurückgenommen, US7-3). Jedes Gerät
+  führt nach einem Downgrade auch die Migrationen der zurückgezogenen höheren Bundles aus, die die ältere
+  Fassung nicht kennt, sofern deren Bundle verifiziert; sonst blieben die Zeilen mit ihren Spalten dort
+  geparkt.
 - **Deaktivieren**: Last-Writer-Wins auf `extensions.enabled` (FR-039).
 - **Entfernen**: Das auslösende Gerät setzt `state = removed`, `purge_data` und `purge_hlc` an der
   Erweiterungszeile (sie bleibt als Grabstein) und löscht seine Registry-Zeilen normal. Jedes Gerät räumt
