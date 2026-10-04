@@ -3,6 +3,7 @@ import { scenario } from '../lib/scenario.ts'
 import { unwrap, type FlowInstance } from '../lib/flows.ts'
 import type { Page } from '../lib/page.ts'
 import {
+  KEY,
   openSettings,
   runAction,
   settingsTabs,
@@ -79,6 +80,22 @@ async function openDetail(
   )
 }
 
+async function maxRows(
+  page: Page & FlowInstance,
+  extension: InstalledExtension,
+): Promise<number> {
+  return unwrap<{ values: { maxRows: number } }>(
+    'extension_limits_get',
+    await page.invoke('extension_limits_get', { extensionId: extension.id }),
+  ).values.maxRows
+}
+
+async function rowsField(page: Page & FlowInstance): Promise<string> {
+  return page.exec<string>(
+    `return document.querySelector('[data-testid="extension-limit-maxRows"]')?.value ?? ''`,
+  )
+}
+
 async function waitReady(
   page: Page & FlowInstance,
   extension: InstalledExtension,
@@ -114,6 +131,53 @@ scenario('extension-lifecycle', { timeoutMs: 300_000 }, async (ctx) => {
   ctx.step('installed, opened and written')
 
   await openDetail(page, probe)
+  await ctx.waitFor(
+    'the limits to show',
+    async () => (await rowsField(page)) === '10000',
+    { timeoutMs: 10_000 },
+  )
+  // An emptied field is no limit: the stored one comes back, nothing is sent.
+  await page.type(
+    'extension-limit-maxRows',
+    KEY.backspace.repeat(5) + KEY.enter,
+  )
+  await ctx.waitFor(
+    'the stored limit to come back',
+    async () => (await rowsField(page)) === '10000',
+    { timeoutMs: 5_000 },
+  )
+  assert.equal(await maxRows(page, probe), 10_000)
+  assert.equal(
+    await page.exec<number>(
+      `return document.querySelectorAll('[role="alert"]').length`,
+    ),
+    0,
+    'no refusal shown for an emptied field',
+  )
+  // A value outside the bounds is refused with the reason, and the stored one comes back.
+  await page.type(
+    'extension-limit-maxRows',
+    KEY.backspace.repeat(5) + '0' + KEY.enter,
+  )
+  await ctx.waitFor(
+    'the refusal to show',
+    async () =>
+      (await page.exec<number>(
+        `return document.querySelectorAll('[role="alert"]').length`,
+      )) === 1,
+    { timeoutMs: 5_000 },
+  )
+  assert.equal(await rowsField(page), '10000')
+  await page.type(
+    'extension-limit-maxRows',
+    KEY.backspace.repeat(5) + '500' + KEY.enter,
+  )
+  await ctx.waitFor(
+    'the new limit to be stored',
+    async () => (await maxRows(page, probe)) === 500,
+    { timeoutMs: 5_000 },
+  )
+  ctx.step('limits: an emptied field restores, a new value is stored')
   await page.click('extension-enabled')
   await ctx.waitFor(
     'the tab of the disabled extension to close',

@@ -36,12 +36,12 @@ function showStored() {
     draft[key] = stored.value ? String(stored.value[key]) : ''
 }
 
+/** Reads the stored limits into the fields; a refusal of the last change stays shown. */
 async function loadAsync() {
   try {
     view.value = await invoke<ExtensionLimitsView>('extension_limits_get', {
       extensionId: props.extensionId,
     })
-    failure.value = null
   } catch (error) {
     failure.value = errString(error)
   }
@@ -51,7 +51,14 @@ async function loadAsync() {
 async function commitAsync(key: Field) {
   const current = stored.value
   if (!current || busy.value) return
-  const value = Number(draft[key])
+  const text = String(draft[key] ?? '').trim()
+  const value = Number(text)
+  // An emptied field or no whole number is not a limit: the stored one comes back.
+  if (text === '' || !Number.isSafeInteger(value)) {
+    draft[key] = String(current[key])
+    failure.value = null
+    return
+  }
   if (value === current[key]) return
   busy.value = true
   try {
