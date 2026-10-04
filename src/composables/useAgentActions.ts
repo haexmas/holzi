@@ -30,7 +30,7 @@ let localeWatchStarted = false
  */
 export function useAgentActions() {
   const wm = useWindowManagerStore()
-  const { t, locale } = useI18n()
+  const { t, locale, loadLocaleMessages } = useI18n()
 
   /** Translates an action title in the requested catalog language. */
   const titleOf = (key: string, language: ActionLocale) =>
@@ -38,6 +38,8 @@ export function useAgentActions() {
 
   /** Replaces Rust's action tools with the eligible catalog and its localized titles. */
   async function pushDefinitionsAsync(): Promise<void> {
+    // Only the active language is loaded lazily; the titles need both catalogs.
+    await Promise.all([loadLocaleMessages('de'), loadLocaleMessages('en')])
     await invoke('set_agent_actions', {
       args: { actions: listAgentActions(ALL_ACTIONS, titleOf) },
     })
