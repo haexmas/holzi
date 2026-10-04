@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { deviceFiles } from '../lib/extension-files.ts'
 import { scenario } from '../lib/scenario.ts'
 import type { FlowInstance } from '../lib/flows.ts'
 import type { Page } from '../lib/page.ts'
@@ -44,9 +42,9 @@ async function events(page: Instance, probe: InstalledExtension) {
 scenario('extension-files', { timeoutMs: 300_000 }, async (ctx) => {
   const group = await ctx.group({ users: { anna: ['laptop'] } })
   const page = group.device('anna/laptop').page
-  const folder = mkdtempSync(join(tmpdir(), 'holzi-ext-files-'))
-  const note = join(folder, 'note.txt')
-  writeFileSync(note, 'from the device')
+  const files = deviceFiles()
+  const note = files.path('note.txt')
+  files.write('note.txt', 'from the device')
 
   const probe = await install(page, fixture('e2e', 'probe'))
   await openFromLauncher(page, probe)
@@ -69,7 +67,7 @@ scenario('extension-files', { timeoutMs: 300_000 }, async (ctx) => {
   assert.equal(Buffer.from(content, 'base64').toString(), 'from the device')
   ctx.step('reading asked first, then the file came')
 
-  const target = join(folder, 'written.txt')
+  const target = files.path('written.txt')
   const write = () =>
     probeRequest(page, probe, 'extension_filesystem_write_file', {
       path: target,
@@ -78,18 +76,18 @@ scenario('extension-files', { timeoutMs: 300_000 }, async (ctx) => {
   assert.equal((await write()).error?.code, 1004, 'writing is asked for')
   await allow(page)
   assert.equal((await write()).error, undefined)
-  assert.equal(readFileSync(target, 'utf8'), 'from the probe')
+  assert.equal(files.read('written.txt'), 'from the probe')
   ctx.step('writing asked again, then the file was written')
 
   const watch = () =>
     probeRequest(page, probe, 'extension_filesystem_watch', {
       ruleId: 'notes',
-      path: folder,
+      path: files.folder,
     })
   assert.equal((await watch()).error?.code, 1004)
   await allow(page)
   assert.equal((await watch()).error, undefined)
-  writeFileSync(join(folder, 'changed.txt'), 'x')
+  files.write('changed.txt', 'x')
   await ctx.waitFor(
     'the change to reach the probe',
     async () =>
@@ -102,4 +100,5 @@ scenario('extension-files', { timeoutMs: 300_000 }, async (ctx) => {
     { timeoutMs: 15_000 },
   )
   ctx.step('a watched folder reports to the probe, flat')
+  files.remove()
 })

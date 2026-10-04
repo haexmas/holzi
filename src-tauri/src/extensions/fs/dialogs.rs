@@ -204,11 +204,59 @@ fn scratch_file(scratch: &Path, name: &str) -> Result<PathBuf, BridgeError> {
     Ok(dir.join(name))
 }
 
-/// `{data, fileName, mimeType?}`: the system's viewer opens a copy (FR-046).
+/// Copies in the scratch place older than this are removed when holzi starts.
+const SCRATCH_KEEP: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// Removes the copies an earlier start handed to the viewer, so files of the user do not pile up
+/// in holzi's cache. Recent ones stay: another holzi process may have just opened them.
+pub fn prune_scratch(scratch: &Path) {
+    let Ok(entries) = std::fs::read_dir(scratch) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let old = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .is_ok_and(|time| time.elapsed().is_ok_and(|age| age > SCRATCH_KEEP));
+        if old && entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            if let Err(error) = std::fs::remove_dir_all(entry.path()) {
+                log::warn!("extensions: an old opened copy stays: {error}");
+            }
+        }
+    }
+}
+
+/// File types the system's viewer may open for an extension: documents, pictures and media.
+/// Anything else could be a program or a script the system would run (`.exe`, `.bat`, `.desktop`,
+/// `.command`, a document with macros); a page (`.html`, `.svg`) would run scripts with access to
+/// local files.
+const VIEWABLE: &[&str] = &[
+    "pdf", "txt", "md", "csv", "tsv", "json", "ics", "vcf", "epub", "odt", "ods", "odp", "odg",
+    "docx", "xlsx", "pptx", "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "heic",
+    "avif", "mp3", "m4a", "ogg", "oga", "opus", "wav", "flac", "mp4", "m4v", "webm", "mkv", "mov",
+];
+
+/// Whether the system's viewer may open a file named `name`. Also refused: `:` (an alternate data
+/// stream on Windows), control characters, and a trailing dot or space, which Windows drops.
+fn viewable(name: &str) -> bool {
+    if name.chars().any(|c| c == ':' || c.is_control()) || name.ends_with(['.', ' ']) {
+        return false;
+    }
+    Path::new(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| VIEWABLE.contains(&e.to_ascii_lowercase().as_str()))
+}
+
+/// `{data, fileName, mimeType?}`: the system's viewer opens a copy (FR-046), only of a document,
+/// picture or media file ([`VIEWABLE`]).
 pub fn open_file(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let environment = ctx.host.fs.environment()?;
     let data = bytes(params, max_bytes(ctx)?)?;
     let name = text(params, "fileName").ok_or_else(|| invalid("fileName is missing"))?;
+    if !viewable(&name) {
+        return Err(invalid("this file type cannot be opened"));
+    }
     let path = scratch_file(&environment.scratch, &name)?;
     std::fs::write(&path, data).map_err(|e| failed(format!("write failed: {e}")))?;
     let opened = environment.dialogs.open(&path);

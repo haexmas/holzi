@@ -418,3 +418,101 @@ fn known_places_are_named_and_still_need_a_permission() {
         1004
     );
 }
+
+#[test]
+fn the_viewer_opens_documents_and_media_but_no_programs_or_pages() {
+    let s = setup();
+    let ctx = s.frame("good-notes-like.xt");
+    let open = |name: &str| {
+        call(
+            &ctx,
+            "extension_filesystem_open_file",
+            &json!({ "data": [1], "fileName": name }),
+        )
+    };
+    for name in ["report.PDF", "photo.jpeg", "talk.mp4"] {
+        assert_eq!(open(name).unwrap()["success"], true, "{name}");
+    }
+    let validation = ExtensionErrorCode::Validation.as_u16();
+    for name in [
+        "setup.exe",
+        "run.bat",
+        "start.desktop",
+        "page.html",
+        "drawing.svg",
+        "macro.docm",
+        "no-extension",
+        "report.pdf.",
+        "report.bat:x.pdf",
+    ] {
+        assert_eq!(code(open(name)), validation, "{name}");
+    }
+    assert_eq!(lock(&s.dialogs.opened).len(), 3);
+}
+
+#[test]
+fn reading_takes_only_regular_files() {
+    let s = setup();
+    let ctx = s.frame("good-notes-like.xt");
+    s.grant(&ctx, "read", &s.root);
+    assert_eq!(
+        code(read(&ctx, &s.root)),
+        ExtensionErrorCode::Validation.as_u16()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn nothing_is_written_through_a_link_nobody_checked() {
+    let s = setup();
+    let ctx = s.frame("good-notes-like.xt");
+    s.grant(&ctx, "readWrite", &s.root);
+    // A broken link inside the granted folder that points into one of holzi's places.
+    std::os::unix::fs::symlink(s.protected.join("new.db"), s.root.join("dangling")).unwrap();
+    let write = json!({ "path": s.root.join("dangling").to_string_lossy(), "data": "eA==" });
+    assert!(call(&ctx, "extension_filesystem_write_file", &write).is_err());
+    assert!(!s.protected.join("new.db").exists());
+
+    // A link already lying in a copy's destination that leads into one of holzi's places.
+    let (from, to) = (s.root.join("from"), s.root.join("to"));
+    std::fs::create_dir_all(from.join("inner")).unwrap();
+    std::fs::write(from.join("inner").join("vault.db"), "overwritten").unwrap();
+    std::fs::create_dir(&to).unwrap();
+    std::os::unix::fs::symlink(&s.protected, to.join("inner")).unwrap();
+    let copy = json!({ "from": from.to_string_lossy(), "to": to.to_string_lossy() });
+    assert!(call(&ctx, "extension_filesystem_copy", &copy).is_err());
+    assert_eq!(
+        std::fs::read_to_string(s.protected.join("vault.db")).unwrap(),
+        "vault"
+    );
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[test]
+fn a_watch_a_dialog_choice_allowed_ends_with_its_frame() {
+    let s = setup();
+    let ctx = s.frame("good-notes-like.xt");
+    let _other = s
+        .host
+        .frames
+        .open(ctx.session.extension_id, Uuid::new_v4(), "tab-2");
+    *lock(&s.dialogs.choice) = Some(s.outside.clone());
+    call(&ctx, "extension_filesystem_select_folder", &json!({})).unwrap();
+    let watch = json!({ "ruleId": "chosen", "path": s.outside.to_string_lossy() });
+    call(&ctx, "extension_filesystem_watch", &watch).unwrap();
+    assert!(s
+        .host
+        .fs
+        .watches
+        .running(ctx.session.extension_id, "chosen"));
+
+    // Another frame of the extension stays open, so only the choice's own watch ends.
+    s.host
+        .fs
+        .frame_closed(&ctx.session.frame, ctx.session.extension_id, false);
+    assert!(!s
+        .host
+        .fs
+        .watches
+        .running(ctx.session.extension_id, "chosen"));
+}

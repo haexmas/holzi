@@ -13,7 +13,7 @@
 
 use serde_json::{json, Value};
 
-use super::{authorize, Access, Reach};
+use super::{authorize_by, Access, Allowed, Reach};
 use crate::extensions::bridge::dispatch::CallContext;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 
@@ -41,8 +41,10 @@ mod desktop {
     use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
     use std::time::Duration;
 
-    use notify::{EventKind, RecommendedWatcher, RecursiveMode};
-    use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, RecommendedCache};
+    use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode};
+    use notify_debouncer_full::{
+        new_debouncer_opt, DebounceEventResult, Debouncer, RecommendedCache,
+    };
     use serde_json::json;
     use uuid::Uuid;
 
@@ -56,15 +58,23 @@ mod desktop {
 
     type Watcher = Debouncer<RecommendedWatcher, RecommendedCache>;
 
+    /// A running watch and, when only a dialog choice allowed it, the frame of that choice.
+    struct Watch {
+        _watcher: Watcher,
+        frame: Option<String>,
+    }
+
     /// The running watches, by (extension, `ruleId`).
     #[derive(Default)]
-    pub struct Watches(Mutex<HashMap<(Uuid, String), Watcher>>);
+    pub struct Watches(Mutex<HashMap<(Uuid, String), Watch>>);
 
     impl Watches {
-        fn map(&self) -> MutexGuard<'_, HashMap<(Uuid, String), Watcher>> {
+        fn map(&self) -> MutexGuard<'_, HashMap<(Uuid, String), Watch>> {
             self.0.lock().unwrap_or_else(PoisonError::into_inner)
         }
 
+        /// Watches `root`; with `frame`, the watch ends when that frame closes. Links below
+        /// `root` are not followed: their targets were never checked.
         pub fn start(
             &self,
             host: Weak<ExtensionHost>,
@@ -72,10 +82,11 @@ mod desktop {
             extension_id: Uuid,
             rule_id: String,
             root: PathBuf,
+            frame: Option<String>,
         ) -> Result<(), String> {
             let rule = rule_id.clone();
             let base = root.clone();
-            let mut watcher = new_debouncer(DEBOUNCE, None, move |result: DebounceEventResult| {
+            let handler = move |result: DebounceEventResult| {
                 let Ok(events) = result else {
                     return;
                 };
@@ -89,7 +100,7 @@ mod desktop {
                         EventKind::Remove(_) => "removed",
                         _ => "any",
                     };
-                    for path in &event.paths {
+                    for path in event.paths.iter().filter_map(|p| relative(&base, p)) {
                         emit_to_frames(
                             emitter.as_ref(),
                             &host,
@@ -98,18 +109,37 @@ mod desktop {
                             &json!({
                                 "ruleId": rule,
                                 "changeType": change,
-                                "path": relative(&base, path),
+                                "path": path,
                             }),
                         );
                     }
                 }
-            })
+            };
+            let mut watcher = new_debouncer_opt::<_, RecommendedWatcher, _>(
+                DEBOUNCE,
+                None,
+                handler,
+                RecommendedCache::new(),
+                Config::default().with_follow_symlinks(false),
+            )
             .map_err(|e| e.to_string())?;
             watcher
                 .watch(&root, RecursiveMode::Recursive)
                 .map_err(|e| e.to_string())?;
-            self.map().insert((extension_id, rule_id), watcher);
+            self.map().insert(
+                (extension_id, rule_id),
+                Watch {
+                    _watcher: watcher,
+                    frame,
+                },
+            );
             Ok(())
+        }
+
+        /// Ends the watches only a choice of `frame` allowed.
+        pub fn end_frame(&self, frame: &str) {
+            self.map()
+                .retain(|_, watch| watch.frame.as_deref() != Some(frame));
         }
 
         pub fn stop(&self, extension_id: Uuid, rule_id: &str) -> bool {
@@ -127,12 +157,12 @@ mod desktop {
         }
     }
 
-    /// `path` below `root` as the SDK reports it, else as it is.
-    fn relative(root: &Path, path: &Path) -> String {
+    /// `path` below `root` as the SDK reports it; a path outside the watched folder is not
+    /// reported.
+    fn relative(root: &Path, path: &Path) -> Option<String> {
         path.strip_prefix(root)
-            .unwrap_or(path)
-            .to_string_lossy()
-            .into_owned()
+            .ok()
+            .map(|rest| rest.to_string_lossy().into_owned())
     }
 }
 
@@ -146,6 +176,7 @@ pub struct Watches;
 
 #[cfg(any(target_os = "android", target_os = "ios"))]
 impl Watches {
+    pub fn end_frame(&self, _frame: &str) {}
     pub fn end_all(&self, _extension_id: uuid::Uuid) {}
 }
 
@@ -158,7 +189,9 @@ pub fn watch(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| BridgeError::new(ExtensionErrorCode::Validation, "path is missing"))?;
-    let root = authorize(ctx, raw, Access::Read, Reach::Tree)?;
+    let (root, allowed) = authorize_by(ctx, raw, Access::Read, Reach::Tree)?;
+    // A choice holds only while its frame is open (FR-048), and so does what it allowed.
+    let frame = (allowed == Allowed::Choice).then(|| ctx.session.frame.clone());
     ctx.host
         .fs
         .watches
@@ -168,6 +201,7 @@ pub fn watch(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
             ctx.session.extension_id,
             rule,
             root,
+            frame,
         )
         .map_err(|e| {
             BridgeError::new(ExtensionErrorCode::Filesystem, format!("watch failed: {e}"))

@@ -593,8 +593,18 @@ Baum einen dieser Orte enthält. Kopieren lässt symbolische Links innerhalb des
 geprüft wurde. Die Dialoge laufen über das Merkmal `FileDialogs` im Host (Tauri-Plugins im Programm, ein Fake in
 den Tests), damit die Bridge keinen `AppHandle` braucht. `open_file` und `show_image` legen die Kopie in einen
 Ordner im Cache von holzi, der selbst gesperrt ist; `show_image` nimmt nur PNG, JPEG, GIF, WebP und BMP.
-Beobachtungen enden mit dem letzten Rahmen ihrer Erweiterung. `filesync:file-changed` trägt den Pfad relativ zum
-beobachteten Ordner; holzis Fenster legt die Felder flacher Ereignisse neben `type`.
+Beobachtungen enden mit dem letzten Rahmen ihrer Erweiterung, beim Entfernen, Deaktivieren und Entladen der
+Erweiterung, und eine nur durch die Dialog-Auswahl eines Rahmens erlaubte schon mit diesem Rahmen (FR-048). Sie
+folgen keinen Links im Baum. `filesync:file-changed` trägt den Pfad relativ zum beobachteten Ordner; holzis Fenster
+legt die Felder flacher Ereignisse neben `type`.
+
+**Nachträge aus dem Review (L4)**: Ein Pfadteil, der da ist, sich aber nicht auflösen lässt (kaputter oder
+kreisender Link), wird abgelehnt: Schreiben folgte ihm sonst an ein ungeprüftes Ziel. Kopieren schreibt nicht durch
+einen Link, der im Ziel schon liegt. `read_file` liest nur reguläre Dateien und höchstens bis zur Antwortgröße.
+`open_file` übergibt dem Standardprogramm nur Dokumente, Bilder und Medien (feste Liste von Endungen, ohne `:`,
+Steuerzeichen und Punkt oder Leerzeichen am Ende): sonst startete etwa unter Windows eine `.bat` ohne jede
+Berechtigung, und eine Seite (`.html`, `.svg`) liefe mit Zugriff auf lokale Dateien. Kopien im Cache, die älter als
+ein Tag sind, entfernt holzi beim Start.
 
 **Begründung**: FR-047/FR-049 verlangen das tatsächliche Ziel; HV prüft rein lexikalisch (Symlinks
 entkommen), Dialog-Auswahlen erzeugen dort keine Berechtigung, `unwatch` prüft den Besitzer nicht.

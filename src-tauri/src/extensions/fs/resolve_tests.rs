@@ -28,6 +28,23 @@ fn a_missing_target_resolves_through_its_nearest_existing_ancestor() {
 
 #[cfg(unix)]
 #[test]
+fn a_broken_link_is_refused_anywhere_in_the_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let real = std::fs::canonicalize(dir.path()).unwrap();
+    let elsewhere = real.join("elsewhere");
+    std::os::unix::fs::symlink(elsewhere.join("vault.db"), real.join("file-link")).unwrap();
+    std::os::unix::fs::symlink(elsewhere.join("folder"), real.join("folder-link")).unwrap();
+    std::os::unix::fs::symlink(real.join("loop"), real.join("loop")).unwrap();
+    for path in ["file-link", "folder-link/new.txt", "loop", "loop/new.txt"] {
+        assert!(
+            resolve(&format!("{}/{path}", real.display())).is_err(),
+            "{path}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn a_link_resolves_to_where_it_points() {
     let dir = tempfile::tempdir().unwrap();
     let real = std::fs::canonicalize(dir.path()).unwrap();

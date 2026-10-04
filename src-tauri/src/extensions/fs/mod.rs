@@ -99,9 +99,11 @@ pub fn environment_for<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> FsEnviro
     .filter_map(|(name, path)| Some((name, path.ok()?)))
     .filter(|(_, path)| path.exists())
     .collect();
-    let scratch = paths
-        .app_cache_dir()
-        .map_or_else(|_| std::env::temp_dir(), |dir| dir.join("extension-files"));
+    let scratch = paths.app_cache_dir().map_or_else(
+        |_| std::env::temp_dir().join("holzi-extension-files"),
+        |dir| dir.join("extension-files"),
+    );
+    dialogs::prune_scratch(&scratch);
     FsEnvironment {
         denied,
         known,
@@ -177,9 +179,11 @@ impl FsState {
             .is_some_and(|choices| choices.iter().any(|c| c.covers(path, access)))
     }
 
-    /// Forgets the choices of a closed frame; with its extension's last frame its watches end.
+    /// Forgets the choices of a closed frame and ends the watches only they allowed; with its
+    /// extension's last frame all its watches end.
     pub fn frame_closed(&self, frame: &str, extension_id: Uuid, last_frame: bool) {
         lock(&self.choices).remove(frame);
+        self.watches.end_frame(frame);
         if last_frame {
             self.watches.end_all(extension_id);
         }
@@ -221,6 +225,15 @@ fn decision(ctx: &CallContext, path: &Path, access: Access) -> Result<Decision, 
     Ok(evaluate(&grants, &request, device))
 }
 
+/// What let a call reach its path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Allowed {
+    /// A choice the user made in a dialog of the calling frame: it ends with that frame.
+    Choice,
+    /// A permission of the extension.
+    Permission,
+}
+
 /// The real target of `raw` if the caller may reach it with `access` and `reach`; otherwise why
 /// not: protected (1002), denied (1002), a question for the user (1004), or no free paths here
 /// (8001).
@@ -230,13 +243,23 @@ pub fn authorize(
     access: Access,
     reach: Reach,
 ) -> Result<PathBuf, BridgeError> {
+    authorize_by(ctx, raw, access, reach).map(|(path, _)| path)
+}
+
+/// [`authorize`], also telling what allowed it.
+pub fn authorize_by(
+    ctx: &CallContext,
+    raw: &str,
+    access: Access,
+    reach: Reach,
+) -> Result<(PathBuf, Allowed), BridgeError> {
     let environment = ctx.host.fs.environment()?;
     let path = resolve(raw)?;
     if touches_denied(&environment, &path, reach) {
         return Err(protected());
     }
     if ctx.host.fs.chosen(&ctx.session.frame, &path, access) {
-        return Ok(path);
+        return Ok((path, Allowed::Choice));
     }
     if !environment.free_paths {
         return Err(BridgeError::not_available());
@@ -246,7 +269,7 @@ pub fn authorize(
         Access::Write => "readWrite",
     };
     match decision(ctx, &path, access)? {
-        Decision::Allow => Ok(path),
+        Decision::Allow => Ok((path, Allowed::Permission)),
         Decision::Deny => Err(BridgeError::new(
             ExtensionErrorCode::PermissionDenied,
             "permission denied",

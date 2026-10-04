@@ -2,6 +2,7 @@
 //! through [`super::authorize`] at its real target before anything is read or written. Contents
 //! travel as base64, as the SDK sends and expects them.
 
+use std::io::Read;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
@@ -46,19 +47,30 @@ fn max_bytes(ctx: &CallContext) -> Result<u64, BridgeError> {
         .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))
 }
 
-/// `{path}` → the contents as base64, up to the caller's answer size.
+fn too_large() -> BridgeError {
+    BridgeError::new(ExtensionErrorCode::LimitExceeded, "file too large")
+}
+
+/// `{path}` → the contents as base64, up to the caller's answer size. Only a regular file: a
+/// device or a pipe has no size and might never end. The read stops past the limit, so a file that
+/// grows after the size check cannot get through either.
 pub fn read_file(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let path = authorize(ctx, path_param(params, "path")?, Access::Read, Reach::Path)?;
-    let size = std::fs::metadata(&path)
-        .map_err(|e| failed("read", e))?
-        .len();
-    if size > max_bytes(ctx)? {
-        return Err(BridgeError::new(
-            ExtensionErrorCode::LimitExceeded,
-            "file too large",
-        ));
+    let metadata = std::fs::metadata(&path).map_err(|e| failed("read", e))?;
+    if !metadata.is_file() {
+        return Err(invalid("path is not a file"));
     }
-    let data = std::fs::read(&path).map_err(|e| failed("read", e))?;
+    let max = max_bytes(ctx)?;
+    if metadata.len() > max {
+        return Err(too_large());
+    }
+    let mut data = Vec::new();
+    std::fs::File::open(&path)
+        .and_then(|file| file.take(max.saturating_add(1)).read_to_end(&mut data))
+        .map_err(|e| failed("read", e))?;
+    if u64::try_from(data.len()).unwrap_or(u64::MAX) > max {
+        return Err(too_large());
+    }
     Ok(json!(base64::engine::general_purpose::STANDARD.encode(data)))
 }
 
@@ -150,8 +162,21 @@ pub fn rename(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     Ok(Value::Null)
 }
 
+/// Refuses to write at `target` below the copy's checked destination when it is already a link:
+/// copying through it would write where nobody checked, perhaps into one of holzi's own places.
+fn not_a_link(target: &Path) -> std::io::Result<()> {
+    match std::fs::symlink_metadata(target) {
+        Ok(metadata) if metadata.file_type().is_symlink() => Err(std::io::Error::other(format!(
+            "{} is a link",
+            target.display()
+        ))),
+        _ => Ok(()),
+    }
+}
+
 /// Copies the tree at `from` (already checked at its real target) to `to`. A symbolic link inside
-/// the tree is left out: its target was never checked and may be one of holzi's own places.
+/// the tree is left out: its target was never checked and may be one of holzi's own places. For
+/// the same reason nothing is written through a link that already lies below `to`.
 fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
     if !std::fs::metadata(from)?.is_dir() {
         std::fs::copy(from, to)?;
@@ -165,6 +190,7 @@ fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
             continue;
         }
         let target = to.join(entry.file_name());
+        not_a_link(&target)?;
         if kind.is_dir() {
             copy_tree(&entry.path(), &target)?;
         } else {

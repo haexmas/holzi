@@ -12,7 +12,8 @@ fn invalid(message: &str) -> BridgeError {
 
 /// The canonical target of the absolute `path`. A target that does not exist yet (a file to
 /// write, a folder to create) resolves through its nearest existing ancestor; the rest is appended
-/// and may hold no `.` or `..`.
+/// and may hold no `.` or `..`. A part that is there but does not resolve is a broken or looping
+/// link: writing through it would reach a target nobody checked, so it is refused.
 pub fn resolve(path: &str) -> Result<PathBuf, BridgeError> {
     let path = Path::new(path);
     if !path.is_absolute() {
@@ -24,6 +25,9 @@ pub fn resolve(path: &str) -> Result<PathBuf, BridgeError> {
     let mut rest: Vec<&std::ffi::OsStr> = Vec::new();
     let mut ancestor = path;
     loop {
+        if std::fs::symlink_metadata(ancestor).is_ok() {
+            return Err(invalid("path holds a broken link"));
+        }
         let parent = ancestor
             .parent()
             .ok_or_else(|| invalid("path has no existing ancestor"))?;
