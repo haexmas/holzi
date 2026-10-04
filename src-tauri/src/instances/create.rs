@@ -144,6 +144,7 @@ pub async fn create_instance(
     // Spec 024: the sync service runs as tracked session work and ends with the close.
     crate::vault_events::start_for_active_instance(&app, &state);
     crate::extensions::registry::lifecycle::start_for_active_instance(&app, &state);
+    crate::extensions::sql::changes::start_for_active_instance(&app, &state);
     crate::sync::start_for_active_instance(&app, &state).await;
 
     *chat.session.lock().unwrap_or_else(|e| e.into_inner()) = None;
