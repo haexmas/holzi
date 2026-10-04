@@ -72,6 +72,16 @@ impl PublicKey {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The 32 bytes the hex characters stand for; `parse` admits nothing else.
+    pub fn bytes(&self) -> [u8; 32] {
+        let mut bytes = [0; 32];
+        for (byte, pair) in bytes.iter_mut().zip(self.0.as_bytes().as_chunks::<2>().0) {
+            let digit = |c: u8| (c as char).to_digit(16).unwrap_or(0) as u8;
+            *byte = digit(pair[0]) << 4 | digit(pair[1]);
+        }
+        bytes
+    }
 }
 
 /// The name of an extension (FR-004): a lowercase letter, then lowercase letters, digits and `-`.

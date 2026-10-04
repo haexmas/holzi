@@ -176,6 +176,16 @@ CREATE INDEX idx_ext_logs_ext ON extension_logs_no_sync(extension_id, created_at
 --> statement-breakpoint
 CREATE INDEX idx_sync_parked_prefix ON sync_parked_groups_no_sync(extension_prefix, hlc);"#;
 
+/// The migration `0024_dev_extension_kv` (spec 017, US12): the key-value store of an extension
+/// loaded in developer mode. Like its registration it stays on this device; unloading it deletes
+/// the rows.
+pub const DEV_EXTENSION_KV_0024: &str = r#"CREATE TABLE dev_extension_kv_no_sync (
+  extension_id TEXT NOT NULL REFERENCES dev_extensions_no_sync(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (extension_id, key)
+);"#;
+
 /// The tables of [`EXTENSIONS_0023`] that haex-crdt tracks and syncs.
 pub const SYNCED_TABLES: [&str; 9] = [
     "extensions",

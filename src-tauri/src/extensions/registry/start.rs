@@ -187,6 +187,12 @@ pub(crate) fn migrate(
     )
 }
 
+/// Whether a development version of `prefix` is registered in this vault file.
+pub(crate) fn dev_prefix_here(db: &VaultDb, prefix: &TablePrefix) -> Result<bool> {
+    let prefix = prefix.to_string();
+    db.read_blocking(move |q| Ok(crate::extensions::dev::prefixes(q)?.contains(&prefix)))
+}
+
 /// Checks and prepares `extension_id` on `device`. Blocking: run it on a blocking thread.
 pub fn start(db: &VaultDb, extension_id: Uuid, device: Uuid, now_ms: i64) -> Result<Started> {
     match db.read_blocking(move |q| Ok(registration(q, extension_id)))?? {
@@ -201,6 +207,13 @@ pub fn start(db: &VaultDb, extension_id: Uuid, device: Uuid, now_ms: i64) -> Res
             DeviceStatus::SignatureFailed,
             Some(bundle_id),
             Some(kind),
+            None,
+        ),
+        // A development version of the same prefix runs on this device (US12, research R16).
+        Effective::Ready(prepared) if dev_prefix_here(db, &prepared.own)? => (
+            DeviceStatus::MigrationFailed,
+            Some(prepared.bundle_id),
+            Some("dev_prefix_conflict".to_owned()),
             None,
         ),
         Effective::Ready(prepared) => match migrate(db, extension_id, &prepared, now_ms) {

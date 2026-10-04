@@ -48,7 +48,9 @@ pub fn ask(ctx: &CallContext, error: &BridgeError) {
     let (lookup_action, lookup_target) = (action.clone(), target.clone());
     let facts = ctx.db.read_blocking(move |q| {
         let display = q.query_row(
-            "SELECT coalesce(display_name, name) FROM extensions WHERE id = ?1",
+            "SELECT coalesce(display_name, name) FROM extensions WHERE id = ?1 \
+             UNION ALL SELECT coalesce(display_name, name) FROM dev_extensions_no_sync \
+             WHERE id = ?1",
             &[&ext],
             |r| r.get::<_, String>(0),
         )?;

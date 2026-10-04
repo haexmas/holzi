@@ -6,6 +6,10 @@ export type FrameOpened = {
  */
 frame: string,
 /**
- * URL of the entry page with the start token.
+ * URL of the entry page with the start token, or of the development server.
  */
-url: string, };
+url: string,
+/**
+ * A development version (US12): its tab is marked, its console shown.
+ */
+dev: boolean, };

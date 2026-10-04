@@ -36,6 +36,8 @@ pub(in crate::sync::inbound) struct Context {
     registry: HashMap<String, (String, bool)>,
     /// The last `purge_hlc` cleared up for, per extension id.
     applied: HashMap<String, String>,
+    /// Prefixes of development versions on this device: their tables are not the synced ones.
+    pub(super) dev: HashSet<String>,
 }
 
 /// A removal read from a group that was applied: the `purge_hlc` of `prefix` and whether it
@@ -101,6 +103,7 @@ impl Context {
             extension_tables,
             parked,
             applied,
+            dev: crate::extensions::dev::prefixes(q)?,
             ..Self::default()
         };
         for (id, key, name, purge_data, purge_hlc) in registered {

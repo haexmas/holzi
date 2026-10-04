@@ -4,14 +4,14 @@ import { formatFileSize } from '~/lib/passwords/format'
 /**
  * The category "Erweiterungen" (spec 017, US1, T049): the installed extensions with icon, name,
  * version and their state on this device, installing one from a file, and the kept data of
- * removed extensions with its size here (US7, T092). The list follows `extensions-changed`
- * through the extensions store.
+ * removed extensions with its size here (US7, T092), and developer mode (US12, T096). The list
+ * follows `extensions-changed` through the extensions store.
  */
 const { t } = useI18n()
 const store = useExtensionsStore()
 const installing = ref(false)
 const installed = computed(() =>
-  store.list.filter((e) => e.state === 'installed'),
+  store.list.filter((e) => e.state === 'installed' && !e.dev),
 )
 const kept = computed(() => store.list.filter((e) => e.state !== 'installed'))
 
@@ -88,6 +88,8 @@ function description(version: string | undefined, status: string | undefined) {
         data-testid="extension-kept-data"
       />
     </SettingsGroup>
+
+    <SettingsExtensionsExtensionDevModeView />
 
     <ExtensionsInstallDialog v-model:open="installing" />
   </section>

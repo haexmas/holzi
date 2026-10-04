@@ -10,9 +10,10 @@
 //!
 //! Changes to the tables of an extension removed with "delete data" that are older than its
 //! `purge_hlc` are dropped (R11). Newer ones are parked until this device has cleared up for that
-//! removal, so the clear-up cannot drop them: they belong to a reinstall. An unknown table without
-//! an extension prefix still aborts the pull, and an extension's device-local (`_no_sync`) table on
-//! the wire is a protocol error.
+//! removal, so the clear-up cannot drop them: they belong to a reinstall. Groups for the prefix of
+//! a development version on this device (US12) stay parked until it is unloaded. An unknown table
+//! without an extension prefix still aborts the pull, and an extension's device-local (`_no_sync`)
+//! table on the wire is a protocol error.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -35,6 +36,7 @@ pub(super) const MISSING_TABLE: &str = "missing_table";
 pub(super) const MISSING_COLUMN: &str = "missing_column";
 pub(super) const AFTER_PARKED: &str = "after_parked";
 pub(super) const AWAITING_PURGE: &str = "awaiting_purge";
+pub(super) const DEV_VERSION: &str = "dev_version";
 
 #[path = "inbound_park_context.rs"]
 mod context;
@@ -153,6 +155,8 @@ pub(super) fn sort(
         let reason = match context.extension_tables.get(&name.to_ascii_lowercase()) {
             // Newer than a removal this device has not cleared up for: the clear-up would drop it.
             _ if context.pending.contains(&prefix) => Some(AWAITING_PURGE),
+            // A development version owns that prefix here until it is unloaded.
+            _ if context.dev.contains(&prefix) => Some(DEV_VERSION),
             None => Some(MISSING_TABLE),
             Some(Some(known))
                 if change.table_name != DELETED_ROWS_TABLE

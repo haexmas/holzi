@@ -36,6 +36,7 @@ use std::sync::Arc;
 
 use haex_crdt::{MigrationName, StaticMigrationSource};
 
+use super::migrations_extensions::DEV_EXTENSION_KV_0024;
 use super::migrations_extensions::EXTENSIONS_0023;
 use super::migrations_extensions::SYNC_PARKING_0025;
 use super::migrations_passwords::PASSWORDS_0022;
@@ -590,6 +591,10 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
     m.insert(
         MigrationName::from("0025_sync_parking"),
         SYNC_PARKING_0025.to_owned(),
+    );
+    m.insert(
+        MigrationName::from("0024_dev_extension_kv"),
+        DEV_EXTENSION_KV_0024.to_owned(),
     );
 
     Arc::new(StaticMigrationSource(m))

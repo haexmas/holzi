@@ -49,7 +49,10 @@ pub fn due(q: &mut impl Query, removal: &Removal) -> haex_crdt::Result<bool> {
 }
 
 /// The tables and views of `prefix`, device-local ones included.
-fn prefixed(q: &mut impl Query, prefix: &TablePrefix) -> haex_crdt::Result<Vec<(String, String)>> {
+pub(crate) fn prefixed(
+    q: &mut impl Query,
+    prefix: &TablePrefix,
+) -> haex_crdt::Result<Vec<(String, String)>> {
     let objects: Vec<(String, String)> = q.query_map(
         "SELECT type, name FROM sqlite_master WHERE type IN ('table', 'view')",
         &[],
@@ -61,7 +64,7 @@ fn prefixed(q: &mut impl Query, prefix: &TablePrefix) -> haex_crdt::Result<Vec<(
         .collect())
 }
 
-fn quoted(name: &str) -> String {
+pub(crate) fn quoted(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
