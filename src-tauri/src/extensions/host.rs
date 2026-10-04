@@ -98,18 +98,22 @@ impl ExtensionHost {
             .clone()
     }
 
-    /// Sets the context holzi's window reports; a theme outside the SDK's names counts as
-    /// `system`.
-    pub fn set_context(&self, theme: &str, locale: &str) {
+    /// Takes over the color scheme and language holzi's window reports (a theme outside the SDK's
+    /// names counts as `system`); returns whether either changed.
+    pub fn set_context(&self, theme: &str, locale: &str) -> bool {
         let theme = match theme {
             "light" => "light",
             "dark" => "dark",
             _ => "system",
         };
-        *self.context.lock().unwrap_or_else(PoisonError::into_inner) = HostContext {
+        let next = HostContext {
             theme,
             locale: locale.to_owned(),
         };
+        let mut current = self.context.lock().unwrap_or_else(PoisonError::into_inner);
+        let changed = *current != next;
+        *current = next;
+        changed
     }
 
     fn dialogs(&self) -> MutexGuard<'_, HashMap<String, (String, Sender<bool>)>> {

@@ -265,7 +265,7 @@ Start (nicht atomar, kein Schema-Modus, kein metadatentreuer Umbau); haex-crdt-E
 `broadcast::Sender<Arc<Vec<String>>>`. Der Host kürzt sie je offenem Rahmen mit derselben Funktion
 `policy::can_read(ext, table)`, die der Authorizer nutzt (eigene Tabellen einschließlich `_no_sync` oder
 Leseberechtigung, nie Kerntabellen), und schickt sie als `haextension:sync:tables-updated` (SDK-Name) an den
-Rahmen. Nach Migrationen kommt dieselbe Meldung mit allen Tabellen, deren Schema sich geändert hat (das SDK hat keinen eigenen Typ dafür). Berechtigungen werden im Speicher
+Rahmen. Nach Migrationen kommt dieselbe Meldung mit allen Tabellen, deren Schema sich geändert hat (das SDK hat keinen eigenen Typ dafür). Weil DDL keine Zeilen schreibt, sieht der Commit-Bericht nur die Journalzeile der Migration; dann vergleicht der Host die Tabellen der Erweiterungen mit dem letzten Stand von `sqlite_master`. Berechtigungen werden im Speicher
 gehalten und bei Änderung verworfen.
 
 **Begründung**: `observe_committed_changes` ersetzt einen früheren Beobachter (`database/mod.rs:174-188`); ein

@@ -12,6 +12,7 @@ use super::frames::FrameSession;
 use super::{database, methods, permissions};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
+use crate::extensions::{kv, logs};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -87,14 +88,47 @@ pub static METHODS: &[Method] = &[
         handler: database::register_migrations,
         module: database::MODULE,
     },
+    Method {
+        name: "extension_web_storage_get_item",
+        handler: kv::get_item,
+        module: kv::MODULE,
+    },
+    Method {
+        name: "extension_web_storage_set_item",
+        handler: kv::set_item,
+        module: kv::MODULE,
+    },
+    Method {
+        name: "extension_web_storage_remove_item",
+        handler: kv::remove_item,
+        module: kv::MODULE,
+    },
+    Method {
+        name: "extension_web_storage_clear",
+        handler: kv::clear,
+        module: kv::MODULE,
+    },
+    Method {
+        name: "extension_web_storage_keys",
+        handler: kv::keys,
+        module: kv::MODULE,
+    },
+    Method {
+        name: "extension_logging_write",
+        handler: logs::write,
+        module: logs::MODULE,
+    },
+    Method {
+        name: "extension_logging_read",
+        handler: logs::read_own,
+        module: logs::MODULE,
+    },
 ];
 
 /// Methods of later deliveries (research R1): they answer 8001 until they land.
 const LATER: &[&str] = &[
     "extension_permissions_check_web",
     "extension_permissions_check_filesystem",
-    "extension_web_storage_",
-    "extension_logging_",
     "extension_web_fetch",
     "extension_web_open",
     "extension_notifications_",

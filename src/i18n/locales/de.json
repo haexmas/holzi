@@ -722,6 +722,19 @@
         "timeoutMs": "Laufzeit einer Anfrage (Millisekunden)",
         "maxResponseBytes": "Größe einer Antwort (Bytes)",
         "range": "{min} bis {max}"
+      },
+      "logs": {
+        "title": "Protokoll auf diesem Gerät",
+        "level": "Stufe",
+        "none": "Keine Einträge.",
+        "older": "Ältere Einträge",
+        "levels": {
+          "all": "Alle",
+          "error": "Fehler",
+          "warn": "Warnungen",
+          "info": "Informationen",
+          "debug": "Details"
+        }
       }
     }
   },

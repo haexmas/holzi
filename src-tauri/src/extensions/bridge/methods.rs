@@ -4,10 +4,12 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use serde_json::{json, Value};
+use uuid::Uuid;
 
 use super::dispatch::CallContext;
 use crate::extensions::bundle::Manifest;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
+use crate::extensions::host::ExtensionHost;
 use crate::extensions::protocol::token;
 use crate::storage::query::Query;
 
@@ -22,15 +24,20 @@ fn platform() -> Option<&'static str> {
     }
 }
 
-/// `{theme, locale, platform, deviceId}`.
-pub fn context_get(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError> {
-    let context = ctx.host.context();
-    Ok(json!({
+/// The SDK's `ApplicationContext` on `device`: `{theme, locale, platform, deviceId}`.
+pub fn context_of(host: &ExtensionHost, device: Uuid) -> Value {
+    let context = host.context();
+    json!({
         "theme": context.theme,
         "locale": context.locale,
         "platform": platform(),
-        "deviceId": ctx.device.to_string(),
-    }))
+        "deviceId": device.to_string(),
+    })
+}
+
+/// `{theme, locale, platform, deviceId}`.
+pub fn context_get(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError> {
+    Ok(context_of(&ctx.host, ctx.device))
 }
 
 /// `{publicKey, name, version, displayName}` of the calling extension only.

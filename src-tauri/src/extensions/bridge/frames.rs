@@ -66,6 +66,14 @@ impl FrameRegistry {
             .cloned()
     }
 
+    /// The extensions with at least one open frame.
+    pub fn extensions(&self) -> Vec<Uuid> {
+        let mut ids: Vec<Uuid> = self.sessions().values().map(|s| s.extension_id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    }
+
     /// Every open frame of an extension, newest first.
     pub fn of_extension(&self, extension_id: Uuid) -> Vec<Arc<FrameSession>> {
         let mut frames: Vec<_> = self

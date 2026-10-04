@@ -10,6 +10,8 @@ pub mod commands;
 pub mod error;
 pub mod host;
 pub mod ids;
+pub mod kv;
+pub mod logs;
 pub mod mime;
 pub mod permissions;
 pub mod protocol;

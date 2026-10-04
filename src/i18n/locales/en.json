@@ -722,6 +722,19 @@
         "timeoutMs": "Run time of a request (milliseconds)",
         "maxResponseBytes": "Size of an answer (bytes)",
         "range": "{min} to {max}"
+      },
+      "logs": {
+        "title": "Log on this device",
+        "level": "Level",
+        "none": "No entries.",
+        "older": "Older entries",
+        "levels": {
+          "all": "All",
+          "error": "Errors",
+          "warn": "Warnings",
+          "info": "Information",
+          "debug": "Details"
+        }
       }
     }
   },

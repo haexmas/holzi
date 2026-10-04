@@ -5,6 +5,7 @@
 
 pub mod ast_check;
 pub mod authorizer;
+pub mod changes;
 pub mod exec;
 pub mod migrate;
 pub mod migrate_rules;
