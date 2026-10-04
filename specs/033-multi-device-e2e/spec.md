@@ -364,9 +364,12 @@ result names the scenario and keeps the material of the failure.
 
 - **SC-001**: All nine manual checks M1 to M9 have an automatic scenario, and 100 % of the expectations
   written for them in the quickstart of spec 024 are checked by one of them.
-- **SC-002**: The nine scenarios pass in 20 consecutive runs of the end-to-end job on its stock runner; a
-  scenario that failed in that period for a reason other than a real defect is counted and fixed before
-  the manual section of the quickstart is retired.
+- **SC-002**: Over the 20 most recent runs of the end-to-end job on `main`, each of the nine scenarios
+  passes in at least 19 of them, and every red run is listed with its cause. A red run caused by a
+  scenario or by the rig, not by the product, is fixed before the manual section of the quickstart is
+  retired; a defect of the product that a scenario found counts as the scenario doing its job. (First
+  worded as 20 runs in a row; with some 40 scenarios and a run per merge that is not a measurement
+  of the scenarios but of luck, and one flaky unrelated scenario would reset it for good.)
 - **SC-003**: A reviewer who has not seen the helpers writes a scenario with two users with two devices
   each, in which one device is made unreachable and restored, in 60 lines or fewer, using only the
   documentation and the template.
