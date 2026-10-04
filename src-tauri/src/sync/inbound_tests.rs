@@ -1,11 +1,14 @@
+use std::sync::Arc;
+
 use haex_crdt::rusqlite::params;
 use uuid::Uuid;
 
 use super::*;
 use crate::storage::query::Query;
+use crate::sync::change::PAGE_BUDGET;
 use crate::sync::device_list::{DeviceList, RemovedDevice};
 use crate::sync::outbound::serve_pull_with_budget;
-use crate::sync::test_support::{open_vault_with_limit, Device};
+use crate::sync::test_support::{open_vault, open_vault_with_limit, pull_into, Device};
 
 fn write_thread(device: &Device, id: &str, title: &str) {
     device
@@ -438,6 +441,137 @@ fn fork_on(device: &Device, origin: Uuid, limit: &str) {
             device_list::insert(tx, &loser)
         })
         .expect("forked lists");
+}
+
+#[test]
+fn more_groups_than_one_step_all_arrive() {
+    let (a, b) = (Device::new(), Device::new());
+    let count = APPLY_CHUNK * 2 + 3;
+    for i in 0..count {
+        write_thread(&a, &format!("t{i}"), "chat");
+    }
+
+    b.pull_from(&a);
+
+    let arrived = query::read(b.db(), |r| {
+        r.query_row("SELECT COUNT(*) FROM chat_threads", &[], |row| {
+            row.get::<_, i64>(0)
+        })
+    })
+    .expect("count");
+    assert_eq!(arrived, Some(i64::try_from(count).expect("count")));
+    assert!(!progress::has_more(
+        &a.replica.progress().expect("a"),
+        &b.replica.progress().expect("b")
+    ));
+}
+
+#[test]
+fn rows_whose_cells_span_a_step_boundary_arrive() {
+    let (a, b) = (Device::new(), Device::new());
+    // Each row is created in one group and gets its title from a later one, because the change
+    // overwrote it. The rows overlap, so wherever a step would end, it ends inside one of them.
+    write_thread(&a, "r0", "first");
+    for i in 1..APPLY_CHUNK {
+        write_thread(&a, &format!("r{i}"), "first");
+        write_thread(&a, &format!("r{}", i - 1), "second");
+    }
+
+    b.pull_from(&a);
+
+    for i in 0..APPLY_CHUNK - 1 {
+        assert_eq!(title(&b, &format!("r{i}")), Some("second".into()), "r{i}");
+    }
+}
+
+#[test]
+fn a_closing_vault_applies_nothing_and_keeps_its_progress() {
+    let a = Device::new();
+    let gate = crate::vault_gate::VaultGate::new();
+    let b = Device::with_gate(gate.clone());
+    write_thread(&a, "late", "not applied");
+    let before = b.replica.progress().expect("progress");
+    assert!(gate.request_close());
+
+    let result = b.try_pull_from(&a, 1024 * 1024);
+
+    assert!(
+        matches!(result, Err(InboundError::Closing(_))),
+        "{result:?}"
+    );
+    assert_eq!(title(&b, "late"), None);
+    assert_eq!(b.replica.progress().expect("progress"), before);
+}
+
+#[test]
+fn a_close_between_steps_keeps_what_was_applied_and_the_next_pull_fetches_the_rest() {
+    let a = Device::new();
+    let count = APPLY_CHUNK * 2;
+    for i in 0..count {
+        write_thread(&a, &format!("t{i}"), "chat");
+    }
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = Arc::new(open_vault(dir.path()));
+    let gate = crate::vault_gate::VaultGate::new();
+    let closing = Replica::tracked(Arc::clone(&db), gate.clone());
+    let before = closing.progress().expect("progress");
+    let threads = || {
+        query::read(&db, |r| {
+            r.query_row("SELECT COUNT(*) FROM chat_threads", &[], |row| {
+                row.get::<_, i64>(0)
+            })
+        })
+        .expect("count")
+        .unwrap_or_default()
+    };
+    AFTER_STEP.set(Some(Box::new(move || {
+        gate.request_close();
+    })));
+
+    let result = pull_into(&closing, &a, 64 * 1024 * 1024);
+    AFTER_STEP.set(None);
+
+    assert!(
+        matches!(result, Err(InboundError::Closing(_))),
+        "{result:?}"
+    );
+    let applied = threads();
+    assert!(
+        applied > 0 && applied < i64::try_from(count).expect("count"),
+        "{applied}"
+    );
+    assert_eq!(closing.progress().expect("progress"), before);
+
+    // The next session of the same vault fetches the rest.
+    pull_into(&Replica::new(Arc::clone(&db)), &a, PAGE_BUDGET).expect("pull");
+    assert_eq!(threads(), i64::try_from(count).expect("count"));
+}
+
+#[tokio::test]
+async fn the_close_waits_for_held_work() {
+    let gate = crate::vault_gate::VaultGate::new();
+    let device = Device::with_gate(gate.clone());
+    let held = device.replica.hold().expect("open vault");
+    let waiting = tokio::spawn({
+        let gate = gate.clone();
+        async move {
+            gate.drain_with(
+                std::time::Duration::from_millis(10),
+                std::time::Duration::from_secs(5),
+            )
+            .await
+        }
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert!(!waiting.is_finished(), "the drain waits while work is held");
+    assert!(device.replica.hold().is_err(), "no new work once closing");
+
+    drop(held);
+
+    assert_eq!(
+        waiting.await.expect("drain"),
+        crate::vault_gate::DrainOutcome::DrainedAfterAbort
+    );
 }
 
 #[test]

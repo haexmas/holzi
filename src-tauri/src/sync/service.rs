@@ -145,7 +145,7 @@ async fn resolve_deps<R: Runtime>(app: &AppHandle<R>, state: &AppState) -> Resul
         })?
         .map_err(HolziError::from)?;
     Ok(SyncDeps {
-        replica: Arc::new(Replica::new(db)),
+        replica: Arc::new(Replica::tracked(db, state.gate().clone())),
         keys: device_keys,
         vault,
         relay_mode,
@@ -166,14 +166,14 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     let bind_addr = deps.bind_addr;
     let devices_app = deps.app.clone();
     let link_app = deps.app.clone();
-    // Presence must refresh its mailbox as soon as a remote device-list pull
-    // changes the effective key, rather than waiting for its 60-second tick.
-    let (changed_tx, changed_rx) = tokio::sync::watch::channel(0u64);
-    let changed_tx = Arc::new(changed_tx);
     let registry = deps
         .app
         .try_state::<Arc<SyncRegistry>>()
         .map(|state| Arc::clone(&*state));
+    // Presence also wants to know when a pulled device list changed the content key, so it
+    // subscribes to the new mailbox at once instead of on its next tick.
+    let (changed_tx, changed_rx) = tokio::sync::watch::channel(0u64);
+    let changed_tx = Arc::new(changed_tx);
     let on_applied = applied_event_sink(
         deps.app,
         Arc::clone(&replica),
@@ -195,23 +195,15 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     };
 
     let node = Arc::new(node);
-    // A session can end because the peer's device list changed while the
-    // connection was still open. Wake reconnect immediately in that case;
-    // otherwise the next attempt waits for the 30-second poll and can leave
-    // a still-listed peer without a session after list convergence.
-    let reconnect_now = Arc::new(Notify::new());
     node.on_devices_changed(Arc::new(move || {
         events::emit(&devices_app, SYNC_DEVICES_CHANGED, ());
     }));
-    let reconnect_for_connections = Arc::clone(&reconnect_now);
-    node.on_connection_ended(Arc::new(move || {
-        reconnect_for_connections.notify_one();
-    }));
+    // Presence and the end of a session wake reconnect, so a device that just appeared or came
+    // back is dialed without waiting out the tick.
+    let reconnect_now = Arc::new(Notify::new());
+    let reconnect_on_end = Arc::clone(&reconnect_now);
+    node.on_session_ended(Arc::new(move || reconnect_on_end.notify_one()));
 
-    // `notify` (the gate's shared commit signal) wakes at most one waiter
-    // per commit, so it gets exactly one consumer here; fanning that out to
-    // presence (which also wants to know about a local or remote device-list
-    // change) goes through this `watch` channel instead.
     // Commands reach the running node through the registry (linking a
     // device); it is cleared again when this service ends.
     let runtime = Arc::new(SyncRuntime {
@@ -236,8 +228,11 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
         registry.set(Arc::clone(&runtime));
     }
     finish_pending_links(&replica, &presence_keys, vault).await;
-    // Presence wakes reconnect as soon as it records a fresh meeting, so a
-    // device that just appeared is dialed without waiting out the tick.
+    // `notify` (the gate's shared commit signal) wakes at most one waiter
+    // per commit, so it gets exactly one consumer here; fanning that out to
+    // presence (which also wants to know about a local commit, e.g. a
+    // device-list change this session just issued) goes through the
+    // `watch` channel instead.
     let notify_loop = async {
         loop {
             notify.notified().await;
@@ -264,7 +259,7 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
                 _ = reconnect_now.notified() => {}
             }
             pace.ready().await;
-            crate::sync::reconnect_missing(&node, &replica).await;
+            crate::sync::reconnect_missing(&node, &replica);
         }
     };
 
@@ -320,8 +315,6 @@ fn applied_event_sink<R: Runtime>(
     Arc::new(move |tables| {
         if tables.contains("device_lists") {
             changed.send_modify(|n| *n = n.wrapping_add(1));
-        }
-        if tables.contains("device_lists") {
             let replica = Arc::clone(&replica);
             let keys = keys.clone();
             let now = std::time::SystemTime::now()

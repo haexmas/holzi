@@ -118,8 +118,7 @@ async fn a_removed_device_gets_nothing_new_while_the_others_keep_syncing() {
     let removed_runtime = runtime_of(&b).await;
     let removed = tokio::time::timeout(Duration::from_secs(40), async {
         loop {
-            holzi_lib::sync::reconnect_missing(&removed_runtime.node, &removed_runtime.replica)
-                .await;
+            holzi_lib::sync::reconnect_missing(&removed_runtime.node, &removed_runtime.replica);
             let place = holzi_lib::storage::query::read(&b.database(), |r| {
                 this_device(r, &b.keys.device_pubkey)
             })

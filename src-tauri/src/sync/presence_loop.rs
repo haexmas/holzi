@@ -87,7 +87,7 @@ pub async fn run(
 
     loop {
         let day = crate::sync::presence::day_tag_now();
-        refresh_subscription(&client, node, replica, vault, keys, day, &mut subscribed).await;
+        refresh_subscription(&client, replica, vault, keys, day, &mut subscribed).await;
         if now_ms().saturating_sub(asking_since) > REQUEST_RENEWAL_MS {
             asking_since = now_ms();
         }
@@ -104,7 +104,7 @@ pub async fn run(
                 if result.is_err() {
                     return;
                 }
-                refresh_subscription(&client, node, replica, vault, keys, day, &mut subscribed).await;
+                refresh_subscription(&client, replica, vault, keys, day, &mut subscribed).await;
                 if let Err(error) =
                     publish_own(&client, node, replica, keys, vault, day, asking_since).await
                 {
@@ -127,11 +127,9 @@ pub async fn run(
 /// current key first.
 type Subscription = (u32, Vec<[u8; 32]>);
 
-/// Brings the subscription in line with the day and the keys this device holds now. A change of the
-/// current key also resets the connections, which were made under the old one.
+/// Brings the subscription in line with the day and the keys this device holds now.
 async fn refresh_subscription(
     client: &nostr_sdk::client::Client,
-    node: &crate::sync::endpoint::SyncNode,
     replica: &crate::sync::replica::Replica,
     vault: [u8; 32],
     keys: &DeviceKeys,
@@ -147,11 +145,6 @@ async fn refresh_subscription(
     };
     if *subscribed == wanted {
         return;
-    }
-    if let Some((_, old)) = subscribed {
-        if old.first() != wanted.as_ref().and_then(|(_, held)| held.first()) {
-            node.reset_connections();
-        }
     }
     match resubscribe(client, replica, vault, keys, day).await {
         Ok(held) => *subscribed = held.map(|held| (day, held)),
@@ -531,6 +524,9 @@ pub(crate) fn read_roster(
             .iter()
             .map(|removed| removed.device_pubkey)
             .collect();
+        // Only the effective list's removals count (FR-043): a same-generation fork that lost
+        // the tie-break may remove the remaining main device, whose keys would then all look
+        // unsafe.
         let Some(key) =
             crate::sync::content_keys::current_key_for_list(r, &removed, Some(&effective.hash))?
         else {

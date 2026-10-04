@@ -37,6 +37,7 @@ scenario('sync-relay-return', { timeoutMs: 360_000 }, async (ctx) => {
   // Neither knows where the other is now, so without the relay they have not met.
   await expectOnline(ctx, laptop, phone, false)
   await expectOnline(ctx, phone, laptop, false)
+  ctx.step('without the relay they do not find each other')
 
   await g.relay.start()
   assert.equal(g.relay.state, 'up')
