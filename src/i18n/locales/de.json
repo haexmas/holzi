@@ -1457,7 +1457,8 @@
         "signature_invalid": "Die Signatur ist ungültig.",
         "legacy_signature_format": "Das Paket ist mit einem alten Werkzeug signiert. Bitte mit dem aktuellen Werkzeug „haex“ neu signieren.",
         "unreadable": "Die Datei lässt sich nicht lesen.",
-        "downgrade_not_confirmed": "Eine ältere Fassung wird nur nach Bestätigung installiert."
+        "downgrade_not_confirmed": "Eine ältere Fassung wird nur nach Bestätigung installiert.",
+        "bundle_mismatch": "Das Paket passt nicht zu den Angaben der Vault."
       },
       "title": "Erweiterung installieren",
       "fileType": "Erweiterung",

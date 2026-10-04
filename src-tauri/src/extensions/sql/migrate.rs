@@ -54,10 +54,13 @@ pub fn sql_sha256(sql: &str) -> String {
 
 /// Whether `migrations` (name, SQL) of the effective bundle keep every migration this device
 /// applied, with the same SQL (research R11). Only then may the device switch to that bundle.
+/// After a confirmed `downgrade` an applied migration the older bundle does not know stays: nothing
+/// is taken back (US7-3); one it knows must still have the same SQL.
 pub fn check_applied_kept(
     q: &mut impl Query,
     extension_id: Uuid,
     migrations: &[(String, String)],
+    downgrade: bool,
 ) -> Result<(), MigrationError> {
     let applied: Vec<(String, String)> = q
         .query_map(
@@ -74,23 +77,61 @@ pub fn check_applied_kept(
         match offered.get(name.as_str()) {
             Some(offered) if *offered == hash => {}
             Some(_) => return Err(MigrationError::Changed { name }),
+            None if downgrade => {}
             None => return Err(MigrationError::Missing { name }),
         }
     }
     Ok(())
 }
 
-/// The migrations still to apply on this device, in order.
+/// The migrations of `migrations` (name, SQL of the verified effective bundle, in its order) still
+/// to apply on this device. Only verified SQL runs (FR-003): the synced `extension_migrations` rows
+/// are not read here, and the journal gets the hash of the SQL that ran.
 pub fn pending(
     q: &mut impl Query,
     extension_id: Uuid,
+    migrations: &[(String, String)],
 ) -> Result<Vec<StoredMigration>, MigrationError> {
-    let ext = extension_id.to_string();
-    let all = q
+    let applied: HashMap<String, String> = q
+        .query_map(
+            &format!("SELECT name, sql_sha256 FROM {MIGRATION_JOURNAL} WHERE extension_id = ?1"),
+            &[&extension_id.to_string()],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+        )
+        .map_err(|_| MigrationError::Unavailable)?
+        .into_iter()
+        .collect();
+    let mut out = Vec::new();
+    for (name, sql) in migrations {
+        let hash = sql_sha256(sql);
+        match applied.get(name) {
+            Some(applied) if *applied == hash => {}
+            Some(_) => return Err(MigrationError::Changed { name: name.clone() }),
+            None => out.push(StoredMigration {
+                name: name.clone(),
+                sql: sql.clone(),
+                sql_sha256: hash,
+            }),
+        }
+    }
+    Ok(out)
+}
+
+/// The migrations (name, SQL) of an extension removed with "keep data", from the
+/// `extension_migrations` rows that stay for it (FR-008): no bundle is left to verify against.
+/// A row whose SQL does not match its hash, or two rows of one name with other SQL, stop it.
+// ponytail: these rows are synced data without a signature; the migration authorizer still limits
+// them to the extension's own prefix. Upgrade path: keep the last bundle's signed `signature.json`
+// on removal and check each SQL against its file hash.
+pub fn kept_migrations(
+    q: &mut impl Query,
+    extension_id: Uuid,
+) -> Result<Vec<(String, String)>, MigrationError> {
+    let rows: Vec<StoredMigration> = q
         .query_map(
             "SELECT name, sql, sql_sha256 FROM extension_migrations \
              WHERE extension_id = ?1 ORDER BY position, name",
-            &[&ext],
+            &[&extension_id.to_string()],
             |r| {
                 Ok(StoredMigration {
                     name: r.get(0)?,
@@ -100,39 +141,15 @@ pub fn pending(
             },
         )
         .map_err(|_| MigrationError::Unavailable)?;
-    let applied: HashMap<String, String> = q
-        .query_map(
-            &format!("SELECT name, sql_sha256 FROM {MIGRATION_JOURNAL} WHERE extension_id = ?1"),
-            &[&ext],
-            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
-        )
-        .map_err(|_| MigrationError::Unavailable)?
-        .into_iter()
-        .collect();
-
-    let mut seen: HashMap<&str, &str> = HashMap::new();
-    for migration in &all {
-        if let Some(other) = seen.insert(&migration.name, &migration.sql_sha256) {
-            if other != migration.sql_sha256 {
-                return Err(MigrationError::Changed {
-                    name: migration.name.clone(),
-                });
-            }
+    let mut out: Vec<(String, String)> = Vec::new();
+    for row in rows {
+        if sql_sha256(&row.sql) != row.sql_sha256 {
+            return Err(MigrationError::Changed { name: row.name });
         }
-    }
-    let mut out = Vec::new();
-    for migration in all {
-        match applied.get(&migration.name) {
-            Some(hash) if *hash == migration.sql_sha256 => {}
-            Some(_) => {
-                return Err(MigrationError::Changed {
-                    name: migration.name,
-                })
-            }
-            None if out
-                .iter()
-                .any(|m: &StoredMigration| m.name == migration.name) => {}
-            None => out.push(migration),
+        match out.iter().find(|(name, _)| *name == row.name) {
+            Some((_, sql)) if *sql == row.sql => {}
+            Some(_) => return Err(MigrationError::Changed { name: row.name }),
+            None => out.push((row.name, row.sql)),
         }
     }
     Ok(out)
@@ -220,17 +237,24 @@ pub(crate) fn applying() -> &'static Mutex<()> {
     &APPLYING
 }
 
-/// Applies every pending migration in order; stops at the first that fails. Returns the names of
-/// the migrations applied now. Blocking.
+/// Applies every pending one of `migrations` (verified, see [`pending`]) in order; stops at the
+/// first that fails. Returns the names of the migrations applied now. Blocking.
 pub fn apply_pending(
     db: &VaultDb,
     extension_id: Uuid,
     own: &TablePrefix,
+    migrations: &[(String, String)],
     now_ms: i64,
 ) -> Result<Vec<String>, MigrationError> {
     let _applying = APPLYING.lock().unwrap_or_else(PoisonError::into_inner);
+    let offered = migrations.to_vec();
     let (pending, limits) = db
-        .read_blocking(move |q| Ok((pending(q, extension_id), limits_of(q, extension_id)?)))
+        .read_blocking(move |q| {
+            Ok((
+                pending(q, extension_id, &offered),
+                limits_of(q, extension_id)?,
+            ))
+        })
         .map_err(|_| MigrationError::Unavailable)?;
     let pending = pending?;
     let mut applied = Vec::with_capacity(pending.len());

@@ -41,3 +41,21 @@ pub fn effective_bundle(q: &mut impl Query, extension_id: Uuid) -> Result<Option
             .then_with(|| a.bundle_id.to_string().cmp(&b.bundle_id.to_string()))
     }))
 }
+
+/// Whether `effective` stands after a confirmed downgrade: confirming one retires every higher
+/// bundle (research R11), so a retired bundle of a higher version is left.
+pub fn is_downgrade(
+    q: &mut impl Query,
+    extension_id: Uuid,
+    effective: &EffectiveBundle,
+) -> Result<bool> {
+    let retired = q.query_map(
+        "SELECT version FROM extension_bundles WHERE extension_id = ?1 AND retired = 1",
+        &[&extension_id.to_string()],
+        |r| r.get::<_, String>(0),
+    )?;
+    Ok(retired
+        .iter()
+        .filter_map(|version| semver::Version::parse(version).ok())
+        .any(|version| version > effective.version))
+}

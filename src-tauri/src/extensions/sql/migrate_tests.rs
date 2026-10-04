@@ -34,8 +34,22 @@ fn add(s: &Setup, position: i64, name: &str, sql: &str) {
     .unwrap();
 }
 
+/// The migrations as a verified bundle would hand them over: in the order of their position.
+fn offered(s: &Setup) -> Vec<(String, String)> {
+    let ext = extension().to_string();
+    crate::storage::query::read(&s.db, move |q| {
+        q.query_map(
+            "SELECT name, sql FROM extension_migrations WHERE extension_id = ?1 \
+             ORDER BY position, name",
+            &[&ext],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+    })
+    .unwrap()
+}
+
 fn migrate(s: &Setup) -> Result<Vec<String>, MigrationError> {
-    apply_pending(&s.vault, extension(), &own(), 1)
+    apply_pending(&s.vault, extension(), &own(), &offered(s), 1)
 }
 
 fn table_exists(s: &Setup, name: &str) -> bool {
@@ -230,4 +244,68 @@ fn the_migration_authorizer_alone_refuses_what_the_rules_refuse() {
         );
         assert!(result.is_err(), "accepted in {phase:?}: {sql}");
     }
+}
+
+fn kept_check(s: &Setup, offered: &[(&str, &str)], downgrade: bool) -> Result<(), MigrationError> {
+    let offered: Vec<(String, String)> = offered
+        .iter()
+        .map(|(name, sql)| ((*name).to_owned(), t(sql)))
+        .collect();
+    crate::storage::query::read(&s.db, move |q| {
+        Ok(check_applied_kept(q, extension(), &offered, downgrade))
+    })
+    .unwrap()
+}
+
+#[test]
+fn an_applied_migration_the_bundle_lacks_stops_it_unless_after_a_downgrade() {
+    let s = setup();
+    add(
+        &s,
+        0,
+        "0000_init",
+        "CREATE TABLE t:books (id TEXT PRIMARY KEY)",
+    );
+    add(
+        &s,
+        1,
+        "0001_tags",
+        "ALTER TABLE t:books ADD COLUMN tag TEXT",
+    );
+    migrate(&s).unwrap();
+    let older = [("0000_init", "CREATE TABLE t:books (id TEXT PRIMARY KEY)")];
+    assert!(matches!(
+        kept_check(&s, &older, false),
+        Err(MigrationError::Missing { .. })
+    ));
+    assert_eq!(kept_check(&s, &older, true), Ok(()));
+    let changed = [(
+        "0000_init",
+        "CREATE TABLE t:books (id TEXT PRIMARY KEY, x TEXT)",
+    )];
+    assert!(matches!(
+        kept_check(&s, &changed, true),
+        Err(MigrationError::Changed { .. })
+    ));
+}
+
+#[test]
+fn a_kept_migration_row_whose_sql_does_not_match_its_hash_does_not_run() {
+    let s = setup();
+    add(
+        &s,
+        0,
+        "0000_init",
+        "CREATE TABLE t:books (id TEXT PRIMARY KEY)",
+    );
+    s.db.write(|tx| {
+        tx.execute(
+            "UPDATE extension_migrations SET sql = 'CREATE TABLE x (id TEXT)'",
+            &[],
+        )
+        .map(drop)
+    })
+    .unwrap();
+    let kept = crate::storage::query::read(&s.db, |q| Ok(kept_migrations(q, extension()))).unwrap();
+    assert!(matches!(kept, Err(MigrationError::Changed { .. })));
 }
