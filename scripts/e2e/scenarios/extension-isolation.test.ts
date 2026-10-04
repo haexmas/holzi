@@ -63,8 +63,9 @@ scenario('extension-isolation', { timeoutMs: 180_000 }, async (ctx) => {
     async () => (await place()) === '#/second',
     { timeoutMs: 10_000 },
   )
-  await instance.exec(`document.activeElement?.blur?.(); return true`)
-  // The extension takes the shim's port by wrapping postMessage and changing the title.
+  // The extension takes the shim's port by wrapping postMessage and changing the title, and sends
+  // the forged shortcut a moment later; meanwhile holzi takes the focus back from the frame
+  // (switching into the frame to run this script may have given it the focus).
   const captured = await inFrame<boolean>(
     instance,
     probe,
@@ -78,11 +79,17 @@ scenario('extension-isolation', { timeoutMs: 180_000 }, async (ctx) => {
      return new Promise((resolve) => setTimeout(() => {
        MessagePort.prototype.postMessage = send
        if (!shim) return resolve(false)
-       shim.postMessage({ type: 'shortcut', id: 'wm.tab.back' })
+       setTimeout(() => shim.postMessage({ type: 'shortcut', id: 'wm.tab.back' }), 1500)
        resolve(true)
      }, 300))`,
   )
   assert.ok(captured, 'the shim port was not captured')
+  const frameFocused = await instance.exec<boolean>(
+    `const frame = document.querySelector('[data-extension-id]')
+     if (document.activeElement === frame) frame.blur()
+     return document.activeElement === frame`,
+  )
+  assert.equal(frameFocused, false, 'holzi took the focus back')
   await ctx.waitFor(
     'the forged title in holzi',
     async () =>
@@ -91,7 +98,7 @@ scenario('extension-isolation', { timeoutMs: 180_000 }, async (ctx) => {
       ),
     { timeoutMs: 5_000 },
   )
-  await settle(1_000)
+  await settle(2_500)
   assert.equal(await place(), '#/second', 'the forged shortcut went back')
   ctx.step('a forged shortcut without focus does nothing')
 
