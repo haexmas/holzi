@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
+use super::apply_extras::{self, Extras};
 use super::report::{folder_path, ReportBuilder};
 use super::{
     duplicate_key, failed, ExistingKeys, IconRef, ImportAttachment, ImportItem, ImportModel,
@@ -71,6 +72,7 @@ pub struct Progress {
 pub enum Step {
     Group,
     Item(usize),
+    Extras,
     Attachment(usize),
 }
 
@@ -88,6 +90,8 @@ struct Ledger {
     groups: Vec<String>,
     items: Vec<String>,
     binaries: Vec<String>,
+    passkeys: Vec<String>,
+    presets: Vec<String>,
     trash_created: bool,
     /// The tags the vault had before the run; a tag that was not there and has no entry any more is
     /// the run's and goes with the rollback.
@@ -273,6 +277,22 @@ async fn write_all(
         progress(done, Phase::Items);
     }
 
+    // Tag colours, passkeys of no entry and generator presets, in one write.
+    check(control, Step::Extras)?;
+    let extras = Extras {
+        tag_colors: std::mem::take(&mut model.tag_colors),
+        passkeys: std::mem::take(&mut model.passkeys),
+        presets: std::mem::take(&mut model.presets),
+    };
+    let outcome = db
+        .write(move |tx| apply_extras::write(tx, &extras).map_err(Into::into))
+        .await?;
+    ledger.passkeys = outcome.passkeys;
+    ledger.presets = outcome.presets;
+    for problem in &outcome.problems {
+        report.add(None, "", "", problem);
+    }
+
     // Attachments, each in a write of its own.
     for (position, job) in jobs.into_iter().enumerate() {
         check(control, Step::Attachment(position))?;
@@ -379,9 +399,20 @@ fn write_groups(
         let icon = icon_text(tx, group.icon.as_ref(), &mut result.new_binaries)?;
         tx.execute(
             "INSERT INTO haex_passwords_groups \
-             (id, name, description, icon, parent_id, trashed_from_parent_id, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
-            params![id, group.name, group.description, icon, parent, previous, now],
+             (id, name, description, icon, color, sort_order, parent_id, trashed_from_parent_id, \
+              created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+            params![
+                id,
+                group.name,
+                group.description,
+                icon,
+                group.color,
+                group.sort_order,
+                parent,
+                previous,
+                now
+            ],
         )?;
         result.ids.insert(group.reference.clone(), id.clone());
         result.created.push(id);
@@ -452,6 +483,7 @@ fn write_item(
     let mut problems = Vec::new();
     let icon = icon_text(tx, item.icon.as_ref(), &mut new_binaries)?;
     let (secret, digits, period, algorithm) = otp_columns(item);
+    let aliases = item.autofill_aliases.as_ref().map(|v| v.to_string());
     tx.execute(
         "INSERT INTO haex_passwords_item_details \
          (id, title, username, password, note, icon, color, url, otp_secret, otp_digits, \
@@ -464,14 +496,14 @@ fn write_item(
             item.password,
             item.note,
             icon,
-            Option::<String>::None,
+            item.color,
             item.url,
             secret,
             digits,
             period,
             algorithm,
             item.expires_at,
-            Option::<String>::None,
+            aliases,
             created,
             updated,
         ],
@@ -647,12 +679,15 @@ async fn rollback(db: &VaultDb, ledger: &Ledger, control: &Control<'_>) {
     }
     let groups = ledger.groups.clone();
     let hashes = ledger.binaries.clone();
+    let passkeys = ledger.passkeys.clone();
+    let presets = ledger.presets.clone();
     let trash_created = ledger.trash_created;
     let initial_tags = ledger.initial_tags.clone();
     let group_count = groups.len() as u32;
     let hash_count = hashes.len() as u32;
     let outcome = db
         .write(move |tx| {
+            apply_extras::undo(tx, &passkeys, &presets)?;
             let tag_ids: Vec<String> =
                 tx.query_map("SELECT id FROM haex_passwords_tags", params![], |r| {
                     r.get(0)

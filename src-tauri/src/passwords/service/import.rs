@@ -2,7 +2,7 @@
 //! imported icon. For the user alone (rule Z11). The file is read and parsed on blocking threads
 //! (a KeePass key derivation can take seconds); the parse is a pure function of the bytes.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use haex_crdt::rusqlite::params;
@@ -12,6 +12,7 @@ use super::{require_user, PasswordsService};
 use crate::error::{HolziError, Result};
 use crate::passwords::access::Caller;
 use crate::passwords::import::apply::{self, Control, OnDuplicate, Progress};
+use crate::passwords::import::haex_vault::{self, WARNING_CLOSE_FIRST, WARNING_HAEX_PASS_TABLES};
 use crate::passwords::import::{self, Credentials, ExistingKeys, ImportModel, ImportSource};
 use crate::passwords::model::{ImportPreview, ImportReport};
 use crate::passwords::TRASH_GROUP_ID;
@@ -32,9 +33,31 @@ pub struct ImportRequest {
     pub key_file_path: Option<String>,
 }
 
-/// Reads the file (and key file) and parses it, off the async threads.
-async fn read_model(request: ImportRequest) -> Result<ImportModel> {
+/// A file read: its model and what the preview says about the file besides the counts.
+struct ReadFile {
+    model: ImportModel,
+    warnings: Vec<String>,
+}
+
+/// Reads the file (and key file) and parses it, off the async threads. A haex-vault file is a
+/// database and is read from its path (spec 037).
+async fn read_model(request: ImportRequest) -> Result<ReadFile> {
     tauri::async_runtime::spawn_blocking(move || {
+        if request.source == ImportSource::HaexVault {
+            let credentials = Credentials {
+                password: request.password,
+                key_file: None,
+            };
+            let read = haex_vault::read(Path::new(&request.path), &credentials)?;
+            let mut warnings = vec![WARNING_CLOSE_FIRST.to_string()];
+            if read.has_haex_pass_tables {
+                warnings.push(WARNING_HAEX_PASS_TABLES.to_string());
+            }
+            return Ok(ReadFile {
+                model: read.model,
+                warnings,
+            });
+        }
         let bytes = Zeroizing::new(
             std::fs::read(PathBuf::from(&request.path)).map_err(|_| failed("unreadable"))?,
         );
@@ -48,7 +71,10 @@ async fn read_model(request: ImportRequest) -> Result<ImportModel> {
             password: request.password,
             key_file,
         };
-        import::parse(request.source, &bytes, &credentials)
+        Ok(ReadFile {
+            model: import::parse(request.source, &bytes, &credentials)?,
+            warnings: Vec::new(),
+        })
     })
     .await
     .map_err(|_| failed("unreadable"))?
@@ -88,9 +114,11 @@ impl PasswordsService {
         request: ImportRequest,
     ) -> Result<ImportPreview> {
         require_user(caller)?;
-        let model = read_model(request).await?;
+        let read = read_model(request).await?;
         let existing = self.existing_keys().await?;
-        Ok(import::preview(&model, &existing))
+        let mut preview = import::preview(&read.model, &existing);
+        preview.warnings.splice(0..0, read.warnings);
+        Ok(preview)
     }
 
     /// Writes the file in steps; see [`apply::run`]. `cancel` is the flag of the run's slot.
@@ -103,7 +131,7 @@ impl PasswordsService {
         progress: &(dyn Fn(Progress) + Send + Sync),
     ) -> Result<ImportReport> {
         require_user(caller)?;
-        let model = read_model(request).await?;
+        let model = read_model(request).await?.model;
         let existing = self.existing_keys().await?;
         let control = Control {
             cancel,
