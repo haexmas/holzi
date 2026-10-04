@@ -157,7 +157,7 @@ watch(
 
     <div
       v-if="collapsedTab"
-      class="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 py-1 text-sm font-medium"
+      class="flex min-w-0 items-center gap-1.5 px-1.5 py-1 text-sm font-medium"
     >
       <Icon
         v-if="collapsedTab.info.icon"
@@ -165,9 +165,7 @@ watch(
         class="h-3.5 w-3.5 shrink-0"
         :aria-hidden="true"
       />
-      <span class="min-w-0 flex-1 truncate">{{
-        titleFrom(collapsedTab.info)
-      }}</span>
+      <span class="min-w-0 truncate">{{ titleFrom(collapsedTab.info) }}</span>
       <span
         v-if="collapsedTab.info.hasAttention"
         class="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
