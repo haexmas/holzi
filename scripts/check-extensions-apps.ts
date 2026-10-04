@@ -14,6 +14,7 @@ import {
   tabOfExtension,
   tabsOfStoppedExtensions,
 } from '../src/lib/extensions/apps.ts'
+import { readConsoleForward } from '../src/lib/extensions/devConsole.ts'
 import { WM_APPS, type AppDefinition } from '../src/lib/wm/apps.ts'
 import { openApp } from '../src/lib/wm/layoutState.ts'
 import { snapshotSession } from '../src/lib/wm/session.ts'
@@ -35,6 +36,7 @@ function summary(patch: Partial<ExtensionSummary>): ExtensionSummary {
     singleInstance: false,
     hasIcon: false,
     devices: [],
+    dev: false,
     ...patch,
   }
 }
@@ -206,4 +208,32 @@ test('a notification click finds the first tab of its extension, or none', () =>
     .find((t) => t.appId === extensionAppId(notes))
   assert.deepEqual(found, tab && { windowId: tab.windowId, tabId: tab.tabId })
   assert.equal(tabOfExtension(state.windows, calendar), null)
+})
+
+test('a development version is an app with the dev mark', () => {
+  const [draft, signed] = extensionApps(
+    [summary({ id: 'draft', dev: true }), summary({ id: 'signed' })],
+    {},
+  )
+  assert.equal(draft?.dev, true)
+  assert.equal(signed?.dev, undefined)
+})
+
+test('only a console.forward message of the SDK is a console line', () => {
+  assert.deepEqual(
+    readConsoleForward({
+      type: 'console.forward',
+      data: { level: 'warn', message: 'careful', timestamp: '12:00:00' },
+    }),
+    { level: 'warn', message: 'careful', time: '12:00:00' },
+  )
+  assert.equal(
+    readConsoleForward({
+      type: 'console.forward',
+      data: { level: 'trace', message: 'x' },
+    }),
+    null,
+  )
+  assert.equal(readConsoleForward({ type: 'haexspace:port:ready' }), null)
+  assert.equal(readConsoleForward('console.forward'), null)
 })

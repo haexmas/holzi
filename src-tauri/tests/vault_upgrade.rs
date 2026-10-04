@@ -56,12 +56,17 @@ fn open_vault(
     .expect("vault open")
 }
 
-/// The production migration set without `migration`, standing in for a
-/// vault provisioned before that migration shipped.
+/// The production migration set truncated before `migration`, standing in for
+/// a vault provisioned by an older release. Later migrations are excluded as
+/// well because they may depend on the migration being modelled as absent.
 fn source_without(migration: &str) -> Arc<StaticMigrationSource> {
-    let mut m: BTreeMap<MigrationName, String> = holzi_migration_source().0.clone();
-    m.remove(&MigrationName::from(migration))
-        .unwrap_or_else(|| panic!("{migration} must exist in the production migration set"));
+    let full = holzi_migration_source();
+    let m: BTreeMap<MigrationName, String> = full
+        .0
+        .iter()
+        .filter(|(name, _)| name.as_str() < migration)
+        .map(|(name, sql)| (name.clone(), sql.clone()))
+        .collect();
     Arc::new(StaticMigrationSource(m))
 }
 

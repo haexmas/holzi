@@ -49,6 +49,10 @@ use chat::thread_commands::{
     create_thread, delete_thread, list_messages, list_threads, rename_thread,
 };
 use device::commands::{current_device_info, list_vault_devices, update_device_alias};
+use extensions::commands::dev::{
+    extension_dev_confirm, extension_dev_load, extension_dev_mode_get, extension_dev_mode_set,
+    extension_dev_unload,
+};
 use extensions::commands::frames::{
     extension_bridge_call, extension_dialog_resolve, extension_frame_close, extension_frame_open,
     extension_host_context_set,
@@ -228,8 +232,28 @@ pub fn run() {
                 .set_desktop(std::sync::Arc::new(extensions::desktop::AppDesktop::new(
                     app.handle().clone(),
                 )));
+            // Spec 017, US12: holzi's window is built here, not from `tauri.conf.json`, so its
+            // document can frame development servers while developer mode is on (`dev_csp`).
+            let window = app
+                .config()
+                .app
+                .windows
+                .first()
+                .cloned()
+                .ok_or("tauri.conf.json defines no window")?;
+            let host = app.state::<AppState>().extensions();
+            tauri::WebviewWindowBuilder::from_config(app.handle(), &window)?
+                .on_web_resource_request(move |request, response| {
+                    extensions::dev_csp::adjust(&host, request, response);
+                })
+                .build()?;
             // Spec 032: actions of a model's tool call go out as events; `ChatState` is managed
             // without an `AppHandle`, so the emitter is set here.
+            // Spec 017, US9: holzi's protected places, known places and dialogs for extensions.
+            app.state::<AppState>()
+                .extensions()
+                .fs
+                .set_environment(extensions::fs::environment_for(app.handle()));
             let handle = app.handle().clone();
             app.state::<ChatState>()
                 .action_bridge
@@ -363,6 +387,11 @@ pub fn run() {
             extension_limits_get,
             extension_limits_set,
             extension_logs_read,
+            extension_dev_mode_get,
+            extension_dev_mode_set,
+            extension_dev_load,
+            extension_dev_confirm,
+            extension_dev_unload,
             extension_icon,
             extension_frame_open,
             extension_frame_close,

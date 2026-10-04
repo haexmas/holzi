@@ -25,6 +25,7 @@ async fn start(member: &Member) -> Node {
         NodeConfig {
             relay_mode: RelayMode::Disabled,
             bind_addr: Some((std::net::Ipv4Addr::LOCALHOST, 0).into()),
+            session: None,
         },
         Arc::new(move |_tables| signal.notify_one()),
     )
@@ -277,6 +278,7 @@ async fn a_copy_of_a_listed_device_marks_it_as_duplicated() {
         NodeConfig {
             relay_mode: RelayMode::Disabled,
             bind_addr: Some((std::net::Ipv4Addr::LOCALHOST, 0).into()),
+            session: None,
         },
         Arc::new(|_| {}),
     )

@@ -26,7 +26,7 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-use haex_crdt::{compare_hlc_strings, ColumnChange};
+use haex_crdt::{compare_hlc_strings, ColumnChange, SkipReason};
 use uuid::Uuid;
 
 use crate::storage::query;
@@ -188,7 +188,7 @@ impl Inbox {
         // current limits only after acquiring that lock and keep it until the changes
         // and their progress are committed, so a removal cannot race this admission
         // decision (FR-027, research R5).
-        let _exchange = replica.exchange();
+        let exchange = replica.exchange();
 
         let mut changes = std::mem::take(&mut self.pending);
         changes.extend(page.changes);
@@ -219,7 +219,7 @@ impl Inbox {
         };
         let mut arrived: Vec<Group> = Vec::new();
         let mut rejected: Vec<(Uuid, String)> = Vec::new();
-        let mut parking = Parking::default();
+        let mut parking = Parking::new(db);
         let mut group_updates = Vector::new();
         for (hlc, group) in groups {
             let origin = progress::origin_of(&hlc)
@@ -260,7 +260,7 @@ impl Inbox {
                     });
                 }
                 Sorted::Park(group) => {
-                    self.park_group(&mut context, &mut parking, origin, hlc, group, bytes);
+                    self.park_group(&mut context, &mut parking, origin, hlc, group, bytes)?;
                 }
             }
         }
@@ -337,16 +337,28 @@ impl Inbox {
             self.finished = true;
         }
 
+        // Origins with cells haex-crdt skipped for a table or column that is gone now (a clear-up
+        // ran after the page was sorted): neither parked nor applied, so their progress stays and
+        // the next pull brings them again.
+        let mut again: HashSet<Uuid> = HashSet::new();
         for step in steps {
             if replica.closing() {
                 return Err(crate::sync::replica::Closing.into());
             }
-            let accepted: Vec<ColumnChange> = apply[step]
+            let (origins, accepted): (Vec<Uuid>, Vec<ColumnChange>) = apply[step]
                 .iter()
-                .flat_map(|g| g.columns.iter().cloned())
-                .collect();
+                .flat_map(|g| g.columns.iter().map(move |c| (g.origin, c.clone())))
+                .unzip();
             let outcome = db.apply_remote_changes(accepted)?;
             received.skipped_unknown_columns += report_unknown_columns(&outcome);
+            again.extend(outcome.skipped.iter().filter_map(|skipped| {
+                matches!(
+                    skipped.reason,
+                    SkipReason::MissingTable | SkipReason::UnknownColumn
+                )
+                .then(|| origins.get(skipped.input_index).copied())
+                .flatten()
+            }));
             if !outcome.skipped.is_empty() {
                 log::debug!(
                     "sync: {} received cells kept the local value",
@@ -359,6 +371,12 @@ impl Inbox {
                     hook();
                 }
             });
+        }
+        for origin in &again {
+            updates.remove(origin);
+            if let Some(snapshot) = &mut self.snapshot {
+                snapshot.served.remove(origin);
+            }
         }
         // Parked groups count as received: stored in the write that moves
         // progress past them, with the state of an extension at its limit.
@@ -380,8 +398,11 @@ impl Inbox {
         }
         // An extension that became ready while this pull ran gets what it
         // parked; also catches a group parked behind one replayed meanwhile.
+        // The exchange is free again: a replay that waits for a running migration does not hold
+        // up the other sessions, and a closing vault stops it between extensions.
+        drop(exchange);
         if !page.more && context.has_any_parked() {
-            match park::replay_ready(db) {
+            match park::replay_ready(db, &|| replica.closing()) {
                 Ok(replayed) => received.tables.extend(replayed.tables),
                 Err(error) => log::warn!("sync: replaying parked groups failed: {error}"),
             }
@@ -393,14 +414,21 @@ impl Inbox {
     }
 }
 
-/// Logs and counts received cells haex-crdt skipped for a column the table
-/// lacks. Parking catches those before; any left means a check missed one.
+/// Logs and counts received cells haex-crdt skipped for a table or column this device lacks.
+/// Parking catches those before; any left means a check missed one, or a clear-up dropped the
+/// table meanwhile.
 fn report_unknown_columns(outcome: &haex_crdt::ApplyOutcome) -> usize {
-    let skipped = outcome.report.skipped_unknown_column;
-    if skipped > 0 {
-        log::error!("sync: {skipped} received cells named a column this device lacks");
+    let (columns, tables) = (
+        outcome.report.skipped_unknown_column,
+        outcome.report.skipped_unknown_table,
+    );
+    if columns > 0 {
+        log::error!("sync: {columns} received cells named a column this device lacks");
     }
-    skipped
+    if tables > 0 {
+        log::error!("sync: {tables} received cells named a table this device lacks");
+    }
+    columns + tables
 }
 
 /// The table a change touches as the views see it: for a delete marker the

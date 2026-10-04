@@ -49,7 +49,10 @@ pub fn due(q: &mut impl Query, removal: &Removal) -> haex_crdt::Result<bool> {
 }
 
 /// The tables and views of `prefix`, device-local ones included.
-fn prefixed(q: &mut impl Query, prefix: &TablePrefix) -> haex_crdt::Result<Vec<(String, String)>> {
+pub(crate) fn prefixed(
+    q: &mut impl Query,
+    prefix: &TablePrefix,
+) -> haex_crdt::Result<Vec<(String, String)>> {
     let objects: Vec<(String, String)> = q.query_map(
         "SELECT type, name FROM sqlite_master WHERE type IN ('table', 'view')",
         &[],
@@ -61,7 +64,7 @@ fn prefixed(q: &mut impl Query, prefix: &TablePrefix) -> haex_crdt::Result<Vec<(
         .collect())
 }
 
-fn quoted(name: &str) -> String {
+pub(crate) fn quoted(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
@@ -105,13 +108,15 @@ pub fn run(db: &VaultDb, removal: &Removal, device: Uuid) -> Result<()> {
                 )?;
                 park::discard(tx, &removal.prefix, &removal.purge_hlc)?;
             }
+            // A purge only runs for a newer `purge_hlc`, so the new "delete data" one is the highest.
             tx.execute(
-                &format!("DELETE FROM {PURGES_APPLIED} WHERE extension_id = ?1"),
-                params![ext],
-            )?;
-            tx.execute(
-                &format!("INSERT INTO {PURGES_APPLIED} (extension_id, purge_hlc) VALUES (?1, ?2)"),
-                params![ext, removal.purge_hlc],
+                &format!(
+                    "INSERT INTO {PURGES_APPLIED} (extension_id, purge_hlc, data_purge_hlc) \
+                     VALUES (?1, ?2, CASE WHEN ?3 THEN ?2 END) \
+                     ON CONFLICT(extension_id) DO UPDATE SET purge_hlc = excluded.purge_hlc, \
+                     data_purge_hlc = COALESCE(excluded.data_purge_hlc, data_purge_hlc)"
+                ),
+                params![ext, removal.purge_hlc, removal.purge_data],
             )?;
             Ok(())
         },

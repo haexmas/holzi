@@ -255,6 +255,12 @@ notify-rust = "4.18.1"
 # only ever signals the one PID it holds (chat/tools/cli.rs, T032).
 libc = "0.2"
 
+# Spec 017, US9 (research R19): extensions watch folders on desktops only; Android and iOS answer
+# "not available" (FR-066), so the watcher is not built there.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+notify = "8"
+notify-debouncer-full = "0.5"
+
 [dev-dependencies]
 # Mock runtime for IPC-level tests of the vault gateway (spec 013).
 tauri = { version = "2.12.0", features = ["test"] }

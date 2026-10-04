@@ -5,6 +5,9 @@
  * is listed with a checkbox (on by default; off means "ask when needed"), device-scoped kinds
  * offer "nur dieses Gerät" or "alle Geräte". An update lists only the new permissions and warns
  * before a downgrade. Nothing is written before "Installieren".
+ *
+ * With `dev` the same dialog loads a project folder in developer mode (US12, FR-064): unsigned,
+ * from its development server, every permission for this device only.
  */
 import { invoke } from '@tauri-apps/api/core'
 import { open as openFile } from '@tauri-apps/plugin-dialog'
@@ -13,6 +16,7 @@ import type { InstallPreview } from '@bindings/InstallPreview'
 import type { PermissionChoice } from '@bindings/PermissionChoice'
 
 const open = defineModel<boolean>('open', { required: true })
+const props = defineProps<{ dev?: boolean }>()
 const { t } = useI18n()
 const { errString } = useErrorString()
 
@@ -32,10 +36,14 @@ const shown = computed(
   () =>
     preview.value?.existing?.newPermissions ?? preview.value?.declared ?? [],
 )
+/** A preview that can be confirmed: a valid bundle, or any project holzi could read. */
+const usable = computed(
+  () => preview.value !== null && (props.dev || preview.value.signatureValid),
+)
 const blocked = computed(
   () =>
-    !preview.value?.signatureValid ||
-    (preview.value.existing?.isDowngrade === true && !confirmDowngrade.value),
+    !usable.value ||
+    (preview.value?.existing?.isDowngrade === true && !confirmDowngrade.value),
 )
 
 function reset() {
@@ -48,10 +56,16 @@ function reset() {
 
 async function chooseAsync() {
   reset()
-  const selected = await openFile({
-    multiple: false,
-    filters: [{ name: t('extensions.install.fileType'), extensions: ['xt'] }],
-  })
+  const selected = await openFile(
+    props.dev
+      ? { multiple: false, directory: true }
+      : {
+          multiple: false,
+          filters: [
+            { name: t('extensions.install.fileType'), extensions: ['xt'] },
+          ],
+        },
+  )
   if (typeof selected !== 'string') {
     open.value = false
     return
@@ -59,9 +73,13 @@ async function chooseAsync() {
   busy.value = true
   try {
     path.value = selected
-    preview.value = await invoke<InstallPreview>('extension_install_preview', {
-      path: selected,
-    })
+    preview.value = props.dev
+      ? await invoke<InstallPreview>('extension_dev_load', {
+          projectPath: selected,
+        })
+      : await invoke<InstallPreview>('extension_install_preview', {
+          path: selected,
+        })
     for (const permission of shown.value)
       choices.value[key(permission)] = { granted: true, allDevices: false }
   } catch (error) {
@@ -83,13 +101,19 @@ async function installAsync() {
       granted: choices.value[key(p)]?.granted ?? false,
       allDevices: choices.value[key(p)]?.allDevices ?? false,
     }))
-    await invoke('extension_install', {
-      args: {
-        path: path.value,
+    if (props.dev)
+      await invoke('extension_dev_confirm', {
+        projectPath: path.value,
         accepted,
-        confirmDowngrade: confirmDowngrade.value,
-      },
-    })
+      })
+    else
+      await invoke('extension_install', {
+        args: {
+          path: path.value,
+          accepted,
+          confirmDowngrade: confirmDowngrade.value,
+        },
+      })
     open.value = false
   } catch (error) {
     failure.value = errString(error)
@@ -105,7 +129,10 @@ watch(open, (isOpen) => {
 </script>
 
 <template>
-  <UiDrawerModal v-model:open="open" :title="t('extensions.install.title')">
+  <UiDrawerModal
+    v-model:open="open"
+    :title="dev ? t('extensions.dev.loadTitle') : t('extensions.install.title')"
+  >
     <template #content>
       <div class="flex flex-col gap-4" data-testid="extensions-install-dialog">
         <p v-if="busy && !preview" class="text-sm text-muted-foreground">
@@ -113,7 +140,7 @@ watch(open, (isOpen) => {
         </p>
 
         <div
-          v-if="preview && !preview.signatureValid"
+          v-if="preview && !usable"
           class="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive"
           role="alert"
           data-testid="extensions-install-refused"
@@ -124,7 +151,10 @@ watch(open, (isOpen) => {
           </p>
         </div>
 
-        <template v-if="preview?.signatureValid">
+        <template v-if="preview && usable">
+          <p v-if="dev" class="rounded-xl bg-warning/15 px-4 py-3 text-sm">
+            {{ t('extensions.dev.loadHint') }}
+          </p>
           <div class="flex flex-col gap-1">
             <h3 class="text-base font-semibold">
               {{ preview.displayName ?? preview.name }}
@@ -198,7 +228,7 @@ watch(open, (isOpen) => {
                 </span>
               </label>
               <div
-                v-if="permission.deviceScoped"
+                v-if="permission.deviceScoped && !dev"
                 class="flex gap-4 pl-7 text-xs"
                 role="radiogroup"
               >
@@ -243,12 +273,14 @@ watch(open, (isOpen) => {
             {{ t('extensions.install.cancel') }}
           </UiButton>
           <UiButton
-            v-if="preview?.signatureValid"
+            v-if="usable"
             :disabled="busy || blocked"
             data-testid="extensions-install-confirm"
             @click="installAsync"
           >
-            {{ t('extensions.install.install') }}
+            {{
+              dev ? t('extensions.dev.load') : t('extensions.install.install')
+            }}
           </UiButton>
         </div>
       </div>

@@ -176,6 +176,16 @@ CREATE INDEX idx_ext_logs_ext ON extension_logs_no_sync(extension_id, created_at
 --> statement-breakpoint
 CREATE INDEX idx_sync_parked_prefix ON sync_parked_groups_no_sync(extension_prefix, hlc);"#;
 
+/// The migration `0024_dev_extension_kv` (spec 017, US12): the key-value store of an extension
+/// loaded in developer mode. Like its registration it stays on this device; unloading it deletes
+/// the rows.
+pub const DEV_EXTENSION_KV_0024: &str = r#"CREATE TABLE dev_extension_kv_no_sync (
+  extension_id TEXT NOT NULL REFERENCES dev_extensions_no_sync(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (extension_id, key)
+);"#;
+
 /// The tables of [`EXTENSIONS_0023`] that haex-crdt tracks and syncs.
 pub const SYNCED_TABLES: [&str; 9] = [
     "extensions",
@@ -198,3 +208,14 @@ pub const DEVICE_TABLES: [&str; 6] = [
     "dev_extensions_no_sync",
     "dev_extension_permissions_no_sync",
 ];
+
+/// The migration `0025_sync_parking` (spec 017, research R10, R11): parked groups are unique per
+/// origin and HLC (a group fetched again is not stored or counted twice, and the check is an index
+/// lookup), and a device remembers the highest "delete data" removal it cleared up for, so a later
+/// "keep data" removal does not lift the filter for changes older than it.
+pub const SYNC_PARKING_0025: &str = r#"DELETE FROM sync_parked_groups_no_sync
+  WHERE id NOT IN (SELECT MIN(id) FROM sync_parked_groups_no_sync GROUP BY origin, hlc);
+--> statement-breakpoint
+CREATE UNIQUE INDEX idx_sync_parked_origin_hlc ON sync_parked_groups_no_sync(origin, hlc);
+--> statement-breakpoint
+ALTER TABLE extension_purges_applied_no_sync ADD COLUMN data_purge_hlc TEXT;"#;

@@ -517,6 +517,8 @@ des Entwicklermodus das Hauptfenster neu (vermutet, Prüfaufgabe). Der Rahmen be
 holzi nicht; ihre CSP ist Sache der Entwicklerin, Netzsperre und Inline-Hashes gelten im Entwicklermodus also
 nicht (Bewusste Grenze). Konsolenausgabe des Rahmens zeigt holzi in einem Bereich des Tabs.
 
+**Umsetzung (L3)**: Die Migrationen kommen nicht von der Platte, sondern aus `extension_database_register_migrations`, mit dem die Erweiterung sie ohnehin meldet (wie HV im Entwicklermodus): die Regeln für das Lesen von Migrationen aus einem Bundle liegen privat in `haex-bundle`, ein zweiter Leser in holzi wäre eine zweite Implementierung. Sie laufen durch dieselbe Prüfung und im lokalen Modus. Erlaubt sind nur `localhost` und `127.0.0.1`, weil eine CSP-Quelle keine IPv6-Adresse nennen kann. Das Hauptfenster wird in `setup` gebaut (`create: false`), damit es den Haken `on_web_resource_request` bekommt; im `tauri dev` mit Entwicklungsserver ruft Tauri ihn nicht auf, dort lädt der Rahmen einer Entwicklungsfassung also nicht. Nach dem Entsperren mit eingeschaltetem Modus lädt das Fenster einmal neu (das Dokument stammt von vor dem Entsperren); ein Merker in `sessionStorage` verhindert eine Schleife. Geprüft unter Linux (WebKitGTK, E2E-Szene `extension-dev-mode`); macOS und Windows sind noch offen. `name` kommt wie im `readManifest` des SDK aus der `package.json` des Projekts (das SDK benennt die Tabellen damit, `haex init` schreibt keinen Namen ins Manifest); `version`, `author` und `homepage` von dort, wo das Manifest keine hat. `extension_get_info`, das Öffnen eines Rahmens und die Liste lesen das Projekt jeweils neu (ein Entwicklungsserver auf neuem Port wird gefunden), aber nur solange es dasselbe Präfix nennt wie die Registrierung; sonst `dev_project_changed`, und das Projekt wird neu geladen. Bewusste Grenze: `frame-src` gilt für das ganze Hauptdokument, solange der Modus an ist, darf also auch der Rahmen einer installierten Erweiterung zu einem Server auf `localhost`/`127.0.0.1` navigieren. Nur die Adressen der geladenen Projekte freizugeben, hieße das Fenster bei jedem Laden und jedem Portwechsel neu zu laden; der Modus ist eine bewusste Einstellung dieses Geräts.
+
 **Begründung**: geräteeigen per Bauart; keine SDK-Änderung; derselbe Ablauf wie HV über den Projektordner,
 aber ohne dessen synchronisierte Registrierung (HV `dev_server.rs:266, 301`).
 
@@ -586,6 +588,27 @@ die volle Adresse; sonst fragte jede Symboldatei neu. Eine Weiterleitung auf ein
 5. `open_file` schreibt in ein holzi-eigenes Temp-Verzeichnis, nur mit `Path::file_name()`.
 6. Beobachten über `notify` + `notify-debouncer-full` (neu), Schlüssel (Erweiterung, `ruleId`), Meldungen
    (`filesync:file-changed`, flache Form wie im SDK, jeder Pfad eines Bündels) nur an Rahmen der Erweiterung.
+
+**Umsetzung (L4)**: `extensions/fs/` mit `resolve`, der Prüfung `authorize` (Sperrliste, Dialog-Auswahl des
+Rahmens, dann Berechtigung mit Rückfrage 1004), `ops`, `dialogs` und `watch`. Gesperrt sind alle App-Ordner aus
+Tauris Pfadauflöser (Konfiguration, Daten, lokale Daten mit den Vaults, Cache, Log), aufgelöst. Ein Aufruf, der
+einen ganzen Baum erfasst (rekursives Entfernen, Umbenennen, Kopieren, Beobachten), ist auch gesperrt, wenn der
+Baum einen dieser Orte enthält. Kopieren lässt symbolische Links innerhalb des Baums aus, weil ihr Ziel nie
+geprüft wurde. Die Dialoge laufen über das Merkmal `FileDialogs` im Host (Tauri-Plugins im Programm, ein Fake in
+den Tests), damit die Bridge keinen `AppHandle` braucht. `open_file` und `show_image` legen die Kopie in einen
+Ordner im Cache von holzi, der selbst gesperrt ist; `show_image` nimmt nur PNG, JPEG, GIF, WebP und BMP.
+Beobachtungen enden mit dem letzten Rahmen ihrer Erweiterung, beim Entfernen, Deaktivieren und Entladen der
+Erweiterung, und eine nur durch die Dialog-Auswahl eines Rahmens erlaubte schon mit diesem Rahmen (FR-048). Sie
+folgen keinen Links im Baum. `filesync:file-changed` trägt den Pfad relativ zum beobachteten Ordner; holzis Fenster
+legt die Felder flacher Ereignisse neben `type`.
+
+**Nachträge aus dem Review (L4)**: Ein Pfadteil, der da ist, sich aber nicht auflösen lässt (kaputter oder
+kreisender Link), wird abgelehnt: Schreiben folgte ihm sonst an ein ungeprüftes Ziel. Kopieren schreibt nicht durch
+einen Link, der im Ziel schon liegt. `read_file` liest nur reguläre Dateien und höchstens bis zur Antwortgröße.
+`open_file` übergibt dem Standardprogramm nur Dokumente, Bilder und Medien (feste Liste von Endungen, ohne `:`,
+Steuerzeichen und Punkt oder Leerzeichen am Ende): sonst startete etwa unter Windows eine `.bat` ohne jede
+Berechtigung, und eine Seite (`.html`, `.svg`) liefe mit Zugriff auf lokale Dateien. Kopien im Cache, die älter als
+ein Tag sind, entfernt holzi beim Start.
 
 **Begründung**: FR-047/FR-049 verlangen das tatsächliche Ziel; HV prüft rein lexikalisch (Symlinks
 entkommen), Dialog-Auswahlen erzeugen dort keine Berechtigung, `unwatch` prüft den Besitzer nicht.

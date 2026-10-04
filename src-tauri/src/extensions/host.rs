@@ -2,6 +2,7 @@
 //! frame sessions and the started bundles the protocol handler serves. It ends with the process.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
@@ -52,6 +53,8 @@ pub trait Desktop: Send + Sync {
 #[derive(Default)]
 pub struct ExtensionHost {
     pub frames: FrameRegistry,
+    /// Dialog choices per frame, holzi's protected places and folder watches (US9).
+    pub fs: super::fs::FsState,
     /// Open permission questions and decisions held in memory (US3).
     pub permissions: PermissionState,
     /// System notifications shown for extensions (US8).
@@ -65,6 +68,10 @@ pub struct ExtensionHost {
     dialogs: Mutex<HashMap<String, (String, Sender<bool>)>>,
     /// Running SQL calls per extension (limit `max_concurrent`).
     running_sql: Arc<Mutex<HashMap<Uuid, u64>>>,
+    /// Developer mode is on for the open vault: holzi's document may frame development servers.
+    dev_frames: AtomicBool,
+    /// The document holzi's window shows was served with the development origins.
+    served_dev_frames: AtomicBool,
     desktop: OnceLock<Arc<dyn Desktop>>,
 }
 
@@ -122,6 +129,24 @@ impl ExtensionHost {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&extension_id);
+    }
+
+    /// Whether holzi's next document may frame development servers (`dev_csp`).
+    pub fn dev_frames(&self) -> bool {
+        self.dev_frames.load(Ordering::SeqCst)
+    }
+
+    pub fn set_dev_frames(&self, allowed: bool) {
+        self.dev_frames.store(allowed, Ordering::SeqCst);
+    }
+
+    /// Whether the document holzi's window shows may frame development servers.
+    pub fn served_dev_frames(&self) -> bool {
+        self.served_dev_frames.load(Ordering::SeqCst)
+    }
+
+    pub fn note_served_dev_frames(&self, allowed: bool) {
+        self.served_dev_frames.store(allowed, Ordering::SeqCst);
     }
 
     pub fn context(&self) -> HostContext {

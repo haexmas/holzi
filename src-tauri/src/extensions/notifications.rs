@@ -238,7 +238,12 @@ fn icon(
         })
         .map(|(_, e)| *e)
         .ok_or_else(|| invalid("icon must be png, jpeg, webp or gif"))?;
-    let bundle_id = ctx.session.bundle_id;
+    // A development version has no stored bundle; its icon comes as a `data:` URL.
+    let bundle_id = ctx
+        .session
+        .source
+        .bundle()
+        .ok_or_else(|| invalid("icon file not in the bundle"))?;
     let bytes = ctx
         .db
         .read_blocking(move |q| {

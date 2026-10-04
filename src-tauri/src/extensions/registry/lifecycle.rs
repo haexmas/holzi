@@ -130,7 +130,7 @@ pub fn reconcile(
             Err(error) => log::warn!("extension {}: following failed: {error}", extension.id),
         }
     }
-    if let Err(error) = park::replay_ready(&db.database()) {
+    if let Err(error) = park::replay_ready(&db.database(), &|| false) {
         log::warn!("extensions: replaying parked sync groups failed: {error}");
     }
     Ok(changed)
@@ -152,7 +152,11 @@ fn follow(
             purge_hlc: purge_hlc.clone(),
         };
         let check = removal.clone();
-        if db.read_blocking(move |q| purge::due(q, &check))? {
+        // The tables of that prefix here are a development version's (US12): the clear-up waits
+        // until it is unloaded, which reconciles again.
+        if db.read_blocking(move |q| purge::due(q, &check))?
+            && !starting::dev_prefix_here(db, prefix).unwrap_or(true)
+        {
             purge::run(db, &removal, device)?;
             host.forget_effective(extension.id);
         }
@@ -199,6 +203,12 @@ fn follow(
 /// is left. A failure is logged: rows for its tables wait parked until a later run succeeds.
 fn keep_tables(db: &VaultDb, extension: &Registered, now_ms: i64) {
     let id = extension.id;
+    // The tables of that prefix here are a development version's (US12, research R16).
+    if let Some(prefix) = &extension.prefix {
+        if starting::dev_prefix_here(db, prefix).unwrap_or(true) {
+            return;
+        }
+    }
     let result = if extension.installed {
         match starting::effective(db, id) {
             Ok(Effective::Ready(prepared)) => starting::migrate(db, id, &prepared, now_ms),
@@ -333,6 +343,10 @@ mod tests;
 #[cfg(test)]
 #[path = "lifecycle_us7_tests.rs"]
 mod us7_tests;
+
+#[cfg(test)]
+#[path = "lifecycle_us12_tests.rs"]
+mod us12_tests;
 
 #[cfg(test)]
 #[path = "lifecycle_migration_tests.rs"]

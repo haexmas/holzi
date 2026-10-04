@@ -389,7 +389,7 @@ Berechtigung (Anfrage) und eine Kerntabelle (abgelehnt, ohne Anfrage).
 
 ### User Story 7 - Erweiterungen aktualisieren, deaktivieren und entfernen (Priority: P2)
 
-Der Nutzer installiert eine neue Fassung von haex-pass aus einer Datei. holzi zeigt, was neu
+Der Nutzer installiert eine neue Fassung von haex-notes aus einer Datei. holzi zeigt, was neu
 ist, und fragt nur nach den neu erklärten Berechtigungen. Eine Erweiterung, die er gerade
 nicht braucht, deaktiviert er; sie verschwindet aus dem Launcher, ihre Daten bleiben. Eine
 andere entfernt er und wählt, ob ihre Daten mitgehen.
@@ -430,8 +430,8 @@ mit „Daten löschen“.
 ### User Story 8 - Netzwerk und Benachrichtigungen (Priority: P2)
 
 haex-calendar spricht mit einem CalDAV-Server und erinnert an Termine mit einer
-Systembenachrichtigung. haex-pass lädt Symbole von einem Symboldienst und öffnet eine
-Adresse im Browser. Jeder Netzzugriff einer Erweiterung geht über holzi und braucht eine
+Systembenachrichtigung. Eine andere Erweiterung lädt Symbole von einem Symboldienst und öffnet
+eine Adresse im Browser. Jeder Netzzugriff einer Erweiterung geht über holzi und braucht eine
 Berechtigung für die Zieladresse.
 
 **Why this priority**: Kalender und Passwortmanager brauchen das. Die Kernfunktion SQL
@@ -461,7 +461,7 @@ eine Benachrichtigung und erhält das Klicken darauf.
 
 ### User Story 9 - Dateien des Geräts lesen und schreiben (Priority: P2)
 
-haex-pass speichert einen Anhang als Datei, die der Nutzer im Speichern-Dialog auswählt. Eine
+Eine Erweiterung speichert einen Anhang als Datei, die der Nutzer im Speichern-Dialog auswählt. Eine
 Bildbetrachter-Erweiterung liest einen Ordner, den der Nutzer ihr freigegeben hat, und wird
 benachrichtigt, wenn darin eine Datei hinzukommt.
 
@@ -923,12 +923,12 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
 
 ### Measurable Outcomes
 
-- **SC-001**: haex-notes, haex-calendar und haex-pass aus dem haextension-Repository (Revision
-  oben), gebaut und signiert mit dem Kommandozeilenwerkzeug `haex` des vault-sdk in der
+- **SC-001**: haex-notes und haex-calendar aus dem haextension-Repository (Revision oben), gebaut und signiert mit dem Kommandozeilenwerkzeug `haex` des vault-sdk in der
   Fassung mit dem neuen Signaturformat (FR-002), lassen sich ohne Änderung ihres Codes
   installieren und benutzen. Ausgenommen sind nur Funktionen, die Spaces (FR-061) oder die
   External Bridge brauchen. Ihre Hinweise darauf bleiben verständlich, und die Erweiterung
-  läuft weiter.
+  läuft weiter. haex-pass ist kein Prüfgegenstand mehr: der eingebaute Passwortmanager (Spec 034)
+  hat es abgelöst.
 - **SC-002**: Eine Sammlung von Umgehungsversuchen (mindestens: `WITH`-Ausdrücke, `EXISTS`,
   Unterabfragen in jeder Klausel, Schemaangaben, Aliasnamen, Sichten, Trigger und `ATTACH` in
   Migrationen, mehrere Anweisungen in einer Zeichenkette, Schreiben in Sync-Spalten,

@@ -387,7 +387,7 @@ fn without_a_desktop_notifications_are_not_available() {
         db: s.vault.clone(),
         session: host.frames.open(
             s.notes.session.extension_id,
-            s.notes.session.bundle_id,
+            s.notes.session.source.bundle().unwrap(),
             "tab",
         ),
         host,

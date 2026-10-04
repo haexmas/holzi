@@ -1,6 +1,7 @@
 import { onScopeDispose, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import type { DevModeState } from '@bindings/DevModeState'
 import { useColorScheme } from '~/composables/useColorScheme'
 import { useExtensionPermissionsStore } from '~/stores/extensionPermissions'
 import { useExtensionsStore } from '~/stores/extensions'
@@ -11,6 +12,35 @@ import { useWindowManagerStore } from '~/stores/windowManager'
  * window manager, and the color scheme and language holzi applies, which extensions read through
  * `extension_context_get` (contracts/tauri-commands.md `extension_host_context_set`).
  */
+/** Set before the one reload for developer mode, so a document that still lacks the development
+ * origins (in `tauri dev` holzi's hook does not run) does not reload again and again. */
+const DEV_RELOAD_KEY = 'holzi.extensions.devReload'
+
+/** Developer mode is on, but this document was loaded before holzi knew it (before unlocking): its
+ * policy cannot frame development servers yet, so the window reloads once (spec 017, US12,
+ * research R16). Returns whether it reloads. */
+async function reloadForDevModeAsync(): Promise<boolean> {
+  let state: DevModeState
+  try {
+    state = await invoke<DevModeState>('extension_dev_mode_get')
+  } catch {
+    return false
+  }
+  try {
+    if (!state.enabled || state.framesAllowed) {
+      sessionStorage.removeItem(DEV_RELOAD_KEY)
+      return false
+    }
+    if (sessionStorage.getItem(DEV_RELOAD_KEY) !== null) return false
+    sessionStorage.setItem(DEV_RELOAD_KEY, '1')
+  } catch {
+    // Without session storage no loop guard: no reload.
+    return false
+  }
+  window.location.reload()
+  return true
+}
+
 export function useExtensionHost() {
   const extensions = useExtensionsStore()
   const permissions = useExtensionPermissionsStore()
@@ -37,6 +67,7 @@ export function useExtensionHost() {
 
   /** Loads the extension list; the session restore waits for it, so extension tabs survive. */
   async function startAsync(): Promise<void> {
+    if (await reloadForDevModeAsync()) return
     if (!unlistenClick) {
       const wm = useWindowManagerStore()
       unlistenClick = await listen<{ extensionId: string }>(

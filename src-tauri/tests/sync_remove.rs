@@ -151,6 +151,8 @@ async fn a_removed_device_gets_nothing_new_while_the_others_keep_syncing() {
     });
     assert_eq!(removed, ThisDevice::Removed);
 
+    // The node of a runtime held here would outlive the drain.
+    drop((runtime, removed_runtime));
     tokio::join!(a.shutdown(), b.shutdown(), c.shutdown());
 }
 
@@ -183,5 +185,7 @@ async fn only_a_main_device_removes_and_never_itself() {
     ));
     assert_eq!(listed(&a).len(), 2, "nothing was removed");
 
+    // The node of a runtime held here would outlive the drain.
+    drop((main_runtime, linked_runtime));
     tokio::join!(a.shutdown(), b.shutdown());
 }

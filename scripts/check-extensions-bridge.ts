@@ -95,3 +95,31 @@ test('events are held until the port is ready, then delivered in order, only for
     timestamp: 1,
   })
 })
+
+test('a file change reaches the SDK flat, other events keep their data', () => {
+  const change = {
+    frame: 'f1',
+    type: 'filesync:file-changed',
+    data: { ruleId: 'r', changeType: 'modified', path: 'a.txt' },
+    timestamp: 2,
+  }
+  assert.deepEqual(eventMessage(change), {
+    ruleId: 'r',
+    changeType: 'modified',
+    path: 'a.txt',
+    type: 'filesync:file-changed',
+    data: change.data,
+    timestamp: 2,
+  })
+  const tables = {
+    frame: 'f1',
+    type: 'haextension:sync:tables-updated',
+    data: { tables: ['t'] },
+    timestamp: 3,
+  }
+  assert.deepEqual(eventMessage(tables), {
+    type: 'haextension:sync:tables-updated',
+    data: { tables: ['t'] },
+    timestamp: 3,
+  })
+})
