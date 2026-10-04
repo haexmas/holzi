@@ -156,8 +156,14 @@ export function useExtensionFrame(
     const channel = new MessageChannel()
     attempts.push(channel)
     channel.port1.onmessage = (event: MessageEvent) => {
-      if (sdkPort === null && event.data?.type === PORT_READY) {
+      // An offered channel the SDK takes; a development page may replace a working one.
+      if (
+        sdkPort !== channel.port1 &&
+        attempts.includes(channel) &&
+        event.data?.type === PORT_READY
+      ) {
         stopInit()
+        sdkPort?.close()
         sdkPort = channel.port1
         for (const other of attempts) if (other !== channel) other.port1.close()
         attempts = []
@@ -227,12 +233,30 @@ export function useExtensionFrame(
     armDeadline()
   }
 
+  /** A development page's `load` while its channel works. Without a shim holzi cannot tell a new
+   * document from a hash navigation, for which WebKitGTK fires `load` too, and the SDK takes
+   * `port:init` once per document: new channels are offered while the old one keeps working, and
+   * the SDK of a new document takes one of them. */
+  function probeHandshake(): void {
+    stopInit()
+    for (const attempt of attempts) attempt.port1.close()
+    attempts = []
+    offerPort()
+    initTimer = setInterval(offerPort, INIT_INTERVAL_MS)
+    initDeadline = setTimeout(() => {
+      stopInit()
+      for (const attempt of attempts) attempt.port1.close()
+      attempts = []
+    }, INIT_TIMEOUT_MS)
+  }
+
   /** Every `load` of the frame; the shim's `hello` then says whether its document is new. A
-   * development server's page has no shim: every load is a new document. */
+   * development server's page has no shim (`probeHandshake`). */
   function onLoad(): void {
     if (!frame) return
     if (dev.value) {
-      startHandshake()
+      if (state.value === 'ready') probeHandshake()
+      else startHandshake()
       return
     }
     startShim()

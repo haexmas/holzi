@@ -224,8 +224,6 @@ pub fn run() {
                 }
             })?;
             app.manage(presence);
-            // Spec 032: actions of a model's tool call go out as events; `ChatState` is managed
-            // without an `AppHandle`, so the emitter is set here.
             // Spec 017, US12: holzi's window is built here, not from `tauri.conf.json`, so its
             // document can frame development servers while developer mode is on (`dev_csp`).
             let window = app
@@ -241,6 +239,8 @@ pub fn run() {
                     extensions::dev_csp::adjust(&host, request, response);
                 })
                 .build()?;
+            // Spec 032: actions of a model's tool call go out as events; `ChatState` is managed
+            // without an `AppHandle`, so the emitter is set here.
             let handle = app.handle().clone();
             app.state::<ChatState>()
                 .action_bridge

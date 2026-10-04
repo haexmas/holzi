@@ -3,11 +3,11 @@
 /**
  * The user's choice for one declared permission.
  */
-export type PermissionChoice = { kind: string, action: string, target: string,
+export type PermissionChoice = { kind: string, action: string, target: string, 
 /**
  * Ticked: `granted`; unticked: `ask`.
  */
-granted: boolean,
+granted: boolean, 
 /**
  * For device-scoped kinds: remember for every own device instead of only this one.
  */

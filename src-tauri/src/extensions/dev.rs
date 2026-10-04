@@ -20,7 +20,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError};
 
 use haex_crdt::rusqlite::params;
 use haex_crdt::{AuthContext, Authorization, GuardedWriteOptions, SqlGuard};
@@ -36,6 +36,7 @@ use crate::extensions::registry::install::{
 };
 use crate::extensions::registry::purge::{prefixed, quoted};
 use crate::extensions::sql::authorizer::MIGRATION_JOURNAL;
+use crate::extensions::sql::migrate::applying;
 use crate::storage::preferences::{self, PrefScope};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
@@ -373,26 +374,29 @@ pub fn confirm(
 
 /// Unloads a development version: drops its tables and deletes its journal, logs, registration,
 /// permissions and store. Blocking.
+///
+/// Runs under the migration lock and reads the tables in the same write that drops them: a
+/// migration of a frame still open cannot create a table in between, which would stay behind
+/// without a registration and block loading the prefix again (`dev_tables_exist`).
 pub fn unload(db: &VaultDb, id: Uuid) -> Result<()> {
-    let Some(registration) = db.read_blocking(move |q| registration(q, id).map_err(Into::into))?
-    else {
-        return Err(HolziError::ExtensionNotFound);
-    };
-    let prefix = registration.prefix.clone();
-    let objects = db.read_blocking(move |q| prefixed(q, &prefix))?;
+    let _applying = applying().lock().unwrap_or_else(PoisonError::into_inner);
     // holzi's own statements on names read from sqlite_master, as when clearing up a removal.
     let guard = SqlGuard {
         authorizer: Arc::new(|_: &AuthContext<'_>| Authorization::Allow),
         progress: None,
         max_value_bytes: None,
     };
-    db.write_guarded_blocking(
+    let found = db.write_guarded_blocking(
         &guard,
         GuardedWriteOptions {
             schema_mode: true,
             local: true,
         },
         move |tx| {
+            let Some(registration) = registration(tx, id)? else {
+                return Ok(false);
+            };
+            let objects = prefixed(tx, &registration.prefix)?;
             for (kind, name) in &objects {
                 let kind = if kind == "view" { "VIEW" } else { "TABLE" };
                 tx.execute(&format!("DROP {kind} IF EXISTS {}", quoted(name)), &[])?;
@@ -420,10 +424,14 @@ pub fn unload(db: &VaultDb, id: Uuid) -> Result<()> {
                 "DELETE FROM dev_extensions_no_sync WHERE id = ?1",
                 params![ext],
             )?;
-            Ok(())
+            Ok(true)
         },
     )?;
-    Ok(())
+    if found {
+        Ok(())
+    } else {
+        Err(HolziError::ExtensionNotFound)
+    }
 }
 
 /// The registration a frame of `id` opens on `device`: developer mode must be on.

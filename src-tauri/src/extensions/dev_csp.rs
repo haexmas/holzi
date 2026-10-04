@@ -18,25 +18,38 @@ pub const DEV_FRAME_SOURCES: &str = "http://localhost:* http://127.0.0.1:*";
 
 const CSP: &str = "Content-Security-Policy";
 
-/// `csp` with [`DEV_FRAME_SOURCES`] in its `frame-src` directive, added when it has none.
+/// `csp` with [`DEV_FRAME_SOURCES`] in its `frame-src` directive. A policy without one gets it
+/// with the sources frames fell back to (`child-src`, else `default-src`), so other frames keep
+/// what they were allowed.
 pub fn with_dev_frames(csp: &str) -> String {
-    let mut found = false;
     let mut directives: Vec<String> = csp
         .split(';')
         .map(str::trim)
         .filter(|d| !d.is_empty())
-        .map(|directive| {
-            let name = directive.split_whitespace().next().unwrap_or_default();
-            if name.eq_ignore_ascii_case("frame-src") {
-                found = true;
-                format!("{directive} {DEV_FRAME_SOURCES}")
-            } else {
-                directive.to_owned()
-            }
-        })
+        .map(str::to_owned)
         .collect();
-    if !found {
-        directives.push(format!("frame-src {DEV_FRAME_SOURCES}"));
+    let named = |directives: &[String], wanted: &str| {
+        directives.iter().position(|directive| {
+            directive
+                .split_whitespace()
+                .next()
+                .is_some_and(|name| name.eq_ignore_ascii_case(wanted))
+        })
+    };
+    if let Some(index) = named(&directives, "frame-src") {
+        directives[index] = format!("{} {DEV_FRAME_SOURCES}", directives[index]);
+    } else {
+        let fallback = named(&directives, "child-src")
+            .or_else(|| named(&directives, "default-src"))
+            .map(|index| {
+                directives[index]
+                    .split_whitespace()
+                    .skip(1)
+                    .map(|source| format!("{source} "))
+                    .collect::<String>()
+            })
+            .unwrap_or_default();
+        directives.push(format!("frame-src {fallback}{DEV_FRAME_SOURCES}"));
     }
     directives.join("; ")
 }

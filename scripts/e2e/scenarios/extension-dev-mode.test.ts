@@ -1,12 +1,6 @@
 import assert from 'node:assert/strict'
-import { generateKeyPairSync } from 'node:crypto'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { createServer, type Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { scenario } from '../lib/scenario.ts'
+import { devProject, devServer } from '../lib/extension-dev.ts'
 import { unwrap, waitForWorkspace, type FlowInstance } from '../lib/flows.ts'
 import type { Page } from '../lib/page.ts'
 import { openSettings, setSessionRestore, wmSnapshot } from '../lib/settings.ts'
@@ -23,69 +17,6 @@ import {
 // device, shows its console output and gets a new document after a change; switched off, it is gone.
 
 type Instance = Page & FlowInstance
-
-const FIXTURES = fileURLToPath(
-  new URL('../../../src-tauri/tests/fixtures/extension_e2e/', import.meta.url),
-)
-
-/** A development server for the probe page; `title` is what the page shows next. */
-function devServer(): Promise<{
-  server: Server
-  port: number
-  title: { text: string }
-}> {
-  const title = { text: 'Probe dev' }
-  const server = createServer((request, response) => {
-    // A sandboxed frame has an opaque origin: module scripts need CORS, as Vite's server sends it.
-    response.setHeader('Access-Control-Allow-Origin', '*')
-    const path = (request.url ?? '/').split('?')[0]
-    if (path === '/' || path === '/index.html') {
-      const page = readFileSync(join(FIXTURES, 'probe.html'), 'utf8').replace(
-        '<h1 id="title">Probe</h1>',
-        `<h1 id="title">${title.text}</h1>`,
-      )
-      response.writeHead(200, { 'Content-Type': 'text/html' })
-      response.end(page)
-      return
-    }
-    if (path === '/probe.js') {
-      response.writeHead(200, { 'Content-Type': 'text/javascript' })
-      response.end(readFileSync(join(FIXTURES, 'probe.js')))
-      return
-    }
-    response.writeHead(404)
-    response.end()
-  })
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => {
-      resolve({ server, port: (server.address() as AddressInfo).port, title })
-    })
-  })
-}
-
-/** A project folder for the server on `port`, with a fresh publisher key. */
-function project(port: number): string {
-  const dir = mkdtempSync(join(tmpdir(), 'holzi-dev-project-'))
-  writeFileSync(
-    join(dir, 'haextension.config.json'),
-    JSON.stringify({ dev: { host: '127.0.0.1', port } }),
-  )
-  const key = generateKeyPairSync('ed25519')
-    .publicKey.export({ format: 'der', type: 'spki' })
-    .subarray(-32)
-    .toString('hex')
-  mkdirSync(join(dir, 'haextension'))
-  writeFileSync(
-    join(dir, 'haextension', 'manifest.json'),
-    JSON.stringify({
-      name: 'devprobe',
-      version: '0.1.0',
-      publicKey: key,
-      displayName: 'Dev Probe',
-    }),
-  )
-  return dir
-}
 
 /** Waits until `change` replaced holzi's document and the workspace is back. */
 async function reloaded(page: Instance, change: () => Promise<unknown>) {
@@ -118,7 +49,7 @@ scenario('extension-dev-mode', { timeoutMs: 300_000 }, async (ctx) => {
   await setSessionRestore(page, true)
   const { server, port, title } = await devServer()
   try {
-    const folder = project(port)
+    const folder = devProject(port)
     const refused = (await page.invoke('extension_dev_load', {
       projectPath: folder,
     })) as { ok: boolean; error?: { reason?: string } }

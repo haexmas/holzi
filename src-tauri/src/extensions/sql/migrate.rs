@@ -261,15 +261,16 @@ pub fn apply_pending(
 }
 
 /// [`apply_pending`] for a development version: the migrations it registers, with the same rules,
-/// create tables in haex-crdt's local mode, so they never sync (US12, research R16).
+/// create tables in haex-crdt's local mode, so they never sync (US12, research R16). The caller
+/// holds [`applying`] and read `own` under it, so an unload cannot come in between.
 pub fn apply_pending_local(
+    _applying: &MutexGuard<'_, ()>,
     db: &VaultDb,
     extension_id: Uuid,
     own: &TablePrefix,
     migrations: &[(String, String)],
     now_ms: i64,
 ) -> Result<Vec<String>, MigrationError> {
-    let _applying = APPLYING.lock().unwrap_or_else(PoisonError::into_inner);
     run_pending(
         db,
         extension_id,

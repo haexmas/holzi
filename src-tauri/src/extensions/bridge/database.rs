@@ -3,7 +3,7 @@
 //! with its limits and at most `max_concurrent` at a time.
 
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError};
 
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -19,7 +19,7 @@ use crate::extensions::registry::start::{effective, migrate, Effective};
 use crate::extensions::sql::exec::{
     existing_tables, limits_of, prepare, run_in, Limits, SqlResult,
 };
-use crate::extensions::sql::migrate::{apply_pending_local, MigrationError, Tables};
+use crate::extensions::sql::migrate::{apply_pending_local, applying, MigrationError, Tables};
 use crate::extensions::sql::policy::SqlPolicy;
 use crate::extensions::sql::values::{params, statement_entry};
 use crate::passwords::clock::unix_millis;
@@ -283,10 +283,14 @@ fn register_dev_migrations(ctx: &CallContext, migrations: &[Value]) -> Result<Va
         };
         offered.push((name.to_owned(), sql.to_owned()));
     }
+    let applying = applying().lock().unwrap_or_else(PoisonError::into_inner);
+    // Read under the lock: after an unload the registration is gone and nothing is created.
+    let own = own_prefix(ctx)?;
     let applied = apply_pending_local(
+        &applying,
         &ctx.db,
         ctx.session.extension_id,
-        &own_prefix(ctx)?,
+        &own,
         &offered,
         unix_millis(std::time::SystemTime::now()),
     )
