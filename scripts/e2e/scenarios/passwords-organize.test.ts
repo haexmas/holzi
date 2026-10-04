@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import { createAndUnlock, type FlowInstance } from '../lib/flows.ts'
 import type { WaitContext } from '../lib/sync-flows.ts'
+import { dialogClosed } from '../lib/appearance.ts'
 import { KEY, resizeAppWindow, runAction, wmSnapshot } from '../lib/settings.ts'
 import {
   contextMenu,
@@ -283,6 +284,29 @@ scenario('passwords-organize', { timeoutMs: 300_000 }, async (ctx) => {
       toasts,
   )
   ctx.step('Delete asks, Ctrl+Shift+C copies the password')
+
+  // A confirmed delete takes the focused row away; the focus comes back to the list, so the
+  // shortcuts still work without a click.
+  await instance.type(`passwords-entry-${git}`, KEY.delete)
+  await instance.click('passwords-delete-confirm')
+  await ctx.waitFor('the deleted row gone and the dialog closed', async () =>
+    (await count(instance, `[data-testid="passwords-entry-${git}"]`)) === 0
+      ? dialogClosed(instance)
+      : false,
+  )
+  await ctx.waitFor('the focus back in the list', () =>
+    instance.exec<boolean>(
+      `return Boolean(document.activeElement?.closest('[data-passwords-list]'))`,
+    ),
+  )
+  await instance.typeToFocused(KEY.control + 'a' + KEY.release)
+  const rows = await count(instance, '[data-passwords-list] [data-row-id]')
+  await ctx.waitFor(
+    'Ctrl+A after the delete',
+    async () => rows > 0 && (await selectedRows(instance)).length === rows,
+  )
+  await instance.typeToFocused(KEY.escape)
+  ctx.step('after a delete the focus returns to the list')
 
   // A narrow window: the menu button of the row opens the same menu.
   await resizeAppWindow(instance, 'system.passwords', 360, 560)
