@@ -10,6 +10,7 @@ import {
   extensionAppId,
   extensionApps,
   extensionIdOf,
+  statusErrorKey,
 } from '../src/lib/extensions/apps.ts'
 import { WM_APPS, type AppDefinition } from '../src/lib/wm/apps.ts'
 import { openApp } from '../src/lib/wm/layoutState.ts'
@@ -31,6 +32,7 @@ function summary(patch: Partial<ExtensionSummary>): ExtensionSummary {
     state: 'installed',
     singleInstance: false,
     hasIcon: false,
+    devices: [],
     ...patch,
   }
 }
@@ -64,6 +66,41 @@ test('every installed and enabled extension is an app with its own name and icon
   assert.deepEqual(allApps(apps).slice(0, WM_APPS.length), [...WM_APPS])
   assert.equal(extensionIdOf('extension.abc'), 'abc')
   assert.equal(extensionIdOf('system.chat'), null)
+})
+
+test('an extension that cannot open here is a disabled entry with the reason', () => {
+  const apps = extensionApps(
+    [
+      summary({ id: 'new' }),
+      summary({ id: 'ok', statusHere: 'ready' }),
+      summary({ id: 'moving', statusHere: 'transferring' }),
+      summary({ id: 'broken', statusHere: 'signature_failed' }),
+      summary({ id: 'stuck', statusHere: 'migration_failed' }),
+    ],
+    {},
+  )
+  assert.deepEqual(
+    apps.map((a) => a.unavailableKey ?? null),
+    [
+      null,
+      null,
+      'extensions.status.transferring',
+      'extensions.status.signature_failed',
+      'extensions.status.migration_failed',
+    ],
+  )
+})
+
+test('the error of a state names the broken rule or what went wrong', () => {
+  assert.equal(
+    statusErrorKey('signature_failed', 'file_mismatch'),
+    'extensions.install.errors.file_mismatch',
+  )
+  assert.equal(
+    statusErrorKey('migration_failed', 'migration_missing'),
+    'extensions.statusError.migration_missing',
+  )
+  assert.equal(statusErrorKey('ready', undefined), null)
 })
 
 function savedSessionWith(app: AppDefinition) {

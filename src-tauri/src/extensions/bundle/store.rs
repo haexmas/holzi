@@ -147,6 +147,14 @@ pub fn write_registry_rows(
             )?;
         }
     }
+    // A file that refers to a BLOB again keeps it from being collected (a reinstall, R11).
+    for file in &bundle.files {
+        tx.execute(
+            "UPDATE extension_blobs SET orphaned_at = NULL \
+             WHERE hash = ?1 AND orphaned_at IS NOT NULL",
+            params![file.sha256],
+        )?;
+    }
 
     for (position, migration) in bundle.migrations.iter().enumerate() {
         let sql_sha256 = crate::extensions::sql::migrate::sql_sha256(&migration.sql);

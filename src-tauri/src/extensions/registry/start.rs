@@ -11,7 +11,7 @@ use crate::extensions::bundle::store::{verify_stored_bundle, StoredBundleState};
 use crate::extensions::bundle::Manifest;
 use crate::extensions::ids::TablePrefix;
 use crate::extensions::protocol::{csp, prefix};
-use crate::extensions::sql::migrate::{apply_pending, MigrationError};
+use crate::extensions::sql::migrate::{apply_pending, check_applied_kept, MigrationError};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -57,6 +57,7 @@ fn migration_error_kind(error: &MigrationError) -> &'static str {
         MigrationError::Changed { .. } => "migration_changed",
         MigrationError::Refused { .. } => "migration_refused",
         MigrationError::Failed { .. } => "migration_failed",
+        MigrationError::Missing { .. } => "migration_missing",
         MigrationError::Unavailable => "database_unavailable",
     }
 }
@@ -95,7 +96,15 @@ pub fn start(db: &VaultDb, extension_id: Uuid, device: Uuid, now_ms: i64) -> Res
                 public_key: manifest.public_key.clone(),
                 name: manifest.name.clone(),
             };
-            match apply_pending(db, extension_id, &own, now_ms) {
+            let offered: Vec<(String, String)> = bundle
+                .migrations
+                .iter()
+                .map(|m| (m.name.clone(), m.sql.clone()))
+                .collect();
+            let kept = db
+                .read_blocking(move |q| Ok(check_applied_kept(q, extension_id, &offered)))
+                .unwrap_or(Err(MigrationError::Unavailable));
+            match kept.and_then(|()| apply_pending(db, extension_id, &own, now_ms)) {
                 Ok(_) => {
                     let started = Started {
                         bundle_id,

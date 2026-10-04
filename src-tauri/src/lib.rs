@@ -54,7 +54,7 @@ use extensions::commands::frames::{
     extension_host_context_set,
 };
 use extensions::commands::install::{extension_install, extension_install_preview};
-use extensions::commands::manage::{extension_icon, extension_list};
+use extensions::commands::manage::{extension_icon, extension_list, extension_remove};
 use extensions::commands::permissions::{
     extension_permission_cancel, extension_permission_remove, extension_permission_resolve,
     extension_permission_set, extension_permissions_list,
@@ -346,6 +346,7 @@ pub fn run() {
             extension_install_preview,
             extension_install,
             extension_list,
+            extension_remove,
             extension_icon,
             extension_frame_open,
             extension_frame_close,
