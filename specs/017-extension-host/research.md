@@ -583,6 +583,17 @@ Schleife kann auch für das Weiterleitungsziel fragen.
 6. Beobachten über `notify` + `notify-debouncer-full` (neu), Schlüssel (Erweiterung, `ruleId`), Meldungen
    (`filesync:file-changed`, flache Form wie im SDK, jeder Pfad eines Bündels) nur an Rahmen der Erweiterung.
 
+**Umsetzung (L4)**: `extensions/fs/` mit `resolve`, der Prüfung `authorize` (Sperrliste, Dialog-Auswahl des
+Rahmens, dann Berechtigung mit Rückfrage 1004), `ops`, `dialogs` und `watch`. Gesperrt sind alle App-Ordner aus
+Tauris Pfadauflöser (Konfiguration, Daten, lokale Daten mit den Vaults, Cache, Log), aufgelöst. Ein Aufruf, der
+einen ganzen Baum erfasst (rekursives Entfernen, Umbenennen, Kopieren, Beobachten), ist auch gesperrt, wenn der
+Baum einen dieser Orte enthält. Kopieren lässt symbolische Links innerhalb des Baums aus, weil ihr Ziel nie
+geprüft wurde. Die Dialoge laufen über das Merkmal `FileDialogs` im Host (Tauri-Plugins im Programm, ein Fake in
+den Tests), damit die Bridge keinen `AppHandle` braucht. `open_file` und `show_image` legen die Kopie in einen
+Ordner im Cache von holzi, der selbst gesperrt ist; `show_image` nimmt nur PNG, JPEG, GIF, WebP und BMP.
+Beobachtungen enden mit dem letzten Rahmen ihrer Erweiterung. `filesync:file-changed` trägt den Pfad relativ zum
+beobachteten Ordner; holzis Fenster legt die Felder flacher Ereignisse neben `type`.
+
 **Begründung**: FR-047/FR-049 verlangen das tatsächliche Ziel; HV prüft rein lexikalisch (Symlinks
 entkommen), Dialog-Auswahlen erzeugen dort keine Berechtigung, `unwatch` prüft den Besitzer nicht.
 
