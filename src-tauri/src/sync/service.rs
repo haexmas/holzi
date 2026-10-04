@@ -301,12 +301,19 @@ impl Drop for ClearOnDrop {
 /// publishes a list whose new device already confirmed, a new installation
 /// drops its record once the list names it. Best-effort, and idempotent.
 async fn finish_pending_links(replica: &Arc<Replica>, keys: &DeviceKeys, vault: [u8; 32]) {
+    // Counted with the vault's close like the follow-ups in `applied_event_sink`: an aborted
+    // drain drops this future, but not the blocking thread, which goes on writing. Skipped once
+    // the close has started.
+    let Ok(held) = replica.hold() else {
+        return;
+    };
     let (replica, keys) = (Arc::clone(replica), keys.clone());
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
         .unwrap_or(0);
     let result = tokio::task::spawn_blocking(move || {
+        let _held = held;
         crate::sync::link::host::finish_pending(&replica, &keys, vault, now)?;
         crate::sync::link::join::finish_pending(&replica, now)?;
         crate::sync::admission::sweep_now(&replica, u64::try_from(now).unwrap_or(0))?;
