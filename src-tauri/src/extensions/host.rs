@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use uuid::Uuid;
 
@@ -28,6 +28,13 @@ impl Default for HostContext {
     }
 }
 
+/// What holzi does outside its window for extensions (US8): the app sets it once at start; tests
+/// set a recording one. Without it these functions are not available (8001).
+pub trait Desktop: Send + Sync {
+    /// Opens an address in the system's browser.
+    fn open_url(&self, url: &str) -> Result<(), String>;
+}
+
 #[derive(Default)]
 pub struct ExtensionHost {
     pub frames: FrameRegistry,
@@ -42,6 +49,7 @@ pub struct ExtensionHost {
     dialogs: Mutex<HashMap<String, (String, Sender<bool>)>>,
     /// Running SQL calls per extension (limit `max_concurrent`).
     running_sql: Arc<Mutex<HashMap<Uuid, u64>>>,
+    desktop: OnceLock<Arc<dyn Desktop>>,
 }
 
 /// A running SQL call; dropping it frees its place.
@@ -60,6 +68,15 @@ impl Drop for SqlSlot {
 }
 
 impl ExtensionHost {
+    /// Sets what holzi does on the desktop; only the first call counts.
+    pub fn set_desktop(&self, desktop: Arc<dyn Desktop>) {
+        let _ = self.desktop.set(desktop);
+    }
+
+    pub fn desktop(&self) -> Option<Arc<dyn Desktop>> {
+        self.desktop.get().cloned()
+    }
+
     fn started_map(&self) -> MutexGuard<'_, HashMap<Uuid, Arc<Started>>> {
         self.started.lock().unwrap_or_else(PoisonError::into_inner)
     }

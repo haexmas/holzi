@@ -220,6 +220,12 @@ pub fn run() {
                 }
             })?;
             app.manage(presence);
+            // Spec 017 US8: what holzi does outside its window for extensions (browser, notifications).
+            app.state::<AppState>()
+                .extensions()
+                .set_desktop(std::sync::Arc::new(extensions::desktop::AppDesktop::new(
+                    app.handle().clone(),
+                )));
             // Spec 032: actions of a model's tool call go out as events; `ChatState` is managed
             // without an `AppHandle`, so the emitter is set here.
             let handle = app.handle().clone();
