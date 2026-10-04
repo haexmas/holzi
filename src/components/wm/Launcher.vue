@@ -7,7 +7,8 @@
  * the affected window is elsewhere. Compact mode (T050) drops to two
  * columns so each tile stays a comfortable touch target on a narrow
  * screen, instead of three cramped ones. Spec 015-workspace-shell, T023,
- * T041, T050. Installed extensions are apps too (spec 017). The last tile locks the vault (`useVaultLock`) — the one place
+ * T041, T050. Installed extensions are apps too (spec 017); one that cannot open on this
+ * device is a disabled tile with the reason (T080). The last tile locks the vault (`useVaultLock`) — the one place
  * to lock now that the chat has no lock button.
  */
 const open = defineModel<boolean>('open', { default: false })
@@ -39,9 +40,10 @@ function launch(appId: string) {
           v-for="app in wm.apps()"
           :key="app.id"
           type="button"
-          class="relative flex flex-col items-center gap-2 rounded-lg p-3 text-sm text-foreground hover:bg-accent"
+          class="relative flex flex-col items-center gap-2 rounded-lg p-3 text-sm text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
           :data-testid="app.id === 'system.chat' ? 'open-chat' : undefined"
           :data-app-id="app.id"
+          :disabled="app.unavailableKey !== undefined"
           @click="launch(app.id)"
         >
           <span
@@ -57,6 +59,12 @@ function launch(appId: string) {
           />
           <Icon v-else :name="app.icon" class="h-6 w-6" :aria-hidden="true" />
           <span class="truncate">{{ app.title ?? t(app.titleKey) }}</span>
+          <span
+            v-if="app.unavailableKey"
+            class="truncate text-xs text-muted-foreground"
+          >
+            {{ t(app.unavailableKey) }}
+          </span>
         </button>
         <button
           type="button"

@@ -694,7 +694,35 @@
       "notDeclared": "nicht im Manifest",
       "unreadable": "unbekannt, gilt als nicht vorhanden",
       "remove": "Entfernen",
-      "revoke": "Widerrufen"
+      "revoke": "Widerrufen",
+      "devices": "Auf deinen Geräten",
+      "unnamedDevice": "Gerät ohne Namen",
+      "manage": "Verwalten",
+      "enabled": "Aktiviert",
+      "enabledHint": "Gilt auf allen deinen Geräten. Deaktiviert schließen sich ihre Tabs, die Daten bleiben.",
+      "update": "Neue Fassung installieren",
+      "updateHint": "Aus einer Datei; nur neue Berechtigungen werden abgefragt",
+      "removeTitle": "Aus der Vault entfernen",
+      "removeHint": "Auf allen deinen Geräten",
+      "removeConfirmTitle": "„{name}“ entfernen?",
+      "removeConfirmBody": "Die Erweiterung verschwindet auf allen deinen Geräten. Behältst du ihre Daten, findet eine spätere Installation sie wieder; du kannst sie auch danach noch löschen.",
+      "cancel": "Abbrechen",
+      "keepData": "Daten behalten",
+      "deleteData": "Daten löschen",
+      "keptData": "Behaltene Daten",
+      "keptDataSize": "Größe auf diesem Gerät",
+      "keptDataSizeUnknown": "Größe unbekannt",
+      "purgeConfirmTitle": "Daten von „{name}“ löschen?",
+      "purgeConfirmBody": "Die Daten werden auf allen deinen Geräten gelöscht. Das lässt sich nicht rückgängig machen.",
+      "limits": {
+        "title": "Grenzwerte",
+        "maxRows": "Zeilen je Abfrage",
+        "maxConcurrent": "Gleichzeitige Anfragen",
+        "maxSqlBytes": "Größe einer Anweisung (Bytes)",
+        "timeoutMs": "Laufzeit einer Anfrage (Millisekunden)",
+        "maxResponseBytes": "Größe einer Antwort (Bytes)",
+        "range": "{min} bis {max}"
+      }
     }
   },
   "models": {
@@ -1497,6 +1525,13 @@
       "allDevicesNote": "Die Berechtigung gilt dann auch auf deinen anderen Geräten, sobald sie die Vault synchronisiert haben.",
       "allow": "Erlauben",
       "deny": "Verweigern"
+    },
+    "statusError": {
+      "migration_changed": "Eine angewendete Migration wurde geändert",
+      "migration_refused": "Eine Migration verstößt gegen die Regeln",
+      "migration_failed": "Eine Migration ist fehlgeschlagen",
+      "migration_missing": "Eine angewendete Migration fehlt in dieser Fassung",
+      "database_unavailable": "Die Datenbank war nicht erreichbar"
     }
   }
 }

@@ -6,7 +6,9 @@
 //!
 //! - a table this device does not sync aborts the pull without progress (a
 //!   schema mismatch the handshake should have caught, or a device-local
-//!   table another device must never send);
+//!   table another device must never send), unless it is an extension's
+//!   table this device has not created yet: then the group is parked
+//!   ([`park`], spec 017 research R10);
 //! - a group larger than `max_transaction_bytes` by haex-crdt's own rule
 //!   aborts the pull;
 //! - a group whose origin a known valid device list names as removed, with
@@ -32,12 +34,16 @@ use crate::sync::change::{group_bytes, join_parts, Change, ChangeError, Page};
 use crate::sync::device_list;
 use crate::sync::keys;
 use crate::sync::progress::{self, Vector};
-use crate::sync::replica::{synced_tables, Replica};
+use crate::sync::replica::Replica;
 use crate::sync::resync::RowKey;
 
 #[path = "inbound_hold.rs"]
 mod hold;
 use hold::{settle, steps, Group, Settled};
+
+#[path = "inbound_park.rs"]
+pub mod park;
+use park::{Context, Sorted};
 
 /// haex-crdt's delete log, a synced table like any other.
 const DELETED_ROWS_TABLE: &str = "haex_deleted_rows";
@@ -65,6 +71,8 @@ const BUFFER_SLACK: usize = 1024 * 1024;
 pub enum InboundError {
     #[error("the pull names table {0}, which this device does not sync")]
     UnknownTable(String),
+    #[error("the pull carries {0}, a device-local table of an extension")]
+    DeviceLocalTable(String),
     #[error("a transaction group of {bytes} bytes exceeds the limit of {limit} bytes")]
     GroupTooLarge { bytes: usize, limit: usize },
     #[error("malformed page: {0}")]
@@ -86,6 +94,10 @@ pub struct Received {
     pub tables: BTreeSet<String>,
     /// Groups rejected under research R5.
     pub rejected_groups: usize,
+    /// Groups parked for extension tables this device lacks (spec 017, R10).
+    pub parked_groups: usize,
+    /// Received cells haex-crdt skipped for a column the table lacks; parking keeps this at 0.
+    pub skipped_unknown_columns: usize,
     /// This was the last page of the pull.
     pub done: bool,
 }
@@ -105,6 +117,14 @@ pub struct Inbox {
     finished: bool,
     /// Set for the pull of a resync snapshot: what it carried.
     snapshot: Option<Snapshot>,
+    /// Extensions at their parking limit in this pull, and per origin the
+    /// lowest group not parked because of it: progress stays below it.
+    full_prefixes: HashSet<String>,
+    blocked: Vector,
+    /// Parking limit per extension; `None` is [`park::PARKED_LIMIT_BYTES`].
+    park_limit: Option<usize>,
+    /// Removals applied in earlier pages; a held group may not be written yet.
+    noted: Vec<park::Noted>,
 }
 
 /// What a snapshot pull carried, for pruning what it did not
@@ -126,6 +146,15 @@ impl Inbox {
     pub fn for_snapshot() -> Self {
         Self {
             snapshot: Some(Snapshot::default()),
+            ..Self::default()
+        }
+    }
+
+    /// An inbox with a parking limit of `bytes` per extension.
+    #[cfg(test)]
+    pub fn with_park_limit(bytes: usize) -> Self {
+        Self {
+            park_limit: Some(bytes),
             ..Self::default()
         }
     }
@@ -176,8 +205,10 @@ impl Inbox {
         }
 
         let groups = groups(join_parts(changes)?)?;
-        let tables: HashSet<String> = query::read(db, |r| synced_tables(r))?.into_iter().collect();
+        let mut context = query::read(db, |r| Context::read(r))?;
+        context.extend_noted(&self.noted);
         let limits = query::read(db, |r| removal_limits(r))?;
+        let park_limit = self.park_limit.unwrap_or(park::PARKED_LIMIT_BYTES);
 
         let mut received = Received {
             done: !page.more,
@@ -185,6 +216,7 @@ impl Inbox {
         };
         let mut arrived: Vec<Group> = Vec::new();
         let mut rejected: Vec<(Uuid, String)> = Vec::new();
+        let mut parked: Vec<(String, park::Parked, usize)> = Vec::new();
         let mut group_updates = Vector::new();
         for (hlc, group) in groups {
             let origin = progress::origin_of(&hlc)
@@ -200,28 +232,68 @@ impl Inbox {
             }
             let columns = group
                 .iter()
-                .map(|change| {
-                    if !tables.contains(&change.table) {
-                        return Err(InboundError::UnknownTable(change.table.clone()));
-                    }
-                    Ok(change.to_column()?)
-                })
+                .map(Change::to_column)
                 .collect::<Result<Vec<_>, _>>()?;
             let bytes = group_bytes(&columns)?;
             if bytes > limit {
                 return Err(InboundError::GroupTooLarge { bytes, limit });
             }
+            let sorted = park::sort(&context, &hlc, columns, |prefix| {
+                context.has_parked(prefix) || self.full_prefixes.contains(prefix)
+            })?;
             progress::raise(&mut group_updates, origin, hlc.clone());
             if is_removed_at(&limits, origin, &hlc) {
                 received.rejected_groups += 1;
                 rejected.push((origin, hlc));
                 continue;
             }
-            arrived.push(Group {
-                origin,
-                hlc,
-                columns,
-            });
+            let group = match sorted {
+                Sorted::Apply(columns) => {
+                    self.noted.extend(context.note(&columns));
+                    arrived.push(Group {
+                        origin,
+                        hlc,
+                        columns,
+                    });
+                    continue;
+                }
+                Sorted::Park(group) => group,
+            };
+            if let Some(snapshot) = &mut self.snapshot {
+                snapshot.rows.extend(
+                    group
+                        .columns
+                        .iter()
+                        .map(|c| (c.table_name.clone(), c.row_pks.clone())),
+                );
+            }
+            let full = self.full_prefixes.contains(&group.prefix)
+                || context.parked_bytes(&group.prefix).saturating_add(bytes) > park_limit;
+            if full {
+                if self.full_prefixes.insert(group.prefix.clone()) {
+                    log::warn!(
+                        "sync: parked groups of extension {} reached {park_limit} bytes; \
+                         its origin's progress waits until it is installed or removed",
+                        group.prefix
+                    );
+                }
+                if self
+                    .blocked
+                    .get(&origin)
+                    .is_none_or(|lowest| compare_hlc_strings(&hlc, lowest) == Ordering::Less)
+                {
+                    self.blocked.insert(origin, hlc);
+                }
+                continue;
+            }
+            log::info!(
+                "sync: parked a group for extension {} ({})",
+                group.prefix,
+                group.reason
+            );
+            context.add_parked(&group.prefix, &hlc, bytes);
+            received.parked_groups += 1;
+            parked.push((hlc, group, bytes));
         }
         let mut candidates = std::mem::take(&mut self.held);
         candidates.extend(arrived);
@@ -241,9 +313,9 @@ impl Inbox {
                 .iter()
                 .flat_map(|g| g.columns.iter().filter_map(changed_table)),
         );
-        // Progress rises only below every group still held: those come
-        // again in a pull that starts from it.
-        let mut lowest_held: HashMap<Uuid, String> = HashMap::new();
+        // Progress rises only below every group still held or not parked at
+        // the limit: those come again in a pull that starts from it.
+        let mut lowest_held: HashMap<Uuid, String> = self.blocked.clone().into_iter().collect();
         for group in &held {
             let lowest = lowest_held
                 .entry(group.origin)
@@ -253,8 +325,12 @@ impl Inbox {
             }
         }
         let mut updates = Vector::new();
+        let parked_at = parked
+            .iter()
+            .filter_map(|(hlc, _, _)| Some((progress::origin_of(hlc)?, hlc.clone())));
         for (origin, hlc) in rejected
             .into_iter()
+            .chain(parked_at)
             .chain(apply.iter().map(|g| (g.origin, g.hlc.clone())))
         {
             if lowest_held
@@ -273,10 +349,16 @@ impl Inbox {
             }));
         }
         if !page.more {
+            // An origin with a group not parked at the limit is not served
+            // completely: its progress stays below that group.
+            let served = page
+                .served
+                .into_iter()
+                .filter(|(origin, _)| !self.blocked.contains_key(origin));
             if let Some(snapshot) = &mut self.snapshot {
-                snapshot.served = page.served;
+                snapshot.served = served.collect();
             } else {
-                for (origin, hlc) in page.served {
+                for (origin, hlc) in served {
                     progress::raise(&mut updates, origin, hlc);
                 }
             }
@@ -292,6 +374,7 @@ impl Inbox {
                 .flat_map(|g| g.columns.iter().cloned())
                 .collect();
             let outcome = db.apply_remote_changes(accepted)?;
+            received.skipped_unknown_columns += report_unknown_columns(&outcome);
             if !outcome.skipped.is_empty() {
                 log::debug!(
                     "sync: {} received cells kept the local value",
@@ -305,14 +388,38 @@ impl Inbox {
                 }
             });
         }
-        if !updates.is_empty() {
-            db.write(|tx| progress::advance(tx, &updates))?;
+        // Parked groups count as received: stored in the write that moves
+        // progress past them.
+        if !updates.is_empty() || !parked.is_empty() {
+            let now_ms = crate::passwords::clock::unix_millis(std::time::SystemTime::now());
+            db.write(|tx| {
+                park::store(tx, &parked, now_ms)?;
+                progress::advance(tx, &updates)
+            })?;
+        }
+        // An extension that became ready while this pull ran gets what it
+        // parked; also catches a group parked behind one replayed meanwhile.
+        if !page.more && context.has_any_parked() {
+            match park::replay_ready(db) {
+                Ok(replayed) => received.tables.extend(replayed.tables),
+                Err(error) => log::warn!("sync: replaying parked groups failed: {error}"),
+            }
         }
         for (origin, hlc) in group_updates {
             progress::raise(&mut self.last_received, origin, hlc);
         }
         Ok(received)
     }
+}
+
+/// Logs and counts received cells haex-crdt skipped for a column the table
+/// lacks. Parking catches those before; any left means a check missed one.
+fn report_unknown_columns(outcome: &haex_crdt::ApplyOutcome) -> usize {
+    let skipped = outcome.report.skipped_unknown_column;
+    if skipped > 0 {
+        log::error!("sync: {skipped} received cells named a column this device lacks");
+    }
+    skipped
 }
 
 /// The table a change touches as the views see it: for a delete marker the

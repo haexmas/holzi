@@ -1,6 +1,7 @@
 // Installed extensions as apps of the window manager (spec 017, US1, T043). Pure: the extensions
 // store feeds it, `scripts/check-extensions-apps.ts` tests it.
 import { WM_APPS, type AppDefinition } from '../wm/apps.ts'
+import type { WmWindow } from '../wm/types.ts'
 import type { ExtensionSummary } from '../../types/bindings/ExtensionSummary.ts'
 
 const PREFIX = 'extension.'
@@ -13,6 +14,30 @@ export function extensionAppId(extensionId: string): string {
 /** The extension an app id names, or `null` for a holzi app. */
 export function extensionIdOf(appId: string): string | null {
   return appId.startsWith(PREFIX) ? appId.slice(PREFIX.length) : null
+}
+
+/** States on this device in which an extension cannot open (data-model.md §Zustände). */
+const UNAVAILABLE = new Set([
+  'transferring',
+  'signature_failed',
+  'migration_failed',
+])
+
+/** The i18n key of a device state. */
+export function statusKey(status: string): string {
+  return `extensions.status.${status}`
+}
+
+/** The i18n key of the error kind of a device state, or `null` without one: a broken signature
+ * names the rule the bundle broke, a failed migration what went wrong. */
+export function statusErrorKey(
+  status: string,
+  error: string | null | undefined,
+): string | null {
+  if (!error) return null
+  return status === 'signature_failed'
+    ? `extensions.install.errors.${error}`
+    : `extensions.statusError.${error}`
 }
 
 /** One app per installed and enabled extension, with its own name and icon. */
@@ -32,7 +57,31 @@ export function extensionApps(
       minSize: { width: 360, height: 320 },
       multiInstance: !e.singleInstance,
       tabTitle: 'app' as const,
+      ...(e.statusHere && UNAVAILABLE.has(e.statusHere)
+        ? { unavailableKey: statusKey(e.statusHere) }
+        : {}),
     }))
+}
+
+/** The tabs of extensions that no longer run in this vault, disabled or removed on any own device
+ * (FR-007, FR-039): they close. A tab of an extension that is only not ready here stays. */
+export function tabsOfStoppedExtensions(
+  windows: readonly WmWindow[],
+  extensions: readonly ExtensionSummary[],
+): { windowId: string; tabId: string }[] {
+  const running = new Set(
+    extensions
+      .filter((e) => e.state === 'installed' && e.enabled)
+      .map((e) => e.id),
+  )
+  return windows.flatMap((window) =>
+    window.tabs
+      .filter((tab) => {
+        const id = extensionIdOf(tab.appId)
+        return id !== null && !running.has(id)
+      })
+      .map((tab) => ({ windowId: window.id, tabId: tab.id })),
+  )
 }
 
 /** holzi's own apps followed by the extension apps. */

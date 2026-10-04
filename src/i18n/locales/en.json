@@ -694,7 +694,35 @@
       "notDeclared": "not in the manifest",
       "unreadable": "unknown, counts as absent",
       "remove": "Remove",
-      "revoke": "Revoke"
+      "revoke": "Revoke",
+      "devices": "On your devices",
+      "unnamedDevice": "Unnamed device",
+      "manage": "Manage",
+      "enabled": "Enabled",
+      "enabledHint": "Applies on all your devices. When disabled its tabs close; the data stays.",
+      "update": "Install a new version",
+      "updateHint": "From a file; only new permissions are asked for",
+      "removeTitle": "Remove from the vault",
+      "removeHint": "On all your devices",
+      "removeConfirmTitle": "Remove “{name}”?",
+      "removeConfirmBody": "The extension disappears on all your devices. If you keep its data, a later install finds it again; you can still delete it afterwards.",
+      "cancel": "Cancel",
+      "keepData": "Keep data",
+      "deleteData": "Delete data",
+      "keptData": "Kept data",
+      "keptDataSize": "Size on this device",
+      "keptDataSizeUnknown": "Size unknown",
+      "purgeConfirmTitle": "Delete the data of “{name}”?",
+      "purgeConfirmBody": "The data is deleted on all your devices. This cannot be undone.",
+      "limits": {
+        "title": "Limits",
+        "maxRows": "Rows per query",
+        "maxConcurrent": "Requests at the same time",
+        "maxSqlBytes": "Size of a statement (bytes)",
+        "timeoutMs": "Run time of a request (milliseconds)",
+        "maxResponseBytes": "Size of an answer (bytes)",
+        "range": "{min} to {max}"
+      }
     }
   },
   "models": {
@@ -1497,6 +1525,13 @@
       "allDevicesNote": "The permission then also holds on your other devices once they have synchronised the vault.",
       "allow": "Allow",
       "deny": "Deny"
+    },
+    "statusError": {
+      "migration_changed": "An applied migration was changed",
+      "migration_refused": "A migration breaks the rules",
+      "migration_failed": "A migration failed",
+      "migration_missing": "This version lacks an applied migration",
+      "database_unavailable": "The database was not available"
     }
   }
 }

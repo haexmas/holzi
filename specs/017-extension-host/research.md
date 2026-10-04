@@ -326,8 +326,18 @@ Austauschs).
   `purge_data` und `purge_hlc` stehen.
 - **Empfang** (Ergänzung zu R10): Änderungen und Löschmarken an Tabellen einer mit `purge_data` entfernten
   Erweiterung mit HLC vor `purge_hlc` werden verworfen; bei „Daten behalten“ werden sie übernommen.
+  Neuere Gruppen werden geparkt (`awaiting_purge`), solange dieses Gerät für diesen `purge_hlc` noch nicht
+  aufgeräumt hat, auch wenn die Entfernung erst weiter vorn im selben Pull ankam; das Aufräumen verwirft
+  nur geparkte Gruppen bis `purge_hlc`. Sonst würde ein Gerät, das während Entfernen und Neuinstallation
+  offline war, die Zeilen der Neuinstallation mit den alten Tabellen löschen.
 - **Neuinstallation** nach dem Entfernen nutzt dieselbe abgeleitete Kennung; neuere HLCs gewinnen über das
   Lösch-Log.
+- **Behaltene Daten**: Bei „Daten behalten“ bleiben die Zeilen in `extension_migrations`. Jedes Gerät wendet die
+  Migrationen einer Erweiterung, die bei ihm nicht läuft (deaktiviert oder mit behaltenen Daten entfernt), trotzdem
+  an, auch ein später hinzugekommenes; so haben ihre synchronisierten Zeilen einen Platz und bleiben nicht geparkt.
+  „Behaltene Daten löschen“ setzt `purge_data` und einen neuen `purge_hlc` und löscht die Migrationen; das Aufräumen
+  läuft dann wie beim Entfernen mit „Daten löschen“. Die Liste zeigt eine entfernte Erweiterung nur, solange ihre
+  Daten behalten werden, mit der Größe ihrer Tabellen auf diesem Gerät (`dbstat`).
 - Gerätezustand („bereit“, „wird übertragen“, „Migration fehlgeschlagen“ mit Fehler) als synchronisierte,
   gerätebezogene Zeile für die Anzeige in den Einstellungen.
 
@@ -386,6 +396,9 @@ Skripte (schwächer); CSP als `<meta>` (kann `frame-ancestors` nicht).
   ohne `allow-modals` gibt `confirm()` sofort `false` zurück, Löschen wäre unmöglich. **Entscheidung
   (Betreiber, 2026-10-03)**: kein `allow-modals`; das SDK bekommt `client.dialog.confirm`, holzi zeigt den
   Dialog über dem eigenen Tab (Brückenmethode `extension_dialog_confirm`), die Apps stellen um (T117–T119).
+  Der Dialog nimmt beim Öffnen die Tastatur (der Bestätigen-Knopf bekommt den Fokus), der Rahmen ist
+  solange `inert` und bekommt die Tastatur nach der Antwort zurück, wie nach `confirm()`; sonst bliebe sie im
+  Rahmen, Escape bräche nicht ab und Enter auf dem Knopf der Erweiterung fragte erneut (7000).
 - ics-Export in haex-calendar über `a.download` (`app/composables/useIcal.ts:400`): ohne `allow-downloads`
   passiert nichts. **Entscheidung**: kein `allow-downloads`; der Export läuft künftig über den
   Speichern-Dialog von holzi (L4, `extension_filesystem_*` mit Dialog-Auswahl), bis dahin geht er nicht.
@@ -636,7 +649,8 @@ Eingetragen als „(Planung)“ in den Clarifications der Spec:
 - Frontend: `pnpm check:extensions` (Brücke, Warteschlange, App-Liste, Shim-Abbildung) nach dem Muster der
   vorhandenen Prüfskripte; `typecheck`, `lint`, `format:check`.
 - End-to-End (Rahmen aus Spec 016/033): `extension-install-open`, `extension-permission-prompt`,
-  `extension-isolation` (Rahmen kommt nicht an holzi, andere Rahmen, Netz), `extension-two-devices`.
+  `extension-isolation` (Rahmen kommt nicht an holzi, andere Rahmen, Netz), `extension-two-devices`,
+  `extension-dialog` (Bestätigung nimmt die Tastatur, Escape und Enter antworten).
 - Lokal nur gezielte Testbinärdateien mit `-j 4` (Erfahrung aus früheren Sitzungen); CI deckt den Rest.
 
 ## R24 — ADR

@@ -13,9 +13,15 @@ title: string, description?: string,
  */
 version?: string, publisherFingerprint: string, enabled: boolean,
 /**
- * `installed` or `removed` (data kept, L3).
+ * `installed`, or `removed` with its data kept (FR-008); one removed with its data is not
+ * listed.
  */
 state: string,
+/**
+ * For `removed`: the bytes its kept tables take on this device, indexes included; `None` when
+ * SQLite cannot tell.
+ */
+keptDataBytes?: number,
 /**
  * The app opens at most once (manifest `singleInstance`).
  */
@@ -23,4 +29,29 @@ singleInstance: boolean, hasIcon: boolean,
 /**
  * State on this device (`transferring`, `ready`, …); `None` before its first start here.
  */
-statusHere?: string, };
+statusHere?: string,
+/**
+ * The error kind of that state.
+ */
+statusErrorHere?: string,
+/**
+ * The state on every own device that started it, this device first. Inline, so the binding
+ * imports nothing (the check scripts load it with Node's own module rules).
+ */
+devices: Array<{
+/**
+ * The device's `vault_device_uuid`.
+ */
+deviceId: string,
+/**
+ * The device's name; empty when it has none.
+ */
+deviceName: string, thisDevice: boolean,
+/**
+ * `transferring`, `ready`, `signature_failed`, `migration_failed` or `disabled`.
+ */
+status: string,
+/**
+ * The error kind (`migration_changed`, …), never data of the extension.
+ */
+error?: string, }>, };

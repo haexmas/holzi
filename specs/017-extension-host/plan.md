@@ -82,7 +82,8 @@ Erweiterungen entstehen zur Laufzeit über deren Migrationen. Details in [data-m
 `extension_bridge_contract`, `sync_extension_parking`, `extension_lifecycle_sync`, `extension_web`,
 `extension_fs`); Frontend — neues `pnpm check:extensions`, Regression `check:wm-navigation`, `check:wm-state`,
 `check:settings`, `check:templates`, `typecheck`, `lint`, `format:check`; End-to-End
-`extension-install-open`, `extension-permission-prompt`, `extension-isolation`, `extension-two-devices`;
+`extension-install-open`, `extension-permission-prompt`, `extension-isolation`, `extension-two-devices`,
+`extension-dialog`;
 manuell nach [quickstart.md](./quickstart.md)
 
 **Target Platform**: Linux, macOS, Windows, Android, iOS (FR-066). Die mobilen Builds von holzi (Projekt,

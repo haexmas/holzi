@@ -1,5 +1,5 @@
 import { scenario } from '../lib/scenario.ts'
-import { connectProvider } from '../lib/flows.ts'
+import { connectProvider, unwrap } from '../lib/flows.ts'
 import { waitForLocation } from '../lib/settings.ts'
 import { expectThreads } from '../lib/sync-flows.ts'
 import type { Device } from '../lib/group.ts'
@@ -54,6 +54,18 @@ scenario('sync-two-devices', { timeoutMs: 420_000 }, async (ctx) => {
     async () => (await sessionRestoreOn(laptop.page)) === !before,
     { timeoutMs: 40_000, fixed: true },
   )
+  if (!before) {
+    // Spec 023 FR-024: turned on on the phone, the laptop saves its own session from then on.
+    await ctx.waitFor(
+      'the laptop to save its session once the setting is on',
+      async () =>
+        unwrap<{ session: unknown }>(
+          'wm_session_load',
+          await laptop.page.invoke('wm_session_load'),
+        ).session != null,
+      { timeoutMs: 40_000, fixed: true },
+    )
+  }
   ctx.step('a setting changed on the other applies')
 
   await phone.stop()

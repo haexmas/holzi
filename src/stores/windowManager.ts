@@ -1,11 +1,11 @@
-import { computed, reactive, ref, toRefs } from 'vue'
+import { computed, reactive, ref, toRefs, watch } from 'vue'
 import { defineStore } from 'pinia'
 import {
   getAppDefinition,
   tabTitleFor,
   type AppDefinition,
 } from '~/lib/wm/apps'
-import { allApps } from '~/lib/extensions/apps'
+import { allApps, tabsOfStoppedExtensions } from '~/lib/extensions/apps'
 import { useExtensionsStore } from '~/stores/extensions'
 import {
   closeWindow as closeWindowReducer,
@@ -101,8 +101,8 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     onRestored: syncTabRuntime,
   })
 
-  /** Whether `restoreSessionAsync` has run. Until then a window opened is replaced by the restored
-   * session (or the empty start); tests wait for this before they open one. */
+  /** Whether `restoreSessionAsync` has run, and the apps opened before it are open again in the
+   * restored session; tests wait for this before they open one. */
   const sessionRestored = ref(false)
 
   async function restoreSessionAsync(): Promise<void> {
@@ -242,6 +242,8 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
    * and saves at once either way: reactivating a singleton is a deliberate click, not a continuous
    * gesture. */
   function openApp(appId: string, at: string | TabLocation | null = null) {
+    // The restore replaces the state: open it again there (a launcher click in the first moment).
+    session.noteOpened(() => openApp(appId, at))
     const { tabId } = openAppAt(
       state,
       navigation.histories,
@@ -288,6 +290,20 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     syncTabRuntime()
     session.saveNow()
   }
+
+  // Spec 017, FR-007/FR-039: the tabs of an extension disabled or removed on any own device close
+  // here too, without asking (its frame can no longer answer anyway).
+  watch(
+    () => extensions.list,
+    (list) => {
+      if (!extensions.loaded) return
+      for (const { windowId, tabId } of tabsOfStoppedExtensions(
+        state.windows,
+        list,
+      ))
+        closeTab(windowId, tabId)
+    },
+  )
 
   /** Restores and raises a window, debouncing its new stack position. */
   function focusWindow(windowId: string) {
@@ -416,6 +432,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     windowsInActiveWorkspace,
     restoreSessionAsync,
     sessionRestored,
+    refreshSessionRestoreAsync: session.refreshRestoreAsync,
     setSessionRestore,
     getSessionRestore: session.getRestoreAsync,
     runtimeFor,
