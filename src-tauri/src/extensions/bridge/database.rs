@@ -32,11 +32,6 @@ fn invalid(message: &str) -> BridgeError {
     BridgeError::new(ExtensionErrorCode::Validation, message)
 }
 
-/// The calling extension's table prefix, from its registry row.
-fn own_prefix(ctx: &CallContext) -> Result<TablePrefix, BridgeError> {
-    prefix_of(&ctx.db, ctx.session.extension_id)
-}
-
 /// An extension's table prefix, from its registry row.
 fn prefix_of(db: &VaultDb, extension_id: Uuid) -> Result<TablePrefix, BridgeError> {
     let id = extension_id.to_string();
