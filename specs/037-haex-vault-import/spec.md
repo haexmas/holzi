@@ -42,6 +42,10 @@ nicht Teil dieser Spec. Referenz: haex-vault @ `8dce379d94e18fcd42c3b73686a06f98
 - Q: Gilt das Wiederverwenden vorhandener Ordner nur für haex-vault? → A: Nein, für alle Quellen.
   Bisher legte ein wiederholter Import aus KeePass, Bitwarden oder LastPass die Ordner ein
   zweites Mal an (FR-017).
+- Q: (Umsetzung) Gilt „0 neue Einträge“ beim zweiten Import auch für den Papierkorb? → A: Nein.
+  034 zählt Einträge im Papierkorb bewusst nicht als vorhanden (wer einen Eintrag gelöscht hat,
+  soll ihn neu importieren können). Einträge aus dem Papierkorb der Quelle kommen deshalb bei
+  jedem Import erneut in den Papierkorb (SC-003, User Story 3).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -135,8 +139,8 @@ Import wurde unterbrochen. Er importiert dieselbe Datei erneut und bekommt nur, 
 sein, ist für den ersten Umstieg aber nicht nötig.
 
 **Independent Test**: Dieselbe Datei zweimal importieren; beim zweiten Mal mit „Doppelte
-überspringen“ entstehen keine neuen Einträge, nach einem in haex-vault ergänzten Eintrag
-genau einer.
+überspringen“ entstehen außerhalb des Papierkorbs keine neuen Einträge, nach einem in
+haex-vault ergänzten Eintrag genau einer.
 
 **Acceptance Scenarios**:
 
@@ -144,7 +148,9 @@ genau einer.
    **Then** zählt holzi die schon vorhandenen Einträge als Doppelte und bietet wie bei den
    anderen Quellen „überspringen“ (Vorgabe) oder „trotzdem anlegen“ an.
 2. **Given** „überspringen“, **When** der Nutzer importiert, **Then** entstehen nur Einträge, die
-   es noch nicht gibt, und Ordner und Tags werden nicht doppelt angelegt.
+   es noch nicht gibt, und Ordner und Tags werden nicht doppelt angelegt. Einträge im Papierkorb
+   zählen nach 034 nicht als vorhanden; Einträge aus dem Papierkorb der Quelle landen deshalb
+   erneut im Papierkorb.
 3. **Given** ein Passkey, dessen Credential-ID es in holzi schon gibt, **When** der Nutzer
    importiert, **Then** legt holzi ihn nicht doppelt an und nennt ihn im Bericht.
 
@@ -277,8 +283,8 @@ genau einer.
   jede Abweichung steht im Bericht (0 stille Verluste).
 - **SC-002**: Nach jedem Ablauf, auch nach falschem Passwort, Abbruch und Fehler, ist die
   Quelldatei samt Begleitdateien Byte für Byte unverändert.
-- **SC-003**: Ein zweiter Import derselben Datei mit „überspringen“ legt 0 neue Einträge,
-  Ordner, Tags und Passkeys an.
+- **SC-003**: Ein zweiter Import derselben Datei mit „überspringen“ legt außerhalb des Papierkorbs
+  0 neue Einträge und insgesamt 0 neue Ordner, Tags, Passkeys und Voreinstellungen an.
 - **SC-004**: Der Nutzer kommt von „Import öffnen“ bis zum fertigen Bericht in höchstens fünf
   Schritten (Quelle wählen, Datei wählen, Passwort eingeben, Vorschau bestätigen, Bericht).
 - **SC-005**: Eine Vault mit 1.000 Einträgen ist auf einem gewöhnlichen Laptop in unter einer

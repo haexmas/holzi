@@ -9,19 +9,19 @@ die Tauri-Grenze gehen.
 Tabellen von haex-vault @ `8dce379d94e1`, `src-tauri/database/migrations/0000_jazzy_chat.sql:414-552`.
 Die genaue Abbildung jeder Spalte steht in [contracts/haex-vault-mapping.md](contracts/haex-vault-mapping.md).
 
-| Tabelle | Rolle | Pflicht |
-|---|---|---|
-| `haex_passwords_item_details` | Einträge | ja (fehlt sie: `no_passwords`) |
-| `haex_passwords_item_key_values` | eigene Felder (`ORDER BY rowid`) | ja |
-| `haex_passwords_groups` | Ordner, `trash` als feste Zeile | ja |
-| `haex_passwords_group_items` | Eintrag → Ordner (höchstens einer) | ja |
-| `haex_passwords_binaries` | Anhänge und Bilder, Base64-Text | ja |
-| `haex_passwords_item_binaries` | Anhänge eines Eintrags | ja |
-| `haex_passwords_item_snapshots` | Verlauf (JSON) | ja |
-| `haex_passwords_snapshot_binaries` | Anhänge eines Verlaufsstands | ja |
-| `haex_passwords_tags`, `haex_passwords_item_tags` | Tags | ja |
-| `haex_passwords_passkeys` | Passkeys, `item_id` darf NULL sein | ja |
-| `haex_passwords_generator_presets` | Generator-Voreinstellungen | ja |
+| Tabelle                                           | Rolle                              | Pflicht                        |
+| ------------------------------------------------- | ---------------------------------- | ------------------------------ |
+| `haex_passwords_item_details`                     | Einträge                           | ja (fehlt sie: `no_passwords`) |
+| `haex_passwords_item_key_values`                  | eigene Felder (`ORDER BY rowid`)   | ja                             |
+| `haex_passwords_groups`                           | Ordner, `trash` als feste Zeile    | ja                             |
+| `haex_passwords_group_items`                      | Eintrag → Ordner (höchstens einer) | ja                             |
+| `haex_passwords_binaries`                         | Anhänge und Bilder, Base64-Text    | ja                             |
+| `haex_passwords_item_binaries`                    | Anhänge eines Eintrags             | ja                             |
+| `haex_passwords_item_snapshots`                   | Verlauf (JSON)                     | ja                             |
+| `haex_passwords_snapshot_binaries`                | Anhänge eines Verlaufsstands       | ja                             |
+| `haex_passwords_tags`, `haex_passwords_item_tags` | Tags                               | ja                             |
+| `haex_passwords_passkeys`                         | Passkeys, `item_id` darf NULL sein | ja                             |
+| `haex_passwords_generator_presets`                | Generator-Voreinstellungen         | ja                             |
 
 Bekannte Zusatzspalten jeder Tabelle (ignoriert): `haex_hlc`, `haex_column_hlcs`,
 `haex_column_sigs`.
@@ -50,15 +50,15 @@ einschließlich `public_key`, `icon`, `color`, `nickname`, `sign_count`, `last_u
 
 ## 3. Änderungen in `apply.rs`
 
-| Stelle | Neu |
-|---|---|
-| `write_item` | schreibt `color` und `autofill_aliases` (JSON-Text) statt NULL |
-| `write_groups` | schreibt `color`, `sort_order`; nimmt einen vorhandenen Ordner mit gleichem Namen unter demselben aufgelösten Elternordner, statt neu anzulegen (alle Quellen) |
-| neu nach den Einträgen | `tag_colors`: `tags::set_color`, nur wenn das Tag in holzi noch keine Farbe hat |
-| neu nach den Einträgen | `model.passkeys` über `passkeys::insert` mit `item_id = None`; `Duplicate` → `PasskeyDuplicate` |
-| neu am Ende | `model.presets` über `presets::save`; Name vorhanden → übersprungen; `is_default` nur, wenn holzi keine Standard-Voreinstellung hat |
-| `Ledger` | `+ passkeys: Vec<String>`, `+ presets: Vec<String>`; nur neu angelegte Ordner stehen in `groups` |
-| `rollback` | löscht zusätzlich die Passkeys und Voreinstellungen aus dem Ledger |
+| Stelle                 | Neu                                                                                                                                                            |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `write_item`           | schreibt `color` und `autofill_aliases` (JSON-Text) statt NULL                                                                                                 |
+| `write_groups`         | schreibt `color`, `sort_order`; nimmt einen vorhandenen Ordner mit gleichem Namen unter demselben aufgelösten Elternordner, statt neu anzulegen (alle Quellen) |
+| neu nach den Einträgen | `tag_colors`: `tags::set_color`, nur wenn das Tag in holzi noch keine Farbe hat                                                                                |
+| neu nach den Einträgen | `model.passkeys` über `passkeys::insert` mit `item_id = None`; `Duplicate` → `PasskeyDuplicate`                                                                |
+| neu am Ende            | `model.presets` über `presets::save`; Name vorhanden → übersprungen; `is_default` nur, wenn holzi keine Standard-Voreinstellung hat                            |
+| `Ledger`               | `+ passkeys: Vec<String>`, `+ presets: Vec<String>`; nur neu angelegte Ordner stehen in `groups`                                                               |
+| `rollback`             | löscht zusätzlich die Passkeys und Voreinstellungen aus dem Ledger                                                                                             |
 
 ## 4. Vorschau (`ImportPreview`, `model.rs:222`)
 
@@ -76,12 +76,12 @@ diese Quelle den festen Hinweis zum Schließen von haex-vault (Schlüssel
 
 Neue Arten, je mit Text in `src/i18n/locales/{de,en}.json`:
 
-| Art | Wann | Felder |
-|---|---|---|
-| `HistoryUnreadable` | `snapshot_data` ist kein lesbarer Stand | Eintrag, Zeitpunkt |
-| `GroupReparented` | Elternordner fehlt oder Kreis | Ordner |
-| `TagMerged` | zwei Tags der Quelle fallen beim Falten zusammen | Tag-Namen |
-| `UnknownSourceData` | unbekannte Spalte oder Tabelle im Passwortmanager der Quelle | Tabelle, Spalte |
+| Art                 | Wann                                                         | Felder             |
+| ------------------- | ------------------------------------------------------------ | ------------------ |
+| `HistoryUnreadable` | `snapshot_data` ist kein lesbarer Stand                      | Eintrag, Zeitpunkt |
+| `GroupReparented`   | Elternordner fehlt oder Kreis                                | Ordner             |
+| `TagMerged`         | zwei Tags der Quelle fallen beim Falten zusammen             | Tag-Namen          |
+| `UnknownSourceData` | unbekannte Spalte oder Tabelle im Passwortmanager der Quelle | Tabelle, Spalte    |
 
 Weiterverwendet: `IconNotMapped` (unbekannter Name, Bild fehlt), `AttachmentUnreadable`
 (Binärdaten fehlen oder Base64 kaputt), `AttachmentTooLarge`, `TotpInvalid`, `PasskeyDuplicate`.

@@ -6,17 +6,17 @@ Quelle `haexvault`. Alle Abfragen nennen Spalten beim Namen.
 
 ## Einträge (`haex_passwords_item_details` → `ImportItem`)
 
-| Quelle | Ziel | Regel |
-|---|---|---|
-| `title`, `username`, `password`, `url`, `note` | gleichnamig | unverändert; leerer Text bleibt leer |
-| `icon` | `icon` | siehe „Symbole“ |
-| `color` | `color` | unverändert |
-| `otp_secret` | `otp_raw` | unverändert; `check_otp` prüft, ungültig → `TotpInvalid`, Wert bleibt |
-| `otp_digits`, `otp_period`, `otp_algorithm` | gleichnamig | NULL bleibt NULL (Standardwerte setzt der Schreiber) |
-| `expires_at` | `expires_at` | `YYYY-MM-DD` unverändert; anderes Format über `holzi_time`, dann Datumsteil |
-| `autofill_aliases` | `autofill_aliases` | JSON-Text parsen; kein Objekt → NULL und `UnknownSourceData` |
-| `created_at`, `updated_at` | gleichnamig | `holzi_time` (versteht `YYYY-MM-DD HH:MM:SS` und ISO) |
-| `id` | — | nur zum Verknüpfen innerhalb des Lesens; holzi vergibt neue Kennungen |
+| Quelle                                         | Ziel               | Regel                                                                       |
+| ---------------------------------------------- | ------------------ | --------------------------------------------------------------------------- |
+| `title`, `username`, `password`, `url`, `note` | gleichnamig        | unverändert; leerer Text bleibt leer                                        |
+| `icon`                                         | `icon`             | siehe „Symbole“                                                             |
+| `color`                                        | `color`            | unverändert                                                                 |
+| `otp_secret`                                   | `otp_raw`          | unverändert; `check_otp` prüft, ungültig → `TotpInvalid`, Wert bleibt       |
+| `otp_digits`, `otp_period`, `otp_algorithm`    | gleichnamig        | NULL bleibt NULL (Standardwerte setzt der Schreiber)                        |
+| `expires_at`                                   | `expires_at`       | `YYYY-MM-DD` unverändert; anderes Format über `holzi_time`, dann Datumsteil |
+| `autofill_aliases`                             | `autofill_aliases` | JSON-Text parsen; kein Objekt → NULL und `UnknownSourceData`                |
+| `created_at`, `updated_at`                     | gleichnamig        | `holzi_time` (versteht `YYYY-MM-DD HH:MM:SS` und ISO)                       |
+| `id`                                           | —                  | nur zum Verknüpfen innerhalb des Lesens; holzi vergibt neue Kennungen       |
 
 ## Eigene Felder (`haex_passwords_item_key_values`)
 
@@ -26,7 +26,7 @@ Text.
 ## Ordner (`haex_passwords_groups`, `haex_passwords_group_items`)
 
 - Jede Zeile → `ImportGroup { reference: id, parent_ref: parent_id, name, description, icon,
-  color, sort_order }`; `name` NULL → leerer Text.
+color, sort_order }`; `name` NULL → leerer Text.
 - Zeile `id = 'trash'` → `is_recycle_bin: true`.
 - `parent_id` zeigt auf keine Zeile oder bildet einen Kreis → `parent_ref: None`,
   `GroupReparented`.
@@ -73,15 +73,15 @@ Alle Spalten 1:1: `credential_id`, `relying_party_id`, `relying_party_name`, `us
 
 ## Symbole
 
-| Wert der Quelle | Ziel |
-|---|---|
-| NULL | kein Symbol (holzi zeigt sein Standardsymbol) |
-| `binary:<hash>`, Zeile vorhanden | `IconRef::Custom(bytes)` |
-| `binary:<hash>`, Zeile fehlt | kein Symbol, `IconNotMapped` |
-| `i-lucide-<name>` | `IconRef::Standard("lucide:<name>")`, wenn in der Tabelle; sonst wie unbekannt |
-| `lucide:<name>` | unverändert, wenn in der Tabelle |
-| `mdi:<name>`, Kurznamen der alten Erweiterung | Tabellen-Eintrag → `lucide:…` |
-| sonst | kein Symbol, `IconNotMapped` |
+| Wert der Quelle                               | Ziel                                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------------------ |
+| NULL                                          | kein Symbol (holzi zeigt sein Standardsymbol)                                  |
+| `binary:<hash>`, Zeile vorhanden              | `IconRef::Custom(bytes)`                                                       |
+| `binary:<hash>`, Zeile fehlt                  | kein Symbol, `IconNotMapped`                                                   |
+| `i-lucide-<name>`                             | `IconRef::Standard("lucide:<name>")`, wenn in der Tabelle; sonst wie unbekannt |
+| `lucide:<name>`                               | unverändert, wenn in der Tabelle                                               |
+| `mdi:<name>`, Kurznamen der alten Erweiterung | Tabellen-Eintrag → `lucide:…`                                                  |
+| sonst                                         | kein Symbol, `IconNotMapped`                                                   |
 
 Die Tabelle steht in `src-tauri/src/passwords/import/haex_vault/icons.rs`. Jedes Ziel steht in
 `IMPORT_ICONS` (`src/lib/passwords/icons.ts`); ein Test prüft das.

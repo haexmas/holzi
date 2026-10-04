@@ -13,6 +13,7 @@ gelöscht) und öffnet dort die Kopie mit einer eigenen `haex_crdt::rusqlite::Co
 eine Probeabfrage auf `sqlite_master`.
 
 **Rationale**:
+
 - haex-vault öffnet mit `conn.pragma_update(None, "key", password)` und setzt sonst keine
   `cipher_*`-Pragmas (`src-tauri/src/database/core/init.rs:35`, `create.rs:81`). Das ist SQLCipher 4
   mit Standardwerten (haex-vault bündelt SQLCipher 4.14.0 über libsqlite3-sys 0.38.2). holzi
@@ -32,6 +33,7 @@ eine Probeabfrage auf `sqlite_master`.
   `std::fs::copy` hält sie nicht im Speicher.
 
 **Alternatives considered**:
+
 - Direkt mit `SQLITE_OPEN_READ_ONLY` öffnen: legt `-shm` neben der Quelle an oder scheitert auf
   schreibgeschütztem Ort (USB-Stick). Verstößt gegen FR-003.
 - `sqlite3_deserialize` aus dem Speicher: mit SQLCipher-Verschlüsselung nicht verlässlich, und
@@ -42,13 +44,13 @@ eine Probeabfrage auf `sqlite_master`.
 
 **Decision**: Gründe für `PasswordsImportFailed { reason }`, alle vor dem ersten Schreiben:
 
-| Fall | Erkennung | `reason` |
-|---|---|---|
-| Datei nicht lesbar oder nicht kopierbar | I/O-Fehler | `unreadable` (vorhanden) |
+| Fall                                                                                                              | Erkennung                           | `reason`                         |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------- | -------------------------------- |
+| Datei nicht lesbar oder nicht kopierbar                                                                           | I/O-Fehler                          | `unreadable` (vorhanden)         |
 | Leere Datei, kleiner als eine Seite (4096 Byte), oder Klartext-SQLite (`SQLite format 3\0` in den ersten 16 Byte) | Kopfbytes prüfen, vor dem Schlüssel | `unsupported_format` (vorhanden) |
-| Falsches Passwort oder fremde Datei | Probeabfrage meldet `SQLITE_NOTADB` | `haex_vault_locked` (neu) |
-| Keine Tabelle `haex_passwords_item_details` | `sqlite_master` | `no_passwords` (neu) |
-| Pflichttabelle oder Pflichtspalte fehlt | `PRAGMA table_info` gegen R5 | `unsupported_format` |
+| Falsches Passwort oder fremde Datei                                                                               | Probeabfrage meldet `SQLITE_NOTADB` | `haex_vault_locked` (neu)        |
+| Keine Tabelle `haex_passwords_item_details`                                                                       | `sqlite_master`                     | `no_passwords` (neu)             |
+| Pflichttabelle oder Pflichtspalte fehlt                                                                           | `PRAGMA table_info` gegen R5        | `unsupported_format`             |
 
 **Rationale**: Eine SQLCipher-Datei besteht ohne Schlüssel aus Salt und Zufallsdaten. Falsches
 Passwort und fremde verschlüsselte Datei sehen gleich aus (Spec, Clarifications). holzi selbst
@@ -76,15 +78,15 @@ für drei Quellen wegen einer.
 Das Modell (`import/mod.rs:112-209`) und `apply.rs` verlieren heute, was die bisherigen Quellen
 nicht hatten. Die Tabellen von holzi haben alle Spalten (`identity/migrations_passwords.rs`).
 
-| Lücke | Heute | Änderung |
-|---|---|---|
-| Farbe des Eintrags | `color = NULL` (`apply.rs:442`) | `ImportItem.color: Option<String>` |
-| Autofill-Aliase | `autofill_aliases = NULL` (`apply.rs:449`) | `ImportItem.autofill_aliases: Option<serde_json::Value>` |
-| Farbe, Reihenfolge des Ordners | nicht geschrieben (`apply.rs:335-384`) | `ImportGroup.color`, `ImportGroup.sort_order: Option<i64>` |
-| Tag-Farben | Tags nur als Namen | `ImportModel.tag_colors: Vec<(String, String)>`; gesetzt über vorhandenes `tags::set_color` (`tags.rs:128`), nur wenn das Tag noch keine Farbe hat |
-| Passkeys ohne Eintrag | nicht möglich (`apply.rs:474` setzt immer `item_id`) | `ImportModel.passkeys: Vec<PasskeyInput>` mit `item_id = None` |
-| Volle Passkey-Angaben | `RawPasskey` ohne Symbol, Farbe, Spitzname, letzte Nutzung | nicht nötig: `ImportItem.passkeys` ist schon `Vec<PasskeyInput>` mit allen 18 Spalten; der neue Leser füllt ihn direkt, `passkeys::insert` schreibt den gelieferten öffentlichen Schlüssel unverändert (`passkeys.rs:123-164`) |
-| Generator-Voreinstellungen | kein Teil des Imports | `ImportModel.presets: Vec<PresetInput>`; geschrieben über `presets::save` (`presets.rs:66`) |
+| Lücke                          | Heute                                                      | Änderung                                                                                                                                                                                                                       |
+| ------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Farbe des Eintrags             | `color = NULL` (`apply.rs:442`)                            | `ImportItem.color: Option<String>`                                                                                                                                                                                             |
+| Autofill-Aliase                | `autofill_aliases = NULL` (`apply.rs:449`)                 | `ImportItem.autofill_aliases: Option<serde_json::Value>`                                                                                                                                                                       |
+| Farbe, Reihenfolge des Ordners | nicht geschrieben (`apply.rs:335-384`)                     | `ImportGroup.color`, `ImportGroup.sort_order: Option<i64>`                                                                                                                                                                     |
+| Tag-Farben                     | Tags nur als Namen                                         | `ImportModel.tag_colors: Vec<(String, String)>`; gesetzt über vorhandenes `tags::set_color` (`tags.rs:128`), nur wenn das Tag noch keine Farbe hat                                                                             |
+| Passkeys ohne Eintrag          | nicht möglich (`apply.rs:474` setzt immer `item_id`)       | `ImportModel.passkeys: Vec<PasskeyInput>` mit `item_id = None`                                                                                                                                                                 |
+| Volle Passkey-Angaben          | `RawPasskey` ohne Symbol, Farbe, Spitzname, letzte Nutzung | nicht nötig: `ImportItem.passkeys` ist schon `Vec<PasskeyInput>` mit allen 18 Spalten; der neue Leser füllt ihn direkt, `passkeys::insert` schreibt den gelieferten öffentlichen Schlüssel unverändert (`passkeys.rs:123-164`) |
+| Generator-Voreinstellungen     | kein Teil des Imports                                      | `ImportModel.presets: Vec<PresetInput>`; geschrieben über `presets::save` (`presets.rs:66`)                                                                                                                                    |
 
 Alle neuen Felder sind `Option` bzw. leer per `Default`; die drei bisherigen Parser bleiben
 unverändert.
@@ -109,6 +111,7 @@ steht nicht im Bericht.
 
 Die Tabellen von haex-vault entsprechen Spalte für Spalte denen von holzi (034 hat sie
 übernommen), bis auf:
+
 - `haex_passwords_binaries.data` ist Base64-Text (Standardalphabet mit Padding), holzi speichert
   BLOB. `hash` ist SHA-256 der dekodierten Bytes als Hex in Kleinbuchstaben
   (`src/utils/passwords/binaries.ts:18-39`); holzi rechnet den Hash beim Schreiben ohnehin neu.

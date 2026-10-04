@@ -17,6 +17,7 @@ nix develop --command scripts/with-nix-host-bridge.sh \
 ```
 
 Erwartet: alle grün. Abgedeckt sind:
+
 - jedes Feld aus [contracts/haex-vault-mapping.md](contracts/haex-vault-mapping.md) (SC-001);
 - die Quelldatei und `-wal` sind nach Vorschau, Import, falschem Passwort und Abbruch Byte für Byte
   gleich (SHA-256 vorher und nachher, SC-002);

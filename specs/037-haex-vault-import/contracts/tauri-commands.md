@@ -8,28 +8,33 @@ Keine neuen Commands. Die Import-Commands aus
 ## `ImportSource`
 
 ```ts
-type ImportSource = "keepass" | "bitwarden" | "lastpass" | "haexvault";
+type ImportSource = 'keepass' | 'bitwarden' | 'lastpass' | 'haexvault'
 ```
 
 ## `ImportArgs` / `ImportRunArgs` für `haexvault`
 
-| Feld | Pflicht | Bedeutung |
-|---|---|---|
-| `source` | ja | `"haexvault"` |
-| `path` | ja | Pfad der Vault-Datei von haex-vault; `<path>-wal` wird mitgelesen, wenn vorhanden |
-| `password` | ja | Vault-Passwort von haex-vault; nie gespeichert, nie protokolliert |
-| `keyFilePath` | nein | wird ignoriert |
-| `onDuplicate` | nur `run` | wie 034 |
+| Feld          | Pflicht   | Bedeutung                                                                         |
+| ------------- | --------- | --------------------------------------------------------------------------------- |
+| `source`      | ja        | `"haexvault"`                                                                     |
+| `path`        | ja        | Pfad der Vault-Datei von haex-vault; `<path>-wal` wird mitgelesen, wenn vorhanden |
+| `password`    | ja        | Vault-Passwort von haex-vault; nie gespeichert, nie protokolliert                 |
+| `keyFilePath` | nein      | wird ignoriert                                                                    |
+| `onDuplicate` | nur `run` | wie 034                                                                           |
 
 ## `ImportPreview`
 
 ```ts
 interface ImportPreview {
-  entries: number; groups: number; trashedEntries: number; historyStates: number;
-  attachments: number; passkeys: number; duplicates: number;
-  tags: number;      // neu
-  presets: number;   // neu
-  warnings: string[];
+  entries: number
+  groups: number
+  trashedEntries: number
+  historyStates: number
+  attachments: number
+  passkeys: number
+  duplicates: number
+  tags: number // neu
+  presets: number // neu
+  warnings: string[]
 }
 ```
 
