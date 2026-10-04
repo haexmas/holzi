@@ -3,8 +3,15 @@ import { scenario } from '../lib/scenario.ts'
 import { devProject, devServer } from '../lib/extension-dev.ts'
 import { unwrap, waitForWorkspace, type FlowInstance } from '../lib/flows.ts'
 import type { Page } from '../lib/page.ts'
-import { openSettings, setSessionRestore, wmSnapshot } from '../lib/settings.ts'
 import {
+  KEY,
+  openSettings,
+  setSessionRestore,
+  WM,
+  wmSnapshot,
+} from '../lib/settings.ts'
+import {
+  backInTab,
   inFrame,
   openFromLauncher,
   probeRequest,
@@ -14,7 +21,8 @@ import {
 // Spec 017, US12, T093/T096 (quickstart §7 last bullet): developer mode switched on in the
 // settings reloads holzi's window; a project served from 127.0.0.1 loads unsigned, opens with the
 // permanent mark on its tab, talks to holzi like an installed extension, keeps its tables on this
-// device, shows its console output and gets a new document after a change; switched off, it is gone.
+// device, shows its console output and gets a new document after a change. Its tab behaves like an
+// installed extension's through the frame shim; switched off, it is gone.
 
 type Instance = Page & FlowInstance
 
@@ -139,7 +147,7 @@ scenario('extension-dev-mode', { timeoutMs: 300_000 }, async (ctx) => {
 
     // WebKitGTK fires `load` for a hash navigation too, and the SDK takes `port:init` once per
     // document: the page keeps talking over the channel it has.
-    await inFrame(page, dev, `location.hash = '#elsewhere'; return true`)
+    await inFrame(page, dev, `location.hash = '#/elsewhere'; return true`)
     await new Promise((resolve) => setTimeout(resolve, 1_000))
     const afterHash = await probeRequest(
       page,
@@ -162,6 +170,112 @@ scenario('extension-dev-mode', { timeoutMs: 300_000 }, async (ctx) => {
       'the frame stays ready',
     )
     ctx.step('a hash navigation keeps the channel')
+
+    // The frame shim comes with holzi's init script (research R16): title, navigation with
+    // holzi Back, holzi's shortcuts and the close guard work as in an installed extension.
+    const place = () =>
+      inFrame<string>(
+        page,
+        dev,
+        `return document.getElementById('place').textContent`,
+      )
+    await inFrame(page, dev, `document.title = 'Dev titled'; return true`)
+    await ctx.waitFor(
+      'the page title on its tab',
+      async () =>
+        page.exec<boolean>(
+          `return document.body.innerText.includes('Dev titled')`,
+        ),
+      { timeoutMs: 5_000 },
+    )
+    ctx.step('the page names its tab')
+
+    await inFrame(
+      page,
+      dev,
+      `document.getElementById('to-second').click(); return true`,
+    )
+    await ctx.waitFor(
+      'holzi to record the place inside the page',
+      async () =>
+        JSON.stringify(await page.invoke('wm_session_load')).includes(
+          '/second',
+        ),
+      { fixed: true, timeoutMs: 15_000 },
+    )
+    await backInTab(page, dev)
+    await ctx.waitFor(
+      'the page to follow holzi Back',
+      async () => (await place()) === '#/elsewhere',
+      { timeoutMs: 10_000 },
+    )
+    ctx.step('navigation inside the tab and holzi Back')
+
+    await inFrame(
+      page,
+      dev,
+      `document.getElementById('to-second').click(); return true`,
+    )
+    await ctx.waitFor(
+      'the second place',
+      async () => (await place()) === '#/second',
+      {
+        timeoutMs: 5_000,
+      },
+    )
+    // Alt+ArrowLeft is holzi's Back; pressed inside the frame, the shim hands it to holzi, which
+    // acts only while the frame has the focus. WebKitWebDriver cannot send keys into this sandboxed
+    // frame, so the page gets the key as an event after holzi focused the frame.
+    await page.exec(
+      `document.querySelector('[data-extension-id="${dev.id}"]').focus(); return true`,
+    )
+    await inFrame(
+      page,
+      dev,
+      `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft', key: 'ArrowLeft', altKey: true, bubbles: true })); return true`,
+    )
+    await ctx.waitFor(
+      'holzi Back from a key pressed in the frame',
+      async () => (await place()) === '#/elsewhere',
+      { timeoutMs: 10_000 },
+    )
+    ctx.step('a holzi shortcut pressed inside the frame')
+
+    await inFrame(
+      page,
+      dev,
+      `window.__guard = (event) => event.preventDefault(); window.addEventListener('beforeunload', window.__guard); return true`,
+    )
+    await page.exec(`${WM}.runAction('wm.tab.close', {}); return true`)
+    await ctx.waitFor(
+      'the close confirmation',
+      async () =>
+        page.exec<boolean>(
+          `return document.querySelector('[role="alertdialog"]') !== null`,
+        ),
+      { timeoutMs: 5_000 },
+    )
+    await page.typeToFocused(KEY.escape)
+    await ctx.waitFor(
+      'the confirmation gone',
+      async () =>
+        page.exec<boolean>(
+          `return document.querySelector('[role="alertdialog"]') === null`,
+        ),
+      { timeoutMs: 5_000 },
+    )
+    assert.ok(
+      (await wmSnapshot(page)).windows.some((w) =>
+        w.tabs.some((t) => t.appId === `extension.${id}`),
+      ),
+      'the guarded tab stays open',
+    )
+    await inFrame(
+      page,
+      dev,
+      `window.removeEventListener('beforeunload', window.__guard); return true`,
+    )
+    ctx.step('a close guard asks before the tab closes')
 
     title.text = 'Probe dev changed'
     await inFrame(page, dev, `location.reload(); return true`).catch(() => {})

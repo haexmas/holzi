@@ -126,6 +126,21 @@ pub const SHIM: &str = r#"(() => {
   });
 })();"#;
 
+/// The shim for the page of a development version (US12, research R16 addendum): holzi does not
+/// serve that page, so its main window runs the same shim as an init script in every frame. It
+/// acts only in a frame on a development server's address (`dev::server_url`), the frames
+/// developer mode allows; a frame holzi serves has another address and gets the shim injected.
+/// A sandboxed frame's origin is opaque, so the guard reads protocol and host of its URL.
+pub fn dev_init_script() -> String {
+    let elsewhere = crate::extensions::dev::LOOPBACK
+        .map(|host| format!("at.hostname !== '{host}'"))
+        .join(" && ");
+    format!(
+        "(() => {{ const at = window.location; \
+         if (at.protocol !== 'http:' || ({elsewhere})) return; {SHIM} }})();"
+    )
+}
+
 /// Index of `needle` in `haystack` at or after `from`, ignoring ASCII case.
 pub(crate) fn find_ascii_case_insensitive(
     haystack: &str,
