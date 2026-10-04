@@ -41,7 +41,7 @@ use holzi_lib::instances::vault_config::vault_config;
 use holzi_lib::state::{ActiveInstanceHandle, AppState};
 use holzi_lib::storage::query::Query;
 use holzi_lib::sync;
-use holzi_lib::vault_gate::VaultGate;
+use holzi_lib::vault_gate::{DrainOutcome, VaultGate};
 
 pub const PASSPHRASE: &str = "correct-horse-battery";
 
@@ -116,8 +116,15 @@ impl Instance {
     }
 
     /// Stops the tracked sync service before the fixture's database is dropped.
+    /// A task the drain cannot end would keep running against the dropped vault,
+    /// so that fails the test.
     pub async fn shutdown(self) {
-        self.state.gate().drain().await;
+        let outcome = self.state.gate().drain().await;
+        assert_ne!(
+            outcome,
+            DrainOutcome::Stuck,
+            "a sync task outlived the drain"
+        );
     }
 }
 

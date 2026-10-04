@@ -218,6 +218,7 @@ jobs:
       # A test binary that crashes (a signal, not a failed test) leaves a core
       # file; the step after this one prints its backtrace.
       - name: Run tests
+        id: tests
         shell: bash
         run: |
           set -euo pipefail
@@ -227,7 +228,7 @@ jobs:
           cargo test --manifest-path src-tauri/Cargo.toml ${{ matrix.flags }}
 
       - name: Backtrace of a crashed test binary
-        if: failure()
+        if: failure() && steps.tests.outcome == 'failure'
         shell: bash
         run: |
           shopt -s nullglob
