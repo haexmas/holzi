@@ -69,6 +69,8 @@ async fn two_devices_connect_on_their_own_and_exchange_a_change() {
         main.thread_title("t2").as_deref() == Some("from linked")
     })
     .await;
+
+    tokio::join!(main.shutdown(), linked.shutdown());
 }
 
 /// US2 scenario 1 and SC-005 (spec.md): a device of another vault, running
@@ -106,6 +108,13 @@ async fn a_device_of_another_vault_neither_gets_nor_gives_anything() {
     assert_eq!(foreign_peer.thread_title("secret"), None);
     assert_eq!(main.thread_title("theirs"), None);
     assert_eq!(linked.thread_title("theirs"), None);
+
+    tokio::join!(
+        main.shutdown(),
+        linked.shutdown(),
+        foreign.shutdown(),
+        foreign_peer.shutdown()
+    );
 }
 
 /// US3 scenarios 1 to 3 (spec.md): three devices end with the same data, no
@@ -153,6 +162,8 @@ async fn three_devices_converge_and_each_change_keeps_its_author() {
             );
         }
     }
+
+    tokio::join!(a.shutdown(), b.shutdown(), c.shutdown());
 }
 
 /// US4 scenarios 1, 3 and 5 (spec.md), FR-033, FR-034: a connected device is
@@ -219,6 +230,8 @@ async fn a_connected_device_shows_as_online_with_its_role_and_the_view_is_told()
         told.load(Ordering::SeqCst) > 0,
         "FR-034: the device view was told a device came online"
     );
+
+    tokio::join!(main.shutdown(), linked.shutdown());
 }
 
 /// SC-001 and SC-002 (spec.md, T079): two devices are connected within 30
@@ -290,4 +303,6 @@ async fn devices_connect_within_thirty_seconds_and_changes_show_within_five() {
         p95 <= SHOW_LIMIT,
         "SC-001: the 95th percentile is {p95:?}, over {SHOW_LIMIT:?}: {times:?}"
     );
+
+    tokio::join!(main.shutdown(), linked.shutdown());
 }

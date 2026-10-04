@@ -159,6 +159,8 @@ async fn a_copy_of_a_main_devices_file_becomes_a_main_device_and_syncs_with_its_
         "the copy writes under a node id of its own"
     );
     assert_ne!(copy.device_uuid(), source.device_uuid());
+
+    tokio::join!(source.shutdown(), copy.shutdown());
 }
 
 /// Scenarios 3 and 4, SC-018: the copy of a linked device's file asks, sends
@@ -230,6 +232,8 @@ async fn a_copy_of_a_linked_devices_file_waits_until_a_main_device_admits_it() {
         "the copy syncs with every device",
     )
     .await;
+
+    tokio::join!(main.shutdown(), linked.shutdown(), copy.shutdown());
 }
 
 /// Scenario 4, "Ablehnen": the copy stays outside.
@@ -262,6 +266,8 @@ async fn a_refused_copy_stays_outside() {
     tokio::time::sleep(Duration::from_secs(3)).await;
     assert!(copy.thread_title("after-refusal").is_none());
     assert_eq!(place_of(&copy), ThisDevice::AwaitingAdmission);
+
+    tokio::join!(main.shutdown(), linked.shutdown(), copy.shutdown());
 }
 
 /// Scenario 5: the request reached a linked device, which is not a main
@@ -313,4 +319,6 @@ async fn a_request_that_reached_a_linked_device_reaches_a_main_device_with_its_n
     assert!(listed(&main)
         .iter()
         .any(|(device, is_main)| *device == copy.keys.device_pubkey && !is_main));
+
+    tokio::join!(main.shutdown(), linked.shutdown(), copy.shutdown());
 }

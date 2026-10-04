@@ -76,7 +76,5 @@ async fn a_one_device_vault_publishes_no_presence_until_it_has_a_second_device()
     .expect("presence appears once the vault has a second device");
     assert!(seen);
 
-    // The binary exits right after this test: services still running against the vaults then
-    // crashed it (SIGSEGV) in CI.
     tokio::join!(main.shutdown(), linked.shutdown());
 }
