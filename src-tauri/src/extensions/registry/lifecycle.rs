@@ -9,10 +9,12 @@
 //! `extension-status-changed` for every changed state, with `reload` when the effective bundle of
 //! a running extension changed, so its open tabs load the new one (FR-038).
 
+use std::sync::Arc;
+
 use haex_crdt::rusqlite::params;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Runtime};
-use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 use ts_rs::TS;
 use uuid::Uuid;
 
@@ -118,47 +120,77 @@ pub fn reconcile(
 ) -> Result<Vec<ExtensionStatusChanged>> {
     let mut changed = Vec::new();
     for extension in db.read_blocking(|q| registered(q))? {
-        if let (Some(prefix), Some(purge_hlc)) = (&extension.prefix, &extension.purge_hlc) {
-            let removal = Removal {
-                extension_id: extension.id,
-                prefix: prefix.clone(),
-                purge_data: extension.purge_data,
-                purge_hlc: purge_hlc.clone(),
-            };
-            let check = removal.clone();
-            if db.read_blocking(move |q| purge::due(q, &check))? {
-                if let Err(error) = purge::run(db, &removal, device) {
-                    log::warn!("extension {}: clearing up failed: {error}", extension.id);
-                    continue;
-                }
-                host.forget_effective(extension.id);
-            }
-        }
-        if !extension.installed || !extension.enabled {
-            continue;
-        }
-        let before = shown(db, extension.id, device)?;
-        let started = start(db, extension.id, device, now_ms);
-        let after = shown(db, extension.id, device)?;
-        let mut reload = false;
-        if let Ok(started) = started {
-            let previous = host.note_effective(extension.id, started.bundle_id);
-            reload = previous.is_some_and(|previous| previous != started.bundle_id);
-            host.remember_started(started);
-        }
-        if let Some((status, _, error)) = after.clone().filter(|_| after != before || reload) {
-            changed.push(ExtensionStatusChanged {
-                extension_id: extension.id.to_string(),
-                status,
-                error,
-                reload,
-            });
+        match follow(db, host, &extension, device, now_ms) {
+            Ok(Some(event)) => changed.push(event),
+            Ok(None) => {}
+            Err(error) => log::warn!("extension {}: following failed: {error}", extension.id),
         }
     }
     if let Err(error) = park::replay_ready(&db.database()) {
         log::warn!("extensions: replaying parked sync groups failed: {error}");
     }
     Ok(changed)
+}
+
+/// Brings one extension on `device` in line; returns its state when that changed.
+fn follow(
+    db: &VaultDb,
+    host: &ExtensionHost,
+    extension: &Registered,
+    device: Uuid,
+    now_ms: i64,
+) -> Result<Option<ExtensionStatusChanged>> {
+    if let (Some(prefix), Some(purge_hlc)) = (&extension.prefix, &extension.purge_hlc) {
+        let removal = Removal {
+            extension_id: extension.id,
+            prefix: prefix.clone(),
+            purge_data: extension.purge_data,
+            purge_hlc: purge_hlc.clone(),
+        };
+        let check = removal.clone();
+        if db.read_blocking(move |q| purge::due(q, &check))? {
+            purge::run(db, &removal, device)?;
+            host.forget_effective(extension.id);
+        }
+    }
+    if !extension.installed || !extension.enabled {
+        return Ok(None);
+    }
+    let before = shown(db, extension.id, device)?;
+    let started = start(db, extension.id, device, now_ms);
+    let after = shown(db, extension.id, device)?;
+    let mut reload = false;
+    if let Ok(started) = started {
+        let previous = host.note_effective(extension.id, started.bundle_id);
+        reload = previous.is_some_and(|previous| previous != started.bundle_id);
+        host.remember_started(started);
+    }
+    Ok(after
+        .clone()
+        .filter(|_| after != before || reload)
+        .map(|(status, _, error)| ExtensionStatusChanged {
+            extension_id: extension.id.to_string(),
+            status,
+            error,
+            reload,
+        }))
+}
+
+/// Whether the vault changes waiting in `changes` touch the registry. Takes every waiting
+/// message, so one reconcile answers a burst of writes (each BLOB of a transfer is one).
+fn drain_watched(changes: &mut tokio::sync::broadcast::Receiver<Arc<Vec<String>>>) -> bool {
+    let mut due = false;
+    loop {
+        match changes.try_recv() {
+            Ok(tables) => due |= touches_registry(&tables),
+            Err(TryRecvError::Lagged(_)) => due = true,
+            Err(TryRecvError::Empty | TryRecvError::Closed) => return due,
+        }
+    }
+}
+
+fn touches_registry(tables: &[String]) -> bool {
+    tables.iter().any(|t| WATCHED.contains(&t.as_str()))
 }
 
 /// Follows the registry for the vault session `state` just published, until it ends: once at the
@@ -211,11 +243,12 @@ pub fn start_for_active_instance<R: Runtime>(app: &AppHandle<R>, state: &AppStat
             due = tokio::select! {
                 () = token.cancelled() => return,
                 received = changes.recv() => match received {
-                    Ok(tables) => tables.iter().any(|t| WATCHED.contains(&t.as_str())),
+                    Ok(tables) => touches_registry(&tables),
                     Err(RecvError::Lagged(_)) => true,
                     Err(RecvError::Closed) => return,
                 },
             };
+            due |= drain_watched(&mut changes);
         }
     };
     if let Err(error) = state.gate().spawn(follow) {

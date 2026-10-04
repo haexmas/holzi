@@ -79,7 +79,7 @@ function deviceTitle(device: DeviceState): string {
       >
         <SettingsRow
           v-for="device in extension.devices"
-          :key="device.deviceName + device.thisDevice"
+          :key="device.deviceId"
           :title="deviceTitle(device)"
           :description="stateText(device.status, device.error)"
           data-testid="extension-device-state"

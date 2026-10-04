@@ -34,6 +34,10 @@ statusErrorHere?: string,
  */
 devices: Array<{
 /**
+ * The device's `vault_device_uuid`.
+ */
+deviceId: string,
+/**
  * The device's name; empty when it has none.
  */
 deviceName: string, thisDevice: boolean,

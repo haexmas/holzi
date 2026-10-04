@@ -19,6 +19,8 @@ use crate::storage::query::Query;
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/types/bindings/")]
 pub struct DeviceState {
+    /// The device's `vault_device_uuid`.
+    pub device_id: String,
     /// The device's name; empty when it has none.
     pub device_name: String,
     pub this_device: bool,
@@ -130,6 +132,7 @@ pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
                 Ok(DeviceState {
                     device_name: names.get(&uuid).cloned().unwrap_or_default(),
                     this_device: uuid == here,
+                    device_id: uuid,
                     status: r.get(1)?,
                     error: r.get(2)?,
                 })
