@@ -74,6 +74,8 @@ pub struct ExtensionSummary {
     /// imports nothing (the check scripts load it with Node's own module rules).
     #[ts(inline)]
     pub devices: Vec<DeviceState>,
+    /// A development version on this device (US12): listed while developer mode is on.
+    pub dev: bool,
 }
 
 struct Row {
@@ -205,10 +207,45 @@ pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
             status_here,
             status_error_here,
             devices,
+            dev: false,
         });
+    }
+    if crate::extensions::dev::mode(q, device)? {
+        out.extend(
+            crate::extensions::dev::registrations(q, device)?
+                .into_iter()
+                .map(dev_summary),
+        );
     }
     out.sort_by_key(|e| e.title.to_lowercase());
     Ok(out)
+}
+
+/// A development version as the launcher and the settings show it; what its manifest says now.
+fn dev_summary(registration: crate::extensions::dev::DevRegistration) -> ExtensionSummary {
+    let manifest =
+        crate::extensions::dev::read_project(std::path::Path::new(&registration.project_path))
+            .ok()
+            .map(|project| project.manifest);
+    ExtensionSummary {
+        id: registration.id.to_string(),
+        name: registration.prefix.name.as_str().to_owned(),
+        title: manifest
+            .as_ref()
+            .map_or_else(|| registration.title.clone(), |m| m.title().to_owned()),
+        description: manifest.as_ref().and_then(|m| m.description.clone()),
+        version: manifest.as_ref().map(|m| m.version.to_string()),
+        publisher_fingerprint: publisher_fingerprint(registration.prefix.public_key.as_str()),
+        enabled: true,
+        state: "installed".to_owned(),
+        kept_data_bytes: None,
+        single_instance: manifest.as_ref().is_some_and(|m| m.single_instance),
+        has_icon: false,
+        status_here: None,
+        status_error_here: None,
+        devices: Vec::new(),
+        dev: true,
+    }
 }
 
 /// The icon of the effective bundle as a `data:` URL, or `None` without an image icon or while

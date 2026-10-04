@@ -49,6 +49,17 @@ impl Manifest {
         Self::from_object(&bundle.manifest)
     }
 
+    /// Reads `haextension/manifest.json` of a project loaded in developer mode (US12): restricted
+    /// JSON, not necessarily canonical, and unsigned; the same fields and rules otherwise.
+    pub fn from_dev_file(manifest_json: &str) -> Result<Self, BundleRejection> {
+        match haex_bundle::jcs::parse_restricted(manifest_json) {
+            Ok(JsonValue::Object(manifest)) => Self::from_object(&manifest),
+            _ => Err(BundleRejection::new(
+                haex_bundle::ErrorKind::ManifestInvalid,
+            )),
+        }
+    }
+
     /// Reads the stored `manifest_json` of a bundle that was verified when it was installed.
     pub fn from_stored(manifest_json: &[u8]) -> Result<Self, BundleRejection> {
         match haex_bundle::jcs::parse_canonical(manifest_json) {

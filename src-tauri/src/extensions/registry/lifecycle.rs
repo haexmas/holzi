@@ -199,6 +199,12 @@ fn follow(
 /// is left. A failure is logged: rows for its tables wait parked until a later run succeeds.
 fn keep_tables(db: &VaultDb, extension: &Registered, now_ms: i64) {
     let id = extension.id;
+    // The tables of that prefix here are a development version's (US12, research R16).
+    if let Some(prefix) = &extension.prefix {
+        if starting::dev_prefix_here(db, prefix).unwrap_or(true) {
+            return;
+        }
+    }
     let result = if extension.installed {
         match starting::effective(db, id) {
             Ok(Effective::Ready(prepared)) => starting::migrate(db, id, &prepared, now_ms),
@@ -333,6 +339,10 @@ mod tests;
 #[cfg(test)]
 #[path = "lifecycle_us7_tests.rs"]
 mod us7_tests;
+
+#[cfg(test)]
+#[path = "lifecycle_us12_tests.rs"]
+mod us12_tests;
 
 #[cfg(test)]
 #[path = "lifecycle_migration_tests.rs"]

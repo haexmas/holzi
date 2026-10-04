@@ -155,12 +155,22 @@ pub fn kept_migrations(
     Ok(out)
 }
 
+/// Where the tables of a migration live.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tables {
+    /// Synced vault data, with haex-crdt's columns and triggers.
+    Synced,
+    /// This device only, without CRDT columns: a development version (US12, research R16).
+    DeviceLocal,
+}
+
 /// Checks and runs one migration with its journal row in one guarded write in schema mode.
 fn apply(
     db: &VaultDb,
     extension_id: Uuid,
     own: &TablePrefix,
     migration: &StoredMigration,
+    tables: Tables,
     max_value_bytes: u64,
     now_ms: i64,
 ) -> Result<(), MigrationError> {
@@ -183,7 +193,7 @@ fn apply(
         &guard,
         GuardedWriteOptions {
             schema_mode: true,
-            local: false,
+            local: tables == Tables::DeviceLocal,
         },
         move |tx| {
             for step in &steps {
@@ -250,6 +260,26 @@ pub fn apply_pending(
     apply_pending_locked(&applying, db, extension_id, own, migrations, now_ms)
 }
 
+/// [`apply_pending`] for a development version: the migrations it registers, with the same rules,
+/// create tables in haex-crdt's local mode, so they never sync (US12, research R16).
+pub fn apply_pending_local(
+    db: &VaultDb,
+    extension_id: Uuid,
+    own: &TablePrefix,
+    migrations: &[(String, String)],
+    now_ms: i64,
+) -> Result<Vec<String>, MigrationError> {
+    let _applying = APPLYING.lock().unwrap_or_else(PoisonError::into_inner);
+    run_pending(
+        db,
+        extension_id,
+        own,
+        migrations,
+        Tables::DeviceLocal,
+        now_ms,
+    )
+}
+
 /// [`apply_pending`] for a caller that already holds [`applying`], so a check it made under the
 /// lock still holds when the migrations run.
 pub(crate) fn apply_pending_locked(
@@ -258,6 +288,18 @@ pub(crate) fn apply_pending_locked(
     extension_id: Uuid,
     own: &TablePrefix,
     migrations: &[(String, String)],
+    now_ms: i64,
+) -> Result<Vec<String>, MigrationError> {
+    run_pending(db, extension_id, own, migrations, Tables::Synced, now_ms)
+}
+
+/// Applies what of `migrations` is still pending, in order; the caller holds [`applying`].
+fn run_pending(
+    db: &VaultDb,
+    extension_id: Uuid,
+    own: &TablePrefix,
+    migrations: &[(String, String)],
+    tables: Tables,
     now_ms: i64,
 ) -> Result<Vec<String>, MigrationError> {
     let offered = migrations.to_vec();
@@ -277,6 +319,7 @@ pub(crate) fn apply_pending_locked(
             extension_id,
             own,
             migration,
+            tables,
             limits.max_response_bytes,
             now_ms,
         )?;

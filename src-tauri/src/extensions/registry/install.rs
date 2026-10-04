@@ -18,7 +18,7 @@ use super::effective::{effective_bundle, live_bundles};
 use crate::error::{HolziError, Result};
 use crate::extensions::bundle::store::{store_blobs, write_registry_rows, BundleIds};
 use crate::extensions::bundle::{limits, verify_bundle, BundleRejection, Manifest, VerifiedBundle};
-use crate::extensions::ids::extension_id;
+use crate::extensions::ids::{extension_id, TablePrefix};
 use crate::extensions::permissions::manifest_map::DeclaredPermission;
 use crate::extensions::permissions::store::{self as permission_store, NewPermission};
 use crate::extensions::permissions::{PermissionStatus, VAULT_WIDE};
@@ -401,6 +401,16 @@ pub fn install(
     let bundle = verify_bundle(bytes)?;
     let manifest = Manifest::from_verified(&bundle)?;
     let id = extension_id(&manifest.public_key, &manifest.name);
+    // The tables of that prefix here belong to a development version until it is unloaded (US12).
+    let prefix = TablePrefix {
+        public_key: manifest.public_key.clone(),
+        name: manifest.name.clone(),
+    };
+    if super::start::dev_prefix_here(db, &prefix)? {
+        return Err(HolziError::ExtensionInstall {
+            reason: "dev_prefix_conflict".into(),
+        });
+    }
     let current = db.read_blocking(move |q| {
         if !is_installed(q, id)? {
             return Ok(None);

@@ -9,14 +9,17 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use super::dispatch::CallContext;
+use super::frames::FrameSource;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::{ExtensionHost, SqlSlot};
 use crate::extensions::ids::{ExtensionName, PublicKey, TablePrefix};
 use crate::extensions::permissions::store::candidates;
 use crate::extensions::permissions::PermissionKind;
 use crate::extensions::registry::start::{effective, migrate, Effective};
-use crate::extensions::sql::exec::{existing_tables, limits_of, prepare, run, Limits, SqlResult};
-use crate::extensions::sql::migrate::MigrationError;
+use crate::extensions::sql::exec::{
+    existing_tables, limits_of, prepare, run_in, Limits, SqlResult,
+};
+use crate::extensions::sql::migrate::{apply_pending_local, MigrationError, Tables};
 use crate::extensions::sql::policy::SqlPolicy;
 use crate::extensions::sql::values::{params, statement_entry};
 use crate::passwords::clock::unix_millis;
@@ -33,13 +36,20 @@ fn invalid(message: &str) -> BridgeError {
     BridgeError::new(ExtensionErrorCode::Validation, message)
 }
 
-/// An extension's table prefix, from its registry row.
+/// The calling extension's table prefix, from its registry row.
+fn own_prefix(ctx: &CallContext) -> Result<TablePrefix, BridgeError> {
+    prefix_of(&ctx.db, ctx.session.extension_id)
+}
+
+/// An extension's table prefix, from its registry row or, for a development version, its row on
+/// this device (the ids come from different namespaces, so at most one matches).
 fn prefix_of(db: &VaultDb, extension_id: Uuid) -> Result<TablePrefix, BridgeError> {
     let id = extension_id.to_string();
     let (key, name) = db
         .read_blocking(move |q| {
             q.query_row(
-                "SELECT public_key, name FROM extensions WHERE id = ?1",
+                "SELECT public_key, name FROM extensions WHERE id = ?1 \
+                 UNION ALL SELECT public_key, name FROM dev_extensions_no_sync WHERE id = ?1",
                 &[&id],
                 |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
             )
@@ -50,6 +60,14 @@ fn prefix_of(db: &VaultDb, extension_id: Uuid) -> Result<TablePrefix, BridgeErro
         public_key: PublicKey::parse(&key).map_err(|_| unavailable())?,
         name: ExtensionName::parse(&name).map_err(|_| unavailable())?,
     })
+}
+
+/// Where the caller's own tables live: a development version's on this device only (US12).
+fn tables_of(ctx: &CallContext) -> Tables {
+    match ctx.session.source {
+        FrameSource::Bundle(_) => Tables::Synced,
+        FrameSource::DevServer => Tables::DeviceLocal,
+    }
 }
 
 /// What every SQL call needs: the policy, the limits and a running slot.
@@ -149,11 +167,12 @@ fn one_statement(ctx: &CallContext, call_params: &Value) -> Result<Value, Bridge
         &call.limits,
         &existing,
     )?;
-    result_json(run(
+    result_json(run_in(
         &ctx.db,
         Arc::clone(&call.policy),
         &call.limits,
         vec![checked],
+        tables_of(ctx),
     )?)
 }
 
@@ -187,11 +206,12 @@ pub fn transaction(ctx: &CallContext, call_params: &Value) -> Result<Value, Brid
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
-    result_json(run(
+    result_json(run_in(
         &ctx.db,
         Arc::clone(&call.policy),
         &call.limits,
         checked,
+        tables_of(ctx),
     )?)
 }
 
@@ -204,6 +224,9 @@ pub fn register_migrations(ctx: &CallContext, call_params: &Value) -> Result<Val
         .and_then(Value::as_array)
         .ok_or_else(|| invalid("migrations must be an array"))?;
     let extension_id = ctx.session.extension_id;
+    if ctx.session.source == FrameSource::DevServer {
+        return register_dev_migrations(ctx, migrations);
+    }
     let Effective::Ready(prepared) = effective(&ctx.db, extension_id).map_err(|_| unavailable())?
     else {
         return Err(unavailable());
@@ -231,11 +254,43 @@ pub fn register_migrations(ctx: &CallContext, call_params: &Value) -> Result<Val
         &prepared,
         unix_millis(std::time::SystemTime::now()),
     )
-    .map_err(|error| match error {
+    .map_err(migration_error)?;
+    Ok(json!({
+        "appliedCount": applied.len(),
+        "alreadyAppliedCount": migrations.len().saturating_sub(applied.len()),
+        "appliedMigrations": applied,
+    }))
+}
+
+/// The SQL error of a migration as the bridge answers it.
+fn migration_error(error: MigrationError) -> BridgeError {
+    match error {
         MigrationError::Refused { error, .. } => *error,
         MigrationError::Unavailable => unavailable(),
         _ => BridgeError::new(ExtensionErrorCode::Database, "migration failed"),
-    })?;
+    }
+}
+
+/// A development version has no signed bundle: the migrations it registers are its own, checked
+/// with the same rules and created on this device only (US12, research R16).
+fn register_dev_migrations(ctx: &CallContext, migrations: &[Value]) -> Result<Value, BridgeError> {
+    let mut offered = Vec::with_capacity(migrations.len());
+    for migration in migrations {
+        let name = migration.get("name").and_then(Value::as_str);
+        let sql = migration.get("sql").and_then(Value::as_str);
+        let (Some(name), Some(sql)) = (name, sql) else {
+            return Err(invalid("a migration needs name and sql"));
+        };
+        offered.push((name.to_owned(), sql.to_owned()));
+    }
+    let applied = apply_pending_local(
+        &ctx.db,
+        ctx.session.extension_id,
+        &own_prefix(ctx)?,
+        &offered,
+        unix_millis(std::time::SystemTime::now()),
+    )
+    .map_err(migration_error)?;
     Ok(json!({
         "appliedCount": applied.len(),
         "alreadyAppliedCount": migrations.len().saturating_sub(applied.len()),

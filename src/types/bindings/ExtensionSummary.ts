@@ -54,4 +54,8 @@ status: string,
 /**
  * The error kind (`migration_changed`, …), never data of the extension.
  */
-error?: string, }>, };
+error?: string, }>,
+/**
+ * A development version on this device (US12): listed while developer mode is on.
+ */
+dev: boolean, };

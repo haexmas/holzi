@@ -2,12 +2,14 @@
 //! `extension_web_storage_*`): the SDK's `client.storage`, like `localStorage`. Every row belongs to
 //! this device and the calling frame's extension (`extension_kv`, ADR-0001): an extension never
 //! sees another extension's values or those of another own device. The rows are vault data, so a
-//! value survives a restart; removing the extension deletes them (research R11).
+//! value survives a restart; removing the extension deletes them (research R11). A development
+//! version keeps its values on this device only (US12).
 
 use haex_crdt::rusqlite::params;
 use serde_json::{json, Value};
 
 use crate::extensions::bridge::dispatch::CallContext;
+use crate::extensions::bridge::frames::FrameSource;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::storage::query::Query;
 
@@ -49,16 +51,42 @@ fn owner(ctx: &CallContext) -> (String, String) {
     (ctx.session.extension_id.to_string(), ctx.device.to_string())
 }
 
+/// Where the caller's values live. Every statement binds `?1` device, `?2` extension; a
+/// development version (US12) keeps them in `dev_extension_kv_no_sync` on this device, which has
+/// no device column.
+struct Store {
+    table: &'static str,
+    owner: &'static str,
+    insert: &'static str,
+}
+
+fn store(ctx: &CallContext) -> Store {
+    match ctx.session.source {
+        FrameSource::Bundle(_) => Store {
+            table: "extension_kv",
+            owner: "vault_device_uuid = ?1 AND extension_id = ?2",
+            insert: "INSERT INTO extension_kv (vault_device_uuid, extension_id, key, value) \
+                     VALUES (?1, ?2, ?3, ?4)",
+        },
+        FrameSource::DevServer => Store {
+            table: "dev_extension_kv_no_sync",
+            owner: "extension_id = ?2",
+            insert: "INSERT INTO dev_extension_kv_no_sync (extension_id, key, value) \
+                     VALUES (?2, ?3, ?4)",
+        },
+    }
+}
+
 /// `{key}` → the value, or `null`.
 pub fn get_item(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let key = key(params)?;
     let (ext, device) = owner(ctx);
+    let Store { table, owner, .. } = store(ctx);
     let value = ctx
         .db
         .read_blocking(move |q| {
             q.query_row(
-                "SELECT value FROM extension_kv \
-                 WHERE vault_device_uuid = ?1 AND extension_id = ?2 AND key = ?3",
+                &format!("SELECT value FROM {table} WHERE {owner} AND key = ?3"),
                 params![device, ext, key],
                 |r| r.get::<_, String>(0),
             )
@@ -79,20 +107,27 @@ pub fn set_item(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError>
         ));
     }
     let (ext, device) = owner(ctx);
+    let Store {
+        table,
+        owner,
+        insert,
+    } = store(ctx);
     let stored = ctx
         .db
         .write_blocking(move |tx| {
             // Every other key and value of this extension on this device, in bytes.
             let others = tx
                 .query_row(
-                    "SELECT COALESCE(SUM(length(CAST(key AS BLOB)) + length(CAST(value AS BLOB))), 0) \
-                     FROM extension_kv \
-                     WHERE vault_device_uuid = ?1 AND extension_id = ?2 AND key <> ?3",
+                    &format!(
+                        "SELECT COALESCE(SUM(length(CAST(key AS BLOB)) + \
+                         length(CAST(value AS BLOB))), 0) FROM {table} WHERE {owner} AND key <> ?3"
+                    ),
                     params![device, ext, key],
                     |r| r.get::<_, i64>(0),
                 )?
                 .unwrap_or(0);
-            let total = usize::try_from(others).unwrap_or(usize::MAX)
+            let total = usize::try_from(others)
+                .unwrap_or(usize::MAX)
                 .saturating_add(key.len())
                 .saturating_add(value.len());
             if total > MAX_TOTAL_BYTES {
@@ -100,8 +135,7 @@ pub fn set_item(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError>
             }
             let exists = tx
                 .query_row(
-                    "SELECT COUNT(*) FROM extension_kv \
-                     WHERE vault_device_uuid = ?1 AND extension_id = ?2 AND key = ?3",
+                    &format!("SELECT COUNT(*) FROM {table} WHERE {owner} AND key = ?3"),
                     params![device, ext, key],
                     |r| r.get::<_, i64>(0),
                 )?
@@ -109,17 +143,13 @@ pub fn set_item(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError>
                 > 0;
             if exists {
                 tx.execute(
-                    "UPDATE extension_kv SET value = ?4 \
-                     WHERE vault_device_uuid = ?1 AND extension_id = ?2 AND key = ?3 \
-                     AND value <> ?4",
+                    &format!(
+                        "UPDATE {table} SET value = ?4 WHERE {owner} AND key = ?3 AND value <> ?4"
+                    ),
                     params![device, ext, key, value],
                 )?;
             } else {
-                tx.execute(
-                    "INSERT INTO extension_kv (vault_device_uuid, extension_id, key, value) \
-                     VALUES (?1, ?2, ?3, ?4)",
-                    params![device, ext, key, value],
-                )?;
+                tx.execute(insert, params![device, ext, key, value])?;
             }
             Ok(true)
         })
@@ -137,11 +167,11 @@ pub fn set_item(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError>
 pub fn remove_item(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let key = key(params)?;
     let (ext, device) = owner(ctx);
+    let Store { table, owner, .. } = store(ctx);
     ctx.db
         .write_blocking(move |tx| {
             tx.execute(
-                "DELETE FROM extension_kv \
-                 WHERE vault_device_uuid = ?1 AND extension_id = ?2 AND key = ?3",
+                &format!("DELETE FROM {table} WHERE {owner} AND key = ?3"),
                 params![device, ext, key],
             )
             .map(drop)
@@ -153,10 +183,11 @@ pub fn remove_item(ctx: &CallContext, params: &Value) -> Result<Value, BridgeErr
 /// Removes every value of the caller on this device.
 pub fn clear(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError> {
     let (ext, device) = owner(ctx);
+    let Store { table, owner, .. } = store(ctx);
     ctx.db
         .write_blocking(move |tx| {
             tx.execute(
-                "DELETE FROM extension_kv WHERE vault_device_uuid = ?1 AND extension_id = ?2",
+                &format!("DELETE FROM {table} WHERE {owner}"),
                 params![device, ext],
             )
             .map(drop)
@@ -168,12 +199,12 @@ pub fn clear(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError> {
 /// Every key of the caller on this device, sorted.
 pub fn keys(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError> {
     let (ext, device) = owner(ctx);
+    let Store { table, owner, .. } = store(ctx);
     let keys: Vec<String> = ctx
         .db
         .read_blocking(move |q| {
             q.query_map(
-                "SELECT key FROM extension_kv \
-                 WHERE vault_device_uuid = ?1 AND extension_id = ?2 ORDER BY key",
+                &format!("SELECT key FROM {table} WHERE {owner} ORDER BY key"),
                 params![device, ext],
                 |r| r.get(0),
             )

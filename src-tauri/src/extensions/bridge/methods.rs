@@ -1,5 +1,6 @@
 //! The bridge methods of L1 that are not about data: context, own info, tab attention.
 
+use std::path::Path;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -40,9 +41,23 @@ pub fn context_get(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeEr
     Ok(context_of(&ctx.host, ctx.device))
 }
 
-/// `{publicKey, name, version, displayName}` of the calling extension only.
-pub fn get_info(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError> {
-    let bundle_id = ctx.session.bundle_id.to_string();
+/// The manifest the calling frame runs: of its bundle, or for a development version the one in its
+/// project folder now.
+fn manifest_of(ctx: &CallContext) -> Result<Manifest, BridgeError> {
+    let unavailable = || BridgeError::new(ExtensionErrorCode::Database, "database unavailable");
+    let unreadable = || BridgeError::new(ExtensionErrorCode::Manifest, "manifest unreadable");
+    let Some(bundle_id) = ctx.session.source.bundle() else {
+        let id = ctx.session.extension_id;
+        let registration = ctx
+            .db
+            .read_blocking(move |q| crate::extensions::dev::registration(q, id).map_err(Into::into))
+            .map_err(|_| unavailable())?
+            .ok_or_else(|| BridgeError::new(ExtensionErrorCode::NotFound, "not found"))?;
+        return crate::extensions::dev::read_project(Path::new(&registration.project_path))
+            .map(|project| project.manifest)
+            .map_err(|_| unreadable());
+    };
+    let bundle_id = bundle_id.to_string();
     let manifest_json = ctx
         .db
         .read_blocking(move |q| {
@@ -52,10 +67,14 @@ pub fn get_info(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError
                 |r| r.get::<_, Vec<u8>>(0),
             )
         })
-        .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))?
+        .map_err(|_| unavailable())?
         .ok_or_else(|| BridgeError::new(ExtensionErrorCode::NotFound, "not found"))?;
-    let manifest = Manifest::from_stored(&manifest_json)
-        .map_err(|_| BridgeError::new(ExtensionErrorCode::Manifest, "manifest unreadable"))?;
+    Manifest::from_stored(&manifest_json).map_err(|_| unreadable())
+}
+
+/// `{publicKey, name, version, displayName}` of the calling extension only.
+pub fn get_info(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError> {
+    let manifest = manifest_of(ctx)?;
     Ok(json!({
         "publicKey": manifest.public_key.as_str(),
         "name": manifest.name.as_str(),
