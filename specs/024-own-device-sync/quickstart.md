@@ -21,19 +21,21 @@ haex-crdt-Revision mit E1/E2 (contracts/haex-crdt-upstream.md) ist in `src-tauri
 ## Manuell
 
 Keine mehr. M1 bis M9 laufen als Szenarien im E2E-Job (Spec 033) und lokal mit
-`pnpm test:e2e --grep sync-`:
+`pnpm test:e2e --grep sync-`. Was jedes Szenario erwartet, steht in FR-002 bis FR-010 von Spec 033.
 
-| Prüfung                    | Szenario                                |
-| -------------------------- | --------------------------------------- |
-| M1 Verknüpfen              | `sync-link`                             |
-| M2 Sync                    | `sync-two-devices`                      |
-| M3 Rollen und Identität    | `sync-identity`                         |
-| M4 Online-Stand            | `sync-presence`                         |
-| M5 Kopie                   | `sync-copy`                             |
-| M6 Entfernen               | `sync-remove-device`                    |
-| M7 Gegenseitiges Entfernen | `sync-mutual-removal`                   |
-| M8 Sperren                 | `sync-lock-during-sync`                 |
-| M9 Server                  | `sync-servers-off`, `sync-relay-return` |
+| Prüfung                    | Szenario                |
+| -------------------------- | ----------------------- |
+| M1 Verknüpfen              | `sync-link`             |
+| M2 Sync                    | `sync-two-devices`      |
+| M3 Rollen und Identität    | `sync-identity`         |
+| M4 Online-Stand            | `sync-presence`         |
+| M5 Kopie                   | `sync-copy`             |
+| M6 Entfernen               | `sync-remove-device`    |
+| M7 Gegenseitiges Entfernen | `sync-mutual-removal`   |
+| M8 Sperren                 | `sync-lock-during-sync` |
+| M9 Server                  | `sync-servers-off`      |
 
-Dazu kommen `sync-away-through-key-change` (ein Gerät war beim Schlüsselwechsel weg),
-`sync-indirect`, `sync-own-devices-only` und `sync-two-users`.
+`--grep sync-` startet außerdem `sync-relay-return` (Nostr-Relay kommt unter derselben Adresse
+zurück, Gate G1 von Spec 033), `sync-away-through-key-change` (ein Gerät war beim Schlüsselwechsel
+weg), `sync-indirect`, `sync-own-devices-only`, `sync-two-users`, `appearance-sync-two-devices` und
+`passwords-sync-two-devices`, zusammen 16 Szenarien.
