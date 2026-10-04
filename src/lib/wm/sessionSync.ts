@@ -39,6 +39,13 @@ export function createSessionSync(deps: {
   const { state, histories, port } = deps
   /** Whether the setting is on; `false` until restored (FR-003). */
   let enabled = false
+  /** Whether `restoreAsync` has run. Until then the state is the initial empty workspace, which the
+   * restore replaces. */
+  let restored = false
+  /** Apps opened before the restore, reopened in the restored state (they would be lost). */
+  const openedEarly: Array<() => void> = []
+  /** The setting changed elsewhere while the restore was under way; read it again after. */
+  let refreshAfterRestore = false
 
   function snapshot(): WmSession {
     return snapshotSession(state, (tabId) => histories.get(tabId))
@@ -70,8 +77,30 @@ export function createSessionSync(deps: {
 
   /** Starts the vault session: restores the saved session if the setting applies and one is
    * stored, otherwise one empty workspace. Never throws (FR-012): a failed load or an invalid
-   * session is logged and holzi starts empty. */
+   * session is logged and holzi starts empty. Then it reopens the apps opened meanwhile. */
   async function restoreAsync(): Promise<void> {
+    try {
+      await loadAndReplace()
+    } finally {
+      restored = true
+      for (const reopen of openedEarly.splice(0)) {
+        try {
+          reopen()
+        } catch (error) {
+          console.error(
+            '[wm] reopening an app opened before the restore failed',
+            error,
+          )
+        }
+      }
+      if (refreshAfterRestore) {
+        refreshAfterRestore = false
+        await refreshRestoreAsync()
+      }
+    }
+  }
+
+  async function loadAndReplace(): Promise<void> {
     let loaded: { restore: RestoreState; session: unknown }
     try {
       loaded = await port.load()
@@ -87,6 +116,39 @@ export function createSessionSync(deps: {
     if (loaded.session != null && session === null)
       console.error('[wm] the saved session is not valid; starting empty')
     replaceState(enabled ? session : null)
+  }
+
+  /** Notes an app opened before the restore: `reopen` opens it again once the restored state is in
+   * place. Does nothing afterwards. */
+  function noteOpened(reopen: () => void): void {
+    if (!restored) openedEarly.push(reopen)
+  }
+
+  /** Takes over the setting as stored now, after another device changed it through sync (spec 023
+   * FR-024: one value for the vault). Before the restore it waits for it: the restore reads the
+   * setting itself, and saving the initial empty state would overwrite the saved session. Never
+   * throws: a failed read keeps the current setting. */
+  async function refreshRestoreAsync(): Promise<void> {
+    if (!restored) {
+      refreshAfterRestore = true
+      return
+    }
+    try {
+      const restore = await port.getRestore()
+      const wasEnabled = enabled
+      applyRestore(restore)
+      if (wasEnabled && !restore.enabled) {
+        // wm_session_load removes this device's stale row when restore is off (FR-007/008).
+        // Read the result again in case the setting changed while the cleanup was queued.
+        try {
+          applyRestore((await port.load()).restore)
+        } catch (error) {
+          console.error('[wm] removing the disabled session failed', error)
+        }
+      }
+    } catch (error) {
+      console.error('[wm] reading the session restore setting failed', error)
+    }
   }
 
   /** Takes over a new setting (after `wm_session_restore_set`). Turning it on saves the current
@@ -110,6 +172,9 @@ export function createSessionSync(deps: {
     saveNow,
     saveSoon,
     restoreAsync,
+    noteOpened,
+    refreshRestoreAsync,
+    isRestored: () => restored,
     applyRestore,
     setRestoreAsync,
     getRestoreAsync: () => port.getRestore(),

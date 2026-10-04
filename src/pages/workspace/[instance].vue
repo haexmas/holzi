@@ -9,8 +9,8 @@
  *
  * Awaits `wm.restoreSessionAsync()` (spec 022) before anything else: with
  * the setting "Sitzung wiederherstellen" on, the saved session replaces the
- * store's initial empty workspace, and a window opened before that would be
- * discarded. A failure is logged and the page carries on with the empty
+ * store's initial empty workspace; an app opened before that (the launcher is
+ * already there) is opened again in the restored session. A failure is logged and the page carries on with the empty
  * start, so a deep link below still opens its app (spec 022 FR-012, FR-014).
  *
  * Consumes `?open=<appId>` (and spec 020's optional `&at=<path>`) once (contracts/shell-app-contract.md §3, T024's
@@ -35,6 +35,9 @@ const appearance = useAppearance()
 onVaultTablesChanged(['preferences'], colorScheme.refreshAsync)
 // The appearance (spec 035) is a vault preference too.
 onVaultTablesChanged(['preferences'], appearance.refreshAsync)
+// So is "Sitzung wiederherstellen" (spec 023 FR-024): turned on on another device, this one starts
+// saving its session at once.
+onVaultTablesChanged(['preferences'], wm.refreshSessionRestoreAsync)
 // Spec 020: create the models store here, inside a component setup (its setup calls `useI18n()`),
 // so the global chat actions (`stores/chatActionHandlers.ts`) find it when an action runs.
 useModelsStore()

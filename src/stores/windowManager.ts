@@ -101,8 +101,8 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     onRestored: syncTabRuntime,
   })
 
-  /** Whether `restoreSessionAsync` has run. Until then a window opened is replaced by the restored
-   * session (or the empty start); tests wait for this before they open one. */
+  /** Whether `restoreSessionAsync` has run, and the apps opened before it are open again in the
+   * restored session; tests wait for this before they open one. */
   const sessionRestored = ref(false)
 
   async function restoreSessionAsync(): Promise<void> {
@@ -242,6 +242,8 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
    * and saves at once either way: reactivating a singleton is a deliberate click, not a continuous
    * gesture. */
   function openApp(appId: string, at: string | TabLocation | null = null) {
+    // The restore replaces the state: open it again there (a launcher click in the first moment).
+    session.noteOpened(() => openApp(appId, at))
     const { tabId } = openAppAt(
       state,
       navigation.histories,
@@ -416,6 +418,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     windowsInActiveWorkspace,
     restoreSessionAsync,
     sessionRestored,
+    refreshSessionRestoreAsync: session.refreshRestoreAsync,
     setSessionRestore,
     getSessionRestore: session.getRestoreAsync,
     runtimeFor,
