@@ -127,7 +127,7 @@ Fehlt die Zeile, gelten die Standardwerte. Nur die Oberfläche von holzi ändert
 | `vault_device_uuid` | TEXT FK → `known_devices` ON DELETE CASCADE |                                                                                     |
 | `status`            | TEXT                                        | `transferring` \| `ready` \| `signature_failed` \| `migration_failed` \| `disabled` |
 | `bundle_id`         | TEXT NULL                                   | Fassung, die auf dem Gerät läuft                                                    |
-| `error`             | TEXT NULL                                   | Fehlerart ohne Daten der Erweiterung                                                |
+| `error`             | TEXT NULL                                   | Fehlerart ohne Daten der Erweiterung; `parked_limit`: Parkgrenze erreicht (R10)     |
 | `updated_at`        | INTEGER                                     |                                                                                     |
 
 ### `extension_kv` — Schlüssel-Wert-Speicher

@@ -217,6 +217,7 @@ impl Inbox {
         let mut arrived: Vec<Group> = Vec::new();
         let mut rejected: Vec<(Uuid, String)> = Vec::new();
         let mut parked: Vec<(String, park::Parked, usize)> = Vec::new();
+        let mut newly_full: Vec<String> = Vec::new();
         let mut group_updates = Vector::new();
         for (hlc, group) in groups {
             let origin = progress::origin_of(&hlc)
@@ -271,6 +272,7 @@ impl Inbox {
                 || context.parked_bytes(&group.prefix).saturating_add(bytes) > park_limit;
             if full {
                 if self.full_prefixes.insert(group.prefix.clone()) {
+                    newly_full.push(group.prefix.clone());
                     log::warn!(
                         "sync: parked groups of extension {} reached {park_limit} bytes; \
                          its origin's progress waits until it is installed or removed",
@@ -389,11 +391,12 @@ impl Inbox {
             });
         }
         // Parked groups count as received: stored in the write that moves
-        // progress past them.
-        if !updates.is_empty() || !parked.is_empty() {
+        // progress past them, with the state of an extension at its limit.
+        if !updates.is_empty() || !parked.is_empty() || !newly_full.is_empty() {
             let now_ms = crate::passwords::clock::unix_millis(std::time::SystemTime::now());
             db.write(|tx| {
                 park::store(tx, &parked, now_ms)?;
+                park::note_full(tx, &newly_full, db.device_id(), now_ms)?;
                 progress::advance(tx, &updates)
             })?;
         }

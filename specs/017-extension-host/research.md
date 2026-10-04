@@ -284,7 +284,7 @@ oder eine Spalte, die einer Erweiterungstabelle noch fehlt? Dann wird die **ganz
 läuft weiter (FR-037). Unbekannte Tabellen ohne Präfix brechen weiter ab; `_no_sync`-Tabellen einer
 Erweiterung auf der Leitung sind ein Protokollfehler. Der Lebenszyklus-Dienst (R11) wendet nach den Migrationen
 die geparkten Gruppen dieses Präfixes in HLC-Reihenfolge an (`apply_remote_changes`) und löscht sie danach.
-Grenze für geparkte Bytes je Erweiterung (256 MiB): an der Grenze wird keine Gruppe verworfen, sondern der Fortschritt des Ursprungsgeräts hält vor der nächsten Gruppe dieses Präfixes an, mit einer Statusmeldung; „Daten löschen“ verwirft die geparkten Gruppen. Nach jedem Anwenden wird geprüft, dass
+Grenze für geparkte Bytes je Erweiterung (256 MiB): an der Grenze wird keine Gruppe verworfen, sondern der Fortschritt des Ursprungsgeräts hält vor der nächsten Gruppe dieses Präfixes an, mit einer Statusmeldung (Fehler `parked_limit` am Gerätezustand dieser Erweiterung, solange sie dort noch übertragen wird; er endet, sobald sie dort startet oder mit „Daten löschen“ entfernt wird); „Daten löschen“ verwirft die geparkten Gruppen. Nach jedem Anwenden wird geprüft, dass
 keine unbekannte Spalte übersprungen wurde.
 
 Regel für holzi: synchronisierte Zeilen von Kern- und Erweiterungstabellen werden nie in einer Schreibgruppe

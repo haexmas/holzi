@@ -1521,7 +1521,8 @@
       "migration_refused": "Eine Migration verstößt gegen die Regeln",
       "migration_failed": "Eine Migration ist fehlgeschlagen",
       "migration_missing": "Eine angewendete Migration fehlt in dieser Fassung",
-      "database_unavailable": "Die Datenbank war nicht erreichbar"
+      "database_unavailable": "Die Datenbank war nicht erreichbar",
+      "parked_limit": "Zu viele Daten warten auf die Installation; der Sync dieser Erweiterung hält an, bis sie hier installiert oder mit „Daten löschen“ entfernt ist"
     }
   }
 }

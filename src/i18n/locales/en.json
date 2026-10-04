@@ -1521,7 +1521,8 @@
       "migration_refused": "A migration breaks the rules",
       "migration_failed": "A migration failed",
       "migration_missing": "This version lacks an applied migration",
-      "database_unavailable": "The database was not available"
+      "database_unavailable": "The database was not available",
+      "parked_limit": "Too much data waits for the installation; syncing this extension pauses until it is installed here or removed with “delete data”"
     }
   }
 }
