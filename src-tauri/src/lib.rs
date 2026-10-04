@@ -197,7 +197,7 @@ pub fn run() {
         // timed clearing never pass through the webview. No JS permission is granted for it.
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
-        // Spec 017 US8: system notifications of extensions where notify-rust is not used directly.
+        // Spec 017 US8: system notifications of extensions, with clicks (desktop: forked, Cargo.toml).
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             if cfg!(debug_assertions) {

@@ -4226,7 +4226,6 @@ dependencies = [
  "nostr-sdk",
  "notify",
  "notify-debouncer-full",
- "notify-rust",
  "p256",
  "pkcs1",
  "pkcs8",
@@ -10312,8 +10311,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-notification"
 version = "2.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "533770889abb60a0407d5a32096182f0e6463f5a3dfaa675be94580aa14070e1"
+source = "git+https://github.com/haexmas/plugins-workspace?rev=3f9db5e24719f3def67af4216863e9cc0a6b53b8#3f9db5e24719f3def67af4216863e9cc0a6b53b8"
 dependencies = [
  "log",
  "notify-rust",
