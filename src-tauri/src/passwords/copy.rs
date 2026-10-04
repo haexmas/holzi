@@ -408,7 +408,7 @@ pub fn copy(
                     CopyTitle::Suffix(suffix) => {
                         let base = columns(tx, &target.id)?.and_then(|c| c.title);
                         let titled = format!("{}{suffix}", base.unwrap_or_default());
-                        Some(titled.trim().to_string()).filter(|t| !t.is_empty())
+                        Some(titled).filter(|t| !t.trim().is_empty())
                     }
                 };
                 if copy_item(tx, &target.id, into, title, options)? {

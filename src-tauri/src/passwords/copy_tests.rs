@@ -168,6 +168,27 @@ fn a_single_entry_takes_the_exact_title_and_every_field_by_value() {
 }
 
 #[test]
+fn a_suffix_copy_preserves_whitespace_in_the_original_title() {
+    let (_dir, db) = open_test_vault();
+    let original = full_item(&db, "  Mail  ", None);
+    write(&db, |tx| {
+        copy(tx, &[item_target(&original)], None, &suffix())
+    })
+    .expect("copy");
+
+    let copy_id = copy_ids(&db, &original).remove(0);
+    assert_eq!(
+        text(
+            &db,
+            "SELECT title FROM haex_passwords_item_details WHERE id = ?1",
+            &copy_id
+        )
+        .as_deref(),
+        Some("  Mail   – Kopie")
+    );
+}
+
+#[test]
 fn an_exact_title_needs_exactly_one_entry() {
     let (_dir, db) = open_test_vault();
     let a = full_item(&db, "A", None);
