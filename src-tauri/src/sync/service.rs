@@ -18,6 +18,7 @@ use iroh::RelayMode;
 use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::task_tracker::TaskTrackerToken;
 
 use crate::error::{HolziError, Result};
 use crate::instances::paths::get_app_local_data;
@@ -88,7 +89,8 @@ impl SyncService {
     pub fn start<R: Runtime>(gate: &VaultGate, deps: SyncDeps<R>) -> Result<Self> {
         let notify = gate.sync_notify();
         let token = gate.token();
-        gate.spawn(run(notify, token, deps))?;
+        let session = gate.tracker_token()?;
+        gate.spawn(run(notify, token, session, deps))?;
         Ok(Self)
     }
 }
@@ -158,7 +160,12 @@ async fn resolve_deps<R: Runtime>(app: &AppHandle<R>, state: &AppState) -> Resul
 /// The service body: binds the endpoint, then runs the commit-notify,
 /// presence and reconnect loops until `token` is cancelled, and shuts the
 /// endpoint down.
-async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: SyncDeps<R>) {
+async fn run<R: Runtime>(
+    notify: Arc<Notify>,
+    token: CancellationToken,
+    session: TaskTrackerToken,
+    deps: SyncDeps<R>,
+) {
     let replica = Arc::clone(&deps.replica);
     let presence_keys = deps.keys.clone();
     let vault = deps.vault;
@@ -184,6 +191,7 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     let config = NodeConfig {
         relay_mode: deps.relay_mode,
         bind_addr,
+        session: Some(session),
     };
     let node = match SyncNode::bind(deps.replica, deps.keys, deps.vault, config, on_applied).await {
         Ok(node) => node,
@@ -227,6 +235,9 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     if let Some(registry) = &registry {
         registry.set(Arc::clone(&runtime));
     }
+    // Cleared on every way out, an aborted drain included: a runtime left in the registry holds
+    // the node, and with it the gate's tracker, so the drain would end as stuck.
+    let registered = ClearOnDrop(registry);
     finish_pending_links(&replica, &presence_keys, vault).await;
     // `notify` (the gate's shared commit signal) wakes at most one waiter
     // per commit, so it gets exactly one consumer here; fanning that out to
@@ -271,10 +282,19 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
         _ = reconnect_loop => {}
     }
     runtime.cancel.cancel();
-    if let Some(registry) = &registry {
-        registry.clear();
-    }
+    drop(registered);
     node.shutdown().await;
+}
+
+/// Clears the registry when dropped.
+struct ClearOnDrop(Option<Arc<SyncRegistry>>);
+
+impl Drop for ClearOnDrop {
+    fn drop(&mut self) {
+        if let Some(registry) = &self.0 {
+            registry.clear();
+        }
+    }
 }
 
 /// Finishes links this device began before it last stopped: a main device
