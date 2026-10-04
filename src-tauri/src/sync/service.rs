@@ -333,8 +333,13 @@ fn applied_event_sink<R: Runtime>(
     changed: Arc<tokio::sync::watch::Sender<u64>>,
 ) -> Arc<dyn Fn(std::collections::BTreeSet<String>) + Send + Sync> {
     Arc::new(move |tables| {
+        // The writes below are counted with the vault's close (`Replica::hold`), taken before their
+        // task starts so the drain cannot end in between; once the close has started they are
+        // skipped.
         if tables.contains("device_lists") {
             changed.send_modify(|n| *n = n.wrapping_add(1));
+        }
+        if let Some(Ok(held)) = tables.contains("device_lists").then(|| replica.hold()) {
             let replica = Arc::clone(&replica);
             let keys = keys.clone();
             let now = std::time::SystemTime::now()
@@ -343,6 +348,7 @@ fn applied_event_sink<R: Runtime>(
                 .unwrap_or(0);
             tokio::spawn(async move {
                 match tokio::task::spawn_blocking(move || {
+                    let _held = held;
                     crate::sync::link::host::drop_listed(&replica, vault)?;
                     crate::sync::link::join::finish_pending_after_host_publication(
                         &replica, &keys, vault, now,
@@ -362,7 +368,8 @@ fn applied_event_sink<R: Runtime>(
         }
         // Requests to join and the list they are measured against meet here: the same merged set
         // ends in the same state on every device (R20).
-        if tables.contains("device_lists") || tables.contains("admission_requests") {
+        let sweep = tables.contains("device_lists") || tables.contains("admission_requests");
+        if let Some(Ok(held)) = sweep.then(|| replica.hold()) {
             let replica = Arc::clone(&replica);
             tokio::spawn(async move {
                 let now = u64::try_from(
@@ -373,6 +380,7 @@ fn applied_event_sink<R: Runtime>(
                 )
                 .unwrap_or(0);
                 match tokio::task::spawn_blocking(move || {
+                    let _held = held;
                     crate::sync::admission::sweep_now(&replica, now)
                 })
                 .await
