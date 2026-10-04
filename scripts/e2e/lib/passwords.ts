@@ -113,3 +113,63 @@ export async function restoreEntry(
     }),
   )
 }
+
+/** The tab of an open entry (spec 036) as the tab bar marks it, or `null` when no tab bar shows. */
+export async function activeTab(
+  instance: FlowInstance,
+): Promise<string | null> {
+  return instance.exec<string | null>(
+    `const on = document.querySelector('[data-testid^="entry-tab-"][data-state="active"]')
+     return on ? on.getAttribute('data-testid').slice('entry-tab-'.length) : null`,
+  )
+}
+
+/** Taps a tab of the open entry. */
+export async function selectTab(
+  instance: FlowInstance,
+  tab: 'details' | 'extra' | 'history',
+): Promise<void> {
+  await instance.click(`entry-tab-${tab}`)
+}
+
+/** Whether the swipe surface shows this tab's slide: the slide follows the tab bar (spec 036 FR-002). */
+export async function slideShows(
+  instance: FlowInstance,
+  tab: 'details' | 'extra' | 'history',
+): Promise<boolean> {
+  return instance.exec<boolean>(
+    `const slide = document.querySelector('[data-testid="entry-panel-' + arguments[0] + '"]')
+     return Boolean(slide && slide.classList.contains('swiper-slide-active'))`,
+    [tab],
+  )
+}
+
+/** Changes an entry through `passwords_update_item` (reading its update token first), so a scenario
+ * can make states for the history without the editor. */
+export async function updateEntry(
+  instance: Pick<FlowInstance, 'invoke'>,
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const item = unwrap<{ updatedAt: string }>(
+    'passwords_get_item',
+    await instance.invoke('passwords_get_item', { args: { itemId: id } }),
+  )
+  unwrap(
+    'passwords_update_item',
+    await instance.invoke('passwords_update_item', {
+      args: { itemId: id, expectedUpdatedAt: item.updatedAt, patch },
+    }),
+  )
+}
+
+/** The ids of the states of an entry, newest first, as the backend lists them. */
+export async function historyIds(
+  instance: Pick<FlowInstance, 'invoke'>,
+  id: string,
+): Promise<string[]> {
+  return unwrap<Array<{ id: string }>>(
+    'passwords_history_list',
+    await instance.invoke('passwords_history_list', { args: { itemId: id } }),
+  ).map((state) => state.id)
+}

@@ -201,6 +201,8 @@ export const KEY = {
   escape: '\uE00C',
   backspace: '\uE003',
   arrowDown: '\uE015',
+  arrowLeft: '\uE012',
+  arrowRight: '\uE014',
 } as const
 
 /**

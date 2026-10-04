@@ -101,19 +101,21 @@ function settingsRoutes(): AppRouteRecord[] {
   }))
 }
 
+/** One component object for an entry and its Verlauf, so a change between the two tabs keeps the
+ * page mounted (spec 036, research R2) instead of loading the entry again. */
+const PASSWORDS_ENTRY_PAGE = defineAsyncComponent(
+  () => import('~/components/passwords/EntryPage.vue'),
+)
+
 /** The view of each place of the password manager (spec 034); the stories add theirs. */
 const PASSWORDS_VIEWS: Partial<Record<string, Component>> = {
   list: defineAsyncComponent(() => import('~/components/passwords/List.vue')),
   folder: defineAsyncComponent(() => import('~/components/passwords/List.vue')),
-  entry: defineAsyncComponent(
-    () => import('~/components/passwords/EntryPage.vue'),
-  ),
+  entry: PASSWORDS_ENTRY_PAGE,
   trash: defineAsyncComponent(
     () => import('~/components/passwords/TrashView.vue'),
   ),
-  history: defineAsyncComponent(
-    () => import('~/components/passwords/HistoryView.vue'),
-  ),
+  history: PASSWORDS_ENTRY_PAGE,
   generator: defineAsyncComponent(
     () => import('~/components/passwords/GeneratorPage.vue'),
   ),
