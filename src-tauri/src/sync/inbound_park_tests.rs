@@ -6,7 +6,9 @@ use haex_crdt::rusqlite::params;
 use haex_crdt::{AuthContext, Authorization, GuardedWriteOptions, SqlGuard};
 
 use super::*;
+use crate::extensions::registry::status::{self, DeviceStatus, PARKED_LIMIT};
 use crate::extensions::sql::test_support::{own, t};
+use crate::storage::query;
 use crate::sync::change::PAGE_BUDGET;
 use crate::sync::inbound::tests::{foreign_change, page_with};
 use crate::sync::inbound::Inbox;
@@ -389,6 +391,125 @@ fn at_the_parking_limit_progress_waits_instead_of_dropping() {
     ddl(&b, PAGES);
     replay_ready(b.db()).expect("replay");
     assert_eq!(count(&b, "SELECT COUNT(*) FROM t:pages"), 2);
+}
+
+/// The state of extension `id` on `device`: status and error.
+fn state_of(device: &Device, id: &str) -> Option<(String, Option<String>)> {
+    let row = crate::extensions::ids::device_status_id(
+        uuid::Uuid::parse_str(id).unwrap(),
+        device.db().device_id(),
+    )
+    .to_string();
+    query::read(device.db(), |r| {
+        r.query_row(
+            "SELECT status, error FROM extension_device_status WHERE id = ?1",
+            params![row],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+    })
+    .expect("state")
+}
+
+#[test]
+fn at_the_parking_limit_the_state_here_says_so_until_the_extension_starts() {
+    const EXT: &str = "0b1e7c2a-63d4-4f7a-9d4e-6a0c2f5e8a11";
+    let (a, b) = (Device::new(), Device::new());
+    ddl(&a, PAGES);
+    write(&a, "INSERT INTO t:pages (id, body) VALUES ('p1', 'one')");
+    let prefix = own();
+    b.db()
+        .write(|tx| {
+            tx.execute(
+                "INSERT INTO extensions (id, public_key, name, installed_at, updated_at) \
+                 VALUES (?1, ?2, ?3, 1, 1)",
+                params![EXT, prefix.public_key.as_str(), prefix.name.as_str()],
+            )
+            .map(drop)
+        })
+        .expect("registered");
+
+    // No room at all: the group is not parked, and the state here tells why.
+    pull_with(&b, &a, Inbox::with_park_limit(0));
+    assert!(parked(&b).is_empty());
+    assert_eq!(
+        state_of(&b, EXT),
+        Some(("transferring".to_owned(), Some(PARKED_LIMIT.to_owned())))
+    );
+
+    let ext = uuid::Uuid::parse_str(EXT).unwrap();
+    let me = b.db().device_id();
+    let set = |state: DeviceStatus| {
+        b.db()
+            .write(|tx| status::set(tx, ext, me, state, None, None, 2).map_err(Into::into))
+            .expect("set")
+    };
+    set(DeviceStatus::Transferring);
+    assert_eq!(
+        state_of(&b, EXT).and_then(|(_, error)| error).as_deref(),
+        Some(PARKED_LIMIT),
+        "still transferring: the reason stays"
+    );
+    set(DeviceStatus::Ready);
+    assert_eq!(state_of(&b, EXT), Some(("ready".to_owned(), None)));
+}
+
+#[test]
+fn a_registry_arriving_after_the_limit_page_still_gets_the_limit_error() {
+    const EXT: &str = "0b1e7c2a-63d4-4f7a-9d4e-6a0c2f5e8a11";
+    let (a, b) = (Device::new(), Device::new());
+    ddl(&a, PAGES);
+    write(&a, "INSERT INTO t:pages (id, body) VALUES ('p1', 'one')");
+
+    // Fill the receiver before it knows the extension. The first group's stored size gives a
+    // budget that keeps the later registry write on a separate page.
+    let first = {
+        let probe = Device::new();
+        pull_with(&probe, &a, Inbox::new());
+        query::read(probe.db(), |r| {
+            r.query_row(
+                "SELECT bytes FROM sync_parked_groups_no_sync ORDER BY id LIMIT 1",
+                &[],
+                |row| row.get::<_, i64>(0),
+            )
+        })
+        .expect("bytes")
+        .expect("one parked")
+    };
+    pull_with(&b, &a, Inbox::with_park_limit(0));
+    assert!(state_of(&b, EXT).is_none());
+
+    let prefix = own();
+    a.db()
+        .write(|tx| {
+            tx.execute(
+                "INSERT INTO extensions (id, public_key, name, installed_at, updated_at) \
+                 VALUES (?1, ?2, ?3, 1, 1)",
+                params![EXT, prefix.public_key.as_str(), prefix.name.as_str()],
+            )
+            .map(drop)
+        })
+        .expect("registered");
+
+    let theirs = b.replica.progress().expect("progress");
+    let mut outbox = serve_pull_with_budget(
+        &a.replica,
+        &theirs,
+        usize::try_from(first).unwrap() + usize::try_from(first).unwrap() / 2,
+    )
+    .expect("serve");
+    let mut inbox = Inbox::with_park_limit(0);
+    let first_page = outbox.next_page().expect("data page");
+    assert!(first_page.more, "the registry must be on a later page");
+    inbox.receive(&b.replica, first_page).expect("data page");
+    assert!(state_of(&b, EXT).is_none());
+    while let Some(page) = outbox.next_page() {
+        inbox.receive(&b.replica, page).expect("registry page");
+    }
+
+    assert_eq!(
+        state_of(&b, EXT),
+        Some(("transferring".to_owned(), Some(PARKED_LIMIT.to_owned())))
+    );
 }
 
 #[test]
