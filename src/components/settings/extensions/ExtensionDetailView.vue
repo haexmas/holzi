@@ -4,8 +4,9 @@ import type { DeviceState } from '@bindings/DeviceState'
 
 /**
  * One extension in the settings (spec 017, US3, T070): what it is and its state on this device,
- * its state on each own device (US4, T080), then its permissions. Reached from its row in
- * "Erweiterungen".
+ * its state on each own device (US4, T080), managing it and its limits (US7, T092), then its
+ * permissions. A removed extension whose data was kept shows that data instead. Reached from its
+ * row in "Erweiterungen".
  */
 const { t, te } = useI18n()
 const router = useTabRouter()
@@ -65,6 +66,7 @@ function deviceTitle(device: DeviceState): string {
           :description="extension.publisherFingerprint"
         />
         <SettingsRow
+          v-if="extension.state === 'installed'"
           :title="t('settings.extensions.stateHere')"
           :description="
             extension.statusHere
@@ -85,9 +87,14 @@ function deviceTitle(device: DeviceState): string {
           data-testid="extension-device-state"
         />
       </SettingsGroup>
-      <SettingsExtensionsExtensionPermissionsView
-        :extension-id="extension.id"
-      />
+      <template v-if="extension.state === 'installed'">
+        <SettingsExtensionsExtensionManageView :extension="extension" />
+        <SettingsExtensionsExtensionLimitsView :extension-id="extension.id" />
+        <SettingsExtensionsExtensionPermissionsView
+          :extension-id="extension.id"
+        />
+      </template>
+      <SettingsExtensionsExtensionKeptDataView v-else :extension="extension" />
     </template>
   </section>
 </template>

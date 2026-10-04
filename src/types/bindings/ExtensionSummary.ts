@@ -13,9 +13,15 @@ title: string, description?: string,
  */
 version?: string, publisherFingerprint: string, enabled: boolean,
 /**
- * `installed` or `removed` (data kept, L3).
+ * `installed`, or `removed` with its data kept (FR-008); one removed with its data is not
+ * listed.
  */
 state: string,
+/**
+ * For `removed`: the bytes its kept tables take on this device, indexes included; `None` when
+ * SQLite cannot tell.
+ */
+keptDataBytes?: number,
 /**
  * The app opens at most once (manifest `singleInstance`).
  */

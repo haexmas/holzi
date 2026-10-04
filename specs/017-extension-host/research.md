@@ -332,6 +332,12 @@ Austauschs).
   offline war, die Zeilen der Neuinstallation mit den alten Tabellen löschen.
 - **Neuinstallation** nach dem Entfernen nutzt dieselbe abgeleitete Kennung; neuere HLCs gewinnen über das
   Lösch-Log.
+- **Behaltene Daten**: Bei „Daten behalten“ bleiben die Zeilen in `extension_migrations`. Jedes Gerät wendet die
+  Migrationen einer Erweiterung, die bei ihm nicht läuft (deaktiviert oder mit behaltenen Daten entfernt), trotzdem
+  an, auch ein später hinzugekommenes; so haben ihre synchronisierten Zeilen einen Platz und bleiben nicht geparkt.
+  „Behaltene Daten löschen“ setzt `purge_data` und einen neuen `purge_hlc` und löscht die Migrationen; das Aufräumen
+  läuft dann wie beim Entfernen mit „Daten löschen“. Die Liste zeigt eine entfernte Erweiterung nur, solange ihre
+  Daten behalten werden, mit der Größe ihrer Tabellen auf diesem Gerät (`dbstat`).
 - Gerätezustand („bereit“, „wird übertragen“, „Migration fehlgeschlagen“ mit Fehler) als synchronisierte,
   gerätebezogene Zeile für die Anzeige in den Einstellungen.
 
