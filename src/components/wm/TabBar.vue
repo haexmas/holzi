@@ -166,6 +166,7 @@ watch(
         :aria-hidden="true"
       />
       <span class="min-w-0 truncate">{{ titleFrom(collapsedTab.info) }}</span>
+      <WmDevBadge v-if="collapsedTab.info.dev" />
       <span
         v-if="collapsedTab.info.hasAttention"
         class="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
@@ -215,6 +216,7 @@ watch(
           :aria-hidden="true"
         />
         <span class="min-w-0 flex-1 truncate">{{ titleFrom(row.info) }}</span>
+        <WmDevBadge v-if="row.info.dev" />
         <span
           v-if="row.info.hasAttention"
           class="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"

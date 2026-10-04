@@ -28,7 +28,9 @@ const wm = useWindowManagerStore()
 
 type TabInfo = ReturnType<typeof wm.tabDisplayInfo>
 
-function titleFrom(info: TabInfo): string {
+function titleFrom(
+  info: Pick<TabInfo, 'titleOverride' | 'titleKey' | 'titleParams'>,
+): string {
   return (
     info.titleOverride ??
     (info.titleKey ? t(info.titleKey, info.titleParams) : '')

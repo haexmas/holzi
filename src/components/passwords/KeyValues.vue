@@ -81,6 +81,7 @@ function setValue(index: number, value: string) {
         />
       </div>
       <UiButton
+        type="button"
         variant="ghost"
         size="icon"
         class="shrink-0"
@@ -100,6 +101,7 @@ function setValue(index: number, value: string) {
       />
     </div>
     <UiButton
+      type="button"
       variant="outline"
       size="sm"
       class="self-start"

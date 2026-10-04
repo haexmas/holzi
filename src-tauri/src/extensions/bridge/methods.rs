@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use super::dispatch::CallContext;
+use crate::error::HolziError;
 use crate::extensions::bundle::Manifest;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
@@ -40,9 +41,30 @@ pub fn context_get(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeEr
     Ok(context_of(&ctx.host, ctx.device))
 }
 
-/// `{publicKey, name, version, displayName}` of the calling extension only.
-pub fn get_info(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError> {
-    let bundle_id = ctx.session.bundle_id.to_string();
+/// The manifest the calling frame runs: of its bundle, or for a development version the one in its
+/// project folder now, as long as it still names the registered prefix (the SQL policy's).
+fn manifest_of(ctx: &CallContext) -> Result<Manifest, BridgeError> {
+    let unavailable = || BridgeError::new(ExtensionErrorCode::Database, "database unavailable");
+    let unreadable = || BridgeError::new(ExtensionErrorCode::Manifest, "manifest unreadable");
+    let Some(bundle_id) = ctx.session.source.bundle() else {
+        let id = ctx.session.extension_id;
+        let registration = ctx
+            .db
+            .read_blocking(move |q| crate::extensions::dev::registration(q, id).map_err(Into::into))
+            .map_err(|_| unavailable())?
+            .ok_or_else(|| BridgeError::new(ExtensionErrorCode::NotFound, "not found"))?;
+        return match crate::extensions::dev::current_project(&registration) {
+            Ok(project) => Ok(project.manifest),
+            Err(HolziError::ExtensionInstall { reason }) if reason == "dev_project_changed" => {
+                Err(BridgeError::new(
+                    ExtensionErrorCode::Manifest,
+                    "the project names another key or name now; load it again",
+                ))
+            }
+            Err(_) => Err(unreadable()),
+        };
+    };
+    let bundle_id = bundle_id.to_string();
     let manifest_json = ctx
         .db
         .read_blocking(move |q| {
@@ -52,10 +74,14 @@ pub fn get_info(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError
                 |r| r.get::<_, Vec<u8>>(0),
             )
         })
-        .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))?
+        .map_err(|_| unavailable())?
         .ok_or_else(|| BridgeError::new(ExtensionErrorCode::NotFound, "not found"))?;
-    let manifest = Manifest::from_stored(&manifest_json)
-        .map_err(|_| BridgeError::new(ExtensionErrorCode::Manifest, "manifest unreadable"))?;
+    Manifest::from_stored(&manifest_json).map_err(|_| unreadable())
+}
+
+/// `{publicKey, name, version, displayName}` of the calling extension only.
+pub fn get_info(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError> {
+    let manifest = manifest_of(ctx)?;
     Ok(json!({
         "publicKey": manifest.public_key.as_str(),
         "name": manifest.name.as_str(),

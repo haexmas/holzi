@@ -1,6 +1,10 @@
 //! Remembered permissions in `extension_permissions` (data-model.md). Row ids derive from the
 //! natural key (`ids::permission_id`), so two devices that remember the same permission write the
 //! same row. Writes are check-then-write like the other CRDT tables (`storage/preferences.rs`).
+//!
+//! A development version (US12, research R16) keeps its permissions in
+//! `dev_extension_permissions_no_sync` on this device. Its id comes from another namespace than an
+//! installed extension's, so its rows never collide with those of `extension_permissions`.
 
 use haex_crdt::rusqlite::params;
 use haex_crdt::CrdtTransaction;
@@ -30,11 +34,30 @@ impl PermissionRow {
     }
 }
 
+const SYNCED: &str = "extension_permissions";
+const DEV: &str = "dev_extension_permissions_no_sync";
+
+/// The table that holds the permissions of `extension_id`.
+fn table_of(q: &mut impl Query, extension_id: Uuid) -> Result<&'static str> {
+    let dev = q
+        .query_row(
+            "SELECT COUNT(*) FROM dev_extensions_no_sync WHERE id = ?1",
+            &[&extension_id.to_string()],
+            |r| r.get::<_, i64>(0),
+        )?
+        .unwrap_or(0)
+        > 0;
+    Ok(if dev { DEV } else { SYNCED })
+}
+
 /// Every row of an extension, on every device.
 pub fn rows_of(q: &mut impl Query, extension_id: Uuid) -> Result<Vec<PermissionRow>> {
+    let table = table_of(q, extension_id)?;
     let rows = q.query_map(
-        "SELECT id, kind, action, target, status, declared, vault_device_uuid \
-         FROM extension_permissions WHERE extension_id = ?1",
+        &format!(
+            "SELECT id, kind, action, target, status, declared, vault_device_uuid \
+             FROM {table} WHERE extension_id = ?1"
+        ),
         &[&extension_id.to_string()],
         |r| {
             Ok((
@@ -114,9 +137,10 @@ pub fn put(
         permission.vault_device_uuid,
     );
     let key = id.to_string();
+    let table = table_of(tx, extension_id)?;
     let known = tx
         .query_row(
-            "SELECT COUNT(*) FROM extension_permissions WHERE id = ?1",
+            &format!("SELECT COUNT(*) FROM {table} WHERE id = ?1"),
             params![key],
             |r| r.get::<_, i64>(0),
         )?
@@ -124,15 +148,18 @@ pub fn put(
         > 0;
     if known {
         tx.execute(
-            "UPDATE extension_permissions SET status = ?2, declared = ?3, updated_at = ?4 \
-             WHERE id = ?1",
+            &format!(
+                "UPDATE {table} SET status = ?2, declared = ?3, updated_at = ?4 WHERE id = ?1"
+            ),
             params![key, permission.status, permission.declared, now_ms],
         )?;
     } else {
         tx.execute(
-            "INSERT INTO extension_permissions (id, extension_id, kind, action, target, status, \
-             declared, vault_device_uuid, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            &format!(
+                "INSERT INTO {table} (id, extension_id, kind, action, target, status, \
+                 declared, vault_device_uuid, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
+            ),
             params![
                 key,
                 extension_id.to_string(),
@@ -149,19 +176,24 @@ pub fn put(
     Ok(id)
 }
 
-/// Marks a row as declared by the manifest, keeping its state.
+/// Marks a row as declared by the manifest, keeping its state. The id is in one table only.
 pub fn mark_declared(tx: &mut CrdtTransaction<'_>, id: Uuid, now_ms: i64) -> Result<()> {
-    tx.execute(
-        "UPDATE extension_permissions SET declared = 1, updated_at = ?2 WHERE id = ?1",
-        params![id.to_string(), now_ms],
-    )?;
+    for table in [SYNCED, DEV] {
+        tx.execute(
+            &format!("UPDATE {table} SET declared = 1, updated_at = ?2 WHERE id = ?1"),
+            params![id.to_string(), now_ms],
+        )?;
+    }
     Ok(())
 }
 
+/// Deletes a row; the id is in one table only.
 pub fn delete(tx: &mut CrdtTransaction<'_>, id: Uuid) -> Result<()> {
-    tx.execute(
-        "DELETE FROM extension_permissions WHERE id = ?1",
-        params![id.to_string()],
-    )?;
+    for table in [SYNCED, DEV] {
+        tx.execute(
+            &format!("DELETE FROM {table} WHERE id = ?1"),
+            params![id.to_string()],
+        )?;
+    }
     Ok(())
 }
