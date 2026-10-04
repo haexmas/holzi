@@ -4,7 +4,7 @@
 //! plugin is pinned to a fork that reports them on desktop too (Cargo.toml `[patch.crates-io]`).
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -91,13 +91,20 @@ fn response(action_id: &str) -> NotificationResponse {
     }
 }
 
-/// The icon as a file the notification system can read, named by its content.
-fn icon_file(bytes: &[u8], extension: &str) -> Option<PathBuf> {
-    let dir = std::env::temp_dir().join("holzi-notification-icons");
-    std::fs::create_dir_all(&dir).ok()?;
+/// The icon as a file the notification system can read, named by its content, in holzi's own
+/// cache (not the shared temp directory, where another user could place the folder first). It is
+/// written under a name of its own and renamed, so a notification showing the same icon at the
+/// same time never reads half a file and a crash leaves no truncated one behind.
+fn icon_file(dir: &Path, bytes: &[u8], extension: &str) -> Option<PathBuf> {
+    std::fs::create_dir_all(dir).ok()?;
     let path = dir.join(format!("{}.{extension}", hex(&Sha256::digest(bytes))));
     if !path.exists() {
-        std::fs::write(&path, bytes).ok()?;
+        let partial = dir.join(format!("{}.partial", uuid::Uuid::new_v4()));
+        std::fs::write(&partial, bytes).ok()?;
+        if std::fs::rename(&partial, &path).is_err() {
+            let _ = std::fs::remove_file(&partial);
+            return None;
+        }
     }
     Some(path)
 }
@@ -137,11 +144,10 @@ impl<R: Runtime> Desktop for AppDesktop<R> {
         if let Some(body) = &spec.body {
             builder = builder.body(body);
         }
-        if let Some(path) = spec
-            .icon
-            .as_ref()
-            .and_then(|(bytes, extension)| icon_file(bytes, extension))
-        {
+        let icons = self.app.path().app_cache_dir().ok();
+        if let Some(path) = spec.icon.as_ref().and_then(|(bytes, extension)| {
+            icon_file(&icons?.join("notification-icons"), bytes, extension)
+        }) {
             builder = builder.icon(path.to_string_lossy());
         }
         let buttons = (!spec.buttons.is_empty()).then(|| {
