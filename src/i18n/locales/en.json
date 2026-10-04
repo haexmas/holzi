@@ -1543,6 +1543,7 @@
         "dev_public_key_invalid": "The publisher key in the manifest is not a valid Ed25519 key.",
         "dev_installed_conflict": "An extension with this key and name is or was installed (also with kept data).",
         "dev_tables_exist": "Tables with this extension's prefix exist already.",
+        "dev_project_changed": "The project now names another key or name; load it again.",
         "dev_prefix_conflict": "A development version of this extension is loaded on this device; unload it first."
       },
       "title": "Install extension",

@@ -32,6 +32,8 @@ const PORT_INIT = 'haexspace:port:init'
 const PORT_READY = 'haexspace:port:ready'
 const INIT_INTERVAL_MS = 200
 const INIT_TIMEOUT_MS = 10_000
+/** After a development page's probe timed out, how often a channel is still offered. */
+const LATE_OFFER_INTERVAL_MS = 1_000
 
 export type FrameState = 'loading' | 'ready' | 'error'
 
@@ -247,9 +249,17 @@ export function useExtensionFrame(
     initTimer = setInterval(offerPort, INIT_INTERVAL_MS)
     initDeadline = setTimeout(() => {
       stopInit()
-      for (const attempt of attempts) attempt.port1.close()
-      attempts = []
       events.ready()
+      // Still a channel on offer, one at a time: a new document whose SDK starts late (a slow
+      // reload of the dev server) takes it; until then the old channel stays.
+      // The previous offer stays open for one more round, for an answer on its way.
+      initTimer = setInterval(() => {
+        const previous = attempts.at(-1)
+        for (const attempt of attempts)
+          if (attempt !== previous) attempt.port1.close()
+        attempts = previous ? [previous] : []
+        offerPort()
+      }, LATE_OFFER_INTERVAL_MS)
     }, INIT_TIMEOUT_MS)
   }
 

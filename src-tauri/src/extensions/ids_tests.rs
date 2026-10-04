@@ -149,3 +149,11 @@ fn table_names_compare_without_regard_to_case() {
         .expect("SQLite resolves table names case-insensitively");
     assert_eq!(lower, upper);
 }
+
+#[test]
+fn a_public_key_gives_the_bytes_its_hex_stands_for() {
+    let key = PublicKey::parse(&format!("00ff10{}", "a".repeat(58))).unwrap();
+    let bytes = key.bytes();
+    assert_eq!(&bytes[..3], &[0x00, 0xff, 0x10]);
+    assert!(bytes[3..].iter().all(|b| *b == 0xaa));
+}

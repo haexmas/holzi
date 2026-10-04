@@ -131,6 +131,69 @@ fn a_project_names_its_loopback_server_and_nothing_else() {
 }
 
 #[test]
+fn the_name_comes_from_package_json_as_in_the_sdk() {
+    // As `haex init` writes it: no name or version in the manifest.
+    let mut bare = manifest(&key(), "unused");
+    bare.as_object_mut().unwrap().remove("name");
+    bare.as_object_mut().unwrap().remove("version");
+    let dir = project(&bare, "localhost");
+    assert_eq!(reason(read_project(dir.path())), "manifest_invalid");
+    std::fs::write(
+        dir.path().join("package.json"),
+        json!({ "name": "draft", "version": "1.2.3", "author": { "name": "x" } }).to_string(),
+    )
+    .unwrap();
+    let read = read_project(dir.path()).unwrap();
+    assert_eq!(read.manifest.name.as_str(), "draft");
+    assert_eq!(read.manifest.version.to_string(), "1.2.3");
+    assert_eq!(read.manifest.author, None, "not a text");
+
+    // The package's name wins over the manifest's, the manifest's version over the package's.
+    let dir = project(&manifest(&key(), "other"), "localhost");
+    std::fs::write(
+        dir.path().join("package.json"),
+        json!({ "name": "draft", "version": "9.9.9" }).to_string(),
+    )
+    .unwrap();
+    let read = read_project(dir.path()).unwrap();
+    assert_eq!(read.manifest.name.as_str(), "draft");
+    assert_eq!(read.manifest.version.to_string(), "0.1.0");
+}
+
+#[test]
+fn a_project_that_names_another_prefix_now_must_load_again() {
+    let s = setup();
+    s.mode(true);
+    let dir = project(&manifest(&key(), "draft"), "localhost");
+    let id = confirm(&s.vault, dir.path(), vec![], s.device, 1).unwrap();
+    let registered = s
+        .vault
+        .read_blocking(move |q| registration(q, id).map_err(Into::into))
+        .unwrap()
+        .unwrap();
+
+    // A new port is taken up without loading again.
+    std::fs::write(
+        dir.path().join("haextension.config.json"),
+        json!({ "dev": { "host": "localhost", "port": 5200 } }).to_string(),
+    )
+    .unwrap();
+    assert_eq!(
+        current_project(&registered).unwrap().url,
+        "http://localhost:5200"
+    );
+
+    std::fs::write(
+        dir.path().join("package.json"),
+        json!({ "name": "renamed" }).to_string(),
+    )
+    .unwrap();
+    assert_eq!(reason(current_project(&registered)), "dev_project_changed");
+    let refused = call(&dev_frame(&s, id), "extension_get_info", &Value::Null).unwrap_err();
+    assert!(refused.message.contains("load it again"), "{refused:?}");
+}
+
+#[test]
 fn loading_needs_developer_mode() {
     let s = setup();
     let dir = project(&manifest(&key(), "draft"), "127.0.0.1");

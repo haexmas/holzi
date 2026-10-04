@@ -58,15 +58,15 @@ export function devProject(port: number): string {
     .publicKey.export({ format: 'der', type: 'spki' })
     .subarray(-32)
     .toString('hex')
+  // As `haex init` sets a project up: name and version in package.json, not in the manifest.
+  writeFileSync(
+    join(dir, 'package.json'),
+    JSON.stringify({ name: 'devprobe', version: '0.1.0' }),
+  )
   mkdirSync(join(dir, 'haextension'))
   writeFileSync(
     join(dir, 'haextension', 'manifest.json'),
-    JSON.stringify({
-      name: 'devprobe',
-      version: '0.1.0',
-      publicKey: key,
-      displayName: 'Dev Probe',
-    }),
+    JSON.stringify({ publicKey: key, displayName: 'Dev Probe' }),
   )
   return dir
 }

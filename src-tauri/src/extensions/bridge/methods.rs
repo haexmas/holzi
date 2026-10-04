@@ -1,6 +1,5 @@
 //! The bridge methods of L1 that are not about data: context, own info, tab attention.
 
-use std::path::Path;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -8,6 +7,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use super::dispatch::CallContext;
+use crate::error::HolziError;
 use crate::extensions::bundle::Manifest;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
@@ -42,7 +42,7 @@ pub fn context_get(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeEr
 }
 
 /// The manifest the calling frame runs: of its bundle, or for a development version the one in its
-/// project folder now.
+/// project folder now, as long as it still names the registered prefix (the SQL policy's).
 fn manifest_of(ctx: &CallContext) -> Result<Manifest, BridgeError> {
     let unavailable = || BridgeError::new(ExtensionErrorCode::Database, "database unavailable");
     let unreadable = || BridgeError::new(ExtensionErrorCode::Manifest, "manifest unreadable");
@@ -53,9 +53,16 @@ fn manifest_of(ctx: &CallContext) -> Result<Manifest, BridgeError> {
             .read_blocking(move |q| crate::extensions::dev::registration(q, id).map_err(Into::into))
             .map_err(|_| unavailable())?
             .ok_or_else(|| BridgeError::new(ExtensionErrorCode::NotFound, "not found"))?;
-        return crate::extensions::dev::read_project(Path::new(&registration.project_path))
-            .map(|project| project.manifest)
-            .map_err(|_| unreadable());
+        return match crate::extensions::dev::current_project(&registration) {
+            Ok(project) => Ok(project.manifest),
+            Err(HolziError::ExtensionInstall { reason }) if reason == "dev_project_changed" => {
+                Err(BridgeError::new(
+                    ExtensionErrorCode::Manifest,
+                    "the project names another key or name now; load it again",
+                ))
+            }
+            Err(_) => Err(unreadable()),
+        };
     };
     let bundle_id = bundle_id.to_string();
     let manifest_json = ctx

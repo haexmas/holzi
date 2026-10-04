@@ -51,13 +51,41 @@ impl Manifest {
 
     /// Reads `haextension/manifest.json` of a project loaded in developer mode (US12): restricted
     /// JSON, not necessarily canonical, and unsigned; the same fields and rules otherwise.
-    pub fn from_dev_file(manifest_json: &str) -> Result<Self, BundleRejection> {
-        match haex_bundle::jcs::parse_restricted(manifest_json) {
-            Ok(JsonValue::Object(manifest)) => Self::from_object(&manifest),
-            _ => Err(BundleRejection::new(
+    ///
+    /// The project's `package.json` fills in as the SDK's `readManifest` does when it builds the
+    /// extension: its `name` always wins (the SDK names the tables with it, and `haex init` writes
+    /// no name into the manifest), `version`, `author` and `homepage` count where the manifest has
+    /// none. A `package.json` that is missing or no JSON object adds nothing, as in the SDK.
+    pub fn from_dev_file(
+        manifest_json: &str,
+        package_json: Option<&str>,
+    ) -> Result<Self, BundleRejection> {
+        let Ok(JsonValue::Object(mut manifest)) = haex_bundle::jcs::parse_restricted(manifest_json)
+        else {
+            return Err(BundleRejection::new(
                 haex_bundle::ErrorKind::ManifestInvalid,
-            )),
+            ));
+        };
+        let package = package_json
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
+            .unwrap_or_default();
+        let from_package = |key: &str| {
+            package
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .map(|value| JsonValue::String(value.to_owned()))
+        };
+        if let Some(name) = from_package("name") {
+            manifest.insert("name".to_owned(), name);
         }
+        for key in ["version", "author", "homepage"] {
+            if matches!(manifest.get(key), None | Some(JsonValue::Null)) {
+                if let Some(value) = from_package(key) {
+                    manifest.insert(key.to_owned(), value);
+                }
+            }
+        }
+        Self::from_object(&manifest)
     }
 
     /// Reads the stored `manifest_json` of a bundle that was verified when it was installed.

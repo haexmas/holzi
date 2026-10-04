@@ -139,6 +139,8 @@ pub async fn extension_dev_unload(
     let host = state.extensions();
     tauri::async_runtime::spawn_blocking(move || {
         dev::unload(&db, id)?;
+        // The id is the same when the project loads again: no decision of this session carries over.
+        host.permissions.forget_extension(id);
         reconcile(
             &db,
             &host,

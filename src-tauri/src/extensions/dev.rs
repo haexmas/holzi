@@ -2,8 +2,9 @@
 //! yet runs from a development server on this device.
 //!
 //! The switch is a setting of this device. The developer picks the project folder; holzi reads
-//! `haextension.config.json` (the dev server's host and port, as the SDK writes them) and
-//! `haextension/manifest.json` from it. The server must be `localhost` or `127.0.0.1`.
+//! `haextension.config.json` (the dev server's host and port, as the SDK writes them),
+//! `haextension/manifest.json` and, for the name as in the SDK, `package.json` from it. The server
+//! must be `localhost` or `127.0.0.1`.
 //! Registration and permissions live in `dev_extensions_no_sync` and
 //! `dev_extension_permissions_no_sync`, the key-value store in `dev_extension_kv_no_sync`; the
 //! tables the extension creates come from the migrations it registers itself and are created in
@@ -141,6 +142,8 @@ pub fn server_url(host: &str, port: u16) -> Result<String> {
 }
 
 /// Reads the project folder at `path`. Blocking.
+///
+/// `name` comes from `package.json` as in the SDK (`Manifest::from_dev_file`).
 pub fn read_project(path: &Path) -> Result<DevProject> {
     let config: ProjectConfig = match std::fs::read_to_string(path.join("haextension.config.json"))
     {
@@ -159,14 +162,11 @@ pub fn read_project(path: &Path) -> Result<DevProject> {
     }
     let manifest_text = std::fs::read_to_string(path.join(dir).join("manifest.json"))
         .map_err(|_| refused("dev_manifest_missing"))?;
-    let manifest =
-        Manifest::from_dev_file(&manifest_text).map_err(|rejection| refused(&rejection.kind))?;
+    let package_text = std::fs::read_to_string(path.join("package.json")).ok();
+    let manifest = Manifest::from_dev_file(&manifest_text, package_text.as_deref())
+        .map_err(|rejection| refused(&rejection.kind))?;
     // As for a bundle: the key must be a usable Ed25519 key (FR-004), even unsigned.
-    let key_bytes: Option<Vec<u8>> = (0..manifest.public_key.as_str().len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&manifest.public_key.as_str()[i..i + 2], 16).ok())
-        .collect();
-    if !key_bytes.is_some_and(|bytes| haex_bundle::verify::strict_public_key(&bytes).is_some()) {
+    if haex_bundle::verify::strict_public_key(&manifest.public_key.bytes()).is_none() {
         return Err(refused("dev_public_key_invalid"));
     }
     Ok(DevProject {
@@ -186,52 +186,69 @@ pub struct DevRegistration {
     pub url: String,
 }
 
+const COLUMNS: &str = "id, public_key, name, display_name, project_path, dev_url";
+
+type RawRegistration = (String, String, String, Option<String>, String, String);
+
+fn raw(r: &haex_crdt::rusqlite::Row<'_>) -> haex_crdt::rusqlite::Result<RawRegistration> {
+    Ok((
+        r.get(0)?,
+        r.get(1)?,
+        r.get(2)?,
+        r.get(3)?,
+        r.get(4)?,
+        r.get(5)?,
+    ))
+}
+
+/// A row as a registration; `None` for a row holzi cannot read.
+fn parsed(
+    (id, key, name, display_name, project_path, url): RawRegistration,
+) -> Option<DevRegistration> {
+    let prefix = TablePrefix {
+        public_key: PublicKey::parse_case_insensitive(&key).ok()?,
+        name: ExtensionName::parse(&name).ok()?,
+    };
+    Some(DevRegistration {
+        id: Uuid::parse_str(&id).ok()?,
+        title: display_name.unwrap_or_else(|| name.clone()),
+        prefix,
+        project_path,
+        url,
+    })
+}
+
 /// The development versions registered on `device`; a row holzi cannot read is left out.
 pub fn registrations(q: &mut impl Query, device: Uuid) -> Result<Vec<DevRegistration>> {
-    let rows: Vec<(String, String, String, Option<String>, String, String)> = q.query_map(
-        "SELECT id, public_key, name, display_name, project_path, dev_url \
-         FROM dev_extensions_no_sync WHERE vault_device_uuid = ?1 ORDER BY name",
+    let rows = q.query_map(
+        &format!(
+            "SELECT {COLUMNS} FROM dev_extensions_no_sync WHERE vault_device_uuid = ?1 ORDER BY name"
+        ),
         params![device.to_string()],
-        |r| {
-            Ok((
-                r.get(0)?,
-                r.get(1)?,
-                r.get(2)?,
-                r.get(3)?,
-                r.get(4)?,
-                r.get(5)?,
-            ))
-        },
+        raw,
     )?;
-    Ok(rows
-        .into_iter()
-        .filter_map(|(id, key, name, display_name, project_path, url)| {
-            let prefix = TablePrefix {
-                public_key: PublicKey::parse_case_insensitive(&key).ok()?,
-                name: ExtensionName::parse(&name).ok()?,
-            };
-            Some(DevRegistration {
-                id: Uuid::parse_str(&id).ok()?,
-                title: display_name.unwrap_or_else(|| name.clone()),
-                prefix,
-                project_path,
-                url,
-            })
-        })
-        .collect())
+    Ok(rows.into_iter().filter_map(parsed).collect())
 }
 
 /// The registration `id`, on any device of this vault file.
 pub fn registration(q: &mut impl Query, id: Uuid) -> Result<Option<DevRegistration>> {
-    let device: Option<String> = q.query_row(
-        "SELECT vault_device_uuid FROM dev_extensions_no_sync WHERE id = ?1",
+    let row = q.query_row(
+        &format!("SELECT {COLUMNS} FROM dev_extensions_no_sync WHERE id = ?1"),
         params![id.to_string()],
-        |r| r.get(0),
+        raw,
     )?;
-    let Some(device) = device.and_then(|d| Uuid::parse_str(&d).ok()) else {
-        return Ok(None);
-    };
-    Ok(registrations(q, device)?.into_iter().find(|r| r.id == id))
+    Ok(row.and_then(parsed))
+}
+
+/// The project of `registration` as its folder reads now. Refused when the folder now names
+/// another prefix (key or name changed): the tables, permissions and store belong to the
+/// registered one, so the developer loads the project again. Blocking.
+pub fn current_project(registration: &DevRegistration) -> Result<DevProject> {
+    let project = read_project(Path::new(&registration.project_path))?;
+    if project.prefix() != registration.prefix {
+        return Err(refused("dev_project_changed"));
+    }
+    Ok(project)
 }
 
 /// The prefixes of every development version in this vault file, as table prefixes.

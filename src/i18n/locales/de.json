@@ -1543,6 +1543,7 @@
         "dev_public_key_invalid": "Der Herausgeber-Schlüssel im Manifest ist kein gültiger Ed25519-Schlüssel.",
         "dev_installed_conflict": "Eine Erweiterung mit diesem Schlüssel und Namen ist installiert oder war es (auch mit behaltenen Daten).",
         "dev_tables_exist": "Es gibt schon Tabellen mit dem Präfix dieser Erweiterung.",
+        "dev_project_changed": "Das Projekt nennt jetzt einen anderen Schlüssel oder Namen; lade es erneut.",
         "dev_prefix_conflict": "Auf diesem Gerät ist eine Entwicklungsfassung dieser Erweiterung geladen; entlade sie zuerst."
       },
       "title": "Erweiterung installieren",

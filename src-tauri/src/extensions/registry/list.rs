@@ -223,34 +223,56 @@ pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
     Ok(out)
 }
 
-/// A development version as the launcher and the settings show it; what its manifest says now.
+/// A development version as the launcher and the settings show it, from its registration;
+/// [`with_dev_projects`] adds what its manifest says now.
 fn dev_summary(
     registration: crate::extensions::dev::DevRegistration,
     mode: bool,
 ) -> ExtensionSummary {
-    let manifest =
-        crate::extensions::dev::read_project(std::path::Path::new(&registration.project_path))
-            .ok()
-            .map(|project| project.manifest);
     ExtensionSummary {
         id: registration.id.to_string(),
         name: registration.prefix.name.as_str().to_owned(),
-        title: manifest
-            .as_ref()
-            .map_or_else(|| registration.title.clone(), |m| m.title().to_owned()),
-        description: manifest.as_ref().and_then(|m| m.description.clone()),
-        version: manifest.as_ref().map(|m| m.version.to_string()),
+        title: registration.title,
+        description: None,
+        version: None,
         publisher_fingerprint: publisher_fingerprint(registration.prefix.public_key.as_str()),
         enabled: mode,
         state: "installed".to_owned(),
         kept_data_bytes: None,
-        single_instance: manifest.as_ref().is_some_and(|m| m.single_instance),
+        single_instance: false,
         has_icon: false,
         status_here: None,
         status_error_here: None,
         devices: Vec::new(),
         dev: true,
     }
+}
+
+/// Fills in the development versions of `listed` from their project folders as they read now; a
+/// folder that cannot be read (moved, or naming another prefix) leaves the registration's values.
+/// Reads files, so it runs outside the database read. Blocking.
+pub fn with_dev_projects(
+    mut listed: Vec<ExtensionSummary>,
+    registrations: &[crate::extensions::dev::DevRegistration],
+) -> Vec<ExtensionSummary> {
+    for registration in registrations {
+        let Some(summary) = listed
+            .iter_mut()
+            .find(|e| e.dev && e.id == registration.id.to_string())
+        else {
+            continue;
+        };
+        let Ok(project) = crate::extensions::dev::current_project(registration) else {
+            continue;
+        };
+        let manifest = project.manifest;
+        summary.title = manifest.title().to_owned();
+        summary.description = manifest.description.clone();
+        summary.version = Some(manifest.version.to_string());
+        summary.single_instance = manifest.single_instance;
+    }
+    listed.sort_by_key(|e| e.title.to_lowercase());
+    listed
 }
 
 /// The icon of the effective bundle as a `data:` URL, or `None` without an image icon or while

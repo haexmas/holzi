@@ -45,18 +45,28 @@ pub async fn extension_frame_open(
     let db = active_database(&state)?;
     let device = current_device_uuid(&app, &db)?;
     let dev = db
-        .read(move |q| crate::extensions::dev::registration(q, extension_id).map_err(Into::into))
+        .read(move |q| {
+            if crate::extensions::dev::registration(q, extension_id)?.is_none() {
+                return Ok(None);
+            }
+            crate::extensions::dev::start(q, extension_id, device)
+                .map(Some)
+                .map_err(Into::into)
+        })
         .await?;
-    if dev.is_some() {
-        let registration = db
-            .read(move |q| {
-                crate::extensions::dev::start(q, extension_id, device).map_err(Into::into)
-            })
-            .await?;
+    if let Some(registration) = dev {
+        // The project as it reads now: a dev server that moved to another port is found.
+        let project = tauri::async_runtime::spawn_blocking(move || {
+            crate::extensions::dev::current_project(&registration)
+        })
+        .await
+        .map_err(|e| HolziError::ExtensionNotReady {
+            status: format!("start task: {e}"),
+        })??;
         let session = state.extensions().frames.open_dev(extension_id, &tab_id);
         return Ok(FrameOpened {
             frame: session.frame.clone(),
-            url: format!("{}/", registration.url),
+            url: format!("{}/", project.url),
             dev: true,
         });
     }
