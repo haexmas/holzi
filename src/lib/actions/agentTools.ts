@@ -10,7 +10,10 @@ import type {
   JsonSchema,
 } from './types.ts'
 
-export type ActionLocale = 'de' | 'en'
+/** The catalog languages every action title is pushed in (`AgentActionDef.titles`). */
+export const ACTION_LOCALES = ['de', 'en'] as const
+
+export type ActionLocale = (typeof ACTION_LOCALES)[number]
 
 /** What the frontend pushes to Rust for one action (data-model.md §2). */
 export type AgentActionDef = {
