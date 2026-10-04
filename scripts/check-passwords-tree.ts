@@ -7,6 +7,7 @@ import { test } from 'node:test'
 import {
   buildTree,
   descendantIds,
+  findNode,
   flattenFolders,
   groupPath,
   isInTrash,
@@ -154,4 +155,12 @@ test('flattenFolders lists the folders in display order with their depth', () =>
     { id: 'servers', name: 'Servers', depth: 1 },
     { id: 'apps', name: 'Apps', depth: 1 },
   ])
+})
+
+test('a node is found at any depth, not in the trash (spec 036)', () => {
+  const tree = buildTree(GROUPS, [])
+  assert.equal(findNode(tree.roots, 'servers')?.group.name, 'Servers')
+  assert.equal(findNode(tree.roots, 'work')?.children.length, 3)
+  assert.equal(findNode(tree.roots, 'trash'), undefined)
+  assert.equal(findNode(tree.roots, 'nope'), undefined)
 })

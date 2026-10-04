@@ -117,6 +117,19 @@ export function buildTree<G extends TreeGroup>(
   }
 }
 
+/** The node of `groupId` in a tree, or `undefined` when it is not there (unknown or in the trash). */
+export function findNode<G extends TreeGroup>(
+  nodes: readonly TreeNode<G>[],
+  groupId: string,
+): TreeNode<G> | undefined {
+  for (const node of nodes) {
+    if (node.group.id === groupId) return node
+    const inner = findNode(node.children, groupId)
+    if (inner) return inner
+  }
+  return undefined
+}
+
 /** The ids of every folder below `groupId`, never `groupId` itself; a loop in the data ends. */
 export function descendantIds(
   groups: readonly TreeGroup[],

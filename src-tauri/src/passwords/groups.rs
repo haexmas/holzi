@@ -25,6 +25,23 @@ fn exists(q: &mut impl Query, sql: &str, id: &str) -> Result<bool> {
         > 0)
 }
 
+/// Whether an entry or folder is already in the trash and must not be restored by a move.
+fn target_in_trash(tx: &mut CrdtTransaction<'_>, target: &Target) -> Result<bool> {
+    match target.kind {
+        TargetKind::Item => {
+            let group = tx
+                .query_row(
+                    "SELECT group_id FROM haex_passwords_group_items WHERE item_id = ?1",
+                    params![target.id],
+                    |r| r.get::<_, Option<String>>(0),
+                )?
+                .flatten();
+            group.map_or(Ok(false), |id| is_in_trash(tx, &id))
+        }
+        TargetKind::Group => is_in_trash(tx, &target.id),
+    }
+}
+
 /// Whether `group_id` is the trash or lies below it.
 pub fn is_in_trash(q: &mut impl Query, group_id: &str) -> Result<bool> {
     path_contains(q, group_id, TRASH_GROUP_ID)
@@ -179,6 +196,9 @@ pub fn move_targets(
         }
     }
     for target in targets {
+        if target_in_trash(tx, target)? {
+            return Err(invalid("target_in_trash"));
+        }
         match target.kind {
             TargetKind::Item => move_item(tx, &target.id, to)?,
             TargetKind::Group => move_group(tx, &target.id, to)?,

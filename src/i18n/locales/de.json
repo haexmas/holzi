@@ -1207,14 +1207,9 @@
         "description": "Ein kopierter Wert wird nach dieser Zeit aus der Zwischenablage entfernt, sofern sie noch denselben Wert enthält."
       }
     },
-    "moved": "{count} Eintrag verschoben | {count} Einträge verschoben",
     "folders": {
       "new": "Neuer Ordner",
       "edit": "Ordner bearbeiten",
-      "newChild": "Unterordner anlegen",
-      "moveUp": "Nach oben",
-      "moveDown": "Nach unten",
-      "delete": "Löschen",
       "expand": "Aufklappen",
       "collapse": "Zuklappen",
       "menu": "Aktionen für Ordner {name}",
@@ -1248,10 +1243,15 @@
       "topLevel": "Oberste Ebene",
       "run": "Ausführen",
       "confirm": {
-        "move": "{count} Eintrag verschieben? | {count} Einträge verschieben?",
+        "move": "{count} Element verschieben? | {count} Elemente verschieben?",
         "addTag": "Tag zu {count} Eintrag hinzufügen? | Tag zu {count} Einträgen hinzufügen?",
         "removeTag": "Tag von {count} Eintrag entfernen? | Tag von {count} Einträgen entfernen?"
-      }
+      },
+      "selectAll": "Alle auswählen",
+      "edit": "Bearbeiten",
+      "cut": "Ausschneiden",
+      "copy": "Kopieren",
+      "more": "Weitere Aktionen"
     },
     "trash": {
       "title": "Papierkorb",
@@ -1461,6 +1461,51 @@
       "details": "Details",
       "extra": "Extra",
       "history": "Verlauf"
+    },
+    "breadcrumb": {
+      "label": "Pfad",
+      "search": "Suchergebnisse",
+      "more": "Weitere Ordner"
+    },
+    "list": {
+      "folders": "Ordner",
+      "entries": "Einträge"
+    },
+    "clipboard": {
+      "count": "{count} in der Ablage | {count} in der Ablage",
+      "paste": "Einfügen",
+      "clear": "Ablage leeren",
+      "notHere": "Hier lässt sich nichts einfügen: im Papierkorb, in der Suche und in einer Tag-Ansicht nicht.",
+      "cycle": "Ein Ordner lässt sich nicht in sich selbst oder einen seiner Unterordner verschieben. Es wurde nichts verschoben.",
+      "allGone": "Nichts verschoben: das Element ist nicht mehr vorhanden. | Nichts verschoben: die {count} Elemente sind nicht mehr vorhanden.",
+      "movedCount": "{count} Element verschoben | {count} Elemente verschoben",
+      "missingCount": "{count} nicht mehr vorhanden | {count} nicht mehr vorhanden",
+      "movedSome": "{moved}, {missing}"
+    },
+    "menu": {
+      "button": "Aktionen für {name}",
+      "open": "Öffnen",
+      "edit": "Bearbeiten",
+      "newSubfolder": "Neuer Unterordner",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "copyUsername": "Benutzername kopieren",
+      "copyPassword": "Passwort kopieren",
+      "cut": "Ausschneiden",
+      "copy": "Kopieren",
+      "paste": "Einfügen",
+      "delete": "Löschen",
+      "restore": "Wiederherstellen",
+      "deleteForGood": "Endgültig löschen",
+      "newEntry": "Neuer Eintrag",
+      "newFolder": "Neuer Ordner",
+      "emptyTrash": "Papierkorb leeren",
+      "keys": {
+        "mod": "Strg",
+        "shift": "Umschalt",
+        "delete": "Entf",
+        "enter": "Eingabe"
+      }
     }
   },
   "extensions": {

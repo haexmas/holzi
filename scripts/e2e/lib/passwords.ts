@@ -15,6 +15,7 @@ export interface Overview {
     tags: Array<{ id: string; name: string }>
   }>
   tags: Array<{ id: string; name: string; itemCount: number }>
+  groups: Array<{ id: string; name: string | null; parentId: string | null }>
 }
 
 /** Opens the password manager from the launcher, fits its window into the virtual screen (the
@@ -38,16 +39,107 @@ export async function overview(
   )
 }
 
-/** Creates an entry through the command and returns its id. */
+/** Creates an entry through the command (in a folder when `groupId` is given) and returns its id. */
 export async function createEntry(
   instance: Pick<FlowInstance, 'invoke'>,
   input: Record<string, unknown>,
+  groupId?: string,
 ): Promise<string> {
   const result = unwrap<{ itemId: string }>(
     'passwords_create_item',
-    await instance.invoke('passwords_create_item', { args: { input } }),
+    await instance.invoke('passwords_create_item', {
+      args: groupId ? { input, groupId } : { input },
+    }),
   )
   return result.itemId
+}
+
+/** Creates a folder through the command and returns its id. */
+export async function createFolder(
+  instance: Pick<FlowInstance, 'invoke'>,
+  name: string,
+  parentId?: string,
+): Promise<string> {
+  return unwrap<{ groupId: string }>(
+    'passwords_create_group',
+    await instance.invoke('passwords_create_group', {
+      args: parentId ? { name, parentId } : { name },
+    }),
+  ).groupId
+}
+
+/** The folder of an entry, or the parent of a folder, as the backend holds it (`null` is the top). */
+export async function placeOf(
+  instance: Pick<FlowInstance, 'invoke'>,
+  id: string,
+): Promise<string | null | undefined> {
+  const data = await overview(instance)
+  const header = data.headers.find((candidate) => candidate.id === id)
+  if (header) return header.groupId
+  return data.groups.find((group) => group.id === id)?.parentId
+}
+
+/** Opens the right-click menu of the element found by hook, as a right click does (the rig has no
+ * pointer actions): a `contextmenu` event at its centre. */
+export async function contextMenu(
+  instance: FlowInstance,
+  hook: string,
+): Promise<void> {
+  await instance.waitForDisplayed(hook)
+  await instance.exec(
+    `const el = document.querySelector('[data-testid="' + arguments[0] + '"]')
+     const box = el.getBoundingClientRect()
+     el.dispatchEvent(new MouseEvent('contextmenu', {
+       bubbles: true, cancelable: true, button: 2,
+       clientX: box.left + Math.min(box.width / 2, 40), clientY: box.top + box.height / 2,
+     }))
+     return true`,
+    [hook],
+  )
+}
+
+/** Drags the element found by `from` onto the one found by `to` with the events of HTML drag and
+ * drop and one shared `DataTransfer`, as the browser does (the rig has no pointer actions). */
+export async function dragTo(
+  instance: FlowInstance,
+  from: string,
+  to: string,
+): Promise<void> {
+  await instance.waitForDisplayed(from)
+  await instance.waitForDisplayed(to)
+  await instance.exec(
+    `const find = (hook) => document.querySelector('[data-testid="' + hook + '"]')
+     const source = find(arguments[0])
+     const target = find(arguments[1])
+     const data = new DataTransfer()
+     const fire = (el, type) => el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data }))
+     fire(source, 'dragstart')
+     fire(target, 'dragenter')
+     fire(target, 'dragover')
+     fire(target, 'drop')
+     fire(source, 'dragend')
+     return true`,
+    [from, to],
+  )
+}
+
+/** The ids of the rows the list marks as selected. */
+export async function selectedRows(instance: FlowInstance): Promise<string[]> {
+  return instance.exec<string[]>(
+    `return [...document.querySelectorAll('[data-row-id][aria-pressed="true"]')].map((el) => el.dataset.rowId)`,
+  )
+}
+
+/** Whether the list dims the row (a cut entry or folder in the Ablage). */
+export async function rowDimmed(
+  instance: FlowInstance,
+  id: string,
+): Promise<boolean> {
+  return instance.exec<boolean>(
+    `const row = document.querySelector('[data-row-id="' + arguments[0] + '"]')
+     return Boolean(row && row.closest('li').classList.contains('opacity-50'))`,
+    [id],
+  )
 }
 
 /** The titles of the entries the device holds, sorted. */

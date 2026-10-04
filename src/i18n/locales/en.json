@@ -1207,14 +1207,9 @@
         "description": "A copied value is removed from the clipboard after this time, if it still holds the same value."
       }
     },
-    "moved": "{count} entry moved | {count} entries moved",
     "folders": {
       "new": "New folder",
       "edit": "Edit folder",
-      "newChild": "New subfolder",
-      "moveUp": "Move up",
-      "moveDown": "Move down",
-      "delete": "Delete",
       "expand": "Expand",
       "collapse": "Collapse",
       "menu": "Actions for folder {name}",
@@ -1248,10 +1243,15 @@
       "topLevel": "Top level",
       "run": "Run",
       "confirm": {
-        "move": "Move {count} entry? | Move {count} entries?",
+        "move": "Move {count} item? | Move {count} items?",
         "addTag": "Add a tag to {count} entry? | Add a tag to {count} entries?",
         "removeTag": "Remove a tag from {count} entry? | Remove a tag from {count} entries?"
-      }
+      },
+      "selectAll": "Select all",
+      "edit": "Edit",
+      "cut": "Cut",
+      "copy": "Copy",
+      "more": "More actions"
     },
     "trash": {
       "title": "Trash",
@@ -1461,6 +1461,51 @@
       "details": "Details",
       "extra": "Extra",
       "history": "History"
+    },
+    "breadcrumb": {
+      "label": "Path",
+      "search": "Search results",
+      "more": "More folders"
+    },
+    "list": {
+      "folders": "Folders",
+      "entries": "Entries"
+    },
+    "clipboard": {
+      "count": "{count} ready to paste | {count} ready to paste",
+      "paste": "Paste",
+      "clear": "Discard",
+      "notHere": "Nothing can be pasted here: not in the trash, in a search or in a tag view.",
+      "cycle": "A folder cannot go into itself or one of its subfolders. Nothing was moved.",
+      "allGone": "Nothing moved: the item no longer exists. | Nothing moved: the {count} items no longer exist.",
+      "movedCount": "{count} item moved | {count} items moved",
+      "missingCount": "{count} no longer there | {count} no longer there",
+      "movedSome": "{moved}, {missing}"
+    },
+    "menu": {
+      "button": "Actions for {name}",
+      "open": "Open",
+      "edit": "Edit",
+      "newSubfolder": "New subfolder",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "copyUsername": "Copy username",
+      "copyPassword": "Copy password",
+      "cut": "Cut",
+      "copy": "Copy",
+      "paste": "Paste",
+      "delete": "Delete",
+      "restore": "Restore",
+      "deleteForGood": "Delete for good",
+      "newEntry": "New entry",
+      "newFolder": "New folder",
+      "emptyTrash": "Empty trash",
+      "keys": {
+        "mod": "Ctrl",
+        "shift": "Shift",
+        "delete": "Del",
+        "enter": "Enter"
+      }
     }
   },
   "extensions": {

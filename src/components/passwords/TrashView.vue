@@ -9,6 +9,7 @@ import { toast } from 'vue-sonner'
 import type { ItemHeader } from '@bindings/ItemHeader'
 import type { Target } from '@bindings/Target'
 import { displayTitle } from '~/lib/passwords/format'
+import { buildMenu, type MenuCommand } from '~/lib/passwords/menus'
 import { groupPath, trashGroupIds, TRASH_GROUP_ID } from '~/lib/passwords/tree'
 
 const { t } = useI18n()
@@ -109,6 +110,14 @@ async function confirmDeleteAsync() {
   }
 }
 
+/** The right-click menu of a row in the trash (spec 036, FR-018): the two buttons of the row. */
+const trashMenu = buildMenu({ kind: 'entry', inTrash: true })
+
+function runTrashCommand(command: MenuCommand, item: Target, label: string) {
+  if (command === 'restore') void restoreOneAsync(item)
+  else if (command === 'deleteForGood') askDelete(item, label)
+}
+
 function titleOf(header: ItemHeader): string {
   return displayTitle(header.title) ?? t('passwords.untitled')
 }
@@ -157,77 +166,102 @@ function titleOf(header: ItemHeader): string {
         v-if="folders.length > 0"
         :label="t('passwords.trash.folders')"
       >
-        <SettingsRow
+        <PasswordsEntryMenu
           v-for="folder in folders"
           :key="folder.group.id"
-          :title="displayTitle(folder.group.name) ?? t('passwords.untitled')"
-          :description="
-            t('passwords.trash.cameFrom', { path: folder.path }) +
-            ' · ' +
-            t(
-              'passwords.trash.entriesInside',
-              { count: folder.entries },
-              folder.entries,
+          :entries="trashMenu"
+          @run="
+            runTrashCommand(
+              $event,
+              target('group', folder.group.id),
+              displayTitle(folder.group.name) ?? t('passwords.untitled'),
             )
           "
-          icon="lucide:folder"
-          :data-testid="`passwords-trash-folder-${folder.group.id}`"
         >
-          <UiButton
-            variant="outline"
-            size="sm"
-            :data-testid="`passwords-trash-restore-${folder.group.id}`"
-            @click="restoreOneAsync(target('group', folder.group.id))"
-          >
-            {{ t('passwords.trash.restore') }}
-          </UiButton>
-          <UiButton
-            variant="ghost"
-            size="sm"
-            :data-testid="`passwords-trash-delete-${folder.group.id}`"
-            @click="
-              askDelete(
-                target('group', folder.group.id),
-                displayTitle(folder.group.name) ?? t('passwords.untitled'),
+          <SettingsRow
+            :title="displayTitle(folder.group.name) ?? t('passwords.untitled')"
+            :description="
+              t('passwords.trash.cameFrom', { path: folder.path }) +
+              ' · ' +
+              t(
+                'passwords.trash.entriesInside',
+                { count: folder.entries },
+                folder.entries,
               )
             "
+            icon="lucide:folder"
+            :data-testid="`passwords-trash-folder-${folder.group.id}`"
           >
-            {{ t('passwords.trash.deleteForGood') }}
-          </UiButton>
-        </SettingsRow>
+            <UiButton
+              variant="outline"
+              size="sm"
+              :data-testid="`passwords-trash-restore-${folder.group.id}`"
+              @click="restoreOneAsync(target('group', folder.group.id))"
+            >
+              {{ t('passwords.trash.restore') }}
+            </UiButton>
+            <UiButton
+              variant="ghost"
+              size="sm"
+              :data-testid="`passwords-trash-delete-${folder.group.id}`"
+              @click="
+                askDelete(
+                  target('group', folder.group.id),
+                  displayTitle(folder.group.name) ?? t('passwords.untitled'),
+                )
+              "
+            >
+              {{ t('passwords.trash.deleteForGood') }}
+            </UiButton>
+          </SettingsRow>
+        </PasswordsEntryMenu>
       </SettingsGroup>
 
       <SettingsGroup
         v-if="entries.length > 0"
         :label="t('passwords.trash.entries')"
       >
-        <SettingsRow
+        <PasswordsEntryMenu
           v-for="entry in entries"
           :key="entry.header.id"
-          :title="titleOf(entry.header)"
-          :description="t('passwords.trash.cameFrom', { path: entry.path })"
-          icon="lucide:key-round"
-          :data-testid="`passwords-trash-entry-${entry.header.id}`"
+          :entries="trashMenu"
+          @run="
+            runTrashCommand(
+              $event,
+              target('item', entry.header.id),
+              titleOf(entry.header),
+            )
+          "
         >
-          <UiButton
-            variant="outline"
-            size="sm"
-            :data-testid="`passwords-trash-restore-${entry.header.id}`"
-            @click="restoreOneAsync(target('item', entry.header.id))"
+          <SettingsRow
+            :title="titleOf(entry.header)"
+            :description="t('passwords.trash.cameFrom', { path: entry.path })"
+            icon="lucide:key-round"
+            :data-testid="`passwords-trash-entry-${entry.header.id}`"
           >
-            {{ t('passwords.trash.restore') }}
-          </UiButton>
-          <UiButton
-            variant="ghost"
-            size="sm"
-            :data-testid="`passwords-trash-delete-${entry.header.id}`"
-            @click="
-              askDelete(target('item', entry.header.id), titleOf(entry.header))
-            "
-          >
-            {{ t('passwords.trash.deleteForGood') }}
-          </UiButton>
-        </SettingsRow>
+            <UiButton
+              variant="outline"
+              size="sm"
+              :data-testid="`passwords-trash-restore-${entry.header.id}`"
+              @click="restoreOneAsync(target('item', entry.header.id))"
+            >
+              {{ t('passwords.trash.restore') }}
+            </UiButton>
+            <UiButton
+              variant="ghost"
+              size="sm"
+              :data-testid="`passwords-trash-delete-${entry.header.id}`"
+              @click="
+                askDelete(
+                  target('item', entry.header.id),
+                  titleOf(entry.header),
+                )
+              "
+            >
+              {{ t('passwords.trash.deleteForGood') }}
+            </UiButton>
+          </SettingsRow>
+        </PasswordsEntryMenu>
       </SettingsGroup>
     </div>
 
