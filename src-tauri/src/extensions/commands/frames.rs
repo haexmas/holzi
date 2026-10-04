@@ -27,8 +27,10 @@ use crate::storage::wm_session_commands::current_device_uuid;
 pub struct FrameOpened {
     /// Id of the frame session for bridge calls; never handed to the extension.
     pub frame: String,
-    /// URL of the entry page with the start token.
+    /// URL of the entry page with the start token, or of the development server.
     pub url: String,
+    /// A development version (US12): its tab is marked, its console shown.
+    pub dev: bool,
 }
 
 /// Starts the extension on this device if needed and opens a frame session for one tab.
@@ -42,6 +44,32 @@ pub async fn extension_frame_open(
     let extension_id = Uuid::parse_str(&extension_id).map_err(|_| HolziError::ExtensionNotFound)?;
     let db = active_database(&state)?;
     let device = current_device_uuid(&app, &db)?;
+    let dev = db
+        .read(move |q| {
+            if crate::extensions::dev::registration(q, extension_id)?.is_none() {
+                return Ok(None);
+            }
+            crate::extensions::dev::start(q, extension_id, device)
+                .map(Some)
+                .map_err(Into::into)
+        })
+        .await?;
+    if let Some(registration) = dev {
+        // The project as it reads now: a dev server that moved to another port is found.
+        let project = tauri::async_runtime::spawn_blocking(move || {
+            crate::extensions::dev::current_project(&registration)
+        })
+        .await
+        .map_err(|e| HolziError::ExtensionNotReady {
+            status: format!("start task: {e}"),
+        })??;
+        let session = state.extensions().frames.open_dev(extension_id, &tab_id);
+        return Ok(FrameOpened {
+            frame: session.frame.clone(),
+            url: format!("{}/", project.url),
+            dev: true,
+        });
+    }
     let started = tauri::async_runtime::spawn_blocking(move || {
         start(
             &db,
@@ -65,6 +93,7 @@ pub async fn extension_frame_open(
             encode_path(&started.entry),
             session.token
         ),
+        dev: false,
     })
 }
 

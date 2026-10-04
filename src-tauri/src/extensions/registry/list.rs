@@ -74,6 +74,8 @@ pub struct ExtensionSummary {
     /// imports nothing (the check scripts load it with Node's own module rules).
     #[ts(inline)]
     pub devices: Vec<DeviceState>,
+    /// A development version on this device (US12): enabled only while developer mode is on.
+    pub dev: bool,
 }
 
 struct Row {
@@ -205,10 +207,72 @@ pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
             status_here,
             status_error_here,
             devices,
+            dev: false,
         });
     }
+    // Also while developer mode is off, so the settings can still unload a development version
+    // that holds its prefix (a synced install waits for it); it is not enabled then, so neither
+    // the launcher nor a tab shows it.
+    let mode = crate::extensions::dev::mode(q, device)?;
+    out.extend(
+        crate::extensions::dev::registrations(q, device)?
+            .into_iter()
+            .map(|registration| dev_summary(registration, mode)),
+    );
     out.sort_by_key(|e| e.title.to_lowercase());
     Ok(out)
+}
+
+/// A development version as the launcher and the settings show it, from its registration;
+/// [`with_dev_projects`] adds what its manifest says now.
+fn dev_summary(
+    registration: crate::extensions::dev::DevRegistration,
+    mode: bool,
+) -> ExtensionSummary {
+    ExtensionSummary {
+        id: registration.id.to_string(),
+        name: registration.prefix.name.as_str().to_owned(),
+        title: registration.title,
+        description: None,
+        version: None,
+        publisher_fingerprint: publisher_fingerprint(registration.prefix.public_key.as_str()),
+        enabled: mode,
+        state: "installed".to_owned(),
+        kept_data_bytes: None,
+        single_instance: false,
+        has_icon: false,
+        status_here: None,
+        status_error_here: None,
+        devices: Vec::new(),
+        dev: true,
+    }
+}
+
+/// Fills in the development versions of `listed` from their project folders as they read now; a
+/// folder that cannot be read (moved, or naming another prefix) leaves the registration's values.
+/// Reads files, so it runs outside the database read. Blocking.
+pub fn with_dev_projects(
+    mut listed: Vec<ExtensionSummary>,
+    registrations: &[crate::extensions::dev::DevRegistration],
+) -> Vec<ExtensionSummary> {
+    for registration in registrations {
+        let Some(summary) = listed
+            .iter_mut()
+            .find(|e| e.dev && e.id == registration.id.to_string())
+        else {
+            continue;
+        };
+        let Ok(project) = crate::extensions::dev::current_project(registration) else {
+            continue;
+        };
+        let manifest = project.manifest;
+        summary.title = manifest.title().to_owned();
+        summary.description = manifest.description.clone();
+        summary.version = Some(manifest.version.to_string());
+        summary.single_instance = manifest.single_instance;
+    }
+    listed.sort_by_key(|e| e.title.to_lowercase());
+    listed
 }
 
 /// The icon of the effective bundle as a `data:` URL, or `None` without an image icon or while

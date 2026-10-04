@@ -17,6 +17,7 @@ async fn bind_loopback(member: &Member) -> SyncNode {
         NodeConfig {
             relay_mode: RelayMode::Disabled,
             bind_addr: Some((Ipv4Addr::LOCALHOST, 0).into()),
+            session: None,
         },
         Arc::new(|_| {}),
     )

@@ -29,6 +29,8 @@ export type AppDefinition = {
   /** i18n key of why the app cannot open on this device (an extension that is not ready here);
    * the Launcher shows the entry disabled with that reason (spec 017, T080). */
   unavailableKey?: string
+  /** A development version of an extension (spec 017, US12): its tabs carry a permanent badge. */
+  dev?: boolean
 }
 
 export const WM_APPS: readonly AppDefinition[] = [

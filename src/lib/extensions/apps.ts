@@ -60,6 +60,7 @@ export function extensionApps(
       ...(e.statusHere && UNAVAILABLE.has(e.statusHere)
         ? { unavailableKey: statusKey(e.statusHere) }
         : {}),
+      ...(e.dev ? { dev: true } : {}),
     }))
 }
 

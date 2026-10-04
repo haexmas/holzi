@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::error::{HolziError, Result};
 use crate::extensions::logs::{self, LogEntry, LogQuery};
 use crate::extensions::registry::limits::{self, ExtensionLimits, ExtensionLimitsView};
-use crate::extensions::registry::list::{icon_data_url, list, ExtensionSummary};
+use crate::extensions::registry::list::{icon_data_url, list, with_dev_projects, ExtensionSummary};
 use crate::extensions::registry::remove::{purge_kept_data, remove, set_enabled};
 use crate::passwords::clock::unix_millis;
 use crate::state::AppState;
@@ -27,7 +27,17 @@ pub async fn extension_list(
 ) -> Result<Vec<ExtensionSummary>> {
     let db = active_database(&state)?;
     let device = current_device_uuid(&app, &db)?;
-    db.read(move |q| list(q, device).map_err(Into::into)).await
+    let (listed, dev) = db
+        .read(move |q| {
+            let listed = list(q, device)?;
+            Ok((listed, crate::extensions::dev::registrations(q, device)?))
+        })
+        .await?;
+    tauri::async_runtime::spawn_blocking(move || with_dev_projects(listed, &dev))
+        .await
+        .map_err(|e| HolziError::InvalidInput {
+            reason: format!("extension task: {e}"),
+        })
 }
 
 /// The icon of the effective bundle as a `data:` URL.
@@ -51,8 +61,12 @@ pub async fn extension_remove(
     extension_id: String,
     delete_data: bool,
 ) -> Result<()> {
+    let host = state.extensions();
     change(&app, &state, extension_id, move |db, id, now| {
-        remove(db, id, delete_data, now)
+        remove(db, id, delete_data, now)?;
+        // An install of the same key and name gets the same id again: no decision carries over.
+        host.permissions.forget_extension(id);
+        Ok(())
     })
     .await
 }

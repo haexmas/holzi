@@ -18,6 +18,7 @@ use iroh::RelayMode;
 use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::task_tracker::TaskTrackerToken;
 
 use crate::error::{HolziError, Result};
 use crate::instances::paths::get_app_local_data;
@@ -88,7 +89,8 @@ impl SyncService {
     pub fn start<R: Runtime>(gate: &VaultGate, deps: SyncDeps<R>) -> Result<Self> {
         let notify = gate.sync_notify();
         let token = gate.token();
-        gate.spawn(run(notify, token, deps))?;
+        let session = gate.tracker_token()?;
+        gate.spawn(run(notify, token, session, deps))?;
         Ok(Self)
     }
 }
@@ -158,7 +160,12 @@ async fn resolve_deps<R: Runtime>(app: &AppHandle<R>, state: &AppState) -> Resul
 /// The service body: binds the endpoint, then runs the commit-notify,
 /// presence and reconnect loops until `token` is cancelled, and shuts the
 /// endpoint down.
-async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: SyncDeps<R>) {
+async fn run<R: Runtime>(
+    notify: Arc<Notify>,
+    token: CancellationToken,
+    session: TaskTrackerToken,
+    deps: SyncDeps<R>,
+) {
     let replica = Arc::clone(&deps.replica);
     let presence_keys = deps.keys.clone();
     let vault = deps.vault;
@@ -184,6 +191,7 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     let config = NodeConfig {
         relay_mode: deps.relay_mode,
         bind_addr,
+        session: Some(session),
     };
     let node = match SyncNode::bind(deps.replica, deps.keys, deps.vault, config, on_applied).await {
         Ok(node) => node,
@@ -227,6 +235,9 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
     if let Some(registry) = &registry {
         registry.set(Arc::clone(&runtime));
     }
+    // Cleared on every way out, an aborted drain included: a runtime left in the registry holds
+    // the node, and with it the gate's tracker, so the drain would end as stuck.
+    let registered = ClearOnDrop(registry);
     finish_pending_links(&replica, &presence_keys, vault).await;
     // `notify` (the gate's shared commit signal) wakes at most one waiter
     // per commit, so it gets exactly one consumer here; fanning that out to
@@ -271,22 +282,41 @@ async fn run<R: Runtime>(notify: Arc<Notify>, token: CancellationToken, deps: Sy
         _ = reconnect_loop => {}
     }
     runtime.cancel.cancel();
-    if let Some(registry) = &registry {
-        registry.clear();
-    }
+    drop(registered);
     node.shutdown().await;
+}
+
+/// Clears the registry when dropped.
+struct ClearOnDrop(Option<Arc<SyncRegistry>>);
+
+impl Drop for ClearOnDrop {
+    fn drop(&mut self) {
+        if let Some(registry) = &self.0 {
+            registry.clear();
+        }
+    }
 }
 
 /// Finishes links this device began before it last stopped: a main device
 /// publishes a list whose new device already confirmed, a new installation
 /// drops its record once the list names it. Best-effort, and idempotent.
 async fn finish_pending_links(replica: &Arc<Replica>, keys: &DeviceKeys, vault: [u8; 32]) {
+    // Counted with the vault's close like the follow-ups in `applied_event_sink`: an aborted
+    // drain drops this future, but not the blocking thread, which goes on writing. Skipped once
+    // the close has started.
+    let Ok(held) = replica.hold() else {
+        return;
+    };
     let (replica, keys) = (Arc::clone(replica), keys.clone());
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
         .unwrap_or(0);
     let result = tokio::task::spawn_blocking(move || {
+        // Moved in after the token, so they drop before it: the close waits until the database
+        // reference is gone.
+        let _held = held;
+        let (replica, keys) = (replica, keys);
         crate::sync::link::host::finish_pending(&replica, &keys, vault, now)?;
         crate::sync::link::join::finish_pending(&replica, now)?;
         crate::sync::admission::sweep_now(&replica, u64::try_from(now).unwrap_or(0))?;
@@ -313,8 +343,13 @@ fn applied_event_sink<R: Runtime>(
     changed: Arc<tokio::sync::watch::Sender<u64>>,
 ) -> Arc<dyn Fn(std::collections::BTreeSet<String>) + Send + Sync> {
     Arc::new(move |tables| {
+        // The writes below are counted with the vault's close (`Replica::hold`), taken before their
+        // task starts so the drain cannot end in between; once the close has started they are
+        // skipped.
         if tables.contains("device_lists") {
             changed.send_modify(|n| *n = n.wrapping_add(1));
+        }
+        if let Some(Ok(held)) = tables.contains("device_lists").then(|| replica.hold()) {
             let replica = Arc::clone(&replica);
             let keys = keys.clone();
             let now = std::time::SystemTime::now()
@@ -323,6 +358,8 @@ fn applied_event_sink<R: Runtime>(
                 .unwrap_or(0);
             tokio::spawn(async move {
                 match tokio::task::spawn_blocking(move || {
+                    let _held = held;
+                    let (replica, keys) = (replica, keys);
                     crate::sync::link::host::drop_listed(&replica, vault)?;
                     crate::sync::link::join::finish_pending_after_host_publication(
                         &replica, &keys, vault, now,
@@ -342,7 +379,8 @@ fn applied_event_sink<R: Runtime>(
         }
         // Requests to join and the list they are measured against meet here: the same merged set
         // ends in the same state on every device (R20).
-        if tables.contains("device_lists") || tables.contains("admission_requests") {
+        let sweep = tables.contains("device_lists") || tables.contains("admission_requests");
+        if let Some(Ok(held)) = sweep.then(|| replica.hold()) {
             let replica = Arc::clone(&replica);
             tokio::spawn(async move {
                 let now = u64::try_from(
@@ -353,6 +391,8 @@ fn applied_event_sink<R: Runtime>(
                 )
                 .unwrap_or(0);
                 match tokio::task::spawn_blocking(move || {
+                    let _held = held;
+                    let replica = replica;
                     crate::sync::admission::sweep_now(&replica, now)
                 })
                 .await
