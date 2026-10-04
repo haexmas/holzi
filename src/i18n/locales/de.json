@@ -696,7 +696,33 @@
       "remove": "Entfernen",
       "revoke": "Widerrufen",
       "devices": "Auf deinen Geräten",
-      "unnamedDevice": "Gerät ohne Namen"
+      "unnamedDevice": "Gerät ohne Namen",
+      "manage": "Verwalten",
+      "enabled": "Aktiviert",
+      "enabledHint": "Gilt auf allen deinen Geräten. Deaktiviert schließen sich ihre Tabs, die Daten bleiben.",
+      "update": "Neue Fassung installieren",
+      "updateHint": "Aus einer Datei; nur neue Berechtigungen werden abgefragt",
+      "removeTitle": "Aus der Vault entfernen",
+      "removeHint": "Auf allen deinen Geräten",
+      "removeConfirmTitle": "„{name}“ entfernen?",
+      "removeConfirmBody": "Die Erweiterung verschwindet auf allen deinen Geräten. Behältst du ihre Daten, findet eine spätere Installation sie wieder; du kannst sie auch danach noch löschen.",
+      "cancel": "Abbrechen",
+      "keepData": "Daten behalten",
+      "deleteData": "Daten löschen",
+      "keptData": "Behaltene Daten",
+      "keptDataSize": "Größe auf diesem Gerät",
+      "keptDataSizeUnknown": "Größe unbekannt",
+      "purgeConfirmTitle": "Daten von „{name}“ löschen?",
+      "purgeConfirmBody": "Die Daten werden auf allen deinen Geräten gelöscht. Das lässt sich nicht rückgängig machen.",
+      "limits": {
+        "title": "Grenzwerte",
+        "maxRows": "Zeilen je Abfrage",
+        "maxConcurrent": "Gleichzeitige Anfragen",
+        "maxSqlBytes": "Größe einer Anweisung (Bytes)",
+        "timeoutMs": "Laufzeit einer Anfrage (Millisekunden)",
+        "maxResponseBytes": "Größe einer Antwort (Bytes)",
+        "range": "{min} bis {max}"
+      }
     }
   },
   "models": {

@@ -1,6 +1,7 @@
 // Installed extensions as apps of the window manager (spec 017, US1, T043). Pure: the extensions
 // store feeds it, `scripts/check-extensions-apps.ts` tests it.
 import { WM_APPS, type AppDefinition } from '../wm/apps.ts'
+import type { WmWindow } from '../wm/types.ts'
 import type { ExtensionSummary } from '../../types/bindings/ExtensionSummary.ts'
 
 const PREFIX = 'extension.'
@@ -60,6 +61,27 @@ export function extensionApps(
         ? { unavailableKey: statusKey(e.statusHere) }
         : {}),
     }))
+}
+
+/** The tabs of extensions that no longer run in this vault, disabled or removed on any own device
+ * (FR-007, FR-039): they close. A tab of an extension that is only not ready here stays. */
+export function tabsOfStoppedExtensions(
+  windows: readonly WmWindow[],
+  extensions: readonly ExtensionSummary[],
+): { windowId: string; tabId: string }[] {
+  const running = new Set(
+    extensions
+      .filter((e) => e.state === 'installed' && e.enabled)
+      .map((e) => e.id),
+  )
+  return windows.flatMap((window) =>
+    window.tabs
+      .filter((tab) => {
+        const id = extensionIdOf(tab.appId)
+        return id !== null && !running.has(id)
+      })
+      .map((tab) => ({ windowId: window.id, tabId: tab.id })),
+  )
 }
 
 /** holzi's own apps followed by the extension apps. */

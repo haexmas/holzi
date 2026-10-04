@@ -1,11 +1,11 @@
-import { computed, reactive, ref, toRefs } from 'vue'
+import { computed, reactive, ref, toRefs, watch } from 'vue'
 import { defineStore } from 'pinia'
 import {
   getAppDefinition,
   tabTitleFor,
   type AppDefinition,
 } from '~/lib/wm/apps'
-import { allApps } from '~/lib/extensions/apps'
+import { allApps, tabsOfStoppedExtensions } from '~/lib/extensions/apps'
 import { useExtensionsStore } from '~/stores/extensions'
 import {
   closeWindow as closeWindowReducer,
@@ -290,6 +290,20 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     syncTabRuntime()
     session.saveNow()
   }
+
+  // Spec 017, FR-007/FR-039: the tabs of an extension disabled or removed on any own device close
+  // here too, without asking (its frame can no longer answer anyway).
+  watch(
+    () => extensions.list,
+    (list) => {
+      if (!extensions.loaded) return
+      for (const { windowId, tabId } of tabsOfStoppedExtensions(
+        state.windows,
+        list,
+      ))
+        closeTab(windowId, tabId)
+    },
+  )
 
   /** Restores and raises a window, debouncing its new stack position. */
   function focusWindow(windowId: string) {

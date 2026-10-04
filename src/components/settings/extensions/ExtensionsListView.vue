@@ -1,12 +1,19 @@
 <script setup lang="ts">
+import { formatFileSize } from '~/lib/passwords/format'
+
 /**
  * The category "Erweiterungen" (spec 017, US1, T049): the installed extensions with icon, name,
- * version and their state on this device, and installing one from a file. The list follows
- * `extensions-changed` through the extensions store.
+ * version and their state on this device, installing one from a file, and the kept data of
+ * removed extensions with its size here (US7, T092). The list follows `extensions-changed`
+ * through the extensions store.
  */
 const { t } = useI18n()
 const store = useExtensionsStore()
 const installing = ref(false)
+const installed = computed(() =>
+  store.list.filter((e) => e.state === 'installed'),
+)
+const kept = computed(() => store.list.filter((e) => e.state !== 'installed'))
 
 function description(version: string | undefined, status: string | undefined) {
   const parts = [version ? t('settings.extensions.version', { version }) : null]
@@ -29,11 +36,11 @@ function description(version: string | undefined, status: string | undefined) {
     </SettingsGroup>
 
     <SettingsGroup
-      v-if="store.list.length > 0"
+      v-if="installed.length > 0"
       :label="t('settings.extensions.installed')"
     >
       <SettingsRow
-        v-for="extension in store.list"
+        v-for="extension in installed"
         :key="extension.id"
         :title="extension.title"
         :description="description(extension.version, extension.statusHere)"
@@ -60,6 +67,26 @@ function description(version: string | undefined, status: string | undefined) {
     <p v-else class="px-1 text-sm text-muted-foreground">
       {{ t('settings.extensions.none') }}
     </p>
+
+    <SettingsGroup
+      v-if="kept.length > 0"
+      :label="t('settings.extensions.keptData')"
+    >
+      <SettingsRow
+        v-for="extension in kept"
+        :key="extension.id"
+        icon="lucide:archive"
+        :title="extension.title"
+        :description="
+          extension.keptDataBytes === undefined
+            ? t('settings.extensions.keptDataSizeUnknown')
+            : formatFileSize(extension.keptDataBytes)
+        "
+        :to="`/extensions/${extension.id}`"
+        :data-extension-id="extension.id"
+        data-testid="extension-kept-data"
+      />
+    </SettingsGroup>
 
     <ExtensionsInstallDialog v-model:open="installing" />
   </section>

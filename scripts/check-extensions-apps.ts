@@ -11,6 +11,7 @@ import {
   extensionApps,
   extensionIdOf,
   statusErrorKey,
+  tabsOfStoppedExtensions,
 } from '../src/lib/extensions/apps.ts'
 import { WM_APPS, type AppDefinition } from '../src/lib/wm/apps.ts'
 import { openApp } from '../src/lib/wm/layoutState.ts'
@@ -155,4 +156,35 @@ test('a tab of an extension that is unknown after loading the list is dropped', 
   const { state, sync } = restoring(savedSessionWith(notes), () => allApps([]))
   await sync.restoreAsync()
   assert.equal(state.windows.length, 0)
+})
+
+test('the tabs of a disabled or removed extension close, those of one not ready here stay', () => {
+  const [running, disabled, removed, moving] = [1, 2, 3, 4].map(
+    (n) => `00000000-0000-0000-0000-00000000000${n}`,
+  ) as [string, string, string, string]
+  const ids = [running, disabled, removed, moving]
+  // Opened while all four ran.
+  const before = extensionApps(
+    ids.map((id) => summary({ id })),
+    {},
+  )
+  const state = emptyState()
+  for (const id of ids) openApp(state, extensionAppId(id), allApps(before))
+  openApp(state, 'system.chat', allApps(before))
+
+  const now = [
+    summary({ id: running }),
+    summary({ id: disabled, enabled: false }),
+    summary({ id: removed, state: 'removed' }),
+    summary({ id: moving, statusHere: 'transferring' }),
+  ]
+  const appOf = new Map(
+    state.windows.flatMap((w) => w.tabs).map((t) => [t.id, t.appId]),
+  )
+  assert.deepEqual(
+    tabsOfStoppedExtensions(state.windows, now).map((c) =>
+      extensionIdOf(appOf.get(c.tabId) ?? ''),
+    ),
+    [disabled, removed],
+  )
 })
