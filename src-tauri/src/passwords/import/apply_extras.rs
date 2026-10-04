@@ -23,6 +23,7 @@ pub struct Extras {
 /// The rows created (for the ledger) and the places for the report.
 #[derive(Default)]
 pub struct ExtrasOutcome {
+    pub tag_colors: Vec<(String, Option<String>)>,
     pub passkeys: Vec<String>,
     pub presets: Vec<String>,
     pub problems: Vec<Problem>,
@@ -30,7 +31,7 @@ pub struct ExtrasOutcome {
 
 pub fn write(tx: &mut CrdtTransaction<'_>, extras: &Extras) -> Result<ExtrasOutcome> {
     let mut outcome = ExtrasOutcome::default();
-    write_tag_colors(tx, &extras.tag_colors)?;
+    outcome.tag_colors = write_tag_colors(tx, &extras.tag_colors)?;
     for passkey in &extras.passkeys {
         let mut input = passkey.clone();
         input.item_id = None;
@@ -48,25 +49,30 @@ pub fn write(tx: &mut CrdtTransaction<'_>, extras: &Extras) -> Result<ExtrasOutc
 
 /// A tag of the vault takes the colour of the source only when it has none of its own; tags that
 /// no imported entry carries are not created for a colour.
-fn write_tag_colors(tx: &mut CrdtTransaction<'_>, colors: &[(String, String)]) -> Result<()> {
+fn write_tag_colors(
+    tx: &mut CrdtTransaction<'_>,
+    colors: &[(String, String)],
+) -> Result<Vec<(String, Option<String>)>> {
     if colors.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
     let existing: Vec<(String, String, Option<String>)> = tx.query_map(
         "SELECT id, name, color FROM haex_passwords_tags",
         params![],
         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
     )?;
+    let mut changed = Vec::new();
     for (name, color) in colors {
         let wanted = fold(name);
         let tag = existing
             .iter()
             .find(|(_, stored, current)| current.is_none() && fold(stored) == wanted);
-        if let Some((id, _, _)) = tag {
+        if let Some((id, _, current)) = tag {
             tags::set_color(tx, id, Some(color))?;
+            changed.push((id.clone(), current.clone()));
         }
     }
-    Ok(())
+    Ok(changed)
 }
 
 /// A preset whose name the vault already has is skipped; an imported default only becomes the
@@ -112,7 +118,18 @@ fn write_presets(
 }
 
 /// Removes the passkeys and presets a run created (its rollback).
-pub fn undo(tx: &mut CrdtTransaction<'_>, passkeys: &[String], presets: &[String]) -> Result<()> {
+pub fn undo(
+    tx: &mut CrdtTransaction<'_>,
+    tag_colors: &[(String, Option<String>)],
+    passkeys: &[String],
+    presets: &[String],
+) -> Result<()> {
+    for (id, color) in tag_colors {
+        tx.execute(
+            "UPDATE haex_passwords_tags SET color = ?1 WHERE id = ?2",
+            params![color, id],
+        )?;
+    }
     for id in passkeys {
         tx.execute(
             "DELETE FROM haex_passwords_passkeys WHERE id = ?1",

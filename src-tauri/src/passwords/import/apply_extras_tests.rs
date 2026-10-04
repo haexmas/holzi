@@ -208,7 +208,9 @@ async fn undo_removes_what_the_run_created() {
     )
     .await;
     vault_db
-        .write(move |tx| undo(tx, &outcome.passkeys, &outcome.presets).map_err(Into::into))
+        .write(move |tx| {
+            undo(tx, &outcome.tag_colors, &outcome.passkeys, &outcome.presets).map_err(Into::into)
+        })
         .await
         .expect("undo");
     assert_eq!(
@@ -219,4 +221,32 @@ async fn undo_removes_what_the_run_created() {
         count(&db, "SELECT COUNT(*) FROM haex_passwords_generator_presets"),
         0
     );
+}
+
+#[tokio::test]
+async fn undo_restores_imported_tag_colours() {
+    let (_dir, db, vault_db) = vault();
+    let tag_id = vault_db
+        .write(|tx| tags::get_or_create(tx, "Work").map_err(Into::into))
+        .await
+        .expect("tag");
+    let outcome = write_extras(
+        &vault_db,
+        Extras {
+            tag_colors: vec![("Work".into(), "#222222".into())],
+            passkeys: Vec::new(),
+            presets: Vec::new(),
+        },
+    )
+    .await;
+    assert_eq!(outcome.tag_colors, vec![(tag_id.clone(), None)]);
+    vault_db
+        .write(move |tx| {
+            undo(tx, &outcome.tag_colors, &outcome.passkeys, &outcome.presets).map_err(Into::into)
+        })
+        .await
+        .expect("undo");
+    let sql =
+        format!("SELECT COUNT(*) FROM haex_passwords_tags WHERE id = '{tag_id}' AND color IS NULL");
+    assert_eq!(count(&db, &sql), 1);
 }

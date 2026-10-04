@@ -90,6 +90,7 @@ struct Ledger {
     groups: Vec<String>,
     items: Vec<String>,
     binaries: Vec<String>,
+    tag_colors: Vec<(String, Option<String>)>,
     passkeys: Vec<String>,
     presets: Vec<String>,
     trash_created: bool,
@@ -289,6 +290,7 @@ async fn write_all(
         .await?;
     ledger.passkeys = outcome.passkeys;
     ledger.presets = outcome.presets;
+    ledger.tag_colors = outcome.tag_colors;
     for problem in &outcome.problems {
         report.add(None, "", "", problem);
     }
@@ -679,6 +681,7 @@ async fn rollback(db: &VaultDb, ledger: &Ledger, control: &Control<'_>) {
     }
     let groups = ledger.groups.clone();
     let hashes = ledger.binaries.clone();
+    let tag_colors = ledger.tag_colors.clone();
     let passkeys = ledger.passkeys.clone();
     let presets = ledger.presets.clone();
     let trash_created = ledger.trash_created;
@@ -687,7 +690,7 @@ async fn rollback(db: &VaultDb, ledger: &Ledger, control: &Control<'_>) {
     let hash_count = hashes.len() as u32;
     let outcome = db
         .write(move |tx| {
-            apply_extras::undo(tx, &passkeys, &presets)?;
+            apply_extras::undo(tx, &tag_colors, &passkeys, &presets)?;
             let tag_ids: Vec<String> =
                 tx.query_map("SELECT id FROM haex_passwords_tags", params![], |r| {
                     r.get(0)
