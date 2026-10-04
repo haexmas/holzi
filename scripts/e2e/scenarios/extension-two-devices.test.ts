@@ -129,9 +129,10 @@ scenario('extension-two-devices', { timeoutMs: 300_000 }, async (ctx) => {
       deleteData: true,
     }),
   )
+  // Removed with its data, nothing of it is listed any more.
   await ctx.waitFor(
     'the removal to reach the phone',
-    async () => (await listed(phone, probe))?.state === 'removed',
+    async () => (await listed(phone, probe)) === undefined,
     { timeoutMs: 60_000, fixed: true },
   )
   await phone.click('open-launcher')

@@ -46,6 +46,7 @@ function description(version: string | undefined, status: string | undefined) {
         :description="description(extension.version, extension.statusHere)"
         :to="`/extensions/${extension.id}`"
         :data-extension-id="extension.id"
+        data-testid="extension-row"
       >
         <template #title>
           <span class="flex items-center gap-3">
