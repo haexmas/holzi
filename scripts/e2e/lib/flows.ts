@@ -85,6 +85,33 @@ export async function waitForPath(
   }
 }
 
+/**
+ * Waits until the workspace of an opened vault is in place: the route, then the window manager's
+ * restored session (spec 022). A window opened before that is replaced by the restore, so a scenario
+ * that opens one right after a (re)start would lose it.
+ */
+export async function waitForWorkspace(
+  instance: FlowInstance,
+  deadlineMs = 15_000,
+): Promise<void> {
+  await waitForPath(instance, '/workspace/')
+  const end = Date.now() + deadlineMs
+  for (;;) {
+    const restored = await instance
+      .exec<boolean>(
+        `return document.querySelector('#__nuxt')?.__vue_app__?.config.globalProperties.$pinia._s.get('windowManager')?.sessionRestored === true`,
+      )
+      .catch(() => false)
+    if (restored) return
+    if (Date.now() >= end) {
+      throw new Error(
+        `timed out after ${deadlineMs} ms waiting for the window manager to restore its session`,
+      )
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
 interface CreateInstanceResult {
   info: { name: string }
 }
@@ -111,7 +138,7 @@ export async function createAndUnlock(
   await instance.navigate(
     `tauri://localhost/workspace/${encodeURIComponent(options.name)}`,
   )
-  await waitForPath(instance, '/workspace/')
+  await waitForWorkspace(instance)
   instance.step('unlocked')
 }
 

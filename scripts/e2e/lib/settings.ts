@@ -78,6 +78,23 @@ export function settingsTabs(snapshot: WmSnapshot) {
   )
 }
 
+/** Turns "Sitzung wiederherstellen" on or off through the settings action, the way the switch does:
+ * the window manager takes the setting over and starts saving. (`wm_session_restore_set` alone
+ * only stores it; the window manager reads it when it restores the session.) */
+export async function setSessionRestore(
+  instance: FlowInstance,
+  enabled: boolean,
+): Promise<void> {
+  const outcome = await runAction(instance, 'settings.sessionRestore.set', {
+    enabled,
+  })
+  if (!outcome.ok) {
+    throw new Error(
+      `settings.sessionRestore.set failed: ${JSON.stringify(outcome)}`,
+    )
+  }
+}
+
 /** The location id of the settings title on screen (`data-location`), or `null`. */
 export async function settingsLocation(
   instance: FlowInstance,

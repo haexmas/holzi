@@ -116,7 +116,8 @@ export class FakeHost implements DeviceHost {
     const stopped = { value: false }
     const device = {
       invoke,
-      exec: async () => '/workspace/fake',
+      exec: async (script: string) =>
+        script.includes('sessionRestored') ? true : '/workspace/fake',
       navigate: async () => {},
       step: () => {},
       alive: () => !stopped.value,
