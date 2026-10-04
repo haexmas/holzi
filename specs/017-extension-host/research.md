@@ -632,8 +632,12 @@ als Härtung); lexikalischer Abgleich wie HV.
   `Notification::on_action`; der Fork `haexmas/plugins-workspace` (Zweig `feat/notification-desktop-actions`)
   ergänzt die Desktop-Seite (Aktionsarten als Knöpfe, `tap` für den Klick auf die Benachrichtigung,
   `remove_active` unter Linux und den BSDs, Listener-Befehle), Upstream-PR zu tauri-apps/plugins-workspace#2150.
-  Schließen meldet das Plugin nicht; holzi begrenzt deshalb die offenen Benachrichtigungen je Erweiterung.
-  Klicks unter Windows und macOS sind gebaut, aber nicht von Hand geprüft.
+  Schließen meldet das Plugin auf dem Desktop nicht; holzi begrenzt deshalb die offenen Benachrichtigungen je
+  Erweiterung. Android und iOS melden Wegwischen als Aktion `dismiss`; holzi wertet nur `tap` und die Knöpfe als
+  Klick. Unter Linux (COSMIC, Fork `3f9db5e`) geprüft: Ein Klick auf die Benachrichtigung kommt als `tap`, ein Knopf
+  mit seiner Kennung, beide mit holzis Kennung der Benachrichtigung; das Klicksignal des Servers wurde dafür mit
+  `gdbus emit` gesendet, nachdem der frühere Klick von Hand gezeigt hatte, dass COSMIC es sendet. Windows und macOS
+  sind in der CI des Forks gebaut und geprüft (Clippy), aber nicht angeklickt; T099 bleibt bis dahin offen.
 
 ## R21 — Passwörter, entfernter Speicher, Mail, Shell (L5)
 
