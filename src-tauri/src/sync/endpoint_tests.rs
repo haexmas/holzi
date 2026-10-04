@@ -297,3 +297,77 @@ async fn a_copy_of_a_listed_device_marks_it_as_duplicated() {
     a.node.shutdown().await;
     copy.shutdown().await;
 }
+
+/// FR-027: a removed device that never pulls still loses its session once
+/// this device knows of the removal. The stand-in speaks the handshake as the
+/// listed device, then only reads the control stream: it never pulls, so only
+/// the progress side of the session can end it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_removed_device_that_never_pulls_loses_its_session() {
+    use crate::sync::wire::{expect_frame, read_frame, Message, FRAME_LIMIT};
+
+    let (main, linked) = pair();
+    let a = start(&main).await;
+    let endpoint = Endpoint::builder(presets::Minimal)
+        .secret_key(SecretKey::from_bytes(&linked.keys.endpoint_secret))
+        .relay_mode(RelayMode::Disabled)
+        .clear_ip_transports()
+        .bind_addr((std::net::Ipv4Addr::LOCALHOST, 0))
+        .expect("bind address")
+        .bind()
+        .await
+        .expect("bind the stand-in");
+    let connection = endpoint
+        .connect(a.node.addr(), SYNC_ALPN)
+        .await
+        .expect("dial");
+    let (mut send, mut recv) = connection.accept_bi().await.expect("handshake stream");
+    handshake::dial(
+        &mut send,
+        &mut recv,
+        &linked.device.replica,
+        &linked.local(),
+        *connection.remote_id().as_bytes(),
+    )
+    .await
+    .expect("handshake");
+    let first = expect_frame(&mut recv, FRAME_LIMIT).await.expect("a frame");
+    assert!(
+        matches!(first, Message::Progress { .. }),
+        "the session runs"
+    );
+    assert_eq!(a.node.connected(), vec![linked.keys.device_pubkey]);
+
+    crate::sync::removal::remove_device(
+        &main.device.replica,
+        &main.keys,
+        &linked.keys.device_pubkey,
+        5_000,
+    )
+    .expect("removed");
+    a.node.local_changed();
+
+    // The removal moved this device's progress, yet the removed device gets
+    // no `Progress` with it: the control stream ends without another frame.
+    let after = tokio::time::timeout(EVENT_LIMIT, async {
+        let mut frames = Vec::new();
+        while let Ok(Some(frame)) = read_frame(&mut recv, FRAME_LIMIT).await {
+            frames.push(frame);
+        }
+        frames
+    })
+    .await
+    .expect("the session ends");
+    assert!(
+        !after.iter().any(|m| matches!(m, Message::Progress { .. })),
+        "no progress reaches a removed device"
+    );
+    let closed = connection.closed().await;
+    let iroh::endpoint::ConnectionError::ApplicationClosed(close) = closed else {
+        panic!("closed by the other side, got {closed:?}");
+    };
+    assert_eq!(close.error_code, ErrorCode::Rejected.as_u32().into());
+    assert!(a.node.connected().is_empty());
+    a.node.shutdown().await;
+    endpoint.close().await;
+}
