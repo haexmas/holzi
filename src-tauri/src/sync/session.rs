@@ -271,14 +271,20 @@ async fn pull_when_behind(
     peer: &Peer,
 ) -> Result<(), SessionError> {
     let mut changed = ctx.changed.clone();
+    let mut pulled_at: Option<(Vector, Vector)> = None;
     loop {
         let their_vector = theirs.borrow_and_update().clone();
         changed.mark_unchanged();
         let own = own_progress(&ctx.replica).await?;
-        if progress::has_more(&their_vector, &own) {
-            pull(ctx, connection, own).await?;
+        // A pull that leaves this device's progress below theirs on purpose (a group not parked
+        // at the parking limit, research R10) is not repeated until either side moved: the same
+        // pages would otherwise come again at once, over and over.
+        let at = (their_vector, own);
+        if progress::has_more(&at.0, &at.1) && pulled_at.as_ref() != Some(&at) {
+            pull(ctx, connection, at.1.clone()).await?;
             // The pull may have brought a list that removes the peer.
             ensure_listed(ctx, peer).await?;
+            pulled_at = Some(at);
             continue;
         }
         tokio::select! {
