@@ -4,9 +4,9 @@ import type { DeviceState } from '@bindings/DeviceState'
 
 /**
  * One extension in the settings (spec 017, US3, T070): what it is and its state on this device,
- * its state on each own device (US4, T080), managing it and its limits (US7, T092), then its
- * permissions. A removed extension whose data was kept shows that data instead. Reached from its
- * row in "Erweiterungen".
+ * its state on each own device (US4, T080), managing it and its limits (US7, T092), its
+ * permissions, then its log on this device (US5, T087). A removed extension whose data was kept
+ * shows that data instead. Reached from its row in "Erweiterungen".
  */
 const { t, te } = useI18n()
 const router = useTabRouter()
@@ -93,6 +93,7 @@ function deviceTitle(device: DeviceState): string {
         <SettingsExtensionsExtensionPermissionsView
           :extension-id="extension.id"
         />
+        <SettingsExtensionsExtensionLogsView :extension-id="extension.id" />
       </template>
       <SettingsExtensionsExtensionKeptDataView v-else :extension="extension" />
     </template>
