@@ -2,6 +2,11 @@
 //! rule for the pre-check and the authorizer. An allowlist: the own tables always, a table of
 //! another extension with a matching `database` permission, nothing else — there is no list of
 //! forbidden core tables to keep complete.
+//!
+//! A table of an extension that is not installed (never, or removed with "keep data") does not
+//! exist for others, even with a remembered permission (spec 017, US6 scenario 5).
+
+use std::collections::HashSet;
 
 use uuid::Uuid;
 
@@ -18,6 +23,8 @@ pub struct SqlPolicy {
     pub grants: Vec<Permission>,
     /// This device, for device-scoped rows.
     pub device: Uuid,
+    /// The prefixes of the installed extensions; another prefix's tables do not exist.
+    pub installed: HashSet<TablePrefix>,
 }
 
 impl SqlPolicy {
@@ -27,7 +34,13 @@ impl SqlPolicy {
             own,
             grants: Vec::new(),
             device,
+            installed: HashSet::new(),
         }
+    }
+
+    /// Whether the tables of `prefix` exist for the caller: its own, or an installed extension's.
+    pub fn is_present(&self, prefix: &TablePrefix) -> bool {
+        *prefix == self.own || self.installed.contains(prefix)
     }
 
     /// The decision for one extension table: own tables always, another extension's by its
@@ -52,7 +65,9 @@ impl SqlPolicy {
     pub fn allows(&self, name: &str, write: bool) -> bool {
         match classify(name, &self.own) {
             TableClass::Own(_) => true,
-            TableClass::Foreign(table) => self.decide(&table, write) == Decision::Allow,
+            TableClass::Foreign(table) => {
+                self.is_present(&table.prefix) && self.decide(&table, write) == Decision::Allow
+            }
             TableClass::Core => false,
         }
     }

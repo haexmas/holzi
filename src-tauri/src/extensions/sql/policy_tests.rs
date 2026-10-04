@@ -25,10 +25,15 @@ fn own_tables_always_core_never_and_others_by_their_permission() {
     policy.grants.push(Permission {
         kind: PermissionKind::Database,
         action: Action::Read,
-        target: Target::ExtensionTables(calendar),
+        target: Target::ExtensionTables(calendar.clone()),
         status: PermissionStatus::Granted,
         scope: GrantScope::Vault,
     });
+    assert!(
+        !policy.allows(&table('b', "cal", "events"), false),
+        "not installed: no tables, whatever is granted"
+    );
+    policy.installed.insert(calendar);
     assert!(policy.allows(&table('b', "cal", "events"), false));
     assert!(
         !policy.allows(&table('b', "cal", "events"), true),

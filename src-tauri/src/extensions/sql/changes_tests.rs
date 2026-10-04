@@ -55,6 +55,7 @@ fn an_extension_hears_of_its_own_and_readable_tables_never_of_core_ones() {
         status: PermissionStatus::Granted,
         scope: GrantScope::Vault,
     });
+    policy.installed.insert(calendar.clone());
     assert_eq!(
         readable(&policy, &changed),
         [
