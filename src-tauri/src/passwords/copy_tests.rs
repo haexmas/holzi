@@ -347,7 +347,7 @@ fn username_and_password_can_point_at_the_original_and_an_empty_value_stays_empt
         copied("Mail%", "username").as_deref(),
         Some(format!("{{${original}:username}}").as_str())
     );
-    assert_eq!(copied("– Kopie", "password"), None);
+    assert_eq!(copied(" – Kopie", "password"), None);
 }
 
 #[test]
