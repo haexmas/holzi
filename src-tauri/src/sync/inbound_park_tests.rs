@@ -467,3 +467,6 @@ fn a_snapshot_counts_parked_rows_as_carried() {
     let (rows, _) = inbox.into_snapshot().expect("snapshot");
     assert!(rows.iter().any(|(table, _)| *table == t("t:pages")));
 }
+
+#[path = "inbound_park_split_tests.rs"]
+mod split;
