@@ -5,7 +5,9 @@
 //! `purge_hlc` clears up ([`super::purge`]); an installed, enabled extension is started
 //! ([`super::start::start`]: effective bundle, `transferring` while BLOBs are missing, signature
 //! check, the applied migrations kept, pending migrations) and its state on this device written.
-//! Then parked sync groups whose tables now exist are replayed. holzi's window hears
+//! A disabled one only gets `disabled` as its state. The tables of an extension that does not run
+//! here, disabled or removed with "keep data", follow its migrations in the vault all the same, so
+//! its synced rows have somewhere to go (FR-008, FR-037). Then parked sync groups whose tables now exist are replayed. holzi's window hears
 //! `extension-status-changed` for every changed state, with `reload` when the effective bundle of
 //! a running extension changed, so its open tabs load the new one (FR-038).
 
@@ -20,10 +22,12 @@ use uuid::Uuid;
 
 use super::purge::{self, Removal};
 use super::start::start;
+use super::status::{self, DeviceStatus};
 use crate::error::Result;
 use crate::extensions::commands::{ExtensionsChanged, EXTENSIONS_CHANGED};
 use crate::extensions::host::ExtensionHost;
 use crate::extensions::ids::{device_status_id, ExtensionName, PublicKey, TablePrefix};
+use crate::extensions::sql::migrate::apply_pending;
 use crate::passwords::clock::unix_millis;
 use crate::state::AppState;
 use crate::storage::query::Query;
@@ -153,14 +157,27 @@ fn follow(
             host.forget_effective(extension.id);
         }
     }
-    if !extension.installed || !extension.enabled {
+    if !extension.installed {
+        if !extension.purge_data {
+            keep_tables(db, extension, now_ms);
+        }
         return Ok(None);
     }
     let before = shown(db, extension.id, device)?;
-    let started = start(db, extension.id, device, now_ms);
+    let started = if extension.enabled {
+        start(db, extension.id, device, now_ms).ok()
+    } else {
+        keep_tables(db, extension, now_ms);
+        let id = extension.id;
+        db.write_blocking(move |tx| {
+            status::set(tx, id, device, DeviceStatus::Disabled, None, None, now_ms)
+                .map_err(Into::into)
+        })?;
+        None
+    };
     let after = shown(db, extension.id, device)?;
     let mut reload = false;
-    if let Ok(started) = started {
+    if let Some(started) = started {
         let previous = host.note_effective(extension.id, started.bundle_id);
         reload = previous.is_some_and(|previous| previous != started.bundle_id);
         host.remember_started(started);
@@ -174,6 +191,20 @@ fn follow(
             error,
             reload,
         }))
+}
+
+/// Applies the pending migrations of an extension that does not run on this device. A failure is
+/// logged: rows for its tables wait parked until a later run succeeds.
+fn keep_tables(db: &VaultDb, extension: &Registered, now_ms: i64) {
+    let Some(prefix) = &extension.prefix else {
+        return;
+    };
+    if let Err(error) = apply_pending(db, extension.id, prefix, now_ms) {
+        log::warn!(
+            "extension {}: the migrations of its kept tables failed: {error:?}",
+            extension.id
+        );
+    }
 }
 
 /// Whether the vault changes waiting in `changes` touch the registry. Takes every waiting
@@ -278,5 +309,13 @@ fn announce<R: Runtime>(
 }
 
 #[cfg(test)]
+#[path = "lifecycle_test_support.rs"]
+mod test_support;
+
+#[cfg(test)]
 #[path = "lifecycle_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "lifecycle_us7_tests.rs"]
+mod us7_tests;

@@ -10,6 +10,7 @@ use super::install::publisher_fingerprint;
 use crate::error::Result;
 use crate::extensions::bundle::store::read_verified_file;
 use crate::extensions::bundle::Manifest;
+use crate::extensions::ids::{ExtensionName, PublicKey, TablePrefix};
 use crate::extensions::mime;
 use crate::storage::known_devices;
 use crate::storage::query::Query;
@@ -50,8 +51,14 @@ pub struct ExtensionSummary {
     pub version: Option<String>,
     pub publisher_fingerprint: String,
     pub enabled: bool,
-    /// `installed` or `removed` (data kept, L3).
+    /// `installed`, or `removed` with its data kept (FR-008); one removed with its data is not
+    /// listed.
     pub state: String,
+    /// For `removed`: the bytes its kept tables take on this device, indexes included; `None` when
+    /// SQLite cannot tell.
+    #[ts(optional, type = "number")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kept_data_bytes: Option<u64>,
     /// The app opens at most once (manifest `singleInstance`).
     pub single_instance: bool,
     pub has_icon: bool,
@@ -73,8 +80,30 @@ struct Row {
     id: String,
     public_key: String,
     name: String,
+    display_name: Option<String>,
     enabled: bool,
     state: String,
+}
+
+/// The bytes the tables of `prefix` and their indexes take in this vault file, from SQLite's
+/// `dbstat`; `None` when it cannot be read.
+fn data_bytes(q: &mut impl Query, public_key: &str, name: &str) -> Option<u64> {
+    let prefix = TablePrefix {
+        public_key: PublicKey::parse_case_insensitive(public_key).ok()?,
+        name: ExtensionName::parse(name).ok()?,
+    }
+    .to_string();
+    // Not LIKE: `_` is a wildcard there, and every prefix holds two of them.
+    q.query_row(
+        "SELECT COALESCE(SUM(pgsize), 0) FROM dbstat WHERE name IN \
+         (SELECT name FROM sqlite_master \
+          WHERE lower(substr(tbl_name, 1, length(?1))) = lower(?1))",
+        &[&prefix],
+        |r| r.get::<_, i64>(0),
+    )
+    .ok()
+    .flatten()
+    .and_then(|bytes| u64::try_from(bytes).ok())
 }
 
 /// The manifest of the effective bundle.
@@ -100,15 +129,17 @@ pub fn effective_manifest(
 /// Every extension of the vault, ordered by title.
 pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
     let rows = q.query_map(
-        "SELECT id, public_key, name, enabled, state FROM extensions",
+        "SELECT id, public_key, name, display_name, enabled, state FROM extensions \
+         WHERE state = 'installed' OR purge_data = 0",
         &[],
         |r| {
             Ok(Row {
                 id: r.get(0)?,
                 public_key: r.get(1)?,
                 name: r.get(2)?,
-                enabled: r.get::<_, i64>(3)? != 0,
-                state: r.get(4)?,
+                display_name: r.get(3)?,
+                enabled: r.get::<_, i64>(4)? != 0,
+                state: r.get(5)?,
             })
         },
     )?;
@@ -148,10 +179,16 @@ pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
         let mine = devices.iter().find(|d| d.this_device);
         let status_here = mine.map(|d| d.status.clone());
         let status_error_here = mine.and_then(|d| d.error.clone());
+        let kept_data_bytes = if row.state == "installed" {
+            None
+        } else {
+            data_bytes(q, &row.public_key, &row.name)
+        };
         out.push(ExtensionSummary {
-            title: manifest
-                .as_ref()
-                .map_or_else(|| row.name.clone(), |m| m.title().to_owned()),
+            title: manifest.as_ref().map_or_else(
+                || row.display_name.clone().unwrap_or_else(|| row.name.clone()),
+                |m| m.title().to_owned(),
+            ),
             description: manifest.as_ref().and_then(|m| m.description.clone()),
             version: manifest.as_ref().map(|m| m.version.to_string()),
             single_instance: manifest.as_ref().is_some_and(|m| m.single_instance),
@@ -164,6 +201,7 @@ pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
             name: row.name,
             enabled: row.enabled,
             state: row.state,
+            kept_data_bytes,
             status_here,
             status_error_here,
             devices,
