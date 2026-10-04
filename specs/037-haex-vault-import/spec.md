@@ -31,6 +31,18 @@ nicht Teil dieser Spec. Referenz: haex-vault @ `8dce379d94e18fcd42c3b73686a06f98
 - [`014-portable-mode`](../014-portable-mode/spec.md): Der Import liest eine Datei, die der
   Nutzer selbst auswählt; er sucht nicht in den Datenordnern von haex-vault.
 
+## Clarifications
+
+### Session 2026-10-04 (Planung)
+
+- Q: Lässt sich „falsches Passwort“ von „keine haex-vault-Datei“ unterscheiden? → A: Nur
+  teilweise. Eine verschlüsselte Datei sieht ohne den richtigen Schlüssel wie Zufallsdaten aus;
+  holzi meldet dann beides zusammen. Erkennbar sind nur unverschlüsselte Datenbanken und leere
+  oder zu kleine Dateien (FR-005, User Story 2).
+- Q: Gilt das Wiederverwenden vorhandener Ordner nur für haex-vault? → A: Nein, für alle Quellen.
+  Bisher legte ein wiederholter Import aus KeePass, Bitwarden oder LastPass die Ordner ein
+  zweites Mal an (FR-017).
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Alle Passwörter aus haex-vault in holzi holen (Priority: P1)
@@ -99,11 +111,11 @@ von holzi ist wie vorher.
 **Acceptance Scenarios**:
 
 1. **Given** eine haex-vault-Vault-Datei, **When** der Nutzer ein falsches Vault-Passwort
-   eingibt, **Then** sagt holzi, dass das Passwort nicht passt, lässt ihn es erneut versuchen
-   und schreibt nichts.
-2. **Given** eine Datei, die keine haex-vault-Vault ist (andere Datenbank, beliebige Datei),
-   **When** der Nutzer sie wählt, **Then** sagt holzi, dass die Datei keine haex-vault-Vault ist,
-   und schreibt nichts.
+   eingibt, **Then** sagt holzi, dass das Passwort nicht passt oder die Datei keine
+   haex-vault-Vault ist, lässt ihn es erneut versuchen und schreibt nichts.
+2. **Given** eine Datei, die erkennbar keine haex-vault-Vault ist (unverschlüsselte Datenbank,
+   leere oder zu kleine Datei), **When** der Nutzer sie wählt, **Then** sagt holzi, dass das
+   Format nicht unterstützt wird, und schreibt nichts.
 3. **Given** eine haex-vault-Vault ohne Passwortmanager-Tabellen, **When** der Nutzer sie wählt,
    **Then** sagt holzi, dass diese Vault keine Passwörter enthält, und schreibt nichts.
 4. **Given** ein laufender Import, **When** der Nutzer abbricht oder ein Fehler den Import
@@ -140,10 +152,11 @@ genau einer.
 
 ### Edge Cases
 
-- **haex-vault läuft noch und hat Änderungen nur in der Begleitdatei.** holzi übernimmt
-  den Stand einschließlich dieser Änderungen, wenn die Begleitdatei neben der Vault-Datei liegt.
-  Fehlt sie, importiert holzi den Stand der Vault-Datei und rät in der Vorschau, haex-vault
-  vorher zu schließen; holzi verändert und löscht die Begleitdatei nie.
+- **haex-vault lief beim Kopieren noch oder wurde nicht sauber beendet.** Dann stehen die
+  letzten Änderungen in einer Begleitdatei neben der Vault-Datei. Liegt sie daneben, übernimmt
+  holzi den Stand einschließlich dieser Änderungen; holzi verändert und löscht sie nie. Ob eine
+  Begleitdatei fehlt, lässt sich nicht erkennen (nach sauberem Beenden gibt es keine); der Import
+  weist deshalb bei dieser Quelle immer darauf hin, haex-vault vor dem Kopieren zu schließen.
 - **Die Datei liegt auf einem schreibgeschützten Ort** (USB-Stick, Freigabe ohne Schreibrecht).
   Der Import funktioniert trotzdem.
 - **Ein Anhang oder ein eigenes Symbol ist größer als das Limit aus FR-020 von 034** oder lässt
@@ -193,9 +206,11 @@ genau einer.
   in den Bericht geschrieben werden und MUSS nach dem Import aus dem Speicher entfernt werden,
   wie die Zugangsdaten der KeePass-Quelle in 034.
 - **FR-005**: holzi MUSS vor jedem Schreiben unterscheiden und dem Nutzer verständlich melden:
-  falsches Vault-Passwort, Datei ist keine haex-vault-Vault, Vault enthält keine
-  Passwortmanager-Daten, Vault hat einen Aufbau, den holzi nicht lesen kann (fehlende Tabelle
-  oder Spalte). In keinem dieser Fälle DARF etwas geschrieben werden.
+  Vault-Passwort passt nicht oder die Datei ist keine haex-vault-Vault (eine verschlüsselte Datei
+  verrät ohne den richtigen Schlüssel nicht, was sie ist), Datei ist erkennbar keine
+  haex-vault-Vault, Vault enthält keine Passwortmanager-Daten, Vault hat einen Aufbau, den holzi
+  nicht lesen kann (fehlende Tabelle oder Spalte). In keinem dieser Fälle DARF etwas geschrieben
+  werden.
 
 **Was übernommen wird**
 
@@ -238,9 +253,10 @@ genau einer.
   diese Quelle genauso funktionieren wie für die anderen Quellen nach FR-023 von 034. Die
   Vorschau MUSS zusätzlich die Zahl der Tags, Passkeys und Generator-Voreinstellungen nennen.
 - **FR-017**: Doppelte MÜSSEN nach derselben Regel wie bei den anderen Quellen erkannt werden;
-  Passkeys mit vorhandener Credential-ID MÜSSEN nach 034 behandelt werden. Ordner MÜSSEN beim
-  wiederholten Import nicht doppelt angelegt werden, wenn es einen Ordner mit demselben Pfad
-  schon gibt.
+  Passkeys mit vorhandener Credential-ID MÜSSEN nach 034 behandelt werden. Ein Ordner der
+  Quelle MUSS einen vorhandenen Ordner mit demselben Namen am selben Ort wiederverwenden, statt
+  einen zweiten anzulegen; das gilt für alle Importquellen, nicht nur für haex-vault.
+  Voreinstellungen des Generators mit vorhandenem Namen werden nicht doppelt angelegt.
 
 ### Key Entities
 
@@ -284,6 +300,10 @@ genau einer.
   Sync sie abgleicht, kann Doppelte bekommen; dafür genügt ein Import auf einem Gerät.
 - Symbolnamen aus haex-vault, die holzi kennt, bleiben erhalten; was holzi nicht kennt, ersetzt
   das Standardsymbol (FR-014).
+- Einträge, die haex-vault selbst angelegt hat (etwa Zugangsdaten eines S3-Speichers mit Titel
+  `iam-admin:…`), sind gewöhnliche Einträge und werden wie alle anderen übernommen.
+- Hat die Vault in haex-vault eine Farbe für ein Tag und das gleichnamige Tag in holzi keine,
+  bekommt es die Farbe der Quelle; eine vorhandene Farbe in holzi bleibt.
 
 ## Nicht im Umfang
 
