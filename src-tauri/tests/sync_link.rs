@@ -309,6 +309,8 @@ async fn cancelling_a_join_waits_until_the_pending_vault_is_removed() {
     assert!(!fresh.vault_exists(), "FR-025: no vault stays after cancel");
     runtime.link.cancel();
 
+    // The node of a runtime held here would outlive the drain.
+    drop(runtime);
     main.shutdown().await;
 }
 
@@ -379,6 +381,8 @@ async fn a_wrong_or_used_code_transfers_nothing() {
     );
     assert_eq!(listed(&main).len(), 2, "only the first device was added");
 
+    // The node of a runtime held here would outlive the drain.
+    drop(runtime);
     main.shutdown().await;
 }
 
@@ -402,5 +406,7 @@ async fn a_linked_device_cannot_show_a_code() {
         Err(holzi_lib::error::HolziError::NotMainDevice)
     ));
 
+    // The node of a runtime held here would outlive the drain.
+    drop(runtime);
     tokio::join!(main.shutdown(), linked.shutdown());
 }
