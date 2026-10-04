@@ -134,7 +134,18 @@ export function createSessionSync(deps: {
       return
     }
     try {
-      applyRestore(await port.getRestore())
+      const restore = await port.getRestore()
+      const wasEnabled = enabled
+      applyRestore(restore)
+      if (wasEnabled && !restore.enabled) {
+        // wm_session_load removes this device's stale row when restore is off (FR-007/008).
+        // Read the result again in case the setting changed while the cleanup was queued.
+        try {
+          applyRestore((await port.load()).restore)
+        } catch (error) {
+          console.error('[wm] removing the disabled session failed', error)
+        }
+      }
     } catch (error) {
       console.error('[wm] reading the session restore setting failed', error)
     }

@@ -365,13 +365,24 @@ test('a setting turned on elsewhere is taken over and saves at once (spec 023 FR
 })
 
 test('a setting turned off elsewhere stops saving', async () => {
+  let loads = 0
   const { sync, log } = makeSync(
-    async () => ({ restore: ON, session: savedSession() }),
+    async () => {
+      loads += 1
+      return loads === 1
+        ? { restore: ON, session: savedSession() }
+        : { restore: OFF, session: null }
+    },
     async () => OFF,
   )
   await sync.restoreAsync()
   await sync.refreshRestoreAsync()
   sync.saveNow()
+  assert.equal(
+    loads,
+    2,
+    'turning off elsewhere removes the stale local session',
+  )
   assert.equal(log.saveNow.length, 0)
 })
 
