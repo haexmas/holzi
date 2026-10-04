@@ -212,6 +212,8 @@ async fn a_new_installation_links_as_a_linked_device() {
         2,
         "the main device published the list too"
     );
+
+    main.shutdown().await;
 }
 
 /// US5 scenario 5, SC-012: with the role, the vault secret arrives over the
@@ -244,6 +246,8 @@ async fn a_new_installation_can_link_as_a_main_device() {
         listed(&main).iter().filter(|(_, is_main)| *is_main).count(),
         2
     );
+
+    main.shutdown().await;
 }
 
 /// US5 scenario 7: a decline gives the new installation nothing, leaves the
@@ -272,6 +276,8 @@ async fn a_declined_link_leaves_nothing_behind() {
     assert!(!fresh.vault_exists(), "FR-025: no vault stays");
     assert_eq!(listed(&main).len(), 1, "the device list is unchanged");
     assert_eq!(runtime_of(&main).await.link.status(), None);
+
+    main.shutdown().await;
 }
 
 /// FR-025: cancelling a join waits for the background task to discard its
@@ -302,6 +308,8 @@ async fn cancelling_a_join_waits_until_the_pending_vault_is_removed() {
     );
     assert!(!fresh.vault_exists(), "FR-025: no vault stays after cancel");
     runtime.link.cancel();
+
+    main.shutdown().await;
 }
 
 /// US5 scenario 6: a code that is mistyped, or already used, transfers
@@ -370,6 +378,8 @@ async fn a_wrong_or_used_code_transfers_nothing() {
         "nothing was transferred, no vault stays"
     );
     assert_eq!(listed(&main).len(), 2, "only the first device was added");
+
+    main.shutdown().await;
 }
 
 /// FR-024: a device without the main role cannot show a code, and the
@@ -391,4 +401,6 @@ async fn a_linked_device_cannot_show_a_code() {
         refused,
         Err(holzi_lib::error::HolziError::NotMainDevice)
     ));
+
+    tokio::join!(main.shutdown(), linked.shutdown());
 }
