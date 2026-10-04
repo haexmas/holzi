@@ -313,7 +313,10 @@ async fn finish_pending_links(replica: &Arc<Replica>, keys: &DeviceKeys, vault: 
         .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
         .unwrap_or(0);
     let result = tokio::task::spawn_blocking(move || {
+        // Moved in after the token, so they drop before it: the close waits until the database
+        // reference is gone.
         let _held = held;
+        let (replica, keys) = (replica, keys);
         crate::sync::link::host::finish_pending(&replica, &keys, vault, now)?;
         crate::sync::link::join::finish_pending(&replica, now)?;
         crate::sync::admission::sweep_now(&replica, u64::try_from(now).unwrap_or(0))?;
@@ -356,6 +359,7 @@ fn applied_event_sink<R: Runtime>(
             tokio::spawn(async move {
                 match tokio::task::spawn_blocking(move || {
                     let _held = held;
+                    let (replica, keys) = (replica, keys);
                     crate::sync::link::host::drop_listed(&replica, vault)?;
                     crate::sync::link::join::finish_pending_after_host_publication(
                         &replica, &keys, vault, now,
@@ -388,6 +392,7 @@ fn applied_event_sink<R: Runtime>(
                 .unwrap_or(0);
                 match tokio::task::spawn_blocking(move || {
                     let _held = held;
+                    let replica = replica;
                     crate::sync::admission::sweep_now(&replica, now)
                 })
                 .await
