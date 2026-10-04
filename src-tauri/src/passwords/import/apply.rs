@@ -359,12 +359,18 @@ fn write_groups(
                 .insert(group.reference.clone(), TRASH_GROUP_ID.to_string());
             continue;
         }
-        let id = Uuid::new_v4().to_string();
         let parent = group
             .parent_ref
             .as_ref()
             .and_then(|r| result.ids.get(r))
             .cloned();
+        // A repeated import must not duplicate the tree (spec 037 FR-017): a folder the vault
+        // already had with this name at this place is used, and stays out of the ledger.
+        if let Some(id) = existing_group(tx, &group.name, parent.as_deref(), &result.created)? {
+            result.ids.insert(group.reference.clone(), id);
+            continue;
+        }
+        let id = Uuid::new_v4().to_string();
         let previous = group
             .previous_parent_ref
             .as_ref()
@@ -381,6 +387,25 @@ fn write_groups(
         result.created.push(id);
     }
     Ok(result)
+}
+
+/// A folder the vault had before this run with exactly this name under this parent (`None`: at
+/// the top). Folders the run created itself are not matched, so two equal siblings of one source
+/// stay two.
+fn existing_group(
+    tx: &mut CrdtTransaction<'_>,
+    name: &str,
+    parent: Option<&str>,
+    created: &[String],
+) -> Result<Option<String>> {
+    let ids: Vec<String> = tx.query_map(
+        "SELECT id FROM haex_passwords_groups \
+         WHERE name = ?1 AND COALESCE(parent_id, '') = COALESCE(?2, '') AND id <> ?3 \
+         ORDER BY created_at, id",
+        params![name, parent, TRASH_GROUP_ID],
+        |r| r.get(0),
+    )?;
+    Ok(ids.into_iter().find(|id| !created.contains(id)))
 }
 
 /// The current state of an entry in the columns of `item_details`: a valid TOTP in its normal
