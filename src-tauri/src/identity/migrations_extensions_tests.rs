@@ -105,7 +105,7 @@ const COLUMNS: [(&str, &[&str]); 15] = [
     ),
     (
         "extension_purges_applied_no_sync",
-        &["extension_id", "purge_hlc"],
+        &["extension_id", "purge_hlc", "data_purge_hlc"],
     ),
     (
         "extension_logs_no_sync",
@@ -197,12 +197,19 @@ fn assert_extensions_schema(db: &Database) {
     for (table, columns) in COLUMNS {
         assert!(table_exists(db, table), "{table} must exist after 0023");
         assert_eq!(own_columns(db, table), columns, "columns of {table}");
+    }
+    for table in SYNCED_TABLES {
         assert_eq!(
             unique_indexes(db, table),
             0,
             "{table}: a UNIQUE constraint would halt the sync on a conflict (research R5)"
         );
     }
+    assert_eq!(
+        unique_indexes(db, "sync_parked_groups_no_sync"),
+        1,
+        "a parked group is stored once per origin and HLC (0025)"
+    );
     for table in SYNCED_TABLES {
         assert!(
             has_hlc_column(db, table),
@@ -252,6 +259,52 @@ async fn migration_0023_upgrades_a_vault_from_before_it() {
             false,
             holzi_migration_source(),
         );
+        assert_extensions_schema(&db);
+    })
+    .await
+    .expect("join");
+}
+
+#[tokio::test]
+async fn migration_0025_keeps_one_of_each_parked_group_and_adds_the_data_purge() {
+    tokio::task::spawn_blocking(|| {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let old = open(
+            dir.path(),
+            "sync-parking-migration-upgrade",
+            true,
+            migration_source_before("0025_sync_parking"),
+        );
+        old.with_connection(|conn| {
+            for _ in 0..2 {
+                conn.execute(
+                    "INSERT INTO sync_parked_groups_no_sync (origin, hlc, extension_prefix, tables, \
+                     group_blob, bytes, reason, parked_at) \
+                     VALUES ('o', 'h', 'p', '[]', x'00', 1, 'missing_table', 0)",
+                    [],
+                )?;
+            }
+            Ok(())
+        })
+        .expect("park twice");
+        drop(old);
+
+        let db = open(
+            dir.path(),
+            "sync-parking-migration-upgrade",
+            false,
+            holzi_migration_source(),
+        );
+        let parked = db
+            .with_connection(|conn| {
+                Ok(conn.query_row(
+                    "SELECT COUNT(*) FROM sync_parked_groups_no_sync",
+                    [],
+                    |r| r.get::<_, i64>(0),
+                )?)
+            })
+            .expect("count");
+        assert_eq!(parked, 1);
         assert_extensions_schema(&db);
     })
     .await

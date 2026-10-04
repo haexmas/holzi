@@ -32,7 +32,7 @@ fn a_row_completed_by_a_parked_group_waits_whole_while_core_data_arrives() {
 
     b.pull_from(&a);
     ddl(&b, "ALTER TABLE t:notes ADD COLUMN tag TEXT");
-    replay_ready(b.db()).expect("replay");
+    replay_ready(b.db(), &|| false).expect("replay");
     assert_eq!(
         count(
             &b,
@@ -58,7 +58,7 @@ fn parked_groups_that_only_together_make_a_row_replay_together() {
     assert_eq!(parked(&b).len(), 2);
 
     ddl(&b, NOTES);
-    let replayed = replay_ready(b.db()).expect("replay");
+    let replayed = replay_ready(b.db(), &|| false).expect("replay");
     assert_eq!(replayed.groups, 2);
     assert_eq!(
         count(

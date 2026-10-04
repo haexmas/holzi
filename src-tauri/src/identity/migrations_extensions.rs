@@ -198,3 +198,14 @@ pub const DEVICE_TABLES: [&str; 6] = [
     "dev_extensions_no_sync",
     "dev_extension_permissions_no_sync",
 ];
+
+/// The migration `0025_sync_parking` (spec 017, research R10, R11): parked groups are unique per
+/// origin and HLC (a group fetched again is not stored or counted twice, and the check is an index
+/// lookup), and a device remembers the highest "delete data" removal it cleared up for, so a later
+/// "keep data" removal does not lift the filter for changes older than it.
+pub const SYNC_PARKING_0025: &str = r#"DELETE FROM sync_parked_groups_no_sync
+  WHERE id NOT IN (SELECT MIN(id) FROM sync_parked_groups_no_sync GROUP BY origin, hlc);
+--> statement-breakpoint
+CREATE UNIQUE INDEX idx_sync_parked_origin_hlc ON sync_parked_groups_no_sync(origin, hlc);
+--> statement-breakpoint
+ALTER TABLE extension_purges_applied_no_sync ADD COLUMN data_purge_hlc TEXT;"#;
