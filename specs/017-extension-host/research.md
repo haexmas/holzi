@@ -386,6 +386,9 @@ Skripte (schwächer); CSP als `<meta>` (kann `frame-ancestors` nicht).
   ohne `allow-modals` gibt `confirm()` sofort `false` zurück, Löschen wäre unmöglich. **Entscheidung
   (Betreiber, 2026-10-03)**: kein `allow-modals`; das SDK bekommt `client.dialog.confirm`, holzi zeigt den
   Dialog über dem eigenen Tab (Brückenmethode `extension_dialog_confirm`), die Apps stellen um (T117–T119).
+  Der Dialog nimmt beim Öffnen die Tastatur (der Bestätigen-Knopf bekommt den Fokus), der Rahmen ist
+  solange `inert` und bekommt die Tastatur nach der Antwort zurück, wie nach `confirm()`; sonst bliebe sie im
+  Rahmen, Escape bräche nicht ab und Enter auf dem Knopf der Erweiterung fragte erneut (7000).
 - ics-Export in haex-calendar über `a.download` (`app/composables/useIcal.ts:400`): ohne `allow-downloads`
   passiert nichts. **Entscheidung**: kein `allow-downloads`; der Export läuft künftig über den
   Speichern-Dialog von holzi (L4, `extension_filesystem_*` mit Dialog-Auswahl), bis dahin geht er nicht.
@@ -636,7 +639,8 @@ Eingetragen als „(Planung)“ in den Clarifications der Spec:
 - Frontend: `pnpm check:extensions` (Brücke, Warteschlange, App-Liste, Shim-Abbildung) nach dem Muster der
   vorhandenen Prüfskripte; `typecheck`, `lint`, `format:check`.
 - End-to-End (Rahmen aus Spec 016/033): `extension-install-open`, `extension-permission-prompt`,
-  `extension-isolation` (Rahmen kommt nicht an holzi, andere Rahmen, Netz), `extension-two-devices`.
+  `extension-isolation` (Rahmen kommt nicht an holzi, andere Rahmen, Netz), `extension-two-devices`,
+  `extension-dialog` (Bestätigung nimmt die Tastatur, Escape und Enter antworten).
 - Lokal nur gezielte Testbinärdateien mit `-j 4` (Erfahrung aus früheren Sitzungen); CI deckt den Rest.
 
 ## R24 — ADR

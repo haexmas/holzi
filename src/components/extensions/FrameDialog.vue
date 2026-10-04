@@ -2,17 +2,31 @@
 /**
  * A confirmation an extension asked for (spec 017, T118, `extension_dialog_confirm`): drawn over
  * the extension's own tab only, never over holzi. Escape and the cancel button answer "no".
+ *
+ * It takes the focus when it opens: `autofocus` only works while a document loads, and the
+ * keyboard would otherwise stay in the frame below, where Enter asks the same question again.
  */
+import { onMounted, ref } from 'vue'
 import type { FrameDialog } from '~/composables/useExtensionFrame'
 
 defineProps<{ dialog: FrameDialog }>()
 const emit = defineEmits<{ answer: [confirmed: boolean] }>()
 const { t } = useI18n()
+
+const root = ref<HTMLElement | null>(null)
+
+onMounted(() => {
+  root.value
+    ?.querySelector<HTMLElement>('[data-testid="extension-dialog-confirm"]')
+    ?.focus()
+})
 </script>
 
 <template>
   <div
+    ref="root"
     class="flex items-center justify-center bg-background/70 p-4"
+    data-testid="extension-dialog"
     @keydown.esc="emit('answer', false)"
   >
     <div
@@ -28,12 +42,16 @@ const { t } = useI18n()
       </h2>
       <p class="whitespace-pre-line text-sm">{{ dialog.message }}</p>
       <div class="flex justify-end gap-2">
-        <UiButton variant="outline" @click="emit('answer', false)">
+        <UiButton
+          variant="outline"
+          data-testid="extension-dialog-cancel"
+          @click="emit('answer', false)"
+        >
           {{ dialog.cancelLabel ?? t('extensions.dialog.cancel') }}
         </UiButton>
         <UiButton
           :variant="dialog.destructive ? 'destructive' : 'default'"
-          autofocus
+          data-testid="extension-dialog-confirm"
           @click="emit('answer', true)"
         >
           {{ dialog.confirmLabel ?? t('extensions.dialog.confirm') }}

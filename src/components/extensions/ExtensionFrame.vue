@@ -27,6 +27,7 @@ const { state, error, src, dialog, answerDialog, onLoad, reloadAsync } =
       referrerpolicy="no-referrer"
       class="h-full w-full border-0"
       :class="{ invisible: state !== 'ready' }"
+      :inert="dialog !== null || undefined"
       :title="t('extensions.frame.title')"
       @load="onLoad"
     />
