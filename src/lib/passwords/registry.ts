@@ -65,9 +65,45 @@ const OPAQUE_ID = /^[A-Za-z0-9-]{1,64}$/
  * all that the search looks at); it is never a secret and stays short. */
 const MAX_QUERY_LENGTH = 200
 
+/** The tabs of an entry (spec 036, research R2): Verlauf is the place `entry/:id/history`, the other
+ * two are the query `?tab=` of `entry/:id`. */
+export const ENTRY_TABS = ['details', 'extra', 'history'] as const
+export type EntryTab = (typeof ENTRY_TABS)[number]
+
+/** Tabs that live in the query; `history` has a place of its own. */
+const QUERY_TABS: readonly string[] = ['details', 'extra']
+
+/** The tab a place shows: the history place is Verlauf (unless the entry is being edited, which
+ * has no Verlauf), `?tab=` picks Details or Extra, anything else reads as Details. */
+export function entryTab(location: TabLocation): EntryTab {
+  const found = locationFor(location.path)
+  if (found?.location.id === 'history') {
+    return 'edit' in location.query ? 'details' : 'history'
+  }
+  if (found?.location.id !== 'entry') return 'details'
+  return location.query.tab === 'extra' ? 'extra' : 'details'
+}
+
+/** The place of an entry on one tab, keeping the other query keys; `history` drops `edit` and `tab`
+ * (the Verlauf is only for the saved entry), the others drop or set `tab`. */
+export function withEntryTab(
+  itemId: string,
+  tab: EntryTab,
+  query: Record<string, string>,
+): TabLocation {
+  const { tab: _tab, edit: _edit, ...rest } = query
+  if (tab === 'history')
+    return { path: `/entry/${itemId}/history`, query: rest }
+  const kept = 'edit' in query ? { ...rest, edit: query.edit ?? '' } : rest
+  return {
+    path: `/entry/${itemId}`,
+    query: tab === 'extra' ? { ...kept, tab } : kept,
+  }
+}
+
 /** True when a location can be stored in the tab history and the saved session without leaking a
  * value: it is a known place, its path params are opaque ids, and its query holds only the search
- * text `q`, a tag id `tag` and the edit flag `edit`. */
+ * text `q`, a tag id `tag`, the edit flag `edit` and, on an entry, the tab `tab`. */
 export function isSecretFreeLocation(location: TabLocation): boolean {
   const found = locationFor(location.path)
   if (!found) return false
@@ -81,6 +117,9 @@ export function isSecretFreeLocation(location: TabLocation): boolean {
       if (!OPAQUE_ID.test(value)) return false
     } else if (key === 'edit') {
       if (value !== '' && value !== '1') return false
+    } else if (key === 'tab') {
+      if (found.location.id !== 'entry' || !QUERY_TABS.includes(value))
+        return false
     } else {
       return false
     }

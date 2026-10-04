@@ -1299,7 +1299,11 @@
         "tags": "Tags",
         "keyValues": "Eigene Felder",
         "attachments": "Anhänge"
-      }
+      },
+      "savedAt": "Gespeichert am {when}",
+      "nothingOlder": "Es gibt nichts Älteres: dies ist der erste Stand des Eintrags.",
+      "restoreTitle": "Diesen Stand wiederherstellen?",
+      "restoreBody": "Der Eintrag bekommt die Werte dieses Standes. Der Stand, den er ersetzt, bleibt im Verlauf."
     },
     "attachments": {
       "title": "Anhänge",
@@ -1410,6 +1414,12 @@
       "deleted": "Dieser Eintrag wurde auf einem anderen Gerät gelöscht.",
       "reload": "Neu laden",
       "back": "Zurück"
+    },
+    "tabs": {
+      "label": "Bereiche des Eintrags",
+      "details": "Details",
+      "extra": "Extra",
+      "history": "Verlauf"
     }
   },
   "extensions": {

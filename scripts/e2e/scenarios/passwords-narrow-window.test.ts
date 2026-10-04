@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import { createAndUnlock } from '../lib/flows.ts'
-import { createEntry, openPasswords } from '../lib/passwords.ts'
+import {
+  activeTab,
+  createEntry,
+  openPasswords,
+  selectTab,
+} from '../lib/passwords.ts'
 import { KEY, isShown, resizeAppWindow } from '../lib/settings.ts'
 
 const APP = 'system.passwords'
@@ -99,14 +104,37 @@ scenario('passwords-narrow-window', {}, async (ctx) => {
   assert.ok((await overflow()) <= 1, 'the entry scrolls sideways at 360 px')
   for (const hook of [
     'passwords-edit',
-    'passwords-history',
+    'entry-tab-details',
+    'entry-tab-extra',
+    'entry-tab-history',
     'passwords-delete',
   ]) {
     await instance.waitForDisplayed(hook)
   }
+  // Spec 036 (FR-042, SC-003): every tab of the entry fits 360 px.
+  for (const tab of ['extra', 'history', 'details'] as const) {
+    await selectTab(instance, tab)
+    await ctx.waitFor(
+      `the ${tab} tab`,
+      async () => (await activeTab(instance)) === tab,
+    )
+    assert.ok(
+      (await overflow()) <= 1,
+      `the ${tab} tab scrolls sideways at 360 px`,
+    )
+  }
   await instance.click('passwords-edit')
   await instance.waitForDisplayed('passwords-editor')
   assert.ok((await overflow()) <= 1, 'the editor scrolls sideways at 360 px')
+  await selectTab(instance, 'extra')
+  await ctx.waitFor(
+    'the editor on Extra',
+    async () => (await activeTab(instance)) === 'extra',
+  )
+  assert.ok(
+    (await overflow()) <= 1,
+    'the editor Extra scrolls sideways at 360 px',
+  )
   await instance.waitForDisplayed('passwords-editor-save')
   ctx.step('360 px without sideways scrolling, actions reachable')
 })
