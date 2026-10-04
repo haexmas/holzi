@@ -7,17 +7,26 @@
 import type { CopyField } from '@bindings/CopyField'
 import type { ItemDetail } from '@bindings/ItemDetail'
 
-defineProps<{
-  itemId: string
-  detail: ItemDetail
-}>()
 const emit = defineEmits<{
   copy: [field: CopyField, label: string]
   changed: []
 }>()
 
+const props = defineProps<{
+  itemId: string
+  detail: ItemDetail
+}>()
+
 const { t } = useI18n()
 const { revealAsync } = usePasswords()
+
+/** The marks of a custom field that holds references (spec 036). */
+function marksOf(id: string) {
+  return (
+    props.detail.references.keyValues.find((entry) => entry.id === id)?.marks ??
+    []
+  )
+}
 </script>
 
 <template>
@@ -32,6 +41,13 @@ const { revealAsync } = usePasswords()
         :title="field.key ?? ''"
         data-no-swipe
       >
+        <template v-if="marksOf(field.id).length" #below>
+          <PasswordsReferenceValue
+            :marks="marksOf(field.id)"
+            :text="null"
+            kind="keyValue"
+          />
+        </template>
         <PasswordsMaskedValue
           :fetch="
             async () =>

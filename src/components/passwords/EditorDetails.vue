@@ -116,6 +116,13 @@ const showOtpInput = computed(
           copyable
           data-testid="passwords-field-username"
         />
+        <PasswordsReferenceField
+          class="mt-1.5"
+          :text="draft.username"
+          :item-id="itemId"
+          kind="username"
+          @update:text="draft.username = $event"
+        />
       </li>
       <li class="flex flex-col gap-1.5 px-4 py-3">
         <ShadcnLabel v-if="draft.password.mode === 'keep'" for="pw-password">{{
@@ -169,6 +176,13 @@ const showOtpInput = computed(
             {{ t('passwords.generator.open') }}
           </UiButton>
         </div>
+        <PasswordsReferenceField
+          :text="draft.password.mode === 'set' ? draft.password.value : null"
+          :stored-marks="detail?.references.password"
+          :item-id="itemId"
+          kind="password"
+          @update:text="draft.password = { mode: 'set', value: $event }"
+        />
       </li>
       <li class="px-4 py-3">
         <UiInput
@@ -181,6 +195,13 @@ const showOtpInput = computed(
           inputmode="url"
           copyable
           data-testid="passwords-field-url"
+        />
+        <PasswordsReferenceField
+          class="mt-1.5"
+          :text="draft.url"
+          :item-id="itemId"
+          kind="url"
+          @update:text="draft.url = $event"
         />
       </li>
     </SettingsGroup>
@@ -249,6 +270,13 @@ const showOtpInput = computed(
           label-bg="var(--muted)"
           rows="4"
           data-testid="passwords-field-note"
+        />
+        <PasswordsReferenceField
+          class="mt-1.5"
+          :text="draft.note"
+          :item-id="itemId"
+          kind="note"
+          @update:text="draft.note = $event"
         />
       </li>
       <li class="px-4 py-3">

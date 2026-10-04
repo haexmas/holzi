@@ -10,6 +10,7 @@
  * move; and the list shortcuts, which the frame hands over while the list shows.
  */
 import type { GroupRow } from '@bindings/GroupRow'
+import type { CopyRequest } from '~/composables/usePasswordsActions'
 import type { BreadcrumbPlace } from '~/lib/passwords/breadcrumb'
 import { buildMenu, type MenuCommand } from '~/lib/passwords/menus'
 import { filterHeaders, fold } from '~/lib/passwords/search'
@@ -128,6 +129,7 @@ function entryMenu(id: string) {
     kind: 'entry',
     ablageFilled: clipboard.filled,
     selectionSize: idsFor(id).length,
+    copyAvailable: true,
     hasUsername: Boolean(header?.username),
     hasPassword: header?.hasPassword ?? false,
   })
@@ -138,6 +140,7 @@ function folderMenu(id: string) {
     kind: 'folder',
     ablageFilled: clipboard.filled,
     selectionSize: idsFor(id).length,
+    copyAvailable: true,
   })
 }
 
@@ -158,6 +161,14 @@ function onMenuOpen(id: string) {
 const deleteOpen = ref(false)
 const deleteIds = ref<string[]>([])
 const folderDialog = ref(false)
+const copyRequest = ref<CopyRequest | null>(null)
+const copyOpen = ref(false)
+
+/** A paste of a copied Ablage opens the copy dialog of this window (spec 036, FR-015). */
+function openCopy(request: CopyRequest) {
+  copyRequest.value = request
+  copyOpen.value = true
+}
 const editing = ref<GroupRow | null>(null)
 const parentForNew = ref<string | null>(null)
 
@@ -211,7 +222,7 @@ async function run(command: MenuCommand, id: string | null) {
       break
     case 'paste':
       // Into the folder of the menu, or for the empty area into the open one.
-      await actions.pasteAsync(id ?? folderId.value)
+      await actions.pasteAsync(id ?? folderId.value, openCopy)
       break
     case 'delete':
       askDelete(ids)
@@ -233,6 +244,7 @@ const { focusedId, tabStopId, keepFocus } = usePasswordsListKeys({
   open,
   askDelete,
   pasteTarget: computed(() => (pasteHere.value ? folderId.value : undefined)),
+  openCopy,
 })
 
 const rowCount = computed(() => visibleIds.value.length)
@@ -273,7 +285,7 @@ const rowCount = computed(() => visibleIds.value.length)
         <PasswordsClipboardBar
           v-if="clipboard.filled && !selection.active"
           :can-paste="pasteHere"
-          @paste="actions.pasteAsync(folderId)"
+          @paste="actions.pasteAsync(folderId, openCopy)"
         />
         <p v-if="store.lastError" class="text-sm text-destructive" role="alert">
           {{ store.lastError }}
@@ -349,6 +361,7 @@ const rowCount = computed(() => visibleIds.value.length)
         :targets="actions.targetsOf(deleteIds)"
         @done="selection.clear()"
       />
+      <PasswordsCopyDialog v-model:open="copyOpen" :request="copyRequest" />
       <PasswordsFolderDialog
         v-model:open="folderDialog"
         :group="editing"

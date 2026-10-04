@@ -3,4 +3,4 @@
 /**
  * Which secret of an entry to reveal.
  */
-export type SecretField = { "kind": "password" } | { "kind": "otpSecret" } | { "kind": "keyValue", id: string, };
+export type SecretField = { "kind": "password" } | { "kind": "otpSecret" } | { "kind": "keyValue", id: string, } | { "kind": "username" } | { "kind": "url" } | { "kind": "note" };

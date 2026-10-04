@@ -224,6 +224,23 @@ pub enum HolziError {
     #[error("Import failed: {reason}")]
     PasswordsImportFailed { reason: String },
 
+    /// A placeholder of a value does not resolve (spec 036, `contracts/references.md`): `reason` is
+    /// `missing`, `cycle` or `tooDeep`. Never carries a value or the placeholder.
+    #[error("Reference does not resolve: {reason}")]
+    PasswordsReference { reason: String },
+
+    /// A save would make a value lead back to itself through references (spec 036, FR-046);
+    /// names the source of the first step.
+    #[error("Reference cycle")]
+    PasswordsReferenceCycle {
+        #[serde(rename = "sourceItemId")]
+        source_item_id: String,
+    },
+
+    /// A copy into the trash or a folder inside it (spec 036, `passwords_copy`).
+    #[error("Cannot copy into the trash")]
+    PasswordsIntoTrash,
+
     /// An extension bundle was refused or could not be installed (spec 017,
     /// contracts/bundle-format.md §Prüfung: `reason` is the error kind, e.g. `signature_invalid`,
     /// `file_mismatch`, `legacy_signature_format`). Never carries content of the bundle.

@@ -29,9 +29,6 @@ const selection = usePasswordsSelectionStore()
 const { setTagsAsync } = usePasswords()
 const actions = usePasswordsActions()
 
-/** Kopieren needs the copy dialog of stage 3 (FR-015); until then it is not offered. */
-const copyAvailable = false
-
 type Pending =
   | { kind: 'move'; groupId: string | null }
   | { kind: 'addTag'; name: string }
@@ -97,17 +94,15 @@ const barActions = computed<BarAction[]>(() => {
       selection.clear()
     },
   })
-  if (copyAvailable) {
-    list.push({
-      id: 'copy',
-      icon: 'lucide:copy',
-      label: t('passwords.selection.copy'),
-      run: () => {
-        actions.copy(selection.ids)
-        selection.clear()
-      },
-    })
-  }
+  list.push({
+    id: 'copy',
+    icon: 'lucide:copy',
+    label: t('passwords.selection.copy'),
+    run: () => {
+      actions.copy(selection.ids)
+      selection.clear()
+    },
+  })
   list.push({
     id: 'move',
     icon: 'lucide:folder-input',

@@ -10,7 +10,7 @@ use super::{require_user, PasswordsService};
 use crate::error::{HolziError, Result};
 use crate::passwords::access::{authorize_delete, Caller, Grant, ItemState};
 use crate::passwords::model::{Target, TargetKind};
-use crate::passwords::{items, trash};
+use crate::passwords::{items, references_db, trash};
 
 impl PasswordsService {
     /// Moves an entry into the trash (Z8). A caller needs a write grant and an entry in its scope;
@@ -81,19 +81,48 @@ impl PasswordsService {
             .await
     }
 
-    /// Deletes what is in the trash for good, with everything that depends on it. Z11.
-    pub async fn delete_permanently(&self, caller: &Caller, targets: Vec<Target>) -> Result<u32> {
+    /// Deletes what is in the trash for good, with everything that depends on it. With
+    /// `inline_references` the placeholders other entries hold on the deleted entries are first
+    /// replaced by today's values, in the same transaction (spec 036, FR-048). Z11.
+    pub async fn delete_permanently(
+        &self,
+        caller: &Caller,
+        targets: Vec<Target>,
+        inline_references: bool,
+    ) -> Result<u32> {
         require_user(caller)?;
         self.db()
-            .write(move |tx| trash::delete_permanently(tx, &targets).map_err(Into::into))
+            .write(move |tx| {
+                if inline_references {
+                    let mut sources: Vec<String> = targets
+                        .iter()
+                        .filter(|t| t.kind == TargetKind::Item)
+                        .map(|t| t.id.clone())
+                        .collect();
+                    let groups: Vec<String> = targets
+                        .iter()
+                        .filter(|t| t.kind == TargetKind::Group)
+                        .map(|t| t.id.clone())
+                        .collect();
+                    sources.extend(references_db::items_in_groups(tx, &groups)?);
+                    references_db::inline_all(tx, &sources)?;
+                }
+                trash::delete_permanently(tx, &targets).map_err(Into::into)
+            })
             .await
     }
 
-    /// Empties the trash. Z11.
-    pub async fn empty_trash(&self, caller: &Caller) -> Result<u32> {
+    /// Empties the trash, with `inline_references` as in [`Self::delete_permanently`]. Z11.
+    pub async fn empty_trash(&self, caller: &Caller, inline_references: bool) -> Result<u32> {
         require_user(caller)?;
         self.db()
-            .write(|tx| trash::empty_trash(tx).map_err(Into::into))
+            .write(move |tx| {
+                if inline_references {
+                    let sources: Vec<String> = items::trashed_item_ids(tx)?.into_iter().collect();
+                    references_db::inline_all(tx, &sources)?;
+                }
+                trash::empty_trash(tx).map_err(Into::into)
+            })
             .await
     }
 }

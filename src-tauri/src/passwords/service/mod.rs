@@ -20,12 +20,14 @@ use super::access::{self, Caller};
 use super::usage::UsageRegistry;
 
 mod attachments;
+mod copy;
 mod history;
 pub mod import;
 mod items;
 mod organize;
 mod passkeys;
 mod presets;
+mod references;
 mod trash;
 mod usage;
 

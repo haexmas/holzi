@@ -28,15 +28,45 @@ function terms(query: string): string[] {
     .filter((word) => word.length > 0)
 }
 
+/** A reference placeholder (spec 036, `contracts/references.md`). The grammar itself lives in Rust
+ * (`passwords/references.rs`); this only keeps the search from matching the raw token, so a search
+ * for "password" or a piece of an id does not find every entry with a reference. */
+const PLACEHOLDER =
+  /\{\$[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}:(?:username|password|extra:(?:\\[\s\S]|[^}\\])+)\}/g
+
+/** A text cut into plain parts and placeholders, for a list that shows a mark instead of the raw
+ * token (spec 036, FR-047). Who the mark points at is left to the entry view, which asks Rust. */
+export function placeholderParts(
+  text: string,
+): { kind: 'text' | 'mark'; text: string }[] {
+  const parts: { kind: 'text' | 'mark'; text: string }[] = []
+  let last = 0
+  for (const match of text.matchAll(PLACEHOLDER)) {
+    const start = match.index ?? 0
+    if (start > last)
+      parts.push({ kind: 'text', text: text.slice(last, start) })
+    parts.push({ kind: 'mark', text: match[0] })
+    last = start + match[0].length
+  }
+  if (last < text.length) parts.push({ kind: 'text', text: text.slice(last) })
+  return parts
+}
+
+function withoutPlaceholders(text: string | null): string | null {
+  return text === null ? null : text.replace(PLACEHOLDER, ' ')
+}
+
 /** The folded texts a header is searched in. */
 function haystack(header: SearchableHeader): string[] {
   return [
     header.title,
-    header.username,
-    header.url,
+    withoutPlaceholders(header.username),
+    withoutPlaceholders(header.url),
     ...header.tags.map((tag) => tag.name),
   ]
-    .filter((text): text is string => typeof text === 'string' && text !== '')
+    .filter(
+      (text): text is string => typeof text === 'string' && text.trim() !== '',
+    )
     .map(fold)
 }
 

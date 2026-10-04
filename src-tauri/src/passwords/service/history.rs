@@ -8,7 +8,10 @@ use crate::passwords::access::Caller;
 use crate::passwords::model::{
     HistorySecret, RestoreOutcome, RevealedSecret, SnapshotHeader, SnapshotView,
 };
+use crate::passwords::references::Field;
+use crate::passwords::references_db::{resolve_or_error, stored_texts, validate, Reader};
 use crate::passwords::snapshots;
+use crate::storage::query::Query as _;
 
 impl PasswordsService {
     pub async fn history_list(
@@ -37,7 +40,26 @@ impl PasswordsService {
     ) -> Result<RevealedSecret> {
         require_user(caller)?;
         self.db()
-            .read(move |q| snapshots::reveal(q, &snapshot_id, &field).map_err(Into::into))
+            .read(move |q| {
+                let mut secret = snapshots::reveal(q, &snapshot_id, &field)?;
+                // Spec 036, FR-049: a state keeps its placeholders; revealing resolves them as
+                // they are now, and a source that is gone is an error, never the placeholder.
+                let origin = match &field {
+                    HistorySecret::Password => Field::Password,
+                    HistorySecret::KeyValue { key } => Field::Extra(key.clone()),
+                    HistorySecret::OtpSecret => return Ok(secret),
+                };
+                let item_id = q
+                    .query_row(
+                        "SELECT item_id FROM haex_passwords_item_snapshots WHERE id = ?1",
+                        haex_crdt::rusqlite::params![snapshot_id],
+                        |r| r.get::<_, String>(0),
+                    )?
+                    .unwrap_or_default();
+                secret.value =
+                    resolve_or_error(q, Reader::user(), &item_id, origin, &secret.value)?;
+                Ok(secret)
+            })
             .await
     }
 
@@ -52,8 +74,13 @@ impl PasswordsService {
         require_user(caller)?;
         self.db()
             .write(move |tx| {
-                snapshots::restore(tx, &item_id, &snapshot_id, &expected_updated_at)
-                    .map_err(Into::into)
+                let outcome = snapshots::restore(tx, &item_id, &snapshot_id, &expected_updated_at)?;
+                // Spec 036, FR-046: a state from before another entry pointed back can close a
+                // cycle; the error rolls the restore back.
+                if let Some(texts) = stored_texts(tx, &item_id)? {
+                    validate(tx, &item_id, &texts)?;
+                }
+                Ok(outcome)
             })
             .await
     }

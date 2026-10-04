@@ -456,6 +456,20 @@ onBeforeUnmount(() => {
           <SettingsRow :title="t('passwords.import.report.skippedDuplicates')">
             <span class="tabular-nums">{{ report.skippedDuplicates }}</span>
           </SettingsRow>
+          <SettingsRow
+            v-if="report.referencesConverted + report.referencesLeftAsText > 0"
+            :title="t('passwords.import.report.referencesConverted')"
+            :description="
+              report.referencesLeftAsText > 0
+                ? t('passwords.import.report.referencesLeftAsText', {
+                    count: report.referencesLeftAsText,
+                  })
+                : undefined
+            "
+            data-testid="passwords-import-references"
+          >
+            <span class="tabular-nums">{{ report.referencesConverted }}</span>
+          </SettingsRow>
         </SettingsGroup>
 
         <template v-if="groups.length">

@@ -11,6 +11,7 @@ import type { MenuCommand, MenuEntry } from '~/lib/passwords/menus'
 import { DEFAULT_ENTRY_ICON } from '~/lib/passwords/icons'
 import { draggedIds, ITEMS_MIME, itemsPayload } from '~/lib/passwords/dnd'
 import { displayTitle, isExpired, localDay } from '~/lib/passwords/format'
+import { placeholderParts } from '~/lib/passwords/search'
 
 const props = defineProps<{
   header: ItemHeader
@@ -116,8 +117,22 @@ function onDragStart(event: DragEvent) {
           <span
             v-if="header.username"
             class="truncate text-sm text-muted-foreground"
+            data-testid="passwords-list-username"
           >
-            {{ header.username }}
+            <template
+              v-for="(part, index) in placeholderParts(header.username)"
+              :key="index"
+            >
+              <template v-if="part.kind === 'text'">{{ part.text }}</template>
+              <span
+                v-else
+                class="mx-0.5 inline-flex items-center gap-0.5 rounded-full border border-primary/40 bg-primary/10 px-1.5 align-middle text-xs"
+                data-testid="passwords-list-reference"
+              >
+                <Icon name="lucide:link" class="size-3" />
+                {{ t('passwords.references.listMark') }}
+              </span>
+            </template>
           </span>
         </span>
         <span class="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
