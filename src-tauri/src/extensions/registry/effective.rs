@@ -41,3 +41,34 @@ pub fn effective_bundle(q: &mut impl Query, extension_id: Uuid) -> Result<Option
             .then_with(|| a.bundle_id.to_string().cmp(&b.bundle_id.to_string()))
     }))
 }
+
+/// The retired bundles of a higher version than `effective`, lowest first. Confirming a downgrade
+/// retires every higher bundle (research R11), so `effective` stands after one when this is not
+/// empty.
+pub fn retired_above(
+    q: &mut impl Query,
+    extension_id: Uuid,
+    effective: &EffectiveBundle,
+) -> Result<Vec<EffectiveBundle>> {
+    let rows = q.query_map(
+        "SELECT id, version FROM extension_bundles WHERE extension_id = ?1 AND retired = 1",
+        &[&extension_id.to_string()],
+        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+    )?;
+    let mut above: Vec<EffectiveBundle> = rows
+        .into_iter()
+        .filter_map(|(id, version)| {
+            Some(EffectiveBundle {
+                bundle_id: Uuid::parse_str(&id).ok()?,
+                version: semver::Version::parse(&version).ok()?,
+            })
+        })
+        .filter(|bundle| bundle.version > effective.version)
+        .collect();
+    above.sort_by(|a, b| {
+        a.version
+            .cmp(&b.version)
+            .then_with(|| a.bundle_id.to_string().cmp(&b.bundle_id.to_string()))
+    });
+    Ok(above)
+}

@@ -1480,7 +1480,8 @@
         "signature_invalid": "The signature is invalid.",
         "legacy_signature_format": "The bundle was signed with an old tool. Please sign it again with the current “haex” tool.",
         "unreadable": "The file cannot be read.",
-        "downgrade_not_confirmed": "An older version is installed only after confirmation."
+        "downgrade_not_confirmed": "An older version is installed only after confirmation.",
+        "bundle_mismatch": "The package does not match what the vault records."
       },
       "title": "Install extension",
       "fileType": "Extension",

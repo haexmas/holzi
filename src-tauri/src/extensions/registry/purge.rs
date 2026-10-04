@@ -10,7 +10,7 @@
 //! Changes older than `purge_hlc` that arrive later are dropped by the sync receiver
 //! (`sync::inbound::park`).
 
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError};
 
 use haex_crdt::rusqlite::params;
 use haex_crdt::{compare_hlc_strings, AuthContext, Authorization, GuardedWriteOptions, SqlGuard};
@@ -19,6 +19,7 @@ use uuid::Uuid;
 use crate::error::Result;
 use crate::extensions::ids::{ExtensionTable, TablePrefix};
 use crate::extensions::sql::authorizer::MIGRATION_JOURNAL;
+use crate::extensions::sql::migrate::applying;
 use crate::storage::query::Query;
 use crate::sync::inbound::park;
 use crate::vault_gate::VaultDb;
@@ -64,14 +65,11 @@ fn quoted(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
-/// Clears up for `removal` on `device` in one write and records its `purge_hlc`. Blocking.
+/// Clears up for `removal` on `device` in one write and records its `purge_hlc`. Holds the
+/// migration lock and reads the tables inside the write, so a migration of a starting frame cannot
+/// add a table that would outlive the cleared journal. Blocking.
 pub fn run(db: &VaultDb, removal: &Removal, device: Uuid) -> Result<()> {
-    let objects = if removal.purge_data {
-        let prefix = removal.prefix.clone();
-        db.read_blocking(move |q| prefixed(q, &prefix))?
-    } else {
-        Vec::new()
-    };
+    let _applying = applying().lock().unwrap_or_else(PoisonError::into_inner);
     // holzi's own statements on names read from sqlite_master; schema mode switches foreign keys
     // off, so the tables of one extension can go in any order.
     let guard = SqlGuard {
@@ -97,9 +95,9 @@ pub fn run(db: &VaultDb, removal: &Removal, device: Uuid) -> Result<()> {
                 params![ext],
             )?;
             if removal.purge_data {
-                for (kind, name) in &objects {
+                for (kind, name) in prefixed(tx, &removal.prefix)? {
                     let kind = if kind == "view" { "VIEW" } else { "TABLE" };
-                    tx.execute(&format!("DROP {kind} IF EXISTS {}", quoted(name)), &[])?;
+                    tx.execute(&format!("DROP {kind} IF EXISTS {}", quoted(&name)), &[])?;
                 }
                 tx.execute(
                     &format!("DELETE FROM {MIGRATION_JOURNAL} WHERE extension_id = ?1"),

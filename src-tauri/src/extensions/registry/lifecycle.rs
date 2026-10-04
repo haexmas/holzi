@@ -21,13 +21,13 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use super::purge::{self, Removal};
-use super::start::start;
+use super::start::{self as starting, start, Effective};
 use super::status::{self, DeviceStatus};
 use crate::error::Result;
 use crate::extensions::commands::{ExtensionsChanged, EXTENSIONS_CHANGED};
 use crate::extensions::host::ExtensionHost;
 use crate::extensions::ids::{device_status_id, ExtensionName, PublicKey, TablePrefix};
-use crate::extensions::sql::migrate::apply_pending;
+use crate::extensions::sql::migrate::{apply_pending, kept_migrations, MigrationError};
 use crate::passwords::clock::unix_millis;
 use crate::state::AppState;
 use crate::storage::query::Query;
@@ -193,17 +193,31 @@ fn follow(
         }))
 }
 
-/// Applies the pending migrations of an extension that does not run on this device. A failure is
-/// logged: rows for its tables wait parked until a later run succeeds.
+/// Applies the pending migrations of an extension that does not run on this device, so its tables
+/// follow and rows for them do not wait parked: a disabled one from its verified effective bundle
+/// (FR-003), one removed with "keep data" from its kept migration rows (FR-008), since no bundle
+/// is left. A failure is logged: rows for its tables wait parked until a later run succeeds.
 fn keep_tables(db: &VaultDb, extension: &Registered, now_ms: i64) {
-    let Some(prefix) = &extension.prefix else {
-        return;
+    let id = extension.id;
+    let result = if extension.installed {
+        match starting::effective(db, id) {
+            Ok(Effective::Ready(prepared)) => starting::migrate(db, id, &prepared, now_ms),
+            Ok(Effective::Transferring(_) | Effective::SignatureFailed(..)) => return,
+            Err(error) => {
+                log::warn!("extension {id}: its bundle could not be read: {error}");
+                return;
+            }
+        }
+    } else {
+        let Some(prefix) = &extension.prefix else {
+            return;
+        };
+        db.read_blocking(move |q| Ok(kept_migrations(q, id)))
+            .unwrap_or(Err(MigrationError::Unavailable))
+            .and_then(|kept| apply_pending(db, id, prefix, &kept, now_ms))
     };
-    if let Err(error) = apply_pending(db, extension.id, prefix, now_ms) {
-        log::warn!(
-            "extension {}: the migrations of its kept tables failed: {error:?}",
-            extension.id
-        );
+    if let Err(error) = result {
+        log::warn!("extension {id}: the migrations of its kept tables failed: {error:?}");
     }
 }
 
@@ -319,3 +333,7 @@ mod tests;
 #[cfg(test)]
 #[path = "lifecycle_us7_tests.rs"]
 mod us7_tests;
+
+#[cfg(test)]
+#[path = "lifecycle_migration_tests.rs"]
+mod migration_tests;
