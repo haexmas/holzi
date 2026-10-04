@@ -158,6 +158,11 @@ fn handle(
             Err(error) => log::warn!("extensions: reading the schema failed: {error}"),
         }
     }
+    // No extension may read a core table: a write to one alone (chat, wm, the store or log of an
+    // extension) builds no policy at all.
+    batch
+        .tables
+        .retain(|table| ExtensionTable::parse(table).is_ok());
     notify(db, host, emitter, device, &batch.tables);
 }
 

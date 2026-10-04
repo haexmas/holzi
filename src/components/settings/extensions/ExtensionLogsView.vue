@@ -34,25 +34,33 @@ async function readAsync(before: number | null): Promise<LogEntry[]> {
   })
 }
 
+/** Counts reads; an answer to an earlier one (another level meanwhile) is dropped. */
+let latest = 0
+
 async function loadAsync() {
+  const read = ++latest
   try {
-    entries.value = await readAsync(null)
-    more.value = entries.value.length === PAGE
+    const first = await readAsync(null)
+    if (read !== latest) return
+    entries.value = first
+    more.value = first.length === PAGE
     failure.value = null
   } catch (error) {
-    failure.value = errString(error)
+    if (read === latest) failure.value = errString(error)
   }
 }
 
 async function loadOlderAsync() {
   const oldest = entries.value.at(-1)
   if (!oldest) return
+  const read = ++latest
   try {
     const older = await readAsync(oldest.id)
+    if (read !== latest) return
     entries.value = [...entries.value, ...older]
     more.value = older.length === PAGE
   } catch (error) {
-    failure.value = errString(error)
+    if (read === latest) failure.value = errString(error)
   }
 }
 

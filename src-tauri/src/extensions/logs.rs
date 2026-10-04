@@ -1,7 +1,8 @@
 //! The log of an extension (spec 017, US5, T086, contracts/bridge.md `extension_logging_*`, method
 //! names as in haex-vault): an extension writes and reads only its own entries on this device;
 //! holzi's settings read them with [`read`]. The entries stay on this device
-//! (`extension_logs_no_sync`), at most [`MAX_ENTRIES`] per extension: the oldest go first.
+//! (`extension_logs_no_sync`), at most [`MAX_ENTRIES`] per extension and device: the oldest go
+//! first.
 
 use haex_crdt::rusqlite::params;
 use serde::Serialize;
@@ -148,12 +149,15 @@ pub fn write(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![ext, device, level, message, metadata, now],
             )?;
-            // The ring buffer: everything behind the newest MAX_ENTRIES goes.
+            // The ring buffer of this extension on this device: everything behind its newest
+            // MAX_ENTRIES goes. Rows of another device id (a copied vault file) stay.
             tx.execute(
-                "DELETE FROM extension_logs_no_sync WHERE extension_id = ?1 AND id <= \
-                 (SELECT id FROM extension_logs_no_sync WHERE extension_id = ?1 \
-                  ORDER BY id DESC LIMIT 1 OFFSET ?2)",
-                params![ext, MAX_ENTRIES],
+                "DELETE FROM extension_logs_no_sync \
+                 WHERE extension_id = ?1 AND vault_device_uuid = ?2 AND id <= \
+                 (SELECT id FROM extension_logs_no_sync \
+                  WHERE extension_id = ?1 AND vault_device_uuid = ?2 \
+                  ORDER BY id DESC LIMIT 1 OFFSET ?3)",
+                params![ext, device, MAX_ENTRIES],
             )?;
             Ok(())
         })

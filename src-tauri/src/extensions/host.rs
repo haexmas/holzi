@@ -98,9 +98,8 @@ impl ExtensionHost {
             .clone()
     }
 
-    /// Sets the context holzi's window reports; a theme outside the SDK's names counts as
-    /// `system`.
-    /// Takes over holzi's color scheme and language; returns whether either changed.
+    /// Takes over the color scheme and language holzi's window reports (a theme outside the SDK's
+    /// names counts as `system`); returns whether either changed.
     pub fn set_context(&self, theme: &str, locale: &str) -> bool {
         let theme = match theme {
             "light" => "light",

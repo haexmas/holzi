@@ -138,6 +138,20 @@ fn only_the_newest_entries_of_an_extension_stay() {
     write(&minimal, "info", "kept").unwrap();
     let ext = notes.session.extension_id.to_string();
     let device = notes.device.to_string();
+    // An entry under another device id, as in a vault file copied from elsewhere.
+    let elsewhere = ext.clone();
+    notes
+        .db
+        .write_blocking(move |tx| {
+            tx.execute(
+                "INSERT INTO extension_logs_no_sync \
+                 (extension_id, vault_device_uuid, level, message, created_at) \
+                 VALUES (?1, ?2, 'info', 'from elsewhere', 0)",
+                params![elsewhere, Uuid::new_v4().to_string()],
+            )?;
+            Ok(())
+        })
+        .unwrap();
     // Fill up to the limit directly; the next write through the bridge drops the oldest.
     notes
         .db
@@ -170,7 +184,11 @@ fn only_the_newest_entries_of_an_extension_stay() {
             .unwrap()
             .unwrap_or(0)
     };
-    assert_eq!(count(ext), MAX_ENTRIES);
+    assert_eq!(
+        count(ext),
+        MAX_ENTRIES + 1,
+        "the other device's entry stays"
+    );
     assert_eq!(
         count(minimal.session.extension_id),
         1,
@@ -191,8 +209,9 @@ fn only_the_newest_entries_of_an_extension_stay() {
         .db
         .read_blocking(move |q| {
             q.query_row(
-                "SELECT message FROM extension_logs_no_sync WHERE extension_id = ?1 ORDER BY id LIMIT 1",
-                params![ext.to_string()],
+                "SELECT message FROM extension_logs_no_sync \
+                 WHERE extension_id = ?1 AND vault_device_uuid = ?2 ORDER BY id LIMIT 1",
+                params![ext.to_string(), device.to_string()],
                 |r| r.get::<_, String>(0),
             )
         })
