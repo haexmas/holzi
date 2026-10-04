@@ -267,6 +267,7 @@ async function removeOtpAsync() {
           <template #history>
             <PasswordsHistoryTab
               :item-id="itemId"
+              :updated-at="detail.updatedAt"
               :active="activeTab === 'history'"
               @restored="onRestored"
             />

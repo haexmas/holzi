@@ -12,6 +12,7 @@ import type { SnapshotView } from '@bindings/SnapshotView'
 
 const props = defineProps<{
   itemId: string
+  updatedAt: string | null
   /** Whether this is the tab on show. */
   active: boolean
 }>()
@@ -20,7 +21,7 @@ const emit = defineEmits<{ restored: [] }>()
 const { t } = useI18n()
 const { errString } = useErrorString()
 const store = usePasswordsStore()
-const { historyListAsync, historyGetAsync, historyRestoreAsync, getItemAsync } =
+const { historyListAsync, historyGetAsync, historyRestoreAsync } =
   usePasswords()
 
 const states = ref<SnapshotHeader[]>([])
@@ -64,13 +65,12 @@ async function restoreAsync() {
   if (!view) return
   restoring.value = true
   try {
-    // The token of the entry as it is now: a change meanwhile is a conflict, not an overwrite.
-    const current = await getItemAsync(props.itemId)
-    if (!current.updatedAt) throw new Error('missing update token')
+    // A change since the entry was loaded is a conflict, not an overwrite.
+    if (!props.updatedAt) throw new Error('missing update token')
     const outcome = await historyRestoreAsync(
       props.itemId,
       view.id,
-      current.updatedAt,
+      props.updatedAt,
     )
     await store.quietReloadAsync()
     if (outcome.skippedAttachments.length > 0) {
