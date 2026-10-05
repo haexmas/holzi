@@ -18,7 +18,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use super::{shell_error, EXIT, MAX_SESSIONS, OUTPUT};
-use crate::extensions::bridge::dispatch::{CallContext, Emit};
+use crate::extensions::bridge::dispatch::{is_enabled, CallContext, Emit};
 use crate::extensions::bridge::events::emit_to_frames;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
@@ -284,11 +284,16 @@ pub(super) fn start(
         ended(&ctx.host.shells);
         return Err(shell_error("the program did not start"));
     }
-    // The extension's last frame may have closed while the shell started; its `end_all` ran
-    // before the session was listed.
+    // The extension's last frame may have closed, or it may have been disabled or removed, while
+    // the shell started; its `end_all` ran before the session was listed. Each of those changes
+    // comes before its `end_all`, so one looked at after the listing is seen.
     if ctx.host.frames.of_extension(extension_id).is_empty() {
         ended(&ctx.host.shells);
         return Err(shell_error("the extension has no open frame"));
+    }
+    if !is_enabled(ctx).unwrap_or(false) {
+        ended(&ctx.host.shells);
+        return Err(BridgeError::disabled());
     }
     Ok(session_id)
 }

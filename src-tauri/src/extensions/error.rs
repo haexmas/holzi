@@ -57,6 +57,20 @@ pub struct BridgeError {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<Value>,
+    /// For a `1004` whose `details.target` is not what the user is asked about; never sent.
+    #[serde(skip)]
+    pub asks: Option<Box<Asks>>,
+}
+
+/// What the question behind a `1004` names when it is not `details.target`: the extension is
+/// told the program as it named it, the user is asked about its canonical path (shell), so the
+/// answer does not tell where a link points or whether a name is on `PATH`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Asks {
+    Target(String),
+    /// There is nothing a permission could name: no question, the SDK waits as for one nobody
+    /// answers.
+    Nothing,
 }
 
 impl BridgeError {
@@ -65,11 +79,17 @@ impl BridgeError {
             code,
             message: message.into(),
             details: None,
+            asks: None,
         }
     }
 
     pub fn with_details(mut self, details: Value) -> Self {
         self.details = Some(details);
+        self
+    }
+
+    pub fn asking(mut self, asks: Asks) -> Self {
+        self.asks = Some(Box::new(asks));
         self
     }
 

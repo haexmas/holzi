@@ -8,11 +8,12 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-// ponytail: process groups on Unix (on Linux and Android also every group of a session the child
-// leads) and `taskkill /T` on Windows. Ceiling: a descendant that left its group (`setsid`, or a
-// double fork outside a session the child leads) survives, and on macOS so does a job an
-// interactive shell put in a group of its own and did not hang up. Upgrade path: a Windows Job
-// Object with kill-on-close, `PR_SET_PDEATHSIG` on Linux, and `proc_listallpids` on macOS.
+// ponytail: process groups on Unix, also every group of a session the child leads, and
+// `taskkill /T` on Windows. Ceiling: a descendant that left the child's session (`setsid`, or a
+// double fork outside a session the child leads) survives; only cgroups or a subreaper could hold
+// it, and both would reach all of holzi. For an extension's shell this is accepted: its
+// permission already lets it do anything the user can, `systemd-run --user` too. Upgrade path: a
+// Windows Job Object with kill-on-close, a cgroup per child on Linux.
 
 /// The registered children of one app process. Cheap to clone; every clone is the same registry.
 #[derive(Clone, Default)]
@@ -108,7 +109,7 @@ pub(crate) fn kill_process_tree(pid: u32) {
         }
         // A child that leads its own session (a shell on a terminal) puts each job in a group of
         // its own; those groups stay in its session.
-        #[cfg(any(target_os = "linux", target_os = "android"))]
+        #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
         for other in session_groups(group) {
             // SAFETY: as above; `session_groups` returns only ids above 1 other than our own group.
             unsafe {
@@ -141,6 +142,39 @@ fn session_groups(session: i32) -> Vec<i32> {
         .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse::<u32>().ok())
         .filter_map(|pid| std::fs::read_to_string(format!("/proc/{pid}/stat")).ok())
         .filter_map(|stat| group_in_session(&stat, session))
+        .filter(|group| *group > 1 && *group != session && *group != own)
+        .collect();
+    groups.sort_unstable();
+    groups.dedup();
+    groups
+}
+
+/// The other process groups with a live process in the session `session`, as on Linux; macOS has
+/// no `/proc`, so its process list comes from `proc_listallpids`.
+#[cfg(target_os = "macos")]
+fn session_groups(session: i32) -> Vec<i32> {
+    // SAFETY: with no buffer `proc_listallpids` only counts the processes.
+    let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
+    let Ok(count) = usize::try_from(count) else {
+        return Vec::new();
+    };
+    // Room for processes started since the count.
+    let mut pids: Vec<libc::pid_t> = vec![0; count + 64];
+    let Ok(bytes) = libc::c_int::try_from(pids.len() * std::mem::size_of::<libc::pid_t>()) else {
+        return Vec::new();
+    };
+    // SAFETY: the buffer is `bytes` long and holds `pid_t`s; the call writes at most that much and
+    // returns how many ids it wrote.
+    let listed = unsafe { libc::proc_listallpids(pids.as_mut_ptr().cast(), bytes) };
+    pids.truncate(usize::try_from(listed).unwrap_or(0).min(pids.len()));
+    // SAFETY: `getpgrp` takes no arguments and cannot fail.
+    let own = unsafe { libc::getpgrp() };
+    let mut groups: Vec<i32> = pids
+        .into_iter()
+        .filter(|pid| *pid > 1)
+        // SAFETY: `getsid` and `getpgid` take a plain id and answer -1 for one that is gone.
+        .filter(|pid| unsafe { libc::getsid(*pid) } == session)
+        .map(|pid| unsafe { libc::getpgid(pid) })
         .filter(|group| *group > 1 && *group != session && *group != own)
         .collect();
     groups.sort_unstable();
