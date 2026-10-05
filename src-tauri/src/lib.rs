@@ -248,6 +248,8 @@ pub fn run() {
                 .ok_or("tauri.conf.json defines no window")?;
             let host = app.state::<AppState>().extensions();
             tauri::WebviewWindowBuilder::from_config(app.handle(), &window)?
+                // The frame shim for development pages, which holzi does not serve (R16).
+                .initialization_script_for_all_frames(extensions::protocol::shim::dev_init_script())
                 .on_web_resource_request(move |request, response| {
                     extensions::dev_csp::adjust(&host, request, response);
                 })
