@@ -1,9 +1,13 @@
-import { computed, ref } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 import type { GroupRow } from '@bindings/GroupRow'
 import type { ItemHeader } from '@bindings/ItemHeader'
 import type { TagRow } from '@bindings/TagRow'
-import { mergeTagsForDisplay, tagIdsFor } from '~/lib/passwords/remote'
+import {
+  keepUnchanged,
+  mergeTagsForDisplay,
+  tagIdsFor,
+} from '~/lib/passwords/remote'
 
 /**
  * The overview of the password manager (spec 034, research R15): every entry header, folder and
@@ -11,15 +15,17 @@ import { mergeTagsForDisplay, tagIdsFor } from '~/lib/passwords/remote'
  * another window, an agent, an extension or a sync. The store holds headers only, never a secret
  * (FR-040); a secret is fetched for the moment the user asks and kept in a component-local ref.
  *
- * A quiet reload replaces the lists but never touches a draft: drafts are local to the editor.
+ * A quiet reload replaces the lists but never touches a draft: drafts are local to the editor. The
+ * lists are shallow and keep the object of every unchanged row, so a reload re-renders only the
+ * rows that changed.
  */
 export const usePasswordsStore = defineStore('passwords', () => {
   const { loadOverviewAsync } = usePasswords()
   const { errString } = useErrorString()
 
-  const headers = ref<ItemHeader[]>([])
-  const groups = ref<GroupRow[]>([])
-  const tags = ref<TagRow[]>([])
+  const headers = shallowRef<readonly ItemHeader[]>([])
+  const groups = shallowRef<readonly GroupRow[]>([])
+  const tags = shallowRef<readonly TagRow[]>([])
   const isLoading = ref(false)
   const hasLoadedOnce = ref(false)
   const lastError = ref<string | null>(null)
@@ -42,9 +48,9 @@ export const usePasswordsStore = defineStore('passwords', () => {
 
   async function loadAsync() {
     const overview = await loadOverviewAsync()
-    headers.value = overview.headers
-    groups.value = overview.groups
-    tags.value = overview.tags
+    headers.value = keepUnchanged(headers.value, overview.headers)
+    groups.value = keepUnchanged(groups.value, overview.groups)
+    tags.value = keepUnchanged(tags.value, overview.tags)
     lastError.value = null
     hasLoadedOnce.value = true
   }

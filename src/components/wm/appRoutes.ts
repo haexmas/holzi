@@ -107,10 +107,16 @@ const PASSWORDS_ENTRY_PAGE = defineAsyncComponent(
   () => import('~/components/passwords/EntryPage.vue'),
 )
 
+/** One component object for the top level and a folder, so moving between them keeps the list
+ * mounted instead of building every row again. */
+const PASSWORDS_LIST_PAGE = defineAsyncComponent(
+  () => import('~/components/passwords/List.vue'),
+)
+
 /** The view of each place of the password manager (spec 034); the stories add theirs. */
 const PASSWORDS_VIEWS: Partial<Record<string, Component>> = {
-  list: defineAsyncComponent(() => import('~/components/passwords/List.vue')),
-  folder: defineAsyncComponent(() => import('~/components/passwords/List.vue')),
+  list: PASSWORDS_LIST_PAGE,
+  folder: PASSWORDS_LIST_PAGE,
   entry: PASSWORDS_ENTRY_PAGE,
   trash: defineAsyncComponent(
     () => import('~/components/passwords/TrashView.vue'),
