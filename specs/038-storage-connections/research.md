@@ -59,10 +59,11 @@ wird hier zum ersten Mal benutzt.
 
 ## R3 — Datenmodell und Sync
 
-**Entscheidung**: Migration `0027_storage_connections` mit zwei synchronisierten Tabellen
-(`haex_storage_connections`, `haex_storages`), einer geräteeigenen (`storage_tests_no_sync` für das
-letzte Testergebnis je Speicher) und der Spalte `owner` in `haex_passwords_item_details`;
-`HOLZI_TRIGGER_VERSION` wird erhöht. Kennungen als UUID, keine UNIQUE-Constraints in synchronisierten
+**Entscheidung**: Zwei Migrationen, damit Z14 (PR B) für sich prüfbar bleibt: `0027_passwords_owner`
+(Spalte `owner` in `haex_passwords_item_details`) und `0028_storage_connections` mit zwei
+synchronisierten Tabellen (`haex_storage_connections`, `haex_storages`) und einer geräteeigenen
+(`storage_tests_no_sync` für das letzte Testergebnis je Speicher); `HOLZI_TRIGGER_VERSION` wird jeweils
+erhöht. Kennungen als UUID, keine UNIQUE-Constraints in synchronisierten
 Tabellen (wie `migrations_extensions.rs`). SQL in einer eigenen Datei
 `src-tauri/src/identity/migrations_storage.rs`, registriert in `migrations.rs`.
 

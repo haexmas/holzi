@@ -22,9 +22,9 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](.
   macht Einträge mit Eigentümer für jeden Aufrufer außer dem Nutzer und der besitzenden holzi-Funktion
   unsichtbar, auch für eine Freigabe für `*` und als Quelle eines Verweises. Gelesen wird als
   `Caller::Internal { feature: "storage" }`.
-- **Daten** (R3): Migration `0027_storage_connections`: `haex_storage_connections` und `haex_storages`
-  (synchronisiert), `storage_tests_no_sync` (geräteeigen), Spalte `owner` in
-  `haex_passwords_item_details`; Trigger-Version erhöht.
+- **Daten** (R3): Migration `0027_passwords_owner` (Spalte `owner` in `haex_passwords_item_details`,
+  mit PR B) und `0028_storage_connections`: `haex_storage_connections` und `haex_storages`
+  (synchronisiert), `storage_tests_no_sync` (geräteeigen); Trigger-Version jeweils erhöht.
 - **Erweiterungen** (R4–R7): Präfix `holzi-ext/<extension_id>/`, strenge Schlüsselprüfung vor jedem
   Aufruf, Liste nur mit Namen, Dialog nach dem Muster von `extension_dialog_confirm`, Grenzen und
   Fehlerarten aus Spec 017; Aufrufe mit Zugangsdaten werden abgelehnt.
@@ -107,7 +107,8 @@ specs/038-storage-connections/
 ```text
 src-tauri/src/
 ├── identity/
-│   ├── migrations_storage.rs           # 0027 (neu) + _tests
+│   ├── migrations_passwords_owner.rs   # 0027 (neu, PR B) + _tests
+│   ├── migrations_storage.rs           # 0028 (neu, PR C) + _tests
 │   └── migrations.rs                   # Registrierung, HOLZI_TRIGGER_VERSION
 ├── passwords/
 │   ├── access.rs                       # ItemState.owner, Z14

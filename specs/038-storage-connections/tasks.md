@@ -1,0 +1,205 @@
+---
+description: 'Task list for spec 038-storage-connections'
+---
+
+# Tasks: Speicherverbindungen (S3) und ihre Weitergabe an Erweiterungen
+
+**Input**: Design documents from `/specs/038-storage-connections/`
+
+**Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md),
+[data-model.md](./data-model.md), [contracts/bridge.md](./contracts/bridge.md),
+[contracts/tauri-commands.md](./contracts/tauri-commands.md), [contracts/access-z14.md](./contracts/access-z14.md),
+[quickstart.md](./quickstart.md)
+
+**Tests**: Included. The constitution requires a runnable check for non-trivial logic, and SC-002/SC-003
+need a corpus of credential-leak and key-escape cases. Rust tests live in `*_tests.rs` next to the file
+(`#[cfg(test)] #[path = "…_tests.rs"] mod tests;`), never inline. No network services in `cargo test`:
+`wiremock` (local listener) for S3, a fake `RemoteStore` for the bridge (research R10).
+
+**Organization**: Grouped by user story in priority order (P1: US1, US2; P2: US3, US4).
+
+**Shipping note** (plan.md, Lieferungen): PR A = Phase 1 (docs); PR B = Phase 2a (rule Z14 in 034);
+PR C = Phase 2b + US1 + US4; PR D = US2 + US3; the vault-sdk PR (T040) runs next to PR D. Each PR is
+reviewed and merged before the next one starts on top of `main`.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: Can run in parallel (different files, no dependency on an incomplete task)
+- **[Story]**: User story from spec.md (US1–US4)
+
+---
+
+## Phase 1: Setup (PR A, docs)
+
+- [ ] T001 Prepare `.worktrees/038-storage-connections`: real `pnpm install` (no symlinked `node_modules`), reflink `src-tauri/target` from a worktree with the same `Cargo.lock` if one exists, check `nix develop --command scripts/with-nix-host-bridge.sh cargo check --manifest-path src-tauri/Cargo.toml`
+- [ ] T002 [P] Before the first new name, run bounded `graphify query … --budget 1200` for "password item visibility trash access ItemState", "extension dialog confirm open_dialog resolve", "web fetch limits max_response_bytes stream", "settings category registry view"; note the candidates checked in the PR description (constitution graphify rule; warn and continue if graphify fails)
+- [ ] T003 [P] Align spec 017 with 038: in `specs/017-extension-host/tasks.md` T106 add a note "built by spec 038 (storage connections), see `specs/038-storage-connections/tasks.md`"; in `specs/017-extension-host/research.md` R21 bullet "Entfernter Speicher" replace "S3-Client wählt der Plan von 029. Bis dahin „nicht verfügbar“" with the 038 decisions (rusty-s3, prefix `holzi-ext/<extension_id>/`, credentials only in holzi); in `specs/017-extension-host/contracts/bridge.md` row `extension_remote_storage_*` replace "über 029, sonst 8001" with "über 038 (`specs/038-storage-connections/contracts/bridge.md`)"; in `specs/017-extension-host/contracts/permissions.md` row `remoteStorage` change the target text to "Kennung des Speichers (038) oder `*`"; in `specs/017-extension-host/spec.md` FR-054 replace "die Speicher aus 029" with "die Speicher aus 038"
+- [ ] T004 [P] Align spec 029 with 038 in `specs/029-own-s3-storage/spec.md`: under "Beziehung zu bestehenden Specs" add a bullet that the Speicherverbindung (provider, endpoint, region, addressing, credentials in 034 with owner `storage`, rule Z14) is defined by `specs/038-storage-connections/spec.md` and 029 adds the Eignungsprüfung, space buckets and access keys on top; in Key Entities point "Speicherverbindung" to 038
+- [ ] T005 [P] Add a row for 038 to `plans/README.md` (priority P2, effort M, status "Spezifiziert und geplant 2026-10-05", gate: 017 L1–L4 and 034 in use; unblocks 017 T106 and is reused by 029), and in the 017 row change "der entfernte Speicher in L5 setzt Spec 029 voraus" to "… setzt Spec 038 voraus"
+- [ ] T006 Run `pnpm format:check` (specs are covered), commit, open PR A against `main`
+
+---
+
+## Phase 2: Foundational
+
+### Phase 2a: Rule Z14 in the password manager (PR B)
+
+**Purpose**: Without Z14 an extension with a `passwords` grant for `*` could read the S3 credentials (research R2). Blocks every story.
+
+- [ ] T007 Write the tests first in `src-tauri/src/passwords/access_tests.rs`: an entry with `owner: Some("storage")` is `NotFound` for read/update/delete for `Extension`, `ExternalAgent` and `Internal { feature: "other" }` with a `ReadWrite` grant for `Scope::All`; `Forbidden` still comes first without any grant (Z3); `User` and `Internal { feature: "storage" }` (with a grant) see it
+- [ ] T008 Add the column in a new migration `0027_passwords_owner` in `src-tauri/src/identity/migrations_passwords_owner.rs` (`ALTER TABLE haex_passwords_item_details ADD COLUMN owner TEXT`; "`NULL` = Eintrag des Nutzers; sonst Name einer holzi-Funktion (`storage`)"), register it in `src-tauri/src/identity/migrations.rs`, raise `HOLZI_TRIGGER_VERSION`, test in `src-tauri/src/identity/migrations_passwords_owner_tests.rs` (column exists, existing rows `NULL`, trigger version raised)
+- [ ] T009 Implement Z14 in `src-tauri/src/passwords/access.rs`: `ItemState { tags, in_trash, owner: Option<&str> }`, `visible` checks the owner first (`User` always, `Internal { feature }` only when `feature == owner`, everybody else `NotFound`), keeping Z3 (`Forbidden` without a grant) before it; update every construction of `ItemState` (grep `ItemState {`: `service/items.rs`, `service/trash.rs`, `references_db.rs`, `passkeys_ops.rs`, `copy.rs`)
+- [ ] T010 Read the owner in `src-tauri/src/passwords/items.rs`: `item_state` returns it, `headers_in_scope` and `agent_headers` leave out owned entries for every caller except `User`; tests in `src-tauri/src/passwords/items_tests.rs` (list with `*` grant omits the owned entry; agent headers omit it)
+- [ ] T011 [P] References: test in `src-tauri/tests/passwords_references.rs` or a new `src-tauri/tests/passwords_owner.rs` (the first file is over 500 lines, prefer the new file) that a placeholder in a user entry pointing at an owned entry does not resolve for an extension with a `*` grant (field absent), and resolves for `User`
+- [ ] T012 Service methods in `src-tauri/src/passwords/service/items.rs` and `src-tauri/src/passwords/service/trash.rs`: `create_owned_item(caller: &Caller, input: ItemInput) -> Result<String>` allowed only for `Caller::Internal { feature }` (sets `owner = feature`, otherwise `PasswordsForbidden`), and `delete_owned_item(caller, item_id)` that deletes permanently only when `caller` is `Internal { feature }` and `owner == feature`; no Tauri command and no bridge method sets or changes `owner` (`create_item`/`update_item` keep `owner` untouched); tests in the matching `*_tests.rs`
+- [ ] T013 [P] Frontend marker: add `owner` to `ItemHeader` (Rust `src-tauri/src/passwords/model.rs`, ts-rs binding regenerated) and show "gehört zu: Speicher" / "belongs to: storage" on owned entries in the password list and detail (`src/components/passwords/`, keys in `src/i18n/locales/{de,en}.json`)
+- [ ] T014 Copy rule Z14 from `specs/038-storage-connections/contracts/access-z14.md` into `specs/034-password-manager/contracts/access.md` (rule table, `ItemState`, the sentence "es gibt keine für holzi reservierten Tags" stays true and gets "Einträge mit Eigentümer: Z14")
+- [ ] T015 Extension check: in `src-tauri/src/extensions/passwords_denied_tests.rs` or a new `src-tauri/src/extensions/passwords_owner_tests.rs` prove through the bridge that `extension_password_list/read/update/delete` with a `*` grant never reach an owned entry (1001 for read/update/delete by id, absent in list) — SC-002 part 1
+- [ ] T016 Run `cargo fmt --check`, `pnpm lint:rust`, the password and extension lib tests, `pnpm typecheck`, `pnpm lint`, `pnpm format:check`; commit, open PR B
+
+### Phase 2b: S3 in holzi, data (PR C, start)
+
+- [ ] T017 Add `rusty-s3 = "0.10"` (default features `rustcrypto` and `full`, NOT `aws-lc-rs`) to `src-tauri/Cargo.toml` with a comment pointing to research R1; confirm `cargo tree -i aws-lc-rs` shows no new path through `rusty-s3`
+- [ ] T018 Migration `0028_storage_connections` in `src-tauri/src/identity/migrations_storage.rs`, registered in `src-tauri/src/identity/migrations.rs`, `HOLZI_TRIGGER_VERSION` raised, tables in `SYNCED_TABLES`/`DEVICE_TABLES` lists: `haex_storage_connections` (`id` TEXT PK UUIDv4; `provider_name` TEXT "Pflicht, 1–80 Zeichen"; `provider_kind` TEXT "`aws`, `rustfs`, `other`"; `endpoint` TEXT; `region` TEXT "Pflicht, 1–64 Zeichen"; `addressing` TEXT "`path` oder `virtual`"; `credentials_item_id` TEXT; `created_at`, `updated_at` TEXT), `haex_storages` (`id` TEXT PK UUIDv4; `connection_id` TEXT; `name` TEXT "Pflicht, 1–80 Zeichen"; `bucket` TEXT "Bucket-Name nach S3 (3–63, Kleinbuchstaben, Ziffern, `.-`)"; `created_at`, `updated_at`), `storage_tests_no_sync` (`storage_id` TEXT PK, `tested_at` TEXT, `outcome` TEXT "`passed`, `accessDenied`, `unreachable`, `bucketMissing`, `missingRight`"); no UNIQUE constraints in synced tables; test in `src-tauri/src/identity/migrations_storage_tests.rs`
+- [ ] T019 [P] Types and trait in `src-tauri/src/remote_storage/mod.rs`: `ConnectionRow`, `StorageRow`, `TestOutcome`, `ProviderKind`, `Addressing`, `StorageError { NotFound, AccessDenied, Network, TooLarge, TimedOut }`, trait `RemoteStore { put, get (limit), list (prefix, max), delete }` taking a resolved `Endpoint` + `Credentials` (zeroized secret, redacted `Debug`); register `pub mod remote_storage;` in `src-tauri/src/lib.rs`
+- [ ] T020 [P] Endpoint check (research R8) in `src-tauri/src/remote_storage/address.rs` + `address_tests.rs`: `https` always; `http` only for loopback, `localhost`, RFC 1918, RFC 4193 and link-local hosts, checked on save and on the resolved address before each call; table of cases (public IP over http refused, `http://192.168.1.5:9000` allowed and flagged `insecure`, `ftp://` refused, userinfo in URL refused)
+- [ ] T021 S3 implementation in `src-tauri/src/remote_storage/s3.rs` + `s3_tests.rs` (wiremock): `rusty-s3` presigned actions sent with the shared `reqwest` client (rustls/ring, redirects off); PUT, GET streamed with a byte limit and one deadline (as `extensions/web.rs::send`), ListObjectsV2 following continuation tokens up to `max` keys (more → `TooLarge`), DELETE; map 404/NoSuchKey/NoSuchBucket → `NotFound`, 401/403/InvalidAccessKeyId/SignatureDoesNotMatch/ExpiredToken → `AccessDenied`, network/timeout/5xx/3xx → `Network`; no endpoint, header or body text in error messages (log the cause without secrets)
+- [ ] T022 Store in `src-tauri/src/remote_storage/store.rs` + `store_tests.rs`: read/write connections and storages through `VaultDb`, validation of the field rules above, `remove_storage` deletes the row and every `extension_permissions` row of kind `remoteStorage` with that target in the same write (FR-007), `remove_connection` removes its storages the same way; test results in `storage_tests_no_sync`
+
+**Checkpoint**: PR B merged; Phase 2b compiles and is tested — stories can start.
+
+---
+
+## Phase 3: User Story 1 - Eigenen Speicher in holzi verbinden (Priority: P1) 🎯 MVP
+
+**Goal**: Connections and storages in the settings, tested before saving, credentials in the password manager.
+
+**Independent Test**: quickstart §4 against a local RustFS; automated: commands against wiremock.
+
+- [ ] T023 [US1] Credentials in `src-tauri/src/remote_storage/credentials.rs` + `credentials_tests.rs`: create the entry with `create_owned_item` as `Caller::Internal { feature: "storage" }` (title `S3: <provider_name>`, username = access key id, password = secret, key-value `sessionToken`, url = endpoint), read it with `read_secret_item` and a grant fixed in code, replace it on new credentials, delete it with `delete_owned_item` when no connection uses it; missing entry → `credentialsMissing`
+- [ ] T024 [US1] Connection test (research R9) in `src-tauri/src/remote_storage/probe.rs` + `probe_tests.rs` against the fake `RemoteStore`: write, read, list, delete `holzi-test/<UUID>`, delete also after a failed step, outcomes `passed`/`accessDenied`/`unreachable`/`bucketMissing`/`missingRight`; SC-004: a failed probe leaves no test object and no credentials
+- [ ] T025 [US1] Tauri commands in `src-tauri/src/remote_storage/commands.rs` per `contracts/tauri-commands.md` (`storage_list`, `storage_connection_save` with test before saving new credentials, `storage_connection_remove`, `storage_save`, `storage_remove`, `storage_removal_preview`, `storage_test`), ts-rs types to `src/types/bindings/`, registered in `src-tauri/src/lib.rs`; tests in `src-tauri/src/remote_storage/commands_tests.rs` (no secret in any return value, nothing saved on a failed test, removal preview lists storages and extensions)
+- [ ] T026 [US1] Usage warning: register a `EntryUsage` provider for owned storage credentials in `src-tauri/src/state.rs` / `src-tauri/src/remote_storage/credentials.rs` so deleting "S3: …" in the password manager warns with the connection name (`src-tauri/src/passwords/usage.rs`)
+- [ ] T027 [P] [US1] Settings category "Speicher"/"Storage" in `src/lib/settings/registry.ts` (category id, location, keywords) and `src/components/wm/appRoutes.ts`, i18n in `src/i18n/locales/{de,en}.json`
+- [ ] T028 [US1] Settings views in `src/components/settings/storage/` (COSMIC/GNOME style, reuse Group/Row/OptionRow): `StorageListView.vue` (connections with their storages, last test, "neue Zugangsdaten nötig"), `ConnectionForm.vue` (provider presets AWS/RustFS/other prefill endpoint and addressing, insecure badge for `http`, credential fields, bucket for the test), `StorageForm.vue`, removal confirmation with `storage_removal_preview`; no save buttons beyond the form's own confirm (memory: settings save on selection applies to options, forms with credentials confirm once)
+- [ ] T029 [US1] Run quickstart §1–§4 (§4 manual against RustFS) and note the result in this file
+
+**Checkpoint**: US1 works on its own (MVP).
+
+---
+
+## Phase 4: User Story 4 - Speicher auf allen eigenen Geräten (Priority: P2, ships with PR C)
+
+**Goal**: Connections, storages and their credentials reach every own device through the data sync.
+
+**Independent Test**: quickstart §5 step 5 / an e2e scene with two devices.
+
+- [ ] T030 [US4] Test in `src-tauri/src/identity/migrations_storage_tests.rs` that both tables are synced (in `SYNCED_TABLES`) and `storage_tests_no_sync` is device-local, and in `src-tauri/src/remote_storage/store_tests.rs` that removing a storage on one replica removes its permissions in the same change set
+- [ ] T031 [P] [US4] e2e scene `scripts/e2e/scenarios/storage-two-devices.test.ts` (rig of spec 033): create a storage on device 1, after sync `storage_list` on device 2 shows it with `credentialsMissing: false`; mark the RustFS-dependent step as skipped when no container is available
+- [ ] T032 [US4] Mobile: `cargo check` for an Android target in CI or locally (`scripts/` mobile check if present) to prove nothing is `cfg(desktop)` (FR-016); note the result
+- [ ] T033 Run CI parity (`cargo fmt --check`, `pnpm lint:rust`, `cargo test` targeted, `pnpm typecheck`, `pnpm lint`, `pnpm format:check`), commit, open PR C
+
+---
+
+## Phase 5: User Story 2 - Eine Erweiterung nutzt einen freigegebenen Speicher (Priority: P1, PR D)
+
+**Goal**: The five object methods and the name-only list through the bridge, per-storage permission, own key area.
+
+**Independent Test**: bridge tests with the fake `RemoteStore`; quickstart §5 steps 2–4.
+
+- [ ] T034 [P] [US2] Key area (research R4, R5) in `src-tauri/src/extensions/remote_storage_keys.rs` + `remote_storage_keys_tests.rs`: prefix `holzi-ext/<extension_id>/` from `extensions::ids::extension_id(public_key, name)` (also for dev versions); key rules "nicht leer, nicht mit `/` beginnend, kein leerer Teil, kein `.`/`..`, kein Steuerzeichen U+0000–U+001F/U+007F, kein Rückstrich, mit Präfix höchstens 1024 Bytes"; list prefix may be empty and end in `/`; a corpus of escape attempts (SC-003) all refused; keys from the provider without the prefix dropped
+- [ ] T035 [US2] Bridge module `src-tauri/src/extensions/remote_storage.rs` + `remote_storage_tests.rs`: `list_backends` (only storages covered by a read permission, items `{id, type: "s3", name, providerName, bucket}` — FR-009a), `upload`, `download`, `list`, `delete` per `contracts/bridge.md`; permission check as in `extensions/web.rs` (`candidates` + temporary + `evaluate`, 1004/1002, an uncovered storage never answers 1001); limits from `sql::exec::limits_of` (upload base64 ≤ `max_response_bytes`, download ≤ `max_response_bytes / 4 * 3`, `timeout_ms`, list ≤ `max_rows`) → 7000; provider errors → 1001 / 2002 `{kind}`; `accessDenied` also writes `storage_tests_no_sync`; tests with an in-memory fake `RemoteStore` injected through `ExtensionHost` (same pattern as `FileDialogs`)
+- [ ] T036 [US2] Register the nine method names in `src-tauri/src/extensions/bridge/dispatch.rs` (the four management methods answer 8001 until US3), remove `extension_remote_storage_` from `LATER`, update `dispatch_tests.rs`; `extension_bridge_contract` test passes with the names in `specs/017-extension-host/contracts/bridge.md`
+- [ ] T037 [US2] Credential leak corpus (SC-002) in `src-tauri/src/extensions/remote_storage_tests.rs`: no response or error of any of the nine methods contains the access key, the secret, the session token, the endpoint or the region (marker search, as `passwords_tests.rs`)
+
+**Checkpoint**: US2 works with storages created in the settings (US1).
+
+---
+
+## Phase 6: User Story 3 - Eine Erweiterung stößt einen neuen Speicher an (Priority: P2, PR D)
+
+**Goal**: add/update/test/remove through a holzi dialog; credentials only typed in holzi.
+
+**Independent Test**: bridge tests answering the dialog through the host; quickstart §5 step 1 and 3.
+
+- [ ] T038 [US3] Dialog wait (research R6) in `src-tauri/src/extensions/remote_storage_dialog.rs` + `remote_storage_dialog_tests.rs`: like `bridge/methods.rs::dialog_confirm` (`host.open_dialog`, event `extension-storage-request {requestId, frame, kind, proposal, extensionName, otherExtensions}`, `recv_timeout` 300 s, frame close/timeout = cancel → 1002); command `storage_dialog_resolve(requestId, answer)` in `src-tauri/src/remote_storage/commands.rs`; a call whose `config` has `accessKeyId`, `secretAccessKey` or `sessionToken` → 3001 before any dialog (FR-013a)
+- [ ] T039 [US3] Management methods in `src-tauri/src/extensions/remote_storage.rs`: `add_backend` (proposal `{name, type, config: {endpoint?, region, bucket, pathStyle?}, sameProviderAs?}`; dialog; on confirm create connection or reuse one, test, store, grant the extension `readWrite` on the new storage via `commands::permissions::set`, return the list item), `update_backend` (`readWrite` required, dialog, new credentials only from the dialog answer, test on new bucket or credentials), `test_backend` and `remove_backend` (`readWrite`, dialog; remove names other extensions with permissions); tests for confirm, cancel, failed test (nothing created), credentials in the call refused
+- [ ] T040 [P] [US3] vault-sdk PR (research R11) in `~/Projekte/vault-sdk` (worktree there, haexmas fork, no agent attribution): `AddBackendRequest` without credentials plus `sameProviderAs?`, `UpdateBackendRequest` without credentials, `StorageBackendInfo = {id, type, name, providerName, bucket}`, credential fields of `S3Config` deprecated; changelog entry; then bump the SDK pin in holzi if the e2e fixture needs it
+- [ ] T041 [US3] Frontend dialog `src/components/extensions/StorageDialog.vue` mounted in `src/components/extensions/ExtensionFrame.vue` next to `FrameDialog.vue`, listener in `src/composables/useExtensionFrame.ts` (like the `extension-dialog-request` listener): shows the extension name, the proposal (insecure badge for `http`), a choice of an existing connection with the same endpoint and region, credential fields only for a new connection or "new credentials"; answers with `storage_dialog_resolve`; i18n keys in `src/i18n/locales/{de,en}.json`
+- [ ] T042 [US3] e2e scene `scripts/e2e/scenarios/extension-storage.test.ts` with the probe fixture extended by `remoteStorage` (`src-tauri/tests/fixtures/extension_e2e/`, rebuilt by `src-tauri/tests/extension_e2e_fixtures.rs`): add without credentials → dialog → credentials typed in holzi → id returned; add with `accessKeyId` → 3001 and no dialog; skip the object round trip when no RustFS container is available
+- [ ] T043 Run CI parity, commit, open PR D
+
+**Checkpoint**: all stories work; 017 T106 can be ticked.
+
+---
+
+## Phase 7: Polish & Cross-Cutting Concerns
+
+- [ ] T044 Tick `specs/017-extension-host/tasks.md` T106 with a note pointing at PR D and this spec; update R21 if anything changed during implementation
+- [ ] T045 [P] Run quickstart §5 manually against RustFS (all steps) and record the result here (T029 covers §1–§4)
+- [ ] T046 [P] Check every touched Rust file stays under 500 lines; split by responsibility where needed (constitution), not just for length
+
+---
+
+## Dependencies & Execution Order
+
+### Phase Dependencies
+
+- Phase 1 (PR A) → no dependencies.
+- Phase 2a (PR B) → after PR A is merged; blocks everything that stores credentials.
+- Phase 2b → after PR B; blocks US1–US4.
+- US1 and US4 (PR C) → after Phase 2b.
+- US2 and US3 (PR D) → after PR C (US2 needs storages and credentials, US3 needs the commands and the probe).
+- T040 (vault-sdk) can run in parallel to PR D; holzi refuses credentials in calls regardless of the SDK version.
+- Phase 7 → after PR D.
+
+### User Story Dependencies
+
+- US1: needs Phase 2. Standalone MVP.
+- US4: needs US1 (something to sync).
+- US2: needs US1 (a storage to use); independent of US3 (storages come from the settings).
+- US3: needs US2's bridge module and US1's commands and probe.
+
+### Within Each User Story
+
+- Tests in the `*_tests.rs` file before or with the implementation; non-trivial logic leaves one runnable check.
+
+### Parallel Opportunities
+
+- T002–T005 (docs) in parallel.
+- T011 and T013 in parallel to T010/T012.
+- T019 and T020 in parallel; T021 after T019.
+- T027 in parallel to T023–T026.
+- T034 in parallel to T035's skeleton; T040 in parallel to all of PR D.
+
+---
+
+## Parallel Example: User Story 2
+
+```text
+Task: "T034 Key area and key rules in src-tauri/src/extensions/remote_storage_keys.rs"
+Task: "T040 vault-sdk PR without credentials in AddBackendRequest/UpdateBackendRequest"
+```
+
+---
+
+## Implementation Strategy
+
+### MVP First (User Story 1 Only)
+
+1. PR A (docs), PR B (Z14), Phase 2b.
+2. US1: storages in the settings, tested, credentials owned by `storage`.
+3. Stop and validate with quickstart §1–§4.
+
+### Incremental Delivery
+
+1. PR C = Phase 2b + US1 + US4 → holzi speaks S3 for itself, on all devices.
+2. PR D = US2 + US3 → extensions use and propose storages; 017 T106 done.
+
+---
+
+## Notes
+
+- Never put a secret into a log line, an error message, a ts-rs type sent to the window (except the dialog/form input going _to_ Rust) or a test fixture committed to git.
+- `cargo test` regenerates `src/types/bindings/*.ts` with trailing whitespace; strip it or check out unchanged bindings before committing (new bindings: strip, do not check out).
+- Commit messages: Conventional Commits, no agent attribution.

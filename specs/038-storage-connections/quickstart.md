@@ -36,7 +36,7 @@ streamend durchgesetzt, keine Weiterleitung gefolgt.
 scripts/with-nix-host-bridge.sh cargo test -j 4 --manifest-path src-tauri/Cargo.toml --lib -- identity::migrations
 ```
 
-Erwartet: `0027_storage_connections` läuft, die neuen Tabellen stehen in `SYNCED_TABLES` bzw.
+Erwartet: `0027_passwords_owner` und `0028_storage_connections` laufen, die neuen Tabellen stehen in `SYNCED_TABLES` bzw.
 `DEVICE_TABLES`, Trigger-Version erhöht.
 
 ## 4. Einstellungen gegen RustFS (manuell)

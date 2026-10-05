@@ -2,8 +2,9 @@
 
 **Feature**: [spec.md](./spec.md) | **Research**: [research.md](./research.md)
 
-Migration `0027_storage_connections` (R3), SQL in `src-tauri/src/identity/migrations_storage.rs`.
-`HOLZI_TRIGGER_VERSION` wird erhöht (neue CRDT-Tabellen, neue Spalte in einer CRDT-Tabelle).
+Migrationen (R3): `0027_passwords_owner` (`src-tauri/src/identity/migrations_passwords_owner.rs`, PR B) und
+`0028_storage_connections` (`src-tauri/src/identity/migrations_storage.rs`, PR C). `HOLZI_TRIGGER_VERSION`
+wird jeweils erhöht (neue Spalte in einer CRDT-Tabelle, neue CRDT-Tabellen).
 
 ## haex_storage_connections (synchronisiert)
 
@@ -56,7 +57,7 @@ Letztes Testergebnis je Speicher auf diesem Gerät (FR-004, Edge Case „neue Zu
 Wird auch von einem Aufruf einer Erweiterung mit `accessDenied` gesetzt, damit die Einstellungen den
 Hinweis zeigen.
 
-## haex_passwords_item_details.owner (neue Spalte)
+## haex_passwords_item_details.owner (neue Spalte, Migration 0027)
 
 | Spalte  | Typ  | Regel                                                                     |
 | ------- | ---- | ------------------------------------------------------------------------- |
