@@ -55,7 +55,7 @@ reviewed and merged before the next one starts on top of `main`.
 - [x] T013 [P] Frontend marker: add `owner` to `ItemHeader` (Rust `src-tauri/src/passwords/model.rs`, ts-rs binding regenerated) and show "gehört zu: Speicher" / "belongs to: storage" on owned entries in the password list and detail (`src/components/passwords/`, keys in `src/i18n/locales/{de,en}.json`)
 - [x] T014 Copy rule Z14 from `specs/038-storage-connections/contracts/access-z14.md` into `specs/034-password-manager/contracts/access.md` (rule table, `ItemState`, the sentence "es gibt keine für holzi reservierten Tags" stays true and gets "Einträge mit Eigentümer: Z14")
 - [x] T015 Extension check: in a new `src-tauri/src/extensions/passwords_owner_tests.rs` (registered in `src-tauri/src/extensions/passwords.rs`) prove through the bridge that `extension_password_list/read/update/delete` with a `*` grant never reach an owned entry (1001 for read/update/delete by id, absent in list) — SC-002 part 1
-- [ ] T016 Run `cargo fmt --check`, `pnpm lint:rust`, the password and extension lib tests, `pnpm typecheck`, `pnpm lint`, `pnpm format:check`; commit, open PR B
+- [x] T016 Run `cargo fmt --check`, `pnpm lint:rust`, the password and extension lib tests, `pnpm typecheck`, `pnpm lint`, `pnpm format:check`; commit, open PR B
 
 ### Phase 2b: S3 in holzi, data (PR C, start)
 
