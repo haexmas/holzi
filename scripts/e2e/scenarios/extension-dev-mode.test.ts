@@ -227,7 +227,7 @@ scenario('extension-dev-mode', { timeoutMs: 300_000 }, async (ctx) => {
     // acts only while the frame has the focus. WebKitWebDriver cannot send keys into this sandboxed
     // frame, so the page gets the key as an event after holzi focused the frame.
     await page.exec(
-      `document.querySelector('[data-extension-id="${dev.id}"]').focus(); return true`,
+      `document.querySelector('[data-testid="extension-frame"][data-extension-id="${dev.id}"]').focus(); return true`,
     )
     await inFrame(
       page,

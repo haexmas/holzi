@@ -33,5 +33,5 @@ fn a_development_page_gets_the_same_shim_only_on_a_loopback_http_address() {
     let at = script.find(SHIM).expect("the shim itself, unchanged");
     let guard = &script[..at];
     assert!(guard.contains("if (at.protocol !== 'http:' || (at.hostname !== 'localhost' && at.hostname !== '127.0.0.1')) return;"));
-    assert!(script[at + SHIM.len()..].trim() == "})();");
+    assert_eq!(script[at + SHIM.len()..].trim(), "})();");
 }
