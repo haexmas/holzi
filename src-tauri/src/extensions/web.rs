@@ -121,36 +121,28 @@ fn repeatable(method: &Method) -> bool {
 }
 
 /// Allowed, or the 1002/1004 answer with `{resourceType, action, target}`. A target no answer
-/// could ever cover (holzi cannot store it) is refused instead of asked, and so is one that may
-/// not be asked for (`ask` false: a redirect of a request the SDK could not repeat).
+/// could ever cover (holzi cannot store it) is refused instead of asked.
 fn check(
     grants: &[Permission],
     device: uuid::Uuid,
     method: &Method,
     url: &WebRequest,
-    ask: bool,
 ) -> Result<(), BridgeError> {
     let target = prompt_target(url);
-    let (code, message) = match decide(grants, device, method, url) {
+    let code = match decide(grants, device, method, url) {
         Decision::Allow => return Ok(()),
-        Decision::Prompt if !ask => (
-            ExtensionErrorCode::PermissionDenied,
-            "permission required before the request: it was sent and redirected, and is not \
-             repeated",
-        ),
-        Decision::Prompt if Target::parse(PermissionKind::Web, &target).is_some() => (
-            ExtensionErrorCode::PermissionPromptRequired,
-            "permission required",
-        ),
-        Decision::Prompt | Decision::Deny => {
-            (ExtensionErrorCode::PermissionDenied, "permission required")
+        Decision::Prompt if Target::parse(PermissionKind::Web, &target).is_some() => {
+            ExtensionErrorCode::PermissionPromptRequired
         }
+        Decision::Prompt | Decision::Deny => ExtensionErrorCode::PermissionDenied,
     };
-    Err(BridgeError::new(code, message).with_details(json!({
-        "resourceType": "web",
-        "action": method.as_str(),
-        "target": target,
-    })))
+    Err(
+        BridgeError::new(code, "permission required").with_details(json!({
+            "resourceType": "web",
+            "action": method.as_str(),
+            "target": target,
+        })),
+    )
 }
 
 /// An `http`/`https` address.
@@ -291,26 +283,26 @@ fn method_after(status: StatusCode, method: &Method) -> Method {
 }
 
 /// Sends `request`, following redirects that `allowed` lets through, and reads the answer up to
-/// `max_body` bytes. `allowed` hears whether it may ask: after a question the SDK sends the whole
-/// request again, so for a redirect only when the first method is [`repeatable`] (a `POST` would
-/// reach the first server twice).
+/// `max_body` bytes. After a question (1004) the SDK sends the whole request again, so a redirect
+/// target that would need one is only asked for when the first method is [`repeatable`];
+/// otherwise the redirect itself is the answer (as `fetch` with `redirect: "manual"`), and the
+/// extension follows it with a request of its own. A `POST` thus reaches the first server once.
 async fn send(
     mut request: Request,
     max_body: usize,
-    allowed: impl Fn(&Method, &WebRequest, bool) -> Result<(), BridgeError>,
+    allowed: impl Fn(&Method, &WebRequest) -> Result<(), BridgeError>,
 ) -> Result<Value, BridgeError> {
     let deadline = tokio::time::Instant::now() + request.timeout;
-    let timed_out = || limit("time limit exceeded");
     let first_repeatable = repeatable(&request.method);
+    allowed(&request.method, &request.web)?;
     for hop in 0..=MAX_REDIRECTS {
-        allowed(&request.method, &request.web, hop == 0 || first_repeatable)?;
         let mut builder = client()
             .request(request.method.clone(), request.url.clone())
             .headers(request.headers.clone());
         if let Some(body) = &request.body {
             builder = builder.body(body.clone());
         }
-        let mut response = tokio::time::timeout_at(deadline, builder.send())
+        let response = tokio::time::timeout_at(deadline, builder.send())
             .await
             .map_err(|_| timed_out())?
             .map_err(|e| web_error(format!("request failed: {}", without_url(&e))))?;
@@ -330,12 +322,22 @@ async fn send(
                 .map_err(|_| web_error("redirect to an invalid address"))?;
             let web = WebRequest::parse(next.as_str())
                 .ok_or_else(|| web_error("redirect to a scheme other than http or https"))?;
+            let method = method_after(status, &request.method);
+            match allowed(&method, &web) {
+                Ok(()) => {}
+                Err(error)
+                    if !first_repeatable
+                        && error.code == ExtensionErrorCode::PermissionPromptRequired =>
+                {
+                    return read_answer(response, deadline, max_body).await;
+                }
+                Err(error) => return Err(error),
+            }
             if !same_origin(&request.url, &next) {
                 for name in CREDENTIAL_HEADERS {
                     request.headers.remove(*name);
                 }
             }
-            let method = method_after(status, &request.method);
             if method != request.method {
                 request.body = None;
                 request.headers.remove(reqwest::header::CONTENT_TYPE);
@@ -345,22 +347,37 @@ async fn send(
             request.web = web;
             continue;
         }
-        let headers = response.headers().clone();
-        let url = response.url().clone();
-        let mut body = Vec::new();
-        while let Some(chunk) = tokio::time::timeout_at(deadline, response.chunk())
-            .await
-            .map_err(|_| timed_out())?
-            .map_err(|e| web_error(format!("reading the answer failed: {}", without_url(&e))))?
-        {
-            if body.len() + chunk.len() > max_body {
-                return Err(limit("answer too large"));
-            }
-            body.extend_from_slice(&chunk);
-        }
-        return Ok(answer(status, &headers, &body, &url));
+        return read_answer(response, deadline, max_body).await;
     }
     Err(web_error("too many redirects"))
+}
+
+/// The error for a request that ran past its time limit.
+fn timed_out() -> BridgeError {
+    limit("time limit exceeded")
+}
+
+/// Reads `response` up to `max_body` bytes before `deadline` into the answer of `fetch`.
+async fn read_answer(
+    mut response: reqwest::Response,
+    deadline: tokio::time::Instant,
+    max_body: usize,
+) -> Result<Value, BridgeError> {
+    let status = response.status();
+    let headers = response.headers().clone();
+    let url = response.url().clone();
+    let mut body = Vec::new();
+    while let Some(chunk) = tokio::time::timeout_at(deadline, response.chunk())
+        .await
+        .map_err(|_| timed_out())?
+        .map_err(|e| web_error(format!("reading the answer failed: {}", without_url(&e))))?
+    {
+        if body.len() + chunk.len() > max_body {
+            return Err(limit("answer too large"));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(answer(status, &headers, &body, &url))
 }
 
 /// What went wrong, without reqwest's text: it names addresses, also of redirect targets.
@@ -393,8 +410,8 @@ pub fn fetch(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let request = parse_request(params, &limits)?;
     let grants = grants(ctx)?;
     let device = ctx.device;
-    block_on(send(request, max_body(&limits), |method, url, ask| {
-        check(&grants, device, method, url, ask)
+    block_on(send(request, max_body(&limits), |method, url| {
+        check(&grants, device, method, url)
     }))
 }
 
@@ -402,7 +419,7 @@ pub fn fetch(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
 /// that address (FR-051).
 pub fn open(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let (url, web) = parse_url(text(params, "url")?)?;
-    check(&grants(ctx)?, ctx.device, &Method::GET, &web, true)?;
+    check(&grants(ctx)?, ctx.device, &Method::GET, &web)?;
     ctx.host
         .desktop()
         .ok_or_else(BridgeError::not_available)?
