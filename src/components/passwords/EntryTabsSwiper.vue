@@ -25,6 +25,18 @@ const root = ref<HTMLElement | null>(null)
 const swiper = shallowRef<SwiperInstance | null>(null)
 const index = computed(() => Math.max(0, props.tabs.indexOf(props.modelValue)))
 
+/** What keeps its own gestures: no swipe and no touchpad swipe starts there (FR-003). */
+const NO_SWIPE = 'input, textarea, select, [data-no-swipe], .swiper-no-swiping'
+
+// Swiper's mousewheel module only knows its own class, not `noSwipingSelector`: a horizontal
+// touchpad scroll over a zone that must not swipe (the history timeline) would change the tab.
+// Such a wheel event stops here, before it reaches Swiper; the zone still scrolls natively.
+function keepWheel(event: WheelEvent) {
+  if (event.target instanceof Element && event.target.closest(NO_SWIPE)) {
+    event.stopPropagation()
+  }
+}
+
 function onSwiper(instance: SwiperInstance) {
   swiper.value = instance
 }
@@ -55,7 +67,7 @@ onBeforeUnmount(() => observer?.disconnect())
 </script>
 
 <template>
-  <div ref="root">
+  <div ref="root" @wheel.capture.passive="keepWheel">
     <Swiper
       :slides-per-view="1"
       :auto-height="true"
@@ -64,7 +76,7 @@ onBeforeUnmount(() => observer?.disconnect())
       :mousewheel="{ forceToAxis: true, thresholdDelta: 10 }"
       :threshold="8"
       :no-swiping="true"
-      no-swiping-selector="input, textarea, select, [data-no-swipe], .swiper-no-swiping"
+      :no-swiping-selector="NO_SWIPE"
       :touch-start-prevent-default="false"
       :resistance="false"
       :speed="reducedMotion ? 0 : 300"

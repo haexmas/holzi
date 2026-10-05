@@ -197,10 +197,17 @@ async fn no_result_error_or_debug_print_carries_a_planted_value() {
     ] {
         assert!(!text.contains(MARKER), "{text}");
     }
+    // Custom values show unmasked in the window (spec 034 FR-005 as amended), so the detail
+    // carries the PIN but never the password; its debug print carries neither (the note is no
+    // secret).
     let detail_json = serde_json::to_string(&detail).expect("json");
-    for secret in ["-password", "-pin"] {
-        assert!(!detail_json.contains(secret), "{detail_json}");
-    }
+    assert!(!detail_json.contains("-password"), "{detail_json}");
+    assert!(detail_json.contains("-pin"), "{detail_json}");
+    let detail_debug = format!("{detail:?}");
+    assert!(
+        !detail_debug.contains("-pin") && !detail_debug.contains("-password"),
+        "{detail_debug}"
+    );
     // The values that are meant to leave do so in redacting types.
     for text in [
         format!("{revealed:?}"),

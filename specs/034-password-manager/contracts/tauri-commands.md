@@ -50,7 +50,8 @@ errors: NotFound
 Eingabefeld des Editors; alle anderen lösen Platzhalter auf.
 
 Wird nur auf bewusste Handlung des Nutzers aufgerufen; der Wert wird nicht gespeichert, nicht
-in Ereignisse oder Protokolle geschrieben.
+in Ereignisse oder Protokolle geschrieben. Ausnahme: `storedPassword` holt der Editor beim
+Öffnen, weil er das Passwort als normales Eingabefeld zeigt (Änderung 2026-10-05, PR #287).
 
 ### `passwords_totp_code`
 
@@ -78,12 +79,17 @@ Schreibt in Rust in die Zwischenablage und plant das Löschen (R9). `null` bei �
 ### `passwords_copy_text`
 
 ```text
-args:   { text }
+args:   { text, itemId?, field?: { kind: 'username' | 'password' | 'url' | 'note' }
+                               | { kind: 'keyValue', key } }
 result: { clearsInSeconds: number | null }
+errors: Reference { reason }, Forbidden
 ```
 
 Kopiert einen Text, den das Fenster schon hält (ein Wert im Editor, ein offenes Feld eines
-Verlaufsstands), mit demselben Leeren wie jede andere Kopie.
+Verlaufsstands), mit demselben Leeren wie jede andere Kopie. Mit `field` löst Rust die
+Platzhalter vorher auf, wie in diesem Feld des Eintrags `itemId` (keiner bei einem neuen
+Eintrag); ein Platzhalter, der nicht auflöst, ist der Fehler und wird nie als Text kopiert
+(036 FR-045). Ohne `field` (Titel, Datum, Tags) wird der Text kopiert, wie er ist.
 
 ## Schreiben: Einträge
 

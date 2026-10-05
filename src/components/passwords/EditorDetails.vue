@@ -114,7 +114,12 @@ const showOtpInput = computed(
             <PasswordsCopyButton
               v-if="draft.username"
               :label="t('passwords.fields.username')"
-              @copy="copyText(draft.username, t('passwords.fields.username'))"
+              @copy="
+                copyText(draft.username, t('passwords.fields.username'), {
+                  itemId,
+                  field: { kind: 'username' },
+                })
+              "
             />
             <PasswordsReferenceInsert
               v-model:text="draft.username"
@@ -145,7 +150,12 @@ const showOtpInput = computed(
               <PasswordsCopyButton
                 v-if="draft.password"
                 :label="t('passwords.fields.password')"
-                @copy="copyText(draft.password, t('passwords.fields.password'))"
+                @copy="
+                  copyText(draft.password, t('passwords.fields.password'), {
+                    itemId,
+                    field: { kind: 'password' },
+                  })
+                "
               />
               <PasswordsReferenceInsert
                 v-model:text="draft.password"
@@ -185,7 +195,12 @@ const showOtpInput = computed(
             <PasswordsCopyButton
               v-if="draft.url"
               :label="t('passwords.fields.url')"
-              @copy="copyText(draft.url, t('passwords.fields.url'))"
+              @copy="
+                copyText(draft.url, t('passwords.fields.url'), {
+                  itemId,
+                  field: { kind: 'url' },
+                })
+              "
             />
             <PasswordsReferenceInsert
               v-model:text="draft.url"
@@ -220,8 +235,10 @@ const showOtpInput = computed(
         >
           <template v-if="otpText()" #append>
             <PasswordsCopyButton
-              :label="t('passwords.fields.totp')"
-              @copy="copyText(otpText(), t('passwords.fields.totp'))"
+              :label="t('passwords.history.fields.otpSecret')"
+              @copy="
+                copyText(otpText(), t('passwords.history.fields.otpSecret'))
+              "
             />
           </template>
         </UiInput>
@@ -278,7 +295,12 @@ const showOtpInput = computed(
             <PasswordsCopyButton
               v-if="draft.note"
               :label="t('passwords.fields.note')"
-              @copy="copyText(draft.note, t('passwords.fields.note'))"
+              @copy="
+                copyText(draft.note, t('passwords.fields.note'), {
+                  itemId,
+                  field: { kind: 'note' },
+                })
+              "
             />
             <PasswordsReferenceInsert
               v-model:text="draft.note"

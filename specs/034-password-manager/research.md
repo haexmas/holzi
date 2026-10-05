@@ -311,15 +311,17 @@ die Liste der Konten an einen Cloud-Anbieter geht (R14, R20).
 
 **Entscheidung**: Der Standardzugriff der Oberfläche liefert **keine** Geheimnisse:
 
-- `passwords_get_item` liefert alle Felder außer Passwort, TOTP-Secret, Passkey-Schlüsseln und
-  den **Werten** eigener Felder (statt ihrer `hasPassword`, `hasOtpSecret`, `keyValues[].hasValue`).
-  Die Notiz ist kein Geheimnis im Sinne von FR-005 und kommt mit.
+- `passwords_get_item` liefert alle Felder außer Passwort, TOTP-Secret und Passkey-Schlüsseln
+  (statt ihrer `hasPassword`, `hasOtpSecret`). Die Notiz ist kein Geheimnis im Sinne von FR-005
+  und kommt mit; seit 2026-10-05 (PR #287, FR-005 geändert) auch die Werte eigener Felder, mit
+  ihren Platzhaltern wie gespeichert. Ihr `Debug` bleibt geschwärzt.
 - `passwords_reveal` holt ein einzelnes Geheimnis auf bewusste Handlung (Auge, Halten).
 - `passwords_copy_field` kopiert in Rust: der Wert läuft nie durch den Webview (R9).
 - `passwords_totp_code` berechnet in Rust (R8); der Webview sieht nur Code und Restzeit.
 - Speichern ist ein **Teil-Update**: ein nicht übermitteltes Geheimnis bleibt unverändert, ein
-  übermitteltes ersetzt, ein ausdrücklich geleertes löscht. Der Editor zeigt ein Passwort
-  als „••••“ mit Knöpfen „Anzeigen“, „Ersetzen“ und „Generieren“.
+  übermitteltes ersetzt, ein ausdrücklich geleertes löscht. Der Editor zeigt das Passwort seit
+  2026-10-05 (PR #287) als normales Eingabefeld mit seinem gespeicherten Wert
+  (`storedPassword`); gesendet wird es nur, wenn es sich geändert hat.
 - Typen mit Geheimnissen implementieren `Debug` mit Schwärzung (`<redacted>`), Fehler tragen
   nie einen Wert (FR-040); die Zeichenketten aus der Datenbank werden nach Gebrauch mit
   `zeroize` überschrieben, wo sie lokal gehalten werden.

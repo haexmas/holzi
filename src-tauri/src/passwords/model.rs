@@ -71,7 +71,7 @@ pub enum OtpState {
 /// A custom field in the detail view: its name and its stored value with the placeholders as they
 /// are. Custom values show unmasked in the window (amends spec 034 FR-005); a placeholder's
 /// resolved value still comes only through `passwords_reveal`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Clone, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(rename_all = "camelCase")]
 pub struct KeyValueView {
@@ -79,6 +79,18 @@ pub struct KeyValueView {
     pub key: Option<String>,
     pub value: Option<String>,
     pub has_value: bool,
+}
+
+/// Prints no value: a custom field may hold a PIN (R7).
+impl fmt::Debug for KeyValueView {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("KeyValueView")
+            .field("id", &self.id)
+            .field("key", &self.key)
+            .field("value", &redacted(&self.value))
+            .field("has_value", &self.has_value)
+            .finish()
+    }
 }
 
 /// An attachment of an entry.
@@ -456,6 +468,22 @@ pub struct Overview {
     pub headers: Vec<ItemHeader>,
     pub groups: Vec<GroupRow>,
     pub tags: Vec<TagRow>,
+}
+
+/// The field a text copied from the window comes from (`passwords_copy_text`): its placeholders
+/// are resolved as in that field of the entry (spec 036, FR-045).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TextField {
+    Username,
+    Password,
+    Url,
+    Note,
+    /// The custom field with this name.
+    KeyValue {
+        key: String,
+    },
 }
 
 /// Which value `passwords_copy_field` puts on the clipboard.

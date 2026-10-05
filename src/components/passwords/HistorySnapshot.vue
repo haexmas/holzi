@@ -66,7 +66,12 @@ function when(stamp: string | null): string {
         <PasswordsCopyButton
           v-if="snapshot.username"
           :label="t('passwords.fields.username')"
-          @copy="copyText(snapshot.username, t('passwords.fields.username'))"
+          @copy="
+            copyText(snapshot.username, t('passwords.fields.username'), {
+              itemId: snapshot.itemId,
+              field: { kind: 'username' },
+            })
+          "
         />
       </SettingsRow>
       <SettingsRow :title="t('passwords.fields.password')">
@@ -100,7 +105,12 @@ function when(stamp: string | null): string {
         <PasswordsCopyButton
           v-if="snapshot.url"
           :label="t('passwords.fields.url')"
-          @copy="copyText(snapshot.url, t('passwords.fields.url'))"
+          @copy="
+            copyText(snapshot.url, t('passwords.fields.url'), {
+              itemId: snapshot.itemId,
+              field: { kind: 'url' },
+            })
+          "
         />
       </SettingsRow>
       <SettingsRow
@@ -119,12 +129,12 @@ function when(stamp: string | null): string {
           :label="t('passwords.fields.totp')"
         />
         <PasswordsCopyButton
-          :label="t('passwords.fields.totp')"
+          :label="t('passwords.history.fields.otpSecret')"
           @copy="
             copyHistory(
               snapshot.id,
               { kind: 'otpSecret' },
-              t('passwords.fields.totp'),
+              t('passwords.history.fields.otpSecret'),
             )
           "
         />
@@ -200,7 +210,12 @@ function when(stamp: string | null): string {
       <PasswordsCopyButton
         class="absolute top-1.5 right-2"
         :label="t('passwords.fields.note')"
-        @copy="copyText(snapshot.note, t('passwords.fields.note'))"
+        @copy="
+          copyText(snapshot.note, t('passwords.fields.note'), {
+            itemId: snapshot.itemId,
+            field: { kind: 'note' },
+          })
+        "
       />
       {{ snapshot.note }}
     </div>

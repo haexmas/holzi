@@ -67,7 +67,12 @@ function setValue(index: number, value: string) {
             <PasswordsCopyButton
               v-if="field.value"
               :label="field.key"
-              @copy="copyText(field.value, field.key)"
+              @copy="
+                copyText(field.value, field.key, {
+                  itemId: itemId ?? null,
+                  field: { kind: 'keyValue', key: field.key },
+                })
+              "
             />
             <PasswordsReferenceInsert
               :text="field.value"

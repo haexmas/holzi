@@ -459,7 +459,7 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
   zum letzten Tab nicht weiterführen und mit der Einstellung „Bewegung reduzieren“ ohne
   Gleitbewegung wechseln. Mit der Tastatur MUSS der Wechsel mit den Pfeiltasten auf der
   Tab-Leiste gehen.
-  *Erweitert 2026-10-05:* Am Desktop wechseln auch Ziehen mit der Maus und eine waagerechte
+  _Erweitert 2026-10-05:_ Am Desktop wechseln auch Ziehen mit der Maus und eine waagerechte
   Wischgeste auf dem Touchpad den Tab.
 - **FR-003**: Eine Wischgeste, die auf einem Eingabefeld, einem markierbaren Text, einem
   Code oder einem waagerecht scrollbaren Bereich beginnt, DARF den Tab nicht wechseln.
