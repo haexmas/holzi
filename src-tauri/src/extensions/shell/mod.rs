@@ -4,12 +4,14 @@
 //! Every program needs a `shell` permission for its canonical path (`execute`); the question in
 //! holzi's window warns that the extension can then do anything the user can on this device. A
 //! session belongs to the extension that started it: only it writes, resizes or closes it, and its
-//! output and its end reach only that extension's frames (`shell:output`, `shell:exit`). A session
+//! output and its end reach only that extension's frames (`shell:output`, `shell:exit`), read
+//! only as fast as the frames acknowledge it ([`flow`]). A session
 //! ends with the extension's last frame, when it is disabled or removed, and with the vault: the
 //! whole session of the shell, registered with the vault's
 //! [`ChildRegistry`](crate::vault_gate::ChildRegistry) ([`session`]). Mobile devices have no
 //! shell (8001).
 
+pub(super) mod flow;
 mod program;
 mod session;
 
@@ -44,6 +46,8 @@ pub const MAX_ENV_BYTES: usize = 4096;
 pub const MAX_PROGRAM_BYTES: usize = 4096;
 /// Sessions one extension may have open at a time.
 pub const MAX_SESSIONS: usize = 16;
+/// Output events one `ack` may acknowledge.
+pub const MAX_ACK: u64 = 1_000_000;
 
 fn invalid(message: &str) -> BridgeError {
     BridgeError::new(ExtensionErrorCode::Validation, message)
@@ -333,6 +337,21 @@ pub fn resize(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
             pixel_width: 0,
             pixel_height: 0,
         })
+    })?;
+    Ok(Value::Null)
+}
+
+/// `extension_shell_ack {sessionId, count}`: the calling frame handed on `count` more
+/// `shell:output` events ([`flow`]).
+pub fn ack(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
+    let count = params
+        .get("count")
+        .and_then(Value::as_u64)
+        .filter(|n| (1..=MAX_ACK).contains(n))
+        .ok_or_else(|| invalid("count must be a number from 1 to 1000000"))?;
+    with_own(ctx, params, |session| {
+        session.acknowledge(&ctx.session.frame, count);
+        Ok(())
     })?;
     Ok(Value::Null)
 }

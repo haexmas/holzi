@@ -18,6 +18,8 @@ use crate::passwords::test_support::open_test_vault;
 use crate::storage::known_devices;
 use crate::vault_gate::{VaultDb, VaultGate};
 
+#[path = "shell_flow_tests.rs"]
+mod flow;
 #[path = "shell_permissions_tests.rs"]
 mod permissions;
 

@@ -48,11 +48,12 @@ außerhalb wird mit `InvalidInput` abgelehnt, nichts wird geschrieben.
 
 ## Rahmen (L1)
 
-| Command                 | Eingabe                       | Ausgabe                                                                            |
-| ----------------------- | ----------------------------- | ---------------------------------------------------------------------------------- |
-| `extension_frame_open`  | `{extensionId, tabId}`        | `{frame, url}` (URL mit Start-Token) oder Fehler `disabled` / `not_ready {status}` |
-| `extension_frame_close` | `{frame}`                     | – (beendet Beobachtungen und Shells, wenn es der letzte Rahmen war)                |
-| `extension_bridge_call` | `{frame, id, method, params}` | `{id, result}` oder `{id, error}` (SDK-Form)                                       |
+| Command                    | Eingabe                       | Ausgabe                                                                                                      |
+| -------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `extension_frame_open`     | `{extensionId, tabId}`        | `{frame, url}` (URL mit Start-Token) oder Fehler `disabled` / `not_ready {status}`                           |
+| `extension_frame_close`    | `{frame}`                     | – (beendet Beobachtungen und Shells, wenn es der letzte Rahmen war)                                          |
+| `extension_frame_reloaded` | `{frame}`                     | – (eine neue Seite im Rahmen: dessen Shells warten nicht mehr auf seine Quittungen, bis er wieder quittiert) |
+| `extension_bridge_call`    | `{frame, id, method, params}` | `{id, result}` oder `{id, error}` (SDK-Form)                                                                 |
 
 Ereignis `extension-frame-event {frame, type, data, timestamp}`.
 
