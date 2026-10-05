@@ -24,7 +24,7 @@ use crate::extensions::permissions::{
     evaluate, Action, Decision, PermissionKind, PermissionRequest, RequestTarget,
 };
 pub use program::resolve_program;
-use program::{available, default_program, home};
+use program::{available, default_program, home, lexical_absolute};
 use session::Session;
 pub use session::{ShellState, Utf8Stream};
 
@@ -55,7 +55,9 @@ fn not_found() -> BridgeError {
     BridgeError::new(ExtensionErrorCode::NotFound, "not found")
 }
 
-fn check_program(ctx: &CallContext, program: &Path) -> Result<(), BridgeError> {
+/// Whether the extension may run `program`. With `askable` false (a name no permission can name)
+/// a question becomes a refusal.
+fn check_program(ctx: &CallContext, program: &Path, askable: bool) -> Result<(), BridgeError> {
     let (extension_id, device) = (ctx.session.extension_id, ctx.device);
     let mut grants = ctx
         .db
@@ -76,7 +78,8 @@ fn check_program(ctx: &CallContext, program: &Path) -> Result<(), BridgeError> {
     let code = match evaluate(&grants, &request, device) {
         Decision::Allow => return Ok(()),
         Decision::Deny => ExtensionErrorCode::PermissionDenied,
-        Decision::Prompt => ExtensionErrorCode::PermissionPromptRequired,
+        Decision::Prompt if askable => ExtensionErrorCode::PermissionPromptRequired,
+        Decision::Prompt => ExtensionErrorCode::PermissionDenied,
     };
     Err(
         BridgeError::new(code, "permission required").with_details(json!({
@@ -152,7 +155,7 @@ pub fn create(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
         Some(Value::String(s)) if !s.is_empty() => s.clone(),
         Some(_) => return Err(invalid("shell must be a string")),
     };
-    let program = resolve_program(&named).ok_or_else(|| shell_error("program not found"))?;
+    let program = resolve_program(&named);
     let cols = size(options.get("cols"), 80)?;
     let rows = size(options.get("rows"), 24)?;
     let env = environment(options.get("env"))?;
@@ -160,7 +163,17 @@ pub fn create(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     if cwd.is_some_and(|dir| !dir.is_string()) {
         return Err(invalid("cwd must be a string"));
     }
-    check_program(ctx, &program)?;
+    // The permission comes first: without it, an answer must not tell which files exist. A
+    // program that is not there is asked about by the absolute path it was named by; a bare name
+    // that is not on `PATH` cannot be granted, so it is refused without a question.
+    match &program {
+        Some(found) => check_program(ctx, found, true)?,
+        None => match lexical_absolute(&named) {
+            Some(named) => check_program(ctx, &named, true)?,
+            None => check_program(ctx, Path::new(&named), false)?,
+        },
+    }
+    let program = program.ok_or_else(|| shell_error("program not found"))?;
     if ctx.host.shells.count(ctx.session.extension_id) >= MAX_SESSIONS {
         return Err(BridgeError::new(
             ExtensionErrorCode::LimitExceeded,

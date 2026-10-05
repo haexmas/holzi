@@ -1,7 +1,7 @@
 //! The programs a shell session can start (spec 017, US11, T110): found by name on `PATH` or by
 //! path, always as a canonical path, the form a `shell` permission names.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// `program` as an existing file's canonical path: a bare name is looked up on `PATH`.
 pub fn resolve_program(program: &str) -> Option<PathBuf> {
@@ -27,6 +27,26 @@ pub fn resolve_program(program: &str) -> Option<PathBuf> {
     std::fs::canonicalize(candidate?)
         .ok()
         .filter(|p| p.is_file())
+}
+
+/// An absolute `program` without `.` and `..`, taken by its text alone: the target a question
+/// names for a program that is not there. `None` for a name that is not absolute.
+pub(super) fn lexical_absolute(program: &str) -> Option<PathBuf> {
+    let path = Path::new(program);
+    if !path.is_absolute() {
+        return None;
+    }
+    let mut clean = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                clean.pop();
+            }
+            other => clean.push(other),
+        }
+    }
+    Some(clean)
 }
 
 /// The program a session starts when the SDK names none: the user's shell.
