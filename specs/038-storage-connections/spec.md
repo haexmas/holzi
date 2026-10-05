@@ -211,8 +211,12 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   bis Anna ihn entfernt.
 - **Schlüssel einer Erweiterung, der aus ihrem Bereich führt** (`..`, führendes `/`, leere Teile,
   Steuerzeichen, zu lang): wird abgelehnt, bevor holzi den Anbieter fragt.
-- **Sehr viele Objekte im Bereich**: Auflisten liefert seitenweise oder bis zu einer Grenze und sagt,
-  dass es mehr gibt.
+- **Sehr viele Objekte im Bereich**: Auflisten liefert höchstens so viele Objekte, wie die Grenzwerte
+  der Erweiterung erlauben; gibt es mehr, scheitert der Aufruf mit einem eigenen Fehler, der auf ein
+  engeres Präfix hinweist.
+- **Verbindung kommt vor ihren Zugangsdaten an** (Sync noch nicht fertig): holzi zeigt am Speicher „wird
+  synchronisiert“, nicht „neue Zugangsdaten nötig“; Aufrufe einer Erweiterung scheitern bis dahin mit
+  dem Netzwerkfehler.
 - **Dieselbe Verbindung, zweites Gerät ändert gleichzeitig**: Es gilt die zuletzt synchronisierte
   Änderung; ein Gerät mit veralteten Zugangsdaten zeigt den Fehler aus dem ersten Punkt.
 - **Erweiterung wird entfernt**: Ihre Berechtigungen gehen wie in Spec 017; ihre Objekte beim
@@ -239,8 +243,9 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   zurücklassen.
 - **FR-004**: Der Nutzer MUSS einen gespeicherten Speicher jederzeit erneut testen können.
 - **FR-005**: Die Zugangsdaten MÜSSEN im Passwortmanager (034) liegen und DÜRFEN sonst nirgends in
-  lesbarer Form gespeichert werden. Die Einstellungen zeigen das Geheimnis nur auf eine eigene Aktion
-  des Nutzers, wie Passwörter in 034.
+  lesbarer Form gespeichert werden. Das Geheimnis zeigt nur der Passwortmanager auf eine eigene Aktion
+  des Nutzers (wie Passwörter in 034); die Einstellungen der Speicher zeigen es nicht und verweisen auf
+  den Eintrag.
 - **FR-006**: Speicherverbindungen und Speicher MÜSSEN Vault-Daten sein und mit dem Datensync (Spec 024)
   auf alle eigenen Geräte gelangen.
 - **FR-007**: Beim Entfernen einer Verbindung oder eines Speichers MUSS holzi vorher die betroffenen
@@ -258,8 +263,8 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   zu sehen, Objekte aufzulisten und herunterzuladen, „Lesen und Schreiben“ zusätzlich Hochladen und
   Löschen. Ein Speicher, den keine Berechtigung der Erweiterung deckt, DARF für sie weder in der Liste
   erscheinen noch erreichbar sein. Zustände und Rückfragen folgen Spec 017.
-- **FR-009a**: Die Liste der Speicher für eine Erweiterung MUSS je Speicher nur Kennung, Namen des
-  Speichers, Namen des Anbieters und Namen des Buckets enthalten, nie Endpunkt, Region oder
+- **FR-009a**: Die Liste der Speicher für eine Erweiterung MUSS je Speicher nur Kennung, Art (`s3`),
+  Namen des Speichers, Namen des Anbieters und Namen des Buckets enthalten, nie Endpunkt, Region oder
   Zugangsdaten.
 - **FR-010**: Jede Erweiterung MUSS in jedem Speicher einen eigenen Bereich haben: alle ihre
   Schlüssel liegen unter einem Präfix, das nur ihr gehört, auf allen Geräten gleich ist und eine
@@ -321,8 +326,8 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   Vault und kein Testobjekt beim Anbieter.
 - **SC-005**: Ein auf einem Gerät angelegter Speicher ist nach dem Sync auf einem zweiten Gerät ohne
   erneute Eingabe nutzbar.
-- **SC-006**: Die neun Funktionen arbeiten nachweislich mit mindestens zwei Anbietern: RustFS (selbst
-  betrieben, auch im Test) und AWS S3.
+- **SC-006**: Die neun Funktionen arbeiten nachweislich mit RustFS (selbst betrieben, auch im Test).
+  Weitere Anbieter wie AWS S3 werden nach Bedarf geprüft (Entscheidung des Betreibers 2026-10-05).
 
 ## Assumptions
 
@@ -330,8 +335,8 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   keine. Das Anlegen von Buckets gehört zu 029.
 - Der **Verbindungstest** schreibt, liest, listet und löscht ein eigenes kleines Testobjekt im Bucket;
   Versionierung und eingeschränkte Zugangsschlüssel prüft erst die Eignungsprüfung von 029.
-- Das **Präfix** einer Erweiterung leitet sich aus ihrer dauerhaften Identität ab (wie ihre Tabellen
-  in Spec 017), nicht aus einer Kennung je Installation.
+- Das **Präfix** einer Erweiterung leitet sich aus ihrer dauerhaften Identität (Herausgeberschlüssel
+  und Name, Spec 017) ab, nicht aus einer Kennung je Installation oder je Gerät.
 - Die **Grenzen** für Größe und Laufzeit sind die vorhandenen Grenzwerte der Erweiterung aus Spec 017;
   diese Spec führt keine neuen ein.
 - Das **vault-sdk** schickt beim Hinzufügen heute Zugangsdaten mit (`S3Config`); es wird angepasst,

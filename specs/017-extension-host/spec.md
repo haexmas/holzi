@@ -849,8 +849,8 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   Erweiterung als Aufrufer und den Freigaben dieser Spec als ihren Freigaben. Gibt es den
   Passwortmanager noch nicht, MÜSSEN sie „nicht verfügbar“ antworten.
 - **FR-054**: Die Funktionen für entfernten Speicher (auflisten, hochladen, herunterladen,
-  löschen) MÜSSEN die Speicher aus 029 nutzen, mit einer Berechtigung je Speicher. Gibt es
-  029 noch nicht, MÜSSEN sie „nicht verfügbar“ antworten.
+  löschen) MÜSSEN die Speicher aus 038 nutzen, mit einer Berechtigung je Speicher. Gibt es
+  038 noch nicht, MÜSSEN sie „nicht verfügbar“ antworten.
 - **FR-055**: Anlegen, Ändern, Prüfen und Entfernen eines Speichers durch eine Erweiterung
   MUSS jedes Mal eine Bestätigung in einem Dialog von holzi verlangen. Zugangsdaten DÜRFEN die
   Erweiterung danach nicht mehr erreichen.

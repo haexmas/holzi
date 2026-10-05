@@ -652,8 +652,10 @@ scope}` aus `passwords/access.rs`), Berechtigungen der Art `passwords` → `Gran
 - **Entfernter Speicher**: Trait `RemoteStore`; Erweiterungen sehen nur Speicherverbindungen, die der Nutzer
   für Erweiterungen freigibt, mit einem Schlüsselpräfix je Erweiterung (029 FR-027 erlaubt in Space-Buckets nur
   inhaltsadressierte Objekte, also nie beliebige Schlüssel dort). Berechtigung je Verbindung; Anlegen, Ändern,
-  Prüfen und Entfernen immer über einen Dialog von holzi, Zugangsdaten in den Passwortmanager. S3-Client wählt
-  der Plan von 029. Bis dahin „nicht verfügbar“.
+  Prüfen und Entfernen immer über einen Dialog von holzi, Zugangsdaten in den Passwortmanager. Umgesetzt durch
+  Spec 038 (Speicherverbindungen ohne Spaces): S3-Client `rusty-s3` über reqwest, Präfix
+  `holzi-ext/<extension_id>/`, Berechtigung je Speicher (Bucket), Zugangsdaten gibt nur der Nutzer in holzi
+  ein (Eintrag mit Eigentümer, Regel Z14 in 034). Bis dahin „nicht verfügbar“.
 - **Mail**: `async-imap` (tokio, `tokio-rustls`), `lettre` (rustls/ring), `mail-parser` (alle neu, reines
   Rust). Befehle wie im SDK; Berechtigung je Host **und** Port. Das Beobachten liest Zugangsdaten nur über 034
   mit der Erweiterung als Aufrufer (HV liest sie am Passwortmanager vorbei, `mail/poll.rs:164-208`). Beobachten

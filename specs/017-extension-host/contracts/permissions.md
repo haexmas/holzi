@@ -12,7 +12,7 @@ Begründung: [research.md](../research.md) R15, R18–R21. Modul `src-tauri/src/
 | `web`           | HTTP-Methode oder `*`   | `*`, `schema://host/pfad*`, `*.domain`, Domain                        | wie HV `manager/url.rs`, jede Weiterleitung neu                             | vault-weit                           |
 | `notifications` | `show`                  | `*`                                                                   | –                                                                           | vault-weit                           |
 | `passwords`     | `read`, `readWrite`     | Tag oder `*`                                                          | über 034 (`Grant`, `Scope`)                                                 | vault-weit                           |
-| `remoteStorage` | `read`, `readWrite`     | Kennung der Speicherverbindung oder `*`                               | exakt                                                                       | vault-weit                           |
+| `remoteStorage` | `read`, `readWrite`     | Kennung des Speichers (Spec 038) oder `*`                             | exakt                                                                       | vault-weit                           |
 | `mail`          | `fetch`, `send`, `poll` | `host:port` oder `host` (alle Ports)                                  | Host ohne Rücksicht auf Groß-/Kleinschreibung                               | vault-weit                           |
 | `shell`         | `execute`               | Programm (kanonischer Pfad) oder `*`                                  | exakt nach Auflösung                                                        | **Gerät**, wählbar „für alle Geräte“ |
 

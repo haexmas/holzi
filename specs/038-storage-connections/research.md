@@ -45,7 +45,9 @@ läuft durch denselben Pfad wie der Papierkorb (`ItemState`, `visible`, `headers
 `agent_headers`, Verweise über `references_db::visible`), also eine Regel an einer Stelle. Der Nutzer
 sieht die Einträge weiter im Passwortmanager (Z1); ändert er dort die Zugangsdaten, gilt das für die
 Verbindung. `Caller::Internal` gibt es schon für genau solche holzi-Funktionen (029 „s3-storage“), es
-wird hier zum ersten Mal benutzt.
+wird hier zum ersten Mal benutzt. Auf anderen Geräten hält Z14, weil der Sync nur zwischen Geräten mit
+gleichem Schema läuft (Migrationszahl und Trigger-Version, Spec 024 FR-029, `sync/handshake.rs`): Ein
+Gerät ohne die Regel bekommt die Einträge nicht.
 
 **Verworfen**:
 
