@@ -247,6 +247,16 @@ candle-transformers = { version = "0.10.2", optional = true }
 # C-backed `onig` feature.
 tokenizers = { version = "0.23.2", default-features = false, features = ["fancy-regex"], optional = true }
 tauri-plugin-notification = "2.5.1"
+# Spec 017 US11 (research R21): mail of extensions. IMAP over tokio, its protocol types (async-imap
+# returns them without re-exporting), parsing of fetched messages, and SMTP with lettre. TLS is
+# rustls with ring and the system's certificate check, as everywhere in holzi (no aws-lc-rs, no
+# native-tls).
+async-imap = { version = "0.11", default-features = false, features = ["runtime-tokio"] }
+imap-proto = "0.16"
+mail-parser = "0.11"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+rustls-platform-verifier = "0.7"
+lettre = { version = "0.11.23", default-features = false, features = ["tokio1-rustls", "ring", "rustls-platform-verifier", "smtp-transport", "builder"] }
 
 [target.'cfg(unix)'.dependencies]
 # Kills a whole process group (`kill(-pgid, SIGKILL)`) so a killed

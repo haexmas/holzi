@@ -148,7 +148,7 @@ fn hold_decision(node: &Node, extension: Uuid) {
 }
 
 #[test]
-fn disabling_or_removing_on_a_closes_the_notifications_on_b() {
+fn disabling_or_removing_on_a_closes_the_notifications_and_mail_watches_on_b() {
     let (a, b) = (Node::new(), Node::new());
     let ext = a.install(&bundle("1.0.0", &[INIT]));
     a.follow();
@@ -158,11 +158,17 @@ fn disabling_or_removing_on_a_closes_the_notifications_on_b() {
     let open = |node: &Node| node.host.notifications.of_extension(ext).len();
 
     b.host.notifications.open_for_test(ext);
+    b.host.mail_watches.insert_for_test(ext);
     hold_decision(&b, ext);
     set_enabled(&a.vault, ext, false, now()).expect("disable");
     b.pull(&a);
     b.follow();
     assert_eq!(open(&b), 0, "closed on b although it was disabled on a");
+    assert_eq!(
+        b.host.mail_watches.count(ext),
+        0,
+        "mail watches end on b, with the credentials they hold"
+    );
     assert_eq!(b.host.permissions.held(ext).len(), 1, "kept while disabled");
 
     set_enabled(&a.vault, ext, true, now()).expect("enable");

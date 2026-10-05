@@ -24,7 +24,8 @@ const props = defineProps<{
   selecting?: boolean
   dimmed?: boolean
   tabStop?: boolean
-  menuEntries: readonly MenuEntry[]
+  /** Builds the menu of a row when it opens; the same function for every row. */
+  menuFor: (id: string) => readonly MenuEntry[]
 }>()
 
 const emit = defineEmits<{
@@ -78,7 +79,7 @@ function onDrop(event: DragEvent) {
 
 <template>
   <PasswordsEntryMenu
-    :entries="menuEntries"
+    :entries="() => menuFor(group.id)"
     @run="emit('menu', $event)"
     @open="emit('menuOpen')"
   >
@@ -135,7 +136,7 @@ function onDrop(event: DragEvent) {
         />
       </button>
       <PasswordsEntryMenuButton
-        :entries="menuEntries"
+        :entries="() => menuFor(group.id)"
         :label="t('passwords.folders.menu', { name })"
         :data-testid="`passwords-list-folder-menu-${group.id}`"
         @run="emit('menu', $event)"

@@ -864,8 +864,9 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
 
 - **FR-056**: holzi MUSS die Mail-Funktionen des vault-sdk anbieten (Postfächer, Umschläge,
   Nachrichten, Anhänge, Flags, Verschieben, Ablegen, Senden, Nachricht bauen, Beobachten) mit
-  einer Berechtigung je Mailserver. Neue Nachrichten in einer beobachteten Mailbox MUSS holzi
-  melden.
+  einer Berechtigung je Mailserver oder für alle Mailserver (`*`; ein Mailprogramm kennt die
+  Server seiner Nutzer nicht im Voraus). Neue Nachrichten in einer beobachteten Mailbox MUSS
+  holzi melden.
 - **FR-057**: holzi MUSS die Shell-Funktionen des vault-sdk anbieten (verfügbare Shells
   auflisten, starten, schreiben, Größe ändern, schließen, Ausgabe und Ende melden) mit einer
   Berechtigung je Programm. Die Anfrage MUSS deutlich warnen.
