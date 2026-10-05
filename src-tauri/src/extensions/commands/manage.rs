@@ -68,6 +68,7 @@ pub async fn extension_remove(
         host.permissions.forget_extension(id);
         host.fs.watches.end_all(id);
         host.notifications.close_all(id);
+        host.shells.end_all(id);
         Ok(())
     })
     .await
@@ -107,6 +108,7 @@ pub async fn extension_set_enabled(
         if !enabled {
             host.fs.watches.end_all(id);
             host.notifications.close_all(id);
+            host.shells.end_all(id);
         }
         Ok(())
     })

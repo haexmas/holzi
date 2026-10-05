@@ -12,7 +12,7 @@ use super::frames::{FrameSession, FrameSource};
 use super::{database, methods, permissions};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
-use crate::extensions::{fs, kv, logs, notifications, passwords, web};
+use crate::extensions::{fs, kv, logs, notifications, passwords, shell, web};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -268,14 +268,35 @@ pub static METHODS: &[Method] = &[
         handler: passwords::delete,
         module: passwords::MODULE,
     },
+    Method {
+        name: "extension_shell_list_available",
+        handler: shell::list_available,
+        module: shell::MODULE,
+    },
+    Method {
+        name: "extension_shell_create",
+        handler: shell::create,
+        module: shell::MODULE,
+    },
+    Method {
+        name: "extension_shell_write",
+        handler: shell::write,
+        module: shell::MODULE,
+    },
+    Method {
+        name: "extension_shell_resize",
+        handler: shell::resize,
+        module: shell::MODULE,
+    },
+    Method {
+        name: "extension_shell_close",
+        handler: shell::close,
+        module: shell::MODULE,
+    },
 ];
 
 /// Methods of later deliveries (research R1): they answer 8001 until they land.
-const LATER: &[&str] = &[
-    "extension_remote_storage_",
-    "extension_mail_",
-    "extension_shell_",
-];
+const LATER: &[&str] = &["extension_remote_storage_", "extension_mail_"];
 
 /// Whether the caller may run host functions: an installed, enabled extension, or a development
 /// version while developer mode is on for this device (US12).

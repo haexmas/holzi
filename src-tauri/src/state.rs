@@ -57,6 +57,7 @@ pub struct AppState {
 impl AppState {
     /// Creates application state with no active instance.
     pub fn new(gate: VaultGate) -> Self {
+        let children = gate.children();
         Self {
             active_instance: Mutex::new(None),
             sync_servers_update: tokio::sync::Mutex::new(()),
@@ -65,7 +66,12 @@ impl AppState {
             usage: Arc::new(UsageRegistry::new()),
             password_import: ImportRegistry::new(),
             vault_changes: crate::vault_events::changes_channel(),
-            extensions: Arc::default(),
+            extensions: {
+                let extensions = Arc::new(crate::extensions::host::ExtensionHost::default());
+                // Spec 017 US11: a vault close ends the shells of extensions with its other children.
+                extensions.shells.set_children(children);
+                extensions
+            },
         }
     }
 

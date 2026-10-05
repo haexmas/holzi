@@ -132,7 +132,6 @@ fn unlisted_methods_are_not_supported_and_later_ones_not_available() {
     }
     for method in [
         "extension_remote_storage_list",
-        "extension_shell_create",
         "extension_mail_list_accounts",
     ] {
         assert_eq!(code(call(&s.ctx, method, &Value::Null)), 8001, "{method}");
