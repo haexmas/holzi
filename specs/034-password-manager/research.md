@@ -593,7 +593,10 @@ Literal in `.vue`/`.ts` stehen, sonst bündelt `@nuxt/icon` sie nicht (`nuxt.con
   `setTitle`; Titel der Orte kommen aus festen `titleKey`s. Ein Prüfskript sichert das gegen
   `snapshotSession` und die Routentabelle.
 - Rahmen (Werkzeugleiste, ausblendbare Seitenleiste, Überlagerung unter 672 px): vorhandene
-  Bausteine. Die Seitenleiste von Einstellungen ist an `SETTINGS_CATEGORIES` gebunden;
+  Bausteine. _Stand 2026-10-06 (PR #287):_ Die Werkzeugleiste trägt Seitenleisten-Knopf, Suche,
+  Tag-Filter (`TagFilter.vue`), Einstellungen und „Neu“ (Menü Schlüssel/Ordner); die
+  Seitenleiste trägt Alle Einträge, den Ordnerbaum, Papierkorb, Generator, Import und „Tags
+  verwalten“. Im Kopf eines Eintrags ist „Bearbeiten“ ein Stift-Symbol mit Tooltip. Die Seitenleiste von Einstellungen ist an `SETTINGS_CATEGORIES` gebunden;
   `components/chat/SidebarLayout.vue` ist der kleinste allgemeine Rahmen. Aufgabe T002
   befragt den Graph und entscheidet zwischen **dort anknüpfen** und **gemeinsamen Rahmen
   herausziehen**; ein Umbau des Chats ist nicht Teil dieser Spec und wird bei Zweifel mit dem

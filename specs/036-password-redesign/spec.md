@@ -471,6 +471,8 @@ Passwort in der Kopie überschreiben, die Quelle löschen.
 - **FR-005**: In der Ansicht MÜSSEN leere Felder ausgeblendet sein, beim Bearbeiten alle
   Felder erscheinen. Ein Tab ohne sichtbaren Inhalt (etwa Extra bei einem Eintrag ohne alles
   daraus) MUSS einen Hinweis zeigen, was er hier aufnehmen kann.
+  _Präzisiert 2026-10-06 (PR #287):_ Das gilt auch für das Passwort: ohne Passwort zeigt die
+  Ansicht keine Zeile „Passwort“; Details ohne jedes Feld zeigen den Hinweis.
 - **FR-006**: Der gewählte Tab MUSS zum Ort des Fenster-Tabs gehören (Vor, Zurück, wiederherge-
   stellte Sitzung); der Ort `entry/:id/history` aus 034 MUSS den Tab Verlauf öffnen. Ein Ort
   DARF nie ein Geheimnis enthalten (die Regel aus 034 und 022 für Orte bleibt).

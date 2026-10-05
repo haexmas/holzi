@@ -33,8 +33,8 @@ function when(stamp: string | null): string {
     class="flex min-w-0 flex-col gap-4"
     data-testid="passwords-history-snapshot"
   >
-    <div class="flex flex-wrap items-center gap-2">
-      <h2 class="min-w-0 flex-1 text-lg font-semibold">
+    <div class="flex flex-col items-start gap-2">
+      <h2 class="text-lg font-semibold">
         {{
           t('passwords.history.savedAt', { when: when(snapshot.modifiedAt) })
         }}
