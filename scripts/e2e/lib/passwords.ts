@@ -231,6 +231,22 @@ export async function selectTab(
   await instance.click(`entry-tab-${tab}`)
 }
 
+/** Whether this tab's slide has come to rest: active, and its left edge on the swipe surface's.
+ * A click during the slide animation lets WebDriver scroll the surface sideways to reach the
+ * moving target, which leaves the slides offset. */
+export async function slideSettled(
+  instance: FlowInstance,
+  tab: 'details' | 'extra' | 'history',
+): Promise<boolean> {
+  return instance.exec<boolean>(
+    `const slide = document.querySelector('[data-testid="entry-panel-' + arguments[0] + '"]')
+     const surface = slide && slide.closest('.swiper')
+     if (!slide || !surface || !slide.classList.contains('swiper-slide-active')) return false
+     return Math.abs(slide.getBoundingClientRect().left - surface.getBoundingClientRect().left) < 1`,
+    [tab],
+  )
+}
+
 /** Whether the swipe surface shows this tab's slide: the slide follows the tab bar (spec 036 FR-002). */
 export async function slideShows(
   instance: FlowInstance,

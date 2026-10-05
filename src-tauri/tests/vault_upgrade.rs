@@ -281,6 +281,51 @@ fn reopening_a_pre_0023_vault_installs_the_extension_table_triggers() {
     }
 }
 
+/// `0026_passwords_refs` (spec 036) introduces the CRDT-tracked `haex_passwords_passkey_links`. A
+/// vault provisioned by the release before it already stores trigger version 15, so only the bump
+/// to 16 makes the production open path install the table's triggers; without them a link would
+/// never reach the other devices.
+#[test]
+fn reopening_a_pre_0026_vault_installs_the_passkey_link_triggers() {
+    const TABLE: &str = "haex_passwords_passkey_links";
+    let trigger_count = |db: &Database| -> i64 {
+        db.with_connection(|conn| {
+            Ok(conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master \
+                 WHERE type = 'trigger' AND name LIKE 'z_dirty_' || ?1 || '_%'",
+                [TABLE],
+                |r| r.get(0),
+            )?)
+        })
+        .expect("count triggers")
+    };
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("vault.db");
+    let installation_id = installation_id_path(dir.path());
+
+    let old = open_vault(dir.path(), source_without("0026_passwords_refs"), 15);
+    assert_eq!(trigger_count(&old), 0, "{TABLE} does not exist yet");
+    drop(old);
+
+    let upgraded = Database::open(vault_config(PASSPHRASE, &db_path, &installation_id, false))
+        .expect("reopen upgraded vault");
+    assert!(
+        trigger_count(&upgraded) > 0,
+        "{TABLE} is CRDT-tracked, but the production open path left it without triggers — its \
+         writes will not sync. Bump HOLZI_TRIGGER_VERSION."
+    );
+    let installed = trigger_count(&upgraded);
+    drop(upgraded);
+
+    let again = Database::open(vault_config(PASSPHRASE, &db_path, &installation_id, false))
+        .expect("reopen the vault a second time");
+    assert_eq!(
+        trigger_count(&again),
+        installed,
+        "a second open changes nothing"
+    );
+}
+
 #[test]
 fn a_vault_from_before_spec_024_gets_its_derived_identity_and_first_device_list() {
     let dir = tempfile::tempdir().expect("tempdir");

@@ -427,9 +427,11 @@ fn targets(q: &mut impl Query, sources: &[String]) -> Result<Vec<(String, BTreeS
     Ok(out)
 }
 
-/// How many other entries point at each of `sources` (FR-048, research R12).
+/// How many other entries point at each of `sources` (FR-048, research R12), and how many links
+/// to its passkeys other entries hold (research R6; they drop with it).
 pub fn targets_of(q: &mut impl Query, sources: &[String]) -> Result<Vec<ReferenceUsage>> {
     let found = targets(q, sources)?;
+    let links = super::passkey_links::links_to_items(q, sources)?;
     Ok(sources
         .iter()
         .map(|source| ReferenceUsage {
@@ -441,8 +443,7 @@ pub fn targets_of(q: &mut impl Query, sources: &[String]) -> Result<Vec<Referenc
                     .count(),
             )
             .unwrap_or(u32::MAX),
-            // ponytail: passkey links come with migration 0024 in stage 4 (T065); until then none.
-            passkey_links: 0,
+            passkey_links: links.get(source).copied().unwrap_or(0),
         })
         .collect())
 }

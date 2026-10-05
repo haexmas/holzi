@@ -2,8 +2,8 @@
 /**
  * Inside the confirmation before deleting for good (spec 036, US7, FR-048, research R12): how many
  * other entries point at the ones deleted, and the choice to turn those references into own values
- * first (on by default). Shows nothing when no entry points at them. Passkey links (stage 4) are
- * named as dropping.
+ * first (on by default). Shows nothing when no entry points at them. Links to their passkeys
+ * (research R6) are named as dropping.
  */
 const props = defineProps<{
   /** The entries that go, including those inside deleted folders. */

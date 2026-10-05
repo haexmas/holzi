@@ -328,6 +328,7 @@ function titleOf(header: ItemHeader): string {
           v-model:inline="inlineReferences"
           :item-ids="deletingItemIds"
         />
+        <PasswordsPasskeyDeleteNote :item-ids="deletingItemIds" />
         <ShadcnAlertDialogFooter>
           <ShadcnAlertDialogCancel>{{
             t('passwords.cancel')

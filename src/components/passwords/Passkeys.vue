@@ -1,13 +1,17 @@
 <script setup lang="ts">
 /**
- * The passkeys of an entry (spec 034, FR-004): relying party, user name, created and last used,
- * rename the nickname, delete with a confirmation. There is no button to create one and a key is
- * never shown: passkeys arrive through an import or a sync, and signing comes later with the bridge.
+ * The passkeys of an entry (spec 034, FR-004; spec 036, US5, research R6): nickname or relying
+ * party, relying party, user, created and last used, and a mark for a passkey that signs in
+ * without a user name. Its own passkeys can be renamed and deleted (with a confirmation naming the
+ * relying party). A passkey of another entry shown by a link reads "Verweis auf <Quelle>" (a tap
+ * opens the source) and offers only "Verweis lösen". There is no button to create one and a key is
+ * never shown.
  */
 import { toast } from 'vue-sonner'
 import type { PasskeyView } from '@bindings/PasskeyView'
+import { displayTitle, relativeTime } from '~/lib/passwords/format'
 
-defineProps<{
+const props = defineProps<{
   itemId: string
   passkeys: PasskeyView[]
 }>()
@@ -16,9 +20,11 @@ const emit = defineEmits<{
   changed: []
 }>()
 
-const { t } = useI18n()
+const { t, d, locale } = useI18n()
 const { errString } = useErrorString()
-const { renamePasskeyAsync, deletePasskeyAsync } = usePasswords()
+const router = useTabRouter()
+const { renamePasskeyAsync, deletePasskeyAsync, passkeyUnlinkAsync } =
+  usePasswords()
 
 const editing = ref<string | null>(null)
 const nickname = ref('')
@@ -37,6 +43,23 @@ function algorithmLabel(algorithm: number): string {
   )
 }
 
+function created(stamp: string | null): string {
+  if (!stamp) return '–'
+  const date = new Date(stamp)
+  return Number.isNaN(date.getTime()) ? stamp : d(date, { dateStyle: 'medium' })
+}
+
+function ago(stamp: string): string {
+  const date = new Date(stamp)
+  return Number.isNaN(date.getTime())
+    ? stamp
+    : relativeTime(date, new Date(), locale.value)
+}
+
+function sourceTitle(passkey: PasskeyView): string {
+  return displayTitle(passkey.linkedFrom?.title) ?? t('passwords.untitled')
+}
+
 function startRename(passkey: PasskeyView) {
   editing.value = passkey.id
   nickname.value = passkey.nickname ?? ''
@@ -46,6 +69,15 @@ async function saveRenameAsync(passkey: PasskeyView) {
   try {
     await renamePasskeyAsync(passkey.id, nickname.value.trim() || null)
     editing.value = null
+    emit('changed')
+  } catch (cause) {
+    toast.error(errString(cause))
+  }
+}
+
+async function unlinkAsync(passkey: PasskeyView) {
+  try {
+    await passkeyUnlinkAsync(props.itemId, passkey.id)
     emit('changed')
   } catch (cause) {
     toast.error(errString(cause))
@@ -82,9 +114,21 @@ async function confirmDeleteAsync() {
           .filter(Boolean)
           .join(' · ')
       "
-      icon="lucide:fingerprint"
+      :icon="passkey.linkedFrom ? 'lucide:link' : 'lucide:fingerprint'"
+      :data-testid="`passwords-passkey-row-${passkey.id}`"
     >
-      <template v-if="editing === passkey.id">
+      <template v-if="passkey.linkedFrom">
+        <UiButton
+          type="button"
+          variant="ghost"
+          size="sm"
+          :data-testid="`passwords-passkey-unlink-${passkey.id}`"
+          @click="unlinkAsync(passkey)"
+        >
+          {{ t('passwords.passkeys.unlink') }}
+        </UiButton>
+      </template>
+      <template v-else-if="editing === passkey.id">
         <div class="w-40">
           <UiInput
             v-model="nickname"
@@ -94,12 +138,13 @@ async function confirmDeleteAsync() {
             @keydown.esc.prevent="editing = null"
           />
         </div>
-        <UiButton size="sm" @click="saveRenameAsync(passkey)">{{
+        <UiButton type="button" size="sm" @click="saveRenameAsync(passkey)">{{
           t('passwords.save')
         }}</UiButton>
       </template>
       <template v-else>
         <UiButton
+          type="button"
           variant="ghost"
           size="icon"
           :aria-label="t('passwords.passkeys.rename')"
@@ -110,6 +155,7 @@ async function confirmDeleteAsync() {
           <Icon name="lucide:pencil" class="size-4" />
         </UiButton>
         <UiButton
+          type="button"
           variant="ghost"
           size="icon"
           :aria-label="t('passwords.passkeys.delete')"
@@ -121,18 +167,45 @@ async function confirmDeleteAsync() {
         </UiButton>
       </template>
       <template #below>
-        <p
-          class="text-xs text-muted-foreground"
+        <div
+          class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground"
           :data-testid="`passwords-passkey-${passkey.id}`"
         >
-          {{
-            t('passwords.passkeys.created', { date: passkey.createdAt ?? '–' })
-          }}
-          <template v-if="passkey.lastUsedAt">
+          <button
+            v-if="passkey.linkedFrom"
+            type="button"
+            class="inline-flex items-center gap-0.5 rounded-full border border-primary/40 bg-primary/10 px-1.5 text-foreground hover:bg-primary/20"
+            :data-testid="`passwords-passkey-source-${passkey.id}`"
+            @click="router.push(`/entry/${passkey.linkedFrom.itemId}`)"
+          >
+            <Icon name="lucide:link" class="size-3" />
+            {{
+              t('passwords.passkeys.linkedFrom', {
+                source: sourceTitle(passkey),
+              })
+            }}
+          </button>
+          <span>{{
+            t('passwords.passkeys.created', {
+              date: created(passkey.createdAt),
+            })
+          }}</span>
+          <span v-if="passkey.lastUsedAt">
             ·
-            {{ t('passwords.passkeys.lastUsed', { date: passkey.lastUsedAt }) }}
-          </template>
-        </p>
+            {{
+              t('passwords.passkeys.lastUsed', {
+                date: ago(passkey.lastUsedAt),
+              })
+            }}
+          </span>
+          <span
+            v-if="passkey.isDiscoverable"
+            class="rounded-full bg-muted px-1.5"
+            :data-testid="`passwords-passkey-discoverable-${passkey.id}`"
+          >
+            {{ t('passwords.passkeys.discoverable') }}
+          </span>
+        </div>
       </template>
     </SettingsRow>
   </SettingsGroup>
@@ -158,9 +231,13 @@ async function confirmDeleteAsync() {
         <ShadcnAlertDialogCancel>{{
           t('passwords.cancel')
         }}</ShadcnAlertDialogCancel>
-        <UiButton variant="destructive" @click="confirmDeleteAsync">{{
-          t('passwords.passkeys.delete')
-        }}</UiButton>
+        <UiButton
+          type="button"
+          variant="destructive"
+          data-testid="passwords-passkey-delete-confirm"
+          @click="confirmDeleteAsync"
+          >{{ t('passwords.passkeys.delete') }}</UiButton
+        >
       </ShadcnAlertDialogFooter>
     </ShadcnAlertDialogContent>
   </ShadcnAlertDialog>

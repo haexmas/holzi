@@ -54,7 +54,7 @@ Node 22.19 für die Prüfskripte
 **Neu**: `swiper` 14 (MIT), `photoswipe` 5.4 (MIT, wie haex-vault); Rust `ciborium`, `psl`,
 direktes `url`. RS256 wird nicht signiert, deshalb **kein** `rsa` zur Laufzeit (R8).
 
-**Storage**: Migration `0024_passwords_refs`: eine CRDT-Tabelle
+**Storage**: Migration `0026_passwords_refs` (geplant als `0024`; Spec 017 hat `0024` und `0025` zuerst belegt): eine CRDT-Tabelle
 (`haex_passwords_passkey_links`), `HOLZI_TRIGGER_VERSION`
 15 → 16. Keine Änderung vorhandener Tabellen. Details in [data-model.md](./data-model.md).
 
@@ -134,10 +134,10 @@ anfasst, wird kleiner).
 | 1     | Eintrag in Tabs mit Wischgeste, Verlauf als Tab, Zerlegung des Editors                    | US1, US2            | Frontend; Registry (`tab`); keine Rust-Änderung                           |
 | 2     | Brotkrumen, Auswahlleiste, Ablage (Ausschneiden, Einfügen), Kontextmenüs, Kürzel          | US3, US4            | Frontend; keine Rust-Änderung                                             |
 | 3     | Verweise (Auflöser, Marken, Editor, Löschen), Kopieren mit Dialog, KeePass-Verweise       | US3 (Kopieren), US7 | Rust `references`, `copy`, `import/references`; Frontend; keine Migration |
-| 4     | Passkeys: Dienstmethoden, konstanter Zähler 0, Verbindungen, Passkey-Ansicht im Tab Extra | US5                 | Rust `webauthn`, `passkeys_ops`; Migration `0024`; Frontend               |
+| 4     | Passkeys: Dienstmethoden, konstanter Zähler 0, Verbindungen, Passkey-Ansicht im Tab Extra | US5                 | Rust `webauthn`, `passkeys_ops`; Migration `0026`; Frontend               |
 | 5     | Anhänge als Karten mit Lightbox                                                           | US6                 | Frontend (`photoswipe`)                                                   |
 
-Die Stufen 1 und 2 brauchen kein Rust; die Migration `0024` liegt einmal vor (Stufe 4) und
+Die Stufen 1 und 2 brauchen kein Rust; die Migration `0026` liegt einmal vor (Stufe 4) und
 enthält die Passkey-Verbindungen, Stufe 3 nutzt von ihr nichts. Der Kopier-Dialog in Stufe 3 bietet
 „Passkeys per Verweis“ erst an, wenn Stufe 4 da ist (bis dahin ausgeblendet).
 
@@ -168,8 +168,8 @@ src-tauri/src/
 │   ├── references_db.rs                        # Abfragen: Quelle laden, Verwendung, Einsetzen     [neu]
 │   ├── copy.rs, copy_tests.rs                  # Tiefenkopie in einer Transaktion                  [neu]
 │   ├── webauthn.rs, webauthn_tests.rs          # authData, COSE, Signatur, Herkunft (rein)         [neu]
-│   ├── passkeys_ops.rs, passkeys_ops_tests.rs  # create/confirm/list gegen die Datenbank           [neu]
-│   ├── passkey_links.rs                        # Verbindungen (Ziel/Quelle)                        [neu]
+│   ├── passkeys_ops.rs                         # create/confirm/list gegen die Datenbank           [neu]
+│   ├── passkey_links.rs, passkey_links_tests.rs # Verbindungen (Ziel/Quelle), Löschen, Kopie         [neu]
 │   ├── model_references.rs, model_passkeys.rs  # RefMark, ReferenceUsage, PasskeyHeader (ts-rs)    [neu]
 │   ├── service/copy.rs, service/references.rs  # nur Nutzer: copy, parse, token, usage, key_names  [neu]
 │   ├── service/passkeys.rs                     # + create, confirm, list, unlink                    [ändern]
@@ -178,10 +178,10 @@ src-tauri/src/
 │   ├── items.rs                                # Kreisprüfung beim Speichern, headers_in_scope      [ändern, klein]
 │   ├── trash.rs                                # purge: Verbindungen zuerst                         [ändern, klein]
 │   └── import/references.rs, references_tests.rs, apply_references.rs (Kennungen vorab, Umwandeln vor dem ersten Schreiben), keepass.rs (source_ref) [neu / ändern]
-├── identity/migrations_passwords_refs.rs       # 0024: Passkey-Verbindungen                         [neu]
+├── identity/migrations_passwords_refs.rs       # 0026: Passkey-Verbindungen                         [neu]
 ├── identity/migrations.rs                      # Registrierung, Triggerversion 16                   [ändern]
 ├── Cargo.toml                                  # ciborium, psl, url                                 [ändern]
-└── tests/passwords_references.rs, passwords_copy.rs, passwords_passkeys.rs, fixtures/reference_vectors.json [neu]
+└── tests/passwords_references.rs, passwords_copy.rs, passwords_passkeys{,_scope,_sync}.rs, common/passkey_fixture.rs, fixtures/reference_vectors.json [neu]
 
 src/
 ├── lib/passwords/
