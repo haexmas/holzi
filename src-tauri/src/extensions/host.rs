@@ -59,6 +59,8 @@ pub struct ExtensionHost {
     pub permissions: PermissionState,
     /// System notifications shown for extensions (US8).
     pub notifications: NotificationState,
+    /// Shells started by extensions (US11).
+    pub shells: super::shell::ShellState,
     /// Entry and Content-Security-Policy per bundle started in this process.
     started: Mutex<HashMap<Uuid, Arc<Started>>>,
     /// The bundle each extension last started with on this device, to see an update.

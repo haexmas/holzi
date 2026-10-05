@@ -92,7 +92,7 @@ fn safe_group_pid(pid: u32) -> Option<i32> {
 }
 
 /// Ends `pid` and everything below it. Returns without waiting for the processes to go.
-fn kill_process_tree(pid: u32) {
+pub(crate) fn kill_process_tree(pid: u32) {
     let Some(group) = safe_group_pid(pid) else {
         log::error!("refusing to signal process group {pid}");
         return;

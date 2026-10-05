@@ -22,6 +22,7 @@ pub mod passwords;
 pub mod permissions;
 pub mod protocol;
 pub mod registry;
+pub mod shell;
 pub mod sql;
 pub mod web;
 
