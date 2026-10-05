@@ -45,9 +45,6 @@ pub trait Desktop: Send + Sync {
     ) -> Result<Box<dyn ShownNotification>, String> {
         Err("notifications are not available".to_owned())
     }
-
-    /// Brings holzi's window to the front.
-    fn focus_window(&self) {}
 }
 
 #[derive(Default)]
