@@ -15,6 +15,9 @@ pub mod migrations_extensions;
 #[cfg(test)]
 mod migrations_extensions_tests;
 mod migrations_passwords;
+mod migrations_passwords_refs;
+#[cfg(test)]
+mod migrations_passwords_refs_tests;
 #[cfg(test)]
 mod migrations_tests;
 

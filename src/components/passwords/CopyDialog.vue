@@ -2,9 +2,10 @@
 /**
  * The dialog before a copy is pasted (spec 036, US3, FR-015): a dialog on wide windows, a drawer
  * on narrow ones. For one entry its title (default "<Titel> – Kopie" or "– Copy" by the interface
- * language), for several entries or a folder a common suffix; "Verlauf übernehmen" and user name or
- * password as a reference on the original, all off by default. Cancel creates nothing. The copy
- * runs in one transaction; the Ablage stays filled, so it can be pasted again.
+ * language), for several entries or a folder a common suffix; "Verlauf übernehmen", user name or
+ * password as a reference on the original and "Passkeys per Verweis" (research R6), all off by
+ * default. Cancel creates nothing. The copy runs in one transaction; the Ablage stays filled, so
+ * it can be pasted again.
  */
 import { toast } from 'vue-sonner'
 import type { CopyRequest } from '~/composables/usePasswordsActions'
@@ -20,9 +21,6 @@ const emit = defineEmits<{
   done: []
 }>()
 
-/** Passkeys by link come with stage 4 (T065). */
-const passkeyLinksAvailable = false
-
 const { t } = useI18n()
 const fieldLabels = useFieldLabels()
 const { errString } = useErrorString()
@@ -34,6 +32,8 @@ const suffix = ref('')
 const history = ref(false)
 const usernameAsReference = ref(false)
 const passwordAsReference = ref(false)
+/** A passkey is never copied; this shows the original's passkeys at the copy by a link. */
+const passkeysAsLinks = ref(false)
 const busy = ref(false)
 
 /** One entry gets an exact title; several or a folder a suffix. */
@@ -51,6 +51,7 @@ watch(open, (isOpen) => {
   history.value = false
   usernameAsReference.value = false
   passwordAsReference.value = false
+  passkeysAsLinks.value = false
 })
 
 async function confirmAsync() {
@@ -64,6 +65,7 @@ async function confirmAsync() {
       history: history.value,
       usernameAsReference: usernameAsReference.value,
       passwordAsReference: passwordAsReference.value,
+      passkeysAsLinks: passkeysAsLinks.value,
     })
     await store.quietReloadAsync()
     // Empty folders copy no entry; "0 Einträge kopiert" would read as a failure.
@@ -152,9 +154,19 @@ async function confirmAsync() {
           />
           <span>{{ t('passwords.copyDialog.passwordReference') }}</span>
         </label>
-        <p v-if="!passkeyLinksAvailable" class="text-sm text-muted-foreground">
-          {{ t('passwords.copyDialog.noPasskeys') }}
-        </p>
+        <label class="flex items-start gap-2 text-sm">
+          <ShadcnCheckbox
+            v-model="passkeysAsLinks"
+            class="mt-0.5"
+            data-testid="passwords-copy-passkey-links"
+          />
+          <span>
+            {{ t('passwords.copyDialog.passkeyLinks') }}
+            <span class="block text-muted-foreground">{{
+              t('passwords.copyDialog.noPasskeys')
+            }}</span>
+          </span>
+        </label>
       </form>
     </template>
     <template #footer>

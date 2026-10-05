@@ -241,6 +241,27 @@ pub enum HolziError {
     #[error("Cannot copy into the trash")]
     PasswordsIntoTrash,
 
+    /// The origin of a passkey request does not belong to its relying party (spec 036, FR-025,
+    /// research R9); nothing was created or signed.
+    #[error("Origin does not match the relying party")]
+    PasswordsPasskeyOriginMismatch,
+
+    /// None of the requested algorithms is ES256 or EdDSA, or a stored passkey uses another
+    /// (imported RS256, FR-034) or holds a key that does not decode for its algorithm.
+    #[error("Unsupported passkey algorithm")]
+    PasswordsPasskeyUnsupportedAlgorithm,
+
+    /// A passkey of `excludeCredentials` already exists in a visible entry; nothing was created.
+    #[error("A passkey for this account already exists")]
+    PasswordsPasskeyExcluded,
+
+    /// More than one passkey fits a confirmation; the caller repeats with one credential id in
+    /// `allowCredentials`. The headers carry no key.
+    #[error("Several passkeys fit")]
+    PasswordsPasskeyChoiceRequired {
+        candidates: Vec<crate::passwords::model_passkeys::PasskeyHeader>,
+    },
+
     /// An extension bundle was refused or could not be installed (spec 017,
     /// contracts/bundle-format.md §Prüfung: `reason` is the error kind, e.g. `signature_invalid`,
     /// `file_mismatch`, `legacy_signature_format`). Never carries content of the bundle.

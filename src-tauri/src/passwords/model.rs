@@ -82,21 +82,8 @@ pub struct AttachmentView {
     pub binary_hash: String,
 }
 
-/// A passkey of an entry without its keys (FR-004).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[ts(export, export_to = "../../src/types/bindings/")]
-#[serde(rename_all = "camelCase")]
-pub struct PasskeyView {
-    pub id: String,
-    pub relying_party_id: String,
-    pub relying_party_name: Option<String>,
-    pub user_name: Option<String>,
-    pub nickname: Option<String>,
-    #[ts(type = "number")]
-    pub algorithm: i64,
-    pub created_at: Option<String>,
-    pub last_used_at: Option<String>,
-}
+/// A passkey of an entry without its keys (FR-004); spec 036 moved it to `model_passkeys.rs`.
+pub use super::model_passkeys::PasskeyView;
 
 /// The detail view of one entry, without secrets: `has_*` flags tell what exists, the values come
 /// only through `reveal`, `copy_field` and `totp_code`.
