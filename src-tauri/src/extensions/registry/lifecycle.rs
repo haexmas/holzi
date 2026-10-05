@@ -136,6 +136,19 @@ pub fn reconcile(
     Ok(changed)
 }
 
+/// What an extension that does not run here leaves behind in this process: its file watches end,
+/// its notifications close and, once removed, its held permission decisions go. This runs on every
+/// reconcile, so also when it was disabled or removed on another device and the change came
+/// through sync; with nothing left each step does nothing. A development version has ids of its
+/// own (`dev_extension_id`) and is not touched.
+fn stopped_here(host: &ExtensionHost, extension: &Registered) {
+    host.fs.watches.end_all(extension.id);
+    host.notifications.close_all(extension.id);
+    if !extension.installed {
+        host.permissions.forget_extension(extension.id);
+    }
+}
+
 /// Brings one extension on `device` in line; returns its state when that changed.
 fn follow(
     db: &VaultDb,
@@ -165,6 +178,7 @@ fn follow(
         if !extension.purge_data {
             keep_tables(db, extension, now_ms);
         }
+        stopped_here(host, extension);
         return Ok(None);
     }
     let before = shown(db, extension.id, device)?;
@@ -172,6 +186,7 @@ fn follow(
         start(db, extension.id, device, now_ms).ok()
     } else {
         keep_tables(db, extension, now_ms);
+        stopped_here(host, extension);
         let id = extension.id;
         db.write_blocking(move |tx| {
             status::set(tx, id, device, DeviceStatus::Disabled, None, None, now_ms)

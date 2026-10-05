@@ -156,6 +156,14 @@ impl NotificationState {
         }
     }
 
+    /// An open notification of `extension_id` without a system behind it (tests elsewhere).
+    #[cfg(test)]
+    pub(crate) fn open_for_test(&self, extension_id: Uuid) -> String {
+        let id = Uuid::new_v4().to_string();
+        self.admit(extension_id, &id, None);
+        id
+    }
+
     /// Enters the notification `id` of `extension_id` before it shows, so a response that comes at
     /// once finds it. Under the same lock the one with the same `tag` and the oldest beyond
     /// [`MAX_OPEN`] leave, so calls at the same time cannot pass the limit; they are returned to be

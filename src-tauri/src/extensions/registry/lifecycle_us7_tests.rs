@@ -131,3 +131,32 @@ fn deleting_kept_data_on_a_drops_the_tables_on_b_and_a_reinstall_starts_fresh() 
     assert!(ready(&b, ext));
     assert_eq!(b.count("SELECT COUNT(*) FROM `{t}`"), Some(0));
 }
+
+#[test]
+fn disabling_or_removing_on_a_closes_the_notifications_on_b() {
+    let (a, b) = (Node::new(), Node::new());
+    let ext = a.install(&bundle("1.0.0", &[INIT]));
+    a.follow();
+    b.pull(&a);
+    b.follow();
+    assert!(ready(&b, ext));
+    let open = |node: &Node| node.host.notifications.of_extension(ext).len();
+
+    b.host.notifications.open_for_test(ext);
+    set_enabled(&a.vault, ext, false, now()).expect("disable");
+    b.pull(&a);
+    b.follow();
+    assert_eq!(open(&b), 0, "closed on b although it was disabled on a");
+
+    set_enabled(&a.vault, ext, true, now()).expect("enable");
+    b.pull(&a);
+    b.follow();
+    b.host.notifications.open_for_test(ext);
+    b.follow();
+    assert_eq!(open(&b), 1, "a running extension keeps its notifications");
+
+    remove(&a.vault, ext, false, now()).expect("remove");
+    b.pull(&a);
+    b.follow();
+    assert_eq!(open(&b), 0, "closed on b although it was removed on a");
+}
