@@ -1,57 +1,80 @@
 //! Shells of extensions (spec 017, US11, T109) through the bridge, on a real PTY.
 
-use std::path::Path;
-use std::time::{Duration, Instant};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::Duration;
+
+use serde_json::{json, Value};
+use uuid::Uuid;
 
 use super::*;
-use crate::extensions::bridge::dispatch::call;
+use crate::extensions::bridge::dispatch::{call, Emit};
 use crate::extensions::bridge::events::FRAME_EVENT;
 use crate::extensions::commands::permissions::{set, PermissionSetArgs};
+use crate::extensions::host::ExtensionHost;
 use crate::extensions::registry::effective::effective_bundle;
 use crate::extensions::registry::install::install;
 use crate::passwords::test_support::open_test_vault;
 use crate::storage::known_devices;
 use crate::vault_gate::{VaultDb, VaultGate};
 
+/// Only a guard against a hanging test: every wait ends on an event the shell sends.
+const PATIENCE: Duration = Duration::from_secs(30);
+
 #[derive(Default)]
-struct Recorded(Mutex<Vec<(String, Value)>>);
+struct Recorded {
+    events: Mutex<Vec<(String, Value)>>,
+    arrived: Condvar,
+}
 
 impl Emit for Recorded {
     fn emit(&self, event: &str, payload: Value) {
-        self.0.lock().unwrap().push((event.to_owned(), payload));
+        self.events
+            .lock()
+            .unwrap()
+            .push((event.to_owned(), payload));
+        self.arrived.notify_all();
     }
+}
+
+/// The `data` of every frame event of `kind` for `session`.
+fn of(events: &[(String, Value)], kind: &str, session: &str) -> Vec<Value> {
+    events
+        .iter()
+        .filter(|(e, p)| e == FRAME_EVENT && p["type"] == kind && p["data"]["sessionId"] == session)
+        .map(|(_, p)| p["data"].clone())
+        .collect()
+}
+
+fn output(events: &[(String, Value)], session: &str) -> String {
+    of(events, OUTPUT, session)
+        .iter()
+        .filter_map(|d| d["data"].as_str().map(str::to_owned))
+        .collect()
 }
 
 impl Recorded {
-    /// The `data` of every frame event of `kind` for `session`.
-    fn of(&self, kind: &str, session: &str) -> Vec<Value> {
-        self.0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|(e, p)| {
-                e == FRAME_EVENT && p["type"] == kind && p["data"]["sessionId"] == session
-            })
-            .map(|(_, p)| p["data"].clone())
-            .collect()
+    /// Waits until the events so far satisfy `done`.
+    fn wait_until(&self, what: &str, done: impl Fn(&[(String, Value)]) -> bool) {
+        let events = self.events.lock().unwrap();
+        let (_events, timeout) = self
+            .arrived
+            .wait_timeout_while(events, PATIENCE, |events| !done(events))
+            .unwrap();
+        assert!(!timeout.timed_out(), "timed out: {what}");
     }
 
-    fn output(&self, session: &str) -> String {
-        self.of(OUTPUT, session)
-            .iter()
-            .filter_map(|d| d["data"].as_str().map(str::to_owned))
-            .collect()
+    fn waited_for_output(&self, session: &str, text: &str) {
+        self.wait_until(text, |events| output(events, session).contains(text));
     }
-}
 
-fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
-    let started = Instant::now();
-    while !done() {
-        assert!(
-            started.elapsed() < Duration::from_secs(10),
-            "timed out: {what}"
-        );
-        std::thread::sleep(Duration::from_millis(20));
+    fn waited_for_exit(&self, session: &str) -> Value {
+        self.wait_until("the end", |events| !of(events, EXIT, session).is_empty());
+        of(&self.events.lock().unwrap(), EXIT, session)[0].clone()
+    }
+
+    fn all(&self) -> Vec<(String, Value)> {
+        self.events.lock().unwrap().clone()
     }
 }
 
@@ -173,12 +196,8 @@ fn a_granted_shell_runs_echo_resizes_and_reports_its_end() {
     let session = s.start(&s.notes);
     s.write(&s.notes, &session, "echo \"probe-$PROBE\"; stty size\n")
         .unwrap();
-    wait_until("the echo", || {
-        s.recorded.output(&session).contains("probe-on")
-    });
-    wait_until("the size", || {
-        s.recorded.output(&session).contains("30 100")
-    });
+    s.recorded.waited_for_output(&session, "probe-on");
+    s.recorded.waited_for_output(&session, "30 100");
 
     call(
         &s.notes,
@@ -187,11 +206,8 @@ fn a_granted_shell_runs_echo_resizes_and_reports_its_end() {
     )
     .unwrap();
     s.write(&s.notes, &session, "stty size; exit 3\n").unwrap();
-    wait_until("the new size", || {
-        s.recorded.output(&session).contains("40 120")
-    });
-    wait_until("the end", || !s.recorded.of(EXIT, &session).is_empty());
-    assert_eq!(s.recorded.of(EXIT, &session)[0]["exitCode"], 3);
+    s.recorded.waited_for_output(&session, "40 120");
+    assert_eq!(s.recorded.waited_for_exit(&session)["exitCode"], 3);
     assert_eq!(s.host.shells.count(s.notes.session.extension_id), 0);
     assert_eq!(code(s.write(&s.notes, &session, "x")), 1001, "gone");
 }
@@ -263,12 +279,10 @@ fn a_session_belongs_to_its_extension() {
         &json!({ "sessionId": session }),
     )
     .unwrap();
-    wait_until("the end", || !s.recorded.of(EXIT, &session).is_empty());
+    s.recorded.waited_for_exit(&session);
     let heard: Vec<String> = s
         .recorded
-        .0
-        .lock()
-        .unwrap()
+        .all()
         .iter()
         .filter(|(_, p)| p["data"]["sessionId"] == session.as_str())
         .map(|(_, p)| p["frame"].as_str().unwrap().to_owned())
@@ -280,28 +294,34 @@ fn a_session_belongs_to_its_extension() {
 }
 
 #[test]
-fn ending_all_shells_of_an_extension_kills_the_whole_process_group() {
+fn ending_all_shells_of_an_extension_kills_every_job_of_the_shell() {
     let s = setup();
     s.allow(&s.notes, &sh());
     let session = s.start(&s.notes);
-    s.write(&s.notes, &session, "sleep 100 & echo \"child=$!\"\n")
-        .unwrap();
-    // The terminal echoes the typed line too; the pid is in the last `child=`.
-    let pid = |output: String| -> Option<i32> {
-        output
-            .rsplit("child=")
-            .next()
-            .and_then(|rest| rest.split_whitespace().next())
-            .and_then(|pid| pid.parse().ok())
+    // A job in a process group of its own (job control) that ignores the hangup: only a kill of
+    // the shell's whole session ends it, whether or not the shell passes the hangup on.
+    s.write(
+        &s.notes,
+        &session,
+        "sh -c 'trap \"\" HUP; exec sleep 100' & echo \"child=$!.\"\n",
+    )
+    .unwrap();
+    // The terminal echoes the typed line too; only the printed pid ends in a dot.
+    let pid = |events: &[(String, Value)]| -> Option<i32> {
+        let output = output(events, &session);
+        let (_, rest) = output.rsplit_once("child=")?;
+        rest.split_once('.')?.0.parse().ok()
     };
-    wait_until("the background child", || {
-        pid(s.recorded.output(&session)).is_some()
-    });
-    let child = pid(s.recorded.output(&session)).unwrap();
+    s.recorded
+        .wait_until("the background job", |events| pid(events).is_some());
+    let child = pid(&s.recorded.all()).unwrap();
     assert!(alive(child));
+
     s.host.shells.end_all(s.notes.session.extension_id);
-    wait_until("the background child to end", || !alive(child));
-    wait_until("the end", || !s.recorded.of(EXIT, &session).is_empty());
+
+    // The job holds the terminal: the session reports its end only once the job is gone.
+    s.recorded.waited_for_exit(&session);
+    assert_eq!(s.host.shells.count(s.notes.session.extension_id), 0);
 }
 
 #[test]
@@ -343,7 +363,7 @@ fn malformed_options_are_refused() {
         code(call(
             &s.notes,
             "extension_shell_create",
-            &json!({ "options": { "cwd": "/no/such/dir" } })
+            &json!({ "options": { "shell": "/bin/sh", "cwd": "/no/such/dir" } })
         )),
         2003
     );

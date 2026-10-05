@@ -8,9 +8,11 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-// ponytail: process groups on Unix and `taskkill /T` on Windows. Ceiling: a descendant that left
-// its group (`setsid`, a double fork) survives. Upgrade path: a Windows Job Object with
-// kill-on-close, and `PR_SET_PDEATHSIG` on Linux.
+// ponytail: process groups on Unix (on Linux and Android also every group of a session the child
+// leads) and `taskkill /T` on Windows. Ceiling: a descendant that left its group (`setsid`, or a
+// double fork outside a session the child leads) survives, and on macOS so does a job an
+// interactive shell put in a group of its own and did not hang up. Upgrade path: a Windows Job
+// Object with kill-on-close, `PR_SET_PDEATHSIG` on Linux, and `proc_listallpids` on macOS.
 
 /// The registered children of one app process. Cheap to clone; every clone is the same registry.
 #[derive(Clone, Default)]
@@ -104,6 +106,15 @@ pub(crate) fn kill_process_tree(pid: u32) {
         unsafe {
             libc::kill(-group, libc::SIGKILL);
         }
+        // A child that leads its own session (a shell on a terminal) puts each job in a group of
+        // its own; those groups stay in its session.
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        for other in session_groups(group) {
+            // SAFETY: as above; `session_groups` returns only ids above 1 other than our own group.
+            unsafe {
+                libc::kill(-other, libc::SIGKILL);
+            }
+        }
     }
     // Windows has no group signal; `taskkill /T` walks the OS's own parent-child tree instead.
     #[cfg(windows)]
@@ -114,6 +125,39 @@ pub(crate) fn kill_process_tree(pid: u32) {
     }
     #[cfg(not(any(unix, windows)))]
     let _ = group;
+}
+
+/// The other process groups with a live process in the session `session`. Only a process that
+/// leads its session has its id as the session id, and the id stays taken while the session has
+/// members, so this never names a stranger's group.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn session_groups(session: i32) -> Vec<i32> {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    // SAFETY: `getpgrp` takes no arguments and cannot fail.
+    let own = unsafe { libc::getpgrp() };
+    let mut groups: Vec<i32> = entries
+        .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse::<u32>().ok())
+        .filter_map(|pid| std::fs::read_to_string(format!("/proc/{pid}/stat")).ok())
+        .filter_map(|stat| group_in_session(&stat, session))
+        .filter(|group| *group > 1 && *group != session && *group != own)
+        .collect();
+    groups.sort_unstable();
+    groups.dedup();
+    groups
+}
+
+/// The process group of a `/proc/<pid>/stat` line when the process is alive (not a zombie) and
+/// in `session`. The command name in parentheses may hold spaces and parentheses itself.
+#[cfg(any(target_os = "linux", target_os = "android", test))]
+fn group_in_session(stat: &str, session: i32) -> Option<i32> {
+    // After the name: state, parent, process group, session.
+    let mut fields = stat.get(stat.rfind(')')? + 1..)?.split_whitespace();
+    let state = fields.next()?;
+    let group = fields.nth(1)?.parse().ok()?;
+    let in_session = fields.next()?.parse::<i32>().ok()? == session;
+    (in_session && state != "Z" && state != "X").then_some(group)
 }
 
 #[cfg(test)]
