@@ -31,6 +31,7 @@ use crate::extensions::commands::frames::WindowEmitter;
 use crate::extensions::fs::end_revoked_watches;
 use crate::extensions::host::ExtensionHost;
 use crate::extensions::ids::ExtensionTable;
+use crate::extensions::mail::watch::end_revoked as end_revoked_mail_watches;
 use crate::extensions::permissions::store::TABLES as PERMISSION_TABLES;
 use crate::state::AppState;
 use crate::storage::query::Query;
@@ -158,6 +159,7 @@ fn handle(
             .any(|table| batch.tables.contains(*table))
     {
         end_revoked_watches(db, host, device);
+        end_revoked_mail_watches(db, host, device);
     }
     if batch.lagged || batch.tables.contains(MIGRATION_JOURNAL) {
         match db.read_blocking(|q| schema(q)) {

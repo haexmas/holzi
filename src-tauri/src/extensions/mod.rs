@@ -16,6 +16,7 @@ pub mod host;
 pub mod ids;
 pub mod kv;
 pub mod logs;
+pub mod mail;
 pub mod mime;
 pub mod notifications;
 pub mod passwords;
