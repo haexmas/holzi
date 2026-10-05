@@ -18,12 +18,18 @@ enum Caller {
   Internal { feature: &'static str }, // holzi-Funktion, z. B. "s3-storage" (029)
 }
 enum GrantAction { Read, ReadWrite }  // ReadWrite deckt Read
-enum Scope { All, Tags(BTreeSet<String>) }   // Tag-Namen nach fold; "*" in einer Freigabe ergibt All
+enum Scope {                                  // Tag-Namen nach fold; "*" in einer Freigabe ergibt All
+  All, Tags(BTreeSet<String>),
+  AllExcept { denied: BTreeSet<String>, granted: BTreeSet<String> }, // 017 FR-017: verweigerte Tags
+}
 struct Grant { action: GrantAction, scope: Scope }
 ```
 
 `Scope` eines Aufrufers = Vereinigung der Bereiche seiner passenden Freigaben; ein `All` macht
-den ganzen Bereich `All`. Es zählt, was eine Freigabe **zum Zeitpunkt der Anfrage** deckt; es
+den ganzen Bereich `All`. `AllExcept` deckt alle Einträge außer denen mit einem Tag aus `denied`;
+trägt ein solcher Eintrag auch ein Tag aus `granted`, ist er gedeckt (ein erteiltes Tag schlägt ein
+verweigertes). Mit `Tags` vereinigt, kommen deren Tags zu `granted`. `create_item` nimmt dort kein
+Tag aus `denied`, ein Eintrag ohne Tags liegt im Bereich, und nur `All` und `AllExcept` decken Z9. Es zählt, was eine Freigabe **zum Zeitpunkt der Anfrage** deckt; es
 gibt keine Zwischenspeicherung im Dienst.
 
 ## Dienst (`passwords/service/`)

@@ -68,12 +68,21 @@ fn denies_all(permissions: &[Permission]) -> bool {
         .any(|p| p.status == PermissionStatus::Denied && p.target == Target::Any)
 }
 
-/// The grants of the service: every granted permission. A denied `*` takes them all away; a
-/// denied tag removes nothing the service could subtract, it only keeps holzi from asking again.
+/// The grants of the service: every granted permission. A denied `*` takes them all away. A denied
+/// tag hides the entries carrying it from a `*` grant and voids a grant for the same tag (FR-017),
+/// but an entry that also carries another granted tag stays visible through that one.
 pub fn grants_of(permissions: &[Permission]) -> Vec<Grant> {
     if denies_all(permissions) {
         return Vec::new();
     }
+    let denied: Vec<&String> = permissions
+        .iter()
+        .filter(|p| p.status == PermissionStatus::Denied)
+        .filter_map(|p| match &p.target {
+            Target::Tag(tag) => Some(tag),
+            _ => None,
+        })
+        .collect();
     permissions
         .iter()
         .filter(|p| p.status == PermissionStatus::Granted)
@@ -84,7 +93,8 @@ pub fn grants_of(permissions: &[Permission]) -> Vec<Grant> {
                 _ => return None,
             };
             let scope = match &p.target {
-                Target::Any => Scope::All,
+                Target::Any => Scope::all_except(&denied),
+                Target::Tag(tag) if denied.contains(&tag) => return None,
                 Target::Tag(tag) => Scope::tags([tag]),
                 _ => return None,
             };
@@ -459,3 +469,7 @@ pub fn delete(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
 #[cfg(test)]
 #[path = "passwords_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "passwords_denied_tests.rs"]
+mod denied_tests;

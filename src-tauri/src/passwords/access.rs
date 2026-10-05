@@ -36,11 +36,19 @@ pub enum GrantAction {
     ReadWrite,
 }
 
-/// Which entries a grant covers: all of them, or those that carry one of the (folded) tags.
+/// Which entries a grant covers: all of them, those that carry one of the (folded) tags, or all
+/// but those that carry a denied tag.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Scope {
     All,
     Tags(BTreeSet<String>),
+    /// Every entry except one that carries a tag of `denied`; an entry that also carries a tag of
+    /// `granted` is covered all the same, because a granted tag beats a denied one (spec 017,
+    /// FR-017 for passwords).
+    AllExcept {
+        denied: BTreeSet<String>,
+        granted: BTreeSet<String>,
+    },
 }
 
 impl Scope {
@@ -60,12 +68,62 @@ impl Scope {
         Scope::Tags(folded)
     }
 
+    /// All entries but those carrying one of the denied tag names; none denied is [`Scope::All`].
+    pub fn all_except<I, S>(denied: I) -> Scope
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let denied: BTreeSet<String> = denied.into_iter().map(|n| fold(n.as_ref())).collect();
+        if denied.is_empty() {
+            return Scope::All;
+        }
+        Scope::AllExcept {
+            denied,
+            granted: BTreeSet::new(),
+        }
+    }
+
+    // ponytail: two `AllExcept` scopes join with the union of their denied tags, which hides more
+    // than the exact union (ceiling: grants with different denials; holzi gives all grants of one
+    // caller the same ones, so the result is exact there).
     fn union(self, other: Scope) -> Scope {
         match (self, other) {
             (Scope::All, _) | (_, Scope::All) => Scope::All,
             (Scope::Tags(mut a), Scope::Tags(b)) => {
                 a.extend(b);
                 Scope::Tags(a)
+            }
+            (
+                Scope::AllExcept {
+                    denied,
+                    mut granted,
+                },
+                Scope::Tags(tags),
+            )
+            | (
+                Scope::Tags(tags),
+                Scope::AllExcept {
+                    denied,
+                    mut granted,
+                },
+            ) => {
+                granted.extend(tags);
+                Scope::AllExcept { denied, granted }
+            }
+            (
+                Scope::AllExcept {
+                    mut denied,
+                    mut granted,
+                },
+                Scope::AllExcept {
+                    denied: d,
+                    granted: g,
+                },
+            ) => {
+                denied.extend(d);
+                granted.extend(g);
+                Scope::AllExcept { denied, granted }
             }
         }
     }
@@ -75,6 +133,10 @@ impl Scope {
         match self {
             Scope::All => true,
             Scope::Tags(tags) => tags.contains(&fold(name)),
+            Scope::AllExcept { denied, granted } => {
+                let name = fold(name);
+                granted.contains(&name) || !denied.contains(&name)
+            }
         }
     }
 
@@ -83,6 +145,10 @@ impl Scope {
         match self {
             Scope::All => true,
             Scope::Tags(_) => tags.iter().any(|tag| self.contains(tag)),
+            Scope::AllExcept { denied, granted } => {
+                let has = |set: &BTreeSet<String>| tags.iter().any(|tag| set.contains(&fold(tag)));
+                has(granted) || !has(denied)
+            }
         }
     }
 }
@@ -210,23 +276,19 @@ pub fn authorize_read(
 }
 
 /// `create_item` (Z6): with a tag scope the submitted tags must all lie in it and there must be at
-/// least one.
+/// least one; a scope for all but denied tags takes no denied tag.
 pub fn authorize_create(
     caller: &Caller,
     grants: &[Grant],
     submitted: &[String],
 ) -> Result<(), Denied> {
     let reach = reach(caller, grants, GrantAction::ReadWrite)?;
-    match reach.scope {
-        Scope::All => Ok(()),
-        Scope::Tags(_) => {
-            let all_in_scope = submitted.iter().all(|tag| reach.scope.contains(tag));
-            if !submitted.is_empty() && all_in_scope {
-                Ok(())
-            } else {
-                Err(Denied::Forbidden)
-            }
-        }
+    let needs_a_tag = matches!(reach.scope, Scope::Tags(_));
+    let all_in_scope = submitted.iter().all(|tag| reach.scope.contains(tag));
+    if all_in_scope && !(needs_a_tag && submitted.is_empty()) {
+        Ok(())
+    } else {
+        Err(Denied::Forbidden)
     }
 }
 
@@ -267,7 +329,7 @@ pub fn authorize_update(
             result.push(tag.clone());
         }
     }
-    if result.iter().any(|tag| reach.scope.contains(tag)) {
+    if reach.scope.covers(&result) {
         Ok(result)
     } else {
         Err(Denied::Forbidden)
@@ -290,8 +352,9 @@ pub fn authorize_unassigned(
     grants: &[Grant],
     needed: GrantAction,
 ) -> Result<(), Denied> {
-    match reach(caller, grants, needed)?.scope {
-        Scope::All => Ok(()),
-        Scope::Tags(_) => Err(Denied::NotFound),
+    if reach(caller, grants, needed)?.scope.covers(&[]) {
+        Ok(())
+    } else {
+        Err(Denied::NotFound)
     }
 }
