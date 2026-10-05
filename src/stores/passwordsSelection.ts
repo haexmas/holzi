@@ -2,7 +2,6 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
   emptySelection,
-  isSelected,
   pruneSelection,
   selectAll,
   selectRange,
@@ -23,9 +22,11 @@ export const usePasswordsSelectionStore = defineStore(
     const ids = computed(() => state.value.selected)
     const count = computed(() => state.value.selected.length)
     const active = computed(() => count.value > 0)
+    // Every row asks on each render of the list; a set keeps that linear in the rows.
+    const selectedSet = computed(() => new Set(state.value.selected))
 
     function isIdSelected(id: string): boolean {
-      return isSelected(state.value, id)
+      return selectedSet.value.has(id)
     }
     function toggleId(id: string) {
       state.value = toggle(state.value, id)

@@ -9,6 +9,7 @@ import {
   fold,
   matchesQuery,
   placeholderParts,
+  sortByTitle,
   type SearchableHeader,
 } from '../src/lib/passwords/search.ts'
 
@@ -154,4 +155,19 @@ test('a list shows a placeholder as a mark, the text around it as text (spec 036
     { kind: 'text', text: '!' },
   ])
   assert.deepEqual(placeholderParts('plain'), [{ kind: 'text', text: 'plain' }])
+})
+
+test('the list sorts by folded title, untitled entries last, ties by id', () => {
+  const rows = [
+    { id: 'c', title: null },
+    { id: 'b', title: 'Zebra' },
+    { id: 'a', title: 'zebra' },
+    { id: 'd', title: 'Äpfel' },
+    { id: 'e', title: '' },
+    { id: 'f', title: 'Bank' },
+  ]
+  assert.deepEqual(
+    sortByTitle(rows).map((row) => row.id),
+    ['d', 'f', 'a', 'b', 'c', 'e'],
+  )
 })

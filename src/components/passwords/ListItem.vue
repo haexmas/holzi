@@ -23,7 +23,8 @@ const props = defineProps<{
   dimmed?: boolean
   /** The row holds the one tab stop of the list. */
   tabStop?: boolean
-  menuEntries: readonly MenuEntry[]
+  /** Builds the menu of a row when it opens; the same function for every row. */
+  menuFor: (id: string) => readonly MenuEntry[]
 }>()
 
 const emit = defineEmits<{
@@ -61,7 +62,7 @@ function onDragStart(event: DragEvent) {
 
 <template>
   <PasswordsEntryMenu
-    :entries="menuEntries"
+    :entries="() => menuFor(header.id)"
     @run="emit('menu', $event)"
     @open="emit('menuOpen')"
   >
@@ -166,7 +167,7 @@ function onDragStart(event: DragEvent) {
         </span>
       </button>
       <PasswordsEntryMenuButton
-        :entries="menuEntries"
+        :entries="() => menuFor(header.id)"
         :label="
           t('passwords.menu.button', { name: title ?? t('passwords.untitled') })
         "
