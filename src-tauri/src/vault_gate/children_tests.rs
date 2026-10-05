@@ -3,7 +3,7 @@
 //! The process tests are Unix only: each child is an `sh` that starts a background `sleep`, so a
 //! kill that reached only the shell would leave the `sleep` running and fail the test.
 
-use super::{safe_group_pid, ChildRegistry};
+use super::{group_in_session, safe_group_pid, ChildRegistry};
 
 #[test]
 fn only_a_pid_that_names_exactly_one_group_is_ever_signalled() {
@@ -16,6 +16,19 @@ fn only_a_pid_that_names_exactly_one_group_is_ever_signalled() {
     assert_eq!(safe_group_pid(2), Some(2));
     assert_eq!(safe_group_pid(4242), Some(4242));
     assert_eq!(safe_group_pid(i32::MAX as u32), Some(i32::MAX));
+}
+
+#[test]
+fn a_stat_line_names_the_group_of_a_live_process_in_the_session() {
+    // pid (comm) state ppid pgrp session ...; the name may hold spaces and parentheses.
+    let job = "4711 (sleep) S 4700 4711 4700 34816 4711 4194304";
+    assert_eq!(group_in_session(job, 4700), Some(4711));
+    assert_eq!(group_in_session(job, 4711), None, "another session");
+    let odd = "4712 (a) b (c) R 4700 4712 4700 0 -1";
+    assert_eq!(group_in_session(odd, 4700), Some(4712));
+    let zombie = "4713 (sleep) Z 1 4713 4700 0 -1";
+    assert_eq!(group_in_session(zombie, 4700), None, "a zombie is gone");
+    assert_eq!(group_in_session("garbage", 4700), None);
 }
 
 #[test]

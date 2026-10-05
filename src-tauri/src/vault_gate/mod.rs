@@ -27,6 +27,7 @@ use tokio_util::task::TaskTracker;
 
 use crate::error::{HolziError, Result};
 
+pub(crate) use children::kill_process_tree;
 pub use children::{ChildGuard, ChildRegistry};
 pub use db::VaultDb;
 pub use drain::{
