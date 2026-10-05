@@ -5,7 +5,7 @@
 Aufbauend auf dem Datenmodell von [034](../034-password-manager/data-model.md): Es gibt **keine
 Änderung an vorhandenen Tabellen** (keine neue Spalte, kein neuer Index auf alten Tabellen).
 Verweise sind Text in vorhandenen Spalten (R3); neu ist eine CRDT-Tabelle. Sie entsteht
-in Migration `0024_passwords_refs` (SQL in `src-tauri/src/identity/migrations_passwords_refs.rs`,
+in Migration `0026_passwords_refs` (geplant als `0024`; Spec 017 hat `0024` und `0025` zuerst belegt) (SQL in `src-tauri/src/identity/migrations_passwords_refs.rs`,
 weil `identity/migrations.rs` schon über 500 Zeilen steht), ist CRDT-synchronisiert (kein
 `_no_sync`-Suffix), gehört der Vault, hat **keine UNIQUE-Constraints** (ein Konflikt hält
 den Sync an; Eindeutigkeit über abgeleitete Kennungen, wie in 034 R2) und wird beim

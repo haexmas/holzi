@@ -1171,7 +1171,11 @@
       "lastUsed": "zuletzt genutzt: {date}",
       "otherAlgorithm": "Algorithmus {number}",
       "deleteTitle": "Passkey löschen?",
-      "deleteBody": "Der Passkey für {name} wird endgültig entfernt."
+      "deleteBody": "Der Passkey für {name} wird endgültig entfernt, auch bei den Einträgen, die ihn per Verweis zeigen.",
+      "unlink": "Verweis lösen",
+      "linkedFrom": "Verweis auf {source}",
+      "discoverable": "Anmeldung ohne Benutzername",
+      "deletedWith": "{count} Passkey wird mitgelöscht. | {count} Passkeys werden mitgelöscht."
     },
     "editor": {
       "newTitle": "Neuer Eintrag",
@@ -1569,7 +1573,8 @@
       "historyHint": "Aus: Die Kopie beginnt mit einem eigenen Anfangsstand.",
       "usernameReference": "Benutzername als Verweis auf das Original",
       "passwordReference": "Passwort als Verweis auf das Original",
-      "noPasskeys": "Passkeys werden nicht mitkopiert.",
+      "passkeyLinks": "Passkeys per Verweis",
+      "noPasskeys": "Ein Passkey wird nie mitkopiert. Mit dieser Wahl zeigt die Kopie die Passkeys des Originals; ohne sie hat die Kopie keine.",
       "confirm": "Kopieren",
       "created": "{count} Eintrag kopiert | {count} Einträge kopiert",
       "createdFolders": "{count} Ordner kopiert | {count} Ordner kopiert"

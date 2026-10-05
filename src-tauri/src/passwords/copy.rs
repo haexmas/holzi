@@ -2,8 +2,9 @@
 //! copy in the caller's one transaction, so several hundred entries are all copied or none. A copy
 //! is a new entry with a new id: every field by value (custom fields, tags, TOTP, aliases, expiry,
 //! icon, colour), the attachments linked to the same binaries (nothing is stored twice), and on
-//! request the history and the user name or password as a placeholder on the original. Passkeys are
-//! not copied (links come with stage 4). Folders are copied with every subfolder and entry.
+//! request the history and the user name or password as a placeholder on the original. A passkey is
+//! never copied; on request the copy shows it by a link (research R6). Folders are copied with
+//! every subfolder and entry.
 
 use haex_crdt::rusqlite::params;
 use haex_crdt::CrdtTransaction;
@@ -15,7 +16,7 @@ use super::groups::is_in_trash;
 use super::items::item_state;
 use super::model::{Target, TargetKind};
 use super::references::{build_token, RefKind};
-use super::{clock, groups, snapshots, tags, TRASH_GROUP_ID};
+use super::{clock, groups, passkey_links, snapshots, tags, TRASH_GROUP_ID};
 use crate::error::{HolziError, Result};
 use crate::storage::query::Query;
 
@@ -121,15 +122,16 @@ fn value_or_reference(
     }
 }
 
+/// Copies one entry; `None` when it is gone, else the number of passkey links the copy got.
 fn copy_item(
     tx: &mut CrdtTransaction<'_>,
     source: &str,
     into: Option<&str>,
     title: Option<String>,
     options: &CopyOptions,
-) -> Result<bool> {
+) -> Result<Option<u32>> {
     let Some(stored) = columns(tx, source)? else {
-        return Ok(false);
+        return Ok(None);
     };
     let id = Uuid::new_v4().to_string();
     let now = clock::now();
@@ -204,9 +206,19 @@ fn copy_item(
     if options.history {
         copy_history(tx, source, &id)?;
     }
+    // A passkey is never copied by value (that would clone an authenticator, FR-046): with
+    // "Passkeys per Verweis" the copy shows each passkey of the original, its own and the linked
+    // ones, by a link (research R6).
+    let mut links = 0;
+    if options.passkeys_as_links == Some(true) {
+        for passkey in passkey_links::shown_passkey_ids(tx, source)? {
+            passkey_links::link(tx, &id, &passkey)?;
+            links += 1;
+        }
+    }
     // The copy's own state on top (with "Verlauf übernehmen" off, its first state).
     snapshots::take_snapshot(tx, &id)?;
-    Ok(true)
+    Ok(Some(links))
 }
 
 /// The history states of `source` as states of `target`, with new ids and their attachments.
@@ -368,8 +380,9 @@ fn copy_group(
             .find(|(id, _)| *id == old_folder)
             .map(|(_, new)| new.clone());
         for entry in entries {
-            if copy_item(tx, &entry, new_folder.as_deref(), None, options)? {
+            if let Some(links) = copy_item(tx, &entry, new_folder.as_deref(), None, options)? {
                 report.items_created += 1;
+                report.passkey_links += links;
             }
         }
     }
@@ -395,10 +408,6 @@ pub fn copy(
     into: Option<&str>,
     options: &CopyOptions,
 ) -> Result<CopyReport> {
-    // Passkey links come with stage 4 (T065); until then the option is refused before any work.
-    if options.passkeys_as_links == Some(true) {
-        return Err(invalid("options.passkeysAsLinks"));
-    }
     if let CopyTitle::Exact(_) = options.title {
         let single_entry = targets.len() == 1 && targets[0].kind == TargetKind::Item;
         if !single_entry {
@@ -439,8 +448,9 @@ pub fn copy(
                         Some(titled).filter(|t| !t.trim().is_empty())
                     }
                 };
-                if copy_item(tx, &target.id, into, title, options)? {
+                if let Some(links) = copy_item(tx, &target.id, into, title, options)? {
                     report.items_created += 1;
+                    report.passkey_links += links;
                 }
             }
             TargetKind::Group => {

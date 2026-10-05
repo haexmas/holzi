@@ -16,6 +16,8 @@ pub const NS_TAG: Uuid = Uuid::from_u128(0x1318bf99_b22a_4792_9940_1e637fe41214)
 pub const NS_ITEM_TAG: Uuid = Uuid::from_u128(0x2f0740cd_8b85_40a1_aea7_a5b02c6bf7b3);
 /// Namespace of `haex_passwords_passkeys.id`. Never change.
 pub const NS_PASSKEY: Uuid = Uuid::from_u128(0xe9e2f6e7_716b_43c4_85ba_a83fb47392c8);
+/// Namespace of `haex_passwords_passkey_links.id` (spec 036, research R6). Never change.
+pub const NS_PASSKEY_LINK: Uuid = Uuid::from_u128(0x963a3351_35d8_4686_9653_ca7ce493b077);
 
 /// The comparison form of a tag name: Unicode NFC, lower case, trimmed. "Work" and " work " are
 /// one tag, and so are a precomposed `é` and `e` followed by a combining accent. An empty result
@@ -37,6 +39,16 @@ pub fn item_tag_id(item_id: &str, tag_id: &str) -> Uuid {
 /// The id of the passkey with this credential id: `UUIDv5(NS_PASSKEY, credential_id)`.
 pub fn passkey_id(credential_id: &str) -> Uuid {
     Uuid::new_v5(&NS_PASSKEY, credential_id.as_bytes())
+}
+
+/// The id of the link that shows a passkey at another entry:
+/// `UUIDv5(NS_PASSKEY_LINK, "item_id:passkey_id")`, so two devices that link the same pair make
+/// the same row.
+pub fn passkey_link_id(item_id: &str, passkey_id: &str) -> Uuid {
+    Uuid::new_v5(
+        &NS_PASSKEY_LINK,
+        format!("{item_id}:{passkey_id}").as_bytes(),
+    )
 }
 
 /// The form in which a search compares text: decomposed, accents dropped, lower case. "gerat"

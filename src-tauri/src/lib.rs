@@ -96,7 +96,9 @@ use passwords::commands::organize::{
     passwords_create_group, passwords_delete_tag, passwords_move, passwords_rename_tag,
     passwords_reorder_groups, passwords_set_tag_color, passwords_set_tags, passwords_update_group,
 };
-use passwords::commands::passkeys::{passwords_passkey_delete, passwords_passkey_rename};
+use passwords::commands::passkeys::{
+    passwords_passkey_delete, passwords_passkey_rename, passwords_passkey_unlink,
+};
 use passwords::commands::presets::{
     passwords_preset_delete, passwords_preset_list, passwords_preset_save,
 };
@@ -354,6 +356,7 @@ pub fn run() {
             passwords_update_item,
             passwords_passkey_rename,
             passwords_passkey_delete,
+            passwords_passkey_unlink,
             passwords_create_group,
             passwords_update_group,
             passwords_reorder_groups,
