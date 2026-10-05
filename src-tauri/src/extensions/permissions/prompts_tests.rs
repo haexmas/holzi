@@ -67,3 +67,18 @@ fn an_unloaded_or_removed_extension_keeps_no_held_decision() {
     assert!(state.temporary(ext, PermissionKind::Database).is_empty());
     assert_eq!(state.held(other).len(), 1);
 }
+
+#[test]
+fn a_question_remembers_only_a_bounded_number_of_told_names() {
+    let state = PermissionState::default();
+    let ext = Uuid::new_v4();
+    let (id, _) = state.ask(question(ext, "/usr/bin/bash"), "f1", "bash");
+    for n in 0..MAX_TOLD * 4 {
+        let spelling = format!("/usr/bin/{}bash", "/".repeat(n + 1));
+        let (again, new) = state.ask(question(ext, "/usr/bin/bash"), "f1", &spelling);
+        assert_eq!((again.as_str(), new), (id.as_str(), false));
+    }
+    let told = state.take(&id).expect("open").told;
+    assert_eq!(told.len(), MAX_TOLD);
+    assert!(told.contains("bash"), "the first name is kept");
+}

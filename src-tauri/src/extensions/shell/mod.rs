@@ -42,6 +42,8 @@ pub const MAX_SIZE: u16 = 1000;
 /// Environment variables of one session, and the bytes of each name and value.
 pub const MAX_ENV: usize = 128;
 pub const MAX_ENV_BYTES: usize = 4096;
+/// Bytes of the program an extension names (`options.shell`).
+pub const MAX_PROGRAM_BYTES: usize = 4096;
 /// Sessions one extension may have open at a time.
 pub const MAX_SESSIONS: usize = 16;
 /// Output events one `ack` may acknowledge.
@@ -136,6 +138,64 @@ fn environment(value: Option<&Value>) -> Result<Vec<(String, String)>, BridgeErr
         .collect()
 }
 
+/// The terminal a shell runs on, as programs read it from `TERM`.
+pub const TERM: &str = "xterm-256color";
+
+/// Variables of holzi's own process that a shell does not inherit: holzi's own settings and those
+/// of the wrappers that start it (the Nix devShell and `scripts/with-nix-host-bridge.sh`, Nix's
+/// GTK wrappers, an AppImage), which point the dynamic loader, GTK, GIO, GStreamer, WebKit and the
+/// graphics drivers at holzi's libraries. Everything else the user's session set stays (`HOME`,
+/// `USER`, `PATH`, `LANG`, `LC_*`, `SHELL`, `DISPLAY`, ...); `PATH` too, even when a wrapper
+/// extended it.
+const NOT_INHERITED: &[&str] = &[
+    "APPDIR",
+    "APPIMAGE",
+    "ARGV0",
+    "CUDA_ROOT",
+    "GBM_BACKENDS_PATH",
+    "GSETTINGS_SCHEMA_DIR",
+    "LIBCLANG_PATH",
+    "OWD",
+    "PKG_CONFIG_PATH",
+    "RUST_BACKTRACE",
+    "RUST_LIB_BACKTRACE",
+    "RUST_LOG",
+];
+const NOT_INHERITED_PREFIXES: &[&str] = &[
+    "DYLD_",
+    "GDK_",
+    "GIO_",
+    "GST_PLUGIN_",
+    "GTK_",
+    "HOLZI_",
+    "LD_",
+    "TAURI_",
+    "WEBKIT_",
+    "__EGL_",
+    "__GLX_",
+    "__NV_",
+];
+
+/// Whether a shell does not inherit holzi's variable `name` ([`NOT_INHERITED`]).
+pub fn not_inherited(name: &str) -> bool {
+    let name = name.to_ascii_uppercase();
+    NOT_INHERITED.contains(&name.as_str())
+        || NOT_INHERITED_PREFIXES
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+}
+
+/// `portable-pty` starts from holzi's whole environment; this takes holzi's own variables out
+/// and sets `TERM`.
+fn clean_environment(command: &mut portable_pty::CommandBuilder) {
+    for (name, _) in std::env::vars_os() {
+        if not_inherited(&name.to_string_lossy()) {
+            command.env_remove(name);
+        }
+    }
+    command.env("TERM", TERM);
+}
+
 fn desktop_only() -> Result<(), BridgeError> {
     if cfg!(desktop) {
         Ok(())
@@ -165,6 +225,9 @@ pub fn create(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     };
     let named = match options.get("shell") {
         None | Some(Value::Null) => default_program(),
+        Some(Value::String(s)) if s.len() > MAX_PROGRAM_BYTES => {
+            return Err(invalid("shell too long"))
+        }
         Some(Value::String(s)) if !s.is_empty() => s.clone(),
         Some(_) => return Err(invalid("shell must be a string")),
     };
@@ -201,9 +264,11 @@ pub fn create(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     };
 
     let mut command = portable_pty::CommandBuilder::new(&program);
+    clean_environment(&mut command);
     if let Some(cwd) = cwd {
         command.cwd(cwd);
     }
+    // The extension's own variables come last: with the permission it may set any of them.
     for (name, value) in env {
         command.env(name, value);
     }
