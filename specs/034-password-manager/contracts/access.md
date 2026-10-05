@@ -18,12 +18,18 @@ enum Caller {
   Internal { feature: &'static str }, // holzi-Funktion, z. B. "s3-storage" (029)
 }
 enum GrantAction { Read, ReadWrite }  // ReadWrite deckt Read
-enum Scope { All, Tags(BTreeSet<String>) }   // Tag-Namen nach fold; "*" in einer Freigabe ergibt All
+enum Scope {                                  // Tag-Namen nach fold; "*" in einer Freigabe ergibt All
+  All, Tags(BTreeSet<String>),
+  AllExcept { denied: BTreeSet<String>, granted: BTreeSet<String> }, // 017 FR-017: verweigerte Tags
+}
 struct Grant { action: GrantAction, scope: Scope }
 ```
 
 `Scope` eines Aufrufers = Vereinigung der Bereiche seiner passenden Freigaben; ein `All` macht
-den ganzen Bereich `All`. Es zählt, was eine Freigabe **zum Zeitpunkt der Anfrage** deckt; es
+den ganzen Bereich `All`. `AllExcept` deckt alle Einträge außer denen mit einem Tag aus `denied`;
+trägt ein solcher Eintrag auch ein Tag aus `granted`, ist er gedeckt (ein erteiltes Tag schlägt ein
+verweigertes). Mit `Tags` vereinigt, kommen deren Tags zu `granted`. `create_item` nimmt dort kein
+Tag aus `denied`, ein Eintrag ohne Tags liegt im Bereich, und nur `All` und `AllExcept` decken Z9. Es zählt, was eine Freigabe **zum Zeitpunkt der Anfrage** deckt; es
 gibt keine Zwischenspeicherung im Dienst.
 
 ## Dienst (`passwords/service/`)
@@ -63,7 +69,7 @@ Eintragskennung die Namen der nutzenden Funktionen liefert.
 | Z6  | `create_item` mit Bereich `Tags`: die gesendete Tagliste darf nur Tags des Bereichs enthalten und muss mindestens eines enthalten, sonst `Forbidden`.                                                                                                                                                                                                                                                                               | FR-028         |
 | Z7  | `update_item` mit Bereich `Tags`: der Eintrag muss **vor** der Änderung im Bereich liegen (sonst `NotFound`) und **danach** mindestens ein Tag im Bereich tragen (sonst `Forbidden`, nichts ändert sich). Tags außerhalb des Bereichs bleiben unverändert (Z12).                                                                                                                                                                    | FR-028         |
 | Z8  | `delete_item` verlangt `ReadWrite` und einen Eintrag im Bereich (sonst `NotFound`) und **verschiebt ihn in den Papierkorb**; endgültiges Löschen, Wiederherstellen und Papierkorb leeren gehören zu Z11.                                                                                                                                                                                                                            | FR-015, FR-028 |
-| Z9  | Passkeys ohne `item_id` gehören zu keinem Tag-Bereich; nur `All` deckt sie.                                                                                                                                                                                                                                                                                                                                                         | Datenmodell    |
+| Z9  | Passkeys ohne `item_id` gehören zu keinem Tag-Bereich; nur `All` und `AllExcept` decken sie.                                                                                                                                                                                                                                                                                                                                        | Datenmodell    |
 | Z10 | Keine Antwort, kein Fehler, keine Protokollzeile enthält einen Wert eines Geheimnisses.                                                                                                                                                                                                                                                                                                                                             | FR-040         |
 | Z11 | Jede Methode außer `list_headers`, `read_secret_item`, `create_item`, `update_item` und `delete_item` ist für andere Aufrufer als `User` `Forbidden` (Ordner, Verschieben, Reihenfolge, Tags, Papierkorb, Verlauf, Anhänge, Passkeys, Voreinstellungen, Import), bis eine spätere Spec dafür eine Regel schreibt.                                                                                                                   | FR-024         |
 | Z12 | Ein Aufrufer sieht alle Tags eines Eintrags im Bereich (`list_headers`, `read_secret_item`), aber ein Tag außerhalb seines Bereichs bleibt bei seiner Änderung unverändert: er kann es nicht entfernen (ein Weglassen in der gesendeten Liste ändert nichts), nicht hinzufügen (ein neues Tag außerhalb des Bereichs in der gesendeten Liste ist `Forbidden`) und nicht umbenennen oder löschen (Z11).                              | FR-028         |

@@ -25,11 +25,12 @@ pub const ES256: i64 = -7;
 pub const EDDSA: i64 = -8;
 pub const RS256: i64 = -257;
 
-/// The passkeys of an entry without their keys.
+/// The passkeys of an entry without their keys: its own, then those of other entries it shows by
+/// a link (spec 036, research R6).
 pub fn list_for_item(q: &mut impl Query, item_id: &str) -> Result<Vec<PasskeyView>> {
-    Ok(q.query_map(
+    let mut own = q.query_map(
         "SELECT id, relying_party_id, relying_party_name, user_name, nickname, algorithm, \
-                created_at, last_used_at \
+                created_at, last_used_at, is_discoverable, sign_count \
          FROM haex_passwords_passkeys WHERE item_id = ?1 ORDER BY rowid",
         params![item_id],
         |r| {
@@ -42,9 +43,15 @@ pub fn list_for_item(q: &mut impl Query, item_id: &str) -> Result<Vec<PasskeyVie
                 algorithm: r.get(5)?,
                 created_at: r.get(6)?,
                 last_used_at: r.get(7)?,
+                item_id: Some(item_id.to_owned()),
+                is_discoverable: r.get::<_, i64>(8)? != 0,
+                sign_count: r.get(9)?,
+                linked_from: None,
             })
         },
-    )?)
+    )?;
+    own.extend(super::passkey_links::linked_views(q, item_id)?);
+    Ok(own)
 }
 
 /// Sets the nickname of a passkey (`None` clears it); nothing else changes.
@@ -63,8 +70,9 @@ pub fn rename(
     Ok(())
 }
 
-/// Deletes one passkey; the others stay.
+/// Deletes one passkey and, first, its links to other entries; the other passkeys stay.
 pub fn delete(tx: &mut CrdtTransaction<'_>, passkey_id: &str) -> Result<()> {
+    super::passkey_links::delete_for_passkey(tx, passkey_id)?;
     let changed = tx.execute(
         "DELETE FROM haex_passwords_passkeys WHERE id = ?1",
         params![passkey_id],

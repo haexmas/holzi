@@ -5,14 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 /** A fresh folder of the device with helpers to name, write and read files in it. */
-export function deviceFiles(): {
+export function deviceFiles(prefix = 'holzi-ext-files-'): {
   folder: string
   path: (name: string) => string
   write: (name: string, text: string) => void
   read: (name: string) => string
   remove: () => void
 } {
-  const folder = mkdtempSync(join(tmpdir(), 'holzi-ext-files-'))
+  const folder = mkdtempSync(join(tmpdir(), prefix))
   const path = (name: string) => join(folder, name)
   return {
     folder,

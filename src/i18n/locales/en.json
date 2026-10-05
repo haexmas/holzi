@@ -1171,7 +1171,11 @@
       "lastUsed": "last used: {date}",
       "otherAlgorithm": "Algorithm {number}",
       "deleteTitle": "Delete passkey?",
-      "deleteBody": "The passkey for {name} will be removed for good."
+      "deleteBody": "The passkey for {name} will be removed for good, also from the entries that show it by a link.",
+      "unlink": "Remove link",
+      "linkedFrom": "Link to {source}",
+      "discoverable": "Sign-in without user name",
+      "deletedWith": "{count} passkey is deleted with it. | {count} passkeys are deleted with them."
     },
     "editor": {
       "newTitle": "New entry",
@@ -1569,7 +1573,8 @@
       "historyHint": "Off: the copy starts with a first state of its own.",
       "usernameReference": "Username as a reference to the original",
       "passwordReference": "Password as a reference to the original",
-      "noPasskeys": "Passkeys are not copied.",
+      "passkeyLinks": "Passkeys by link",
+      "noPasskeys": "A passkey is never copied. With this, the copy shows the original's passkeys; without it, the copy has none.",
       "confirm": "Copy",
       "created": "{count} entry copied | {count} entries copied",
       "createdFolders": "{count} folder copied | {count} folders copied"

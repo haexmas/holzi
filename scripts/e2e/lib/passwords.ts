@@ -1,6 +1,7 @@
 // Helpers for the password manager scenarios (spec 034, T092): opening the window and reading what the
 // backend holds through its commands, so a scenario checks data, not pixels. Entries are made through
 // `passwords_create_item` where the editor is not what is being tested.
+import { deviceFiles } from './extension-files.ts'
 import { unwrap } from './flows.ts'
 import { resizeAppWindow } from './settings.ts'
 import type { FlowInstance } from './flows.ts'
@@ -66,6 +67,28 @@ export async function createFolder(
       args: parentId ? { name, parentId } : { name },
     }),
   ).groupId
+}
+
+/** Imports an export file of another password manager through the command: the text is written to
+ * a fresh folder of the device, which is removed again once the import has run. */
+export async function importExport(
+  instance: Pick<FlowInstance, 'invoke'>,
+  source: string,
+  fileName: string,
+  text: string,
+): Promise<void> {
+  const files = deviceFiles('e2e-passwords-import-')
+  try {
+    files.write(fileName, text)
+    unwrap(
+      'passwords_import_run',
+      await instance.invoke('passwords_import_run', {
+        args: { source, path: files.path(fileName), onDuplicate: 'create' },
+      }),
+    )
+  } finally {
+    files.remove()
+  }
 }
 
 /** The folder of an entry, or the parent of a folder, as the backend holds it (`null` is the top). */
@@ -216,8 +239,12 @@ export async function activeTab(
   )
 }
 
-/** Taps a tab of the open entry, scrolled into the middle first: in a long editor the tab bar can
- * sit under the top edge after typing further down. */
+/**
+ * Taps a tab of the open entry, scrolled into the middle first (in a long editor the tab bar can
+ * sit under the top edge after typing further down), and waits until its slide stands still in
+ * place: the tab bar switches at once, the slide moves for 300 ms, and a tap on a button of the
+ * slide while it moves misses it.
+ */
 export async function selectTab(
   instance: FlowInstance,
   tab: 'details' | 'extra' | 'history',
@@ -229,6 +256,61 @@ export async function selectTab(
     [tab],
   )
   await instance.click(`entry-tab-${tab}`)
+  const deadlineMs = 5000
+  const end = Date.now() + deadlineMs
+  for (;;) {
+    const last = await slideUnsettled(instance, tab)
+    if (last === null) return
+    if (Date.now() >= end) {
+      throw new Error(
+        `timed out after ${deadlineMs} ms waiting for the ${tab} slide to stand still (last seen: ${last})`,
+      )
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
+/**
+ * `null` when `tab`'s slide is the shown one, the swipe surface runs no transition and the slide
+ * sits at the surface's left edge; otherwise what is still off. It reads what is on screen, not
+ * Swiper's `animating`: a slide sent back before its transition got its first frame (an arrow key,
+ * then a tap at once) makes WebKit cancel the transition without a `transitionend`, and Swiper,
+ * which clears `animating` only on that event, keeps it set although nothing moves.
+ */
+async function slideUnsettled(
+  instance: FlowInstance,
+  tab: 'details' | 'extra' | 'history',
+): Promise<string | null> {
+  return instance.exec<string | null>(
+    `const surface = document.querySelector('[data-testid="entry-tabs-swiper"]')
+     const slide = document.querySelector('[data-testid="entry-panel-' + arguments[0] + '"]')
+     if (!surface || !slide) return 'no swipe surface or slide'
+     if (!slide.classList.contains('swiper-slide-active')) return 'another slide is shown'
+     const wrapper = slide.parentElement
+     const moving = typeof wrapper.getAnimations === 'function'
+       ? wrapper.getAnimations().map((animation) => animation.transitionProperty || 'an animation')
+       : []
+     if (moving.length > 0) return 'the slides move (' + moving.join(', ') + ')'
+     const off = slide.getBoundingClientRect().left - surface.getBoundingClientRect().left
+     return Math.abs(off) > 1 ? 'the slide sits ' + Math.round(off) + ' px off' : null`,
+    [tab],
+  )
+}
+
+/** Whether this tab's slide has come to rest: active, and its left edge on the swipe surface's.
+ * A click during the slide animation lets WebDriver scroll the surface sideways to reach the
+ * moving target, which leaves the slides offset. */
+export async function slideSettled(
+  instance: FlowInstance,
+  tab: 'details' | 'extra' | 'history',
+): Promise<boolean> {
+  return instance.exec<boolean>(
+    `const slide = document.querySelector('[data-testid="entry-panel-' + arguments[0] + '"]')
+     const surface = slide && slide.closest('.swiper')
+     if (!slide || !surface || !slide.classList.contains('swiper-slide-active')) return false
+     return Math.abs(slide.getBoundingClientRect().left - surface.getBoundingClientRect().left) < 1`,
+    [tab],
+  )
 }
 
 /** Whether the swipe surface shows this tab's slide: the slide follows the tab bar (spec 036 FR-002). */

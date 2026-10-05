@@ -6,7 +6,7 @@
 //! A refusal asks the user only for a permission the extension holds in the state "ask" (declared
 //! in its manifest and not ticked at install, or remembered so); without one it is 1002 (Z3).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -20,6 +20,7 @@ use crate::extensions::permissions::{
     Action, Permission, PermissionKind, PermissionStatus, Target,
 };
 use crate::passwords::access::{Caller, Grant, GrantAction, Scope};
+use crate::passwords::ids::fold;
 use crate::passwords::model::{
     ItemHeader, ItemInput, ItemPatch, KeyValueInput, KeyValuePatch, Patch, SecretItem,
     SecretKeyValue,
@@ -68,12 +69,26 @@ fn denies_all(permissions: &[Permission]) -> bool {
         .any(|p| p.status == PermissionStatus::Denied && p.target == Target::Any)
 }
 
-/// The grants of the service: every granted permission. A denied `*` takes them all away; a
-/// denied tag removes nothing the service could subtract, it only keeps holzi from asking again.
+/// The (folded) tags of the denied permissions, whatever their action.
+fn denied_tags(permissions: &[Permission]) -> BTreeSet<&str> {
+    permissions
+        .iter()
+        .filter(|p| p.status == PermissionStatus::Denied)
+        .filter_map(|p| match &p.target {
+            Target::Tag(tag) => Some(tag.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The grants of the service: every granted permission. A denied `*` takes them all away. A denied
+/// tag hides the entries carrying it from a `*` grant and voids a grant for the same tag (FR-017),
+/// but an entry that also carries another granted tag stays visible through that one.
 pub fn grants_of(permissions: &[Permission]) -> Vec<Grant> {
     if denies_all(permissions) {
         return Vec::new();
     }
+    let denied = denied_tags(permissions);
     permissions
         .iter()
         .filter(|p| p.status == PermissionStatus::Granted)
@@ -84,7 +99,8 @@ pub fn grants_of(permissions: &[Permission]) -> Vec<Grant> {
                 _ => return None,
             };
             let scope = match &p.target {
-                Target::Any => Scope::All,
+                Target::Any => Scope::all_except(&denied),
+                Target::Tag(tag) if denied.contains(tag.as_str()) => return None,
                 Target::Tag(tag) => Scope::tags([tag]),
                 _ => return None,
             };
@@ -94,10 +110,17 @@ pub fn grants_of(permissions: &[Permission]) -> Vec<Grant> {
 }
 
 /// The answer to a refusal of the service: a question for a permission in the state "ask" that
-/// would cover the call (one of `tags` first, for a write that names them), else 1002. Under a
-/// denied `*` no answer could help, so nothing is asked.
-fn refused(permissions: &[Permission], write: bool, tags: &[String]) -> BridgeError {
-    if denies_all(permissions) {
+/// would cover the call (one of `tags` first, for a write that names them), else 1002. No answer
+/// could help under a denied `*`, for a call that `adds` a denied tag to an entry, or for a
+/// permission on a denied tag (`grants_of` voids it), so none of these is asked.
+fn refused(
+    permissions: &[Permission],
+    write: bool,
+    tags: &[String],
+    adds: &[String],
+) -> BridgeError {
+    let denied = denied_tags(permissions);
+    if denies_all(permissions) || adds.iter().any(|tag| denied.contains(fold(tag).as_str())) {
         return BridgeError::new(ExtensionErrorCode::PermissionDenied, "permission denied");
     }
     let needed = if write {
@@ -108,10 +131,11 @@ fn refused(permissions: &[Permission], write: bool, tags: &[String]) -> BridgeEr
     let asking: Vec<&Permission> = permissions
         .iter()
         .filter(|p| p.status == PermissionStatus::Ask && p.action.covers(&needed))
+        .filter(|p| !matches!(&p.target, Target::Tag(tag) if denied.contains(tag.as_str())))
         .collect();
     let names = |p: &Permission| match &p.target {
         Target::Any => true,
-        Target::Tag(tag) => tags.iter().any(|t| crate::passwords::ids::fold(t) == *tag),
+        Target::Tag(tag) => tags.iter().any(|t| fold(t) == *tag),
         _ => false,
     };
     let chosen = asking
@@ -133,15 +157,17 @@ fn refused(permissions: &[Permission], write: bool, tags: &[String]) -> BridgeEr
     }
 }
 
-/// Maps a failure of the service; no message carries a value of the entry (Z10).
+/// Maps a failure of the service; no message carries a value of the entry (Z10). `tags` are the
+/// submitted tags, `adds` those of them the entry does not carry yet.
 fn map_error(
     error: HolziError,
     permissions: &[Permission],
     write: bool,
     tags: &[String],
+    adds: &[String],
 ) -> BridgeError {
     match error {
-        HolziError::PasswordsForbidden => refused(permissions, write, tags),
+        HolziError::PasswordsForbidden => refused(permissions, write, tags, adds),
         HolziError::PasswordsNotFound => {
             BridgeError::new(ExtensionErrorCode::NotFound, "not found")
         }
@@ -400,7 +426,7 @@ fn call(ctx: &CallContext) -> Result<Call, BridgeError> {
 pub fn list(ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError> {
     let c = call(ctx)?;
     let headers = block_on(c.service.list_headers(&c.caller, &c.grants))
-        .map_err(|e| map_error(e, &c.permissions, false, &[]))?;
+        .map_err(|e| map_error(e, &c.permissions, false, &[], &[]))?;
     match headers {
         Headers::Items(items) => Ok(Value::Array(items.into_iter().map(summary).collect())),
         Headers::Agent(_) => Err(unavailable()),
@@ -413,7 +439,7 @@ pub fn read(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let c = call(ctx)?;
     block_on(c.service.read_secret_item(&c.caller, &c.grants, id))
         .map(full)
-        .map_err(|e| map_error(e, &c.permissions, false, &[]))
+        .map_err(|e| map_error(e, &c.permissions, false, &[], &[]))
 }
 
 /// `extension_password_create {input}` → the new id (Z6).
@@ -423,7 +449,7 @@ pub fn create(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let c = call(ctx)?;
     block_on(c.service.create_item(&c.caller, &c.grants, input, None))
         .map(Value::String)
-        .map_err(|e| map_error(e, &c.permissions, true, &tags))
+        .map_err(|e| map_error(e, &c.permissions, true, &tags, &tags))
 }
 
 /// `extension_password_update {itemId, input}`: the SDK has no version token, so the entry is read
@@ -434,9 +460,13 @@ pub fn update(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let input = input_of(params)?;
     let tags = input.tags.clone();
     let c = call(ctx)?;
-    let fail = |e| map_error(e, &c.permissions, true, &tags);
-    let seen =
-        block_on(c.service.read_secret_item(&c.caller, &c.grants, id.clone())).map_err(fail)?;
+    let seen = block_on(c.service.read_secret_item(&c.caller, &c.grants, id.clone()))
+        .map_err(|e| map_error(e, &c.permissions, true, &tags, &[]))?;
+    let adds: Vec<String> = tags
+        .iter()
+        .filter(|tag| !seen.tags.iter().any(|carried| fold(carried) == fold(tag)))
+        .cloned()
+        .collect();
     let patch = input.into_patch(&seen);
     let token = seen.updated_at.unwrap_or_default();
     block_on(
@@ -444,7 +474,7 @@ pub fn update(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
             .update_item(&c.caller, &c.grants, id, token, patch),
     )
     .map(|_| Value::Null)
-    .map_err(fail)
+    .map_err(|e| map_error(e, &c.permissions, true, &tags, &adds))
 }
 
 /// `extension_password_delete {itemId}`: into the trash (Z8).
@@ -453,9 +483,13 @@ pub fn delete(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let c = call(ctx)?;
     block_on(c.service.delete_item(&c.caller, &c.grants, id))
         .map(|()| Value::Null)
-        .map_err(|e| map_error(e, &c.permissions, true, &[]))
+        .map_err(|e| map_error(e, &c.permissions, true, &[], &[]))
 }
 
 #[cfg(test)]
 #[path = "passwords_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "passwords_denied_tests.rs"]
+mod denied_tests;
