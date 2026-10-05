@@ -6,7 +6,8 @@
 //! group, as from a closed terminal, then after [`HANGUP_GRACE`] a kill of every group in its
 //! session ([`kill_process_tree`]); not every shell passes the hangup on to its jobs (dash does
 //! not). When the shell's output ends, whatever is left in its session is killed before the
-//! shell is reaped, so no job outlives its session.
+//! shell is reaped, so no job outlives its session. The output is read only as fast as the
+//! frames hand it on ([`Flow`]).
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -17,6 +18,7 @@ use std::time::Duration;
 use serde_json::json;
 use uuid::Uuid;
 
+use super::flow::Flow;
 use super::{shell_error, EXIT, MAX_SESSIONS, OUTPUT};
 use crate::extensions::bridge::dispatch::{is_enabled, CallContext, Emit};
 use crate::extensions::bridge::events::emit_to_frames;
@@ -121,6 +123,7 @@ pub(super) struct Session {
     master: Box<dyn portable_pty::MasterPty + Send>,
     input: SyncSender<Vec<u8>>,
     leader: Leader,
+    flow: Arc<Flow>,
 }
 
 impl Session {
@@ -141,9 +144,15 @@ impl Session {
             .map_err(|_| shell_error("the shell has ended"))
     }
 
+    /// `frame` handed on `count` more output events.
+    pub(super) fn acknowledge(&self, frame: &str, count: u64) {
+        self.flow.acknowledge(frame, count);
+    }
+
     /// Ends the shell: a hangup now, a kill of its whole session after [`HANGUP_GRACE`]. Never
     /// waits. The terminal and the input go with `self`; the output thread reports the end.
     pub(super) fn end(self) {
+        self.flow.end();
         let leader = self.leader;
         leader.hang_up();
         let later = leader.clone();
@@ -229,6 +238,7 @@ pub(super) fn start(
         _ => return abandon(shell_error("no terminal available")),
     };
     let (input, queued) = sync_channel(MAX_QUEUED_WRITES);
+    let flow = Arc::new(Flow::default());
     let fed = std::thread::Builder::new()
         .name("extension-shell-input".into())
         .spawn(move || feed(writer, queued));
@@ -260,6 +270,7 @@ pub(super) fn start(
                 master: pair.master,
                 input,
                 leader: leader.clone(),
+                flow: Arc::clone(&flow),
             },
         );
     }
@@ -275,6 +286,7 @@ pub(super) fn start(
         session_id: session_id.clone(),
         leader,
         registered: guard,
+        flow,
     };
     if std::thread::Builder::new()
         .name("extension-shell".into())
@@ -320,11 +332,21 @@ struct Pump {
     leader: Leader,
     /// Keeps the shell registered with the vault until it is killed for good.
     registered: Option<ChildGuard>,
+    flow: Arc<Flow>,
 }
 
 impl Pump {
-    fn emit(&self, event: &str, data: serde_json::Value) {
-        emit_to_frames(&*self.emitter, &self.host, self.extension_id, event, &data);
+    fn emit(&self, event: &str, data: serde_json::Value) -> Vec<String> {
+        emit_to_frames(&*self.emitter, &self.host, self.extension_id, event, &data)
+    }
+
+    fn open_frames(&self) -> Vec<String> {
+        self.host
+            .frames
+            .of_extension(self.extension_id)
+            .iter()
+            .map(|session| session.frame.clone())
+            .collect()
     }
 
     fn run(
@@ -335,15 +357,19 @@ impl Pump {
         let mut stream = Utf8Stream::default();
         let mut buffer = [0u8; 8192];
         loop {
+            self.flow.wait_for_room(|| self.open_frames());
             match reader.read(&mut buffer) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
                     let data = stream.push(&buffer[..n]);
                     if !data.is_empty() {
-                        self.emit(
+                        let frames = self.emit(
                             OUTPUT,
                             json!({ "sessionId": self.session_id, "data": data }),
                         );
+                        for frame in frames {
+                            self.flow.sent(&frame);
+                        }
                     }
                 }
             }

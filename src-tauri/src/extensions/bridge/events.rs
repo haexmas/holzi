@@ -13,16 +13,18 @@ use crate::extensions::host::ExtensionHost;
 
 pub const FRAME_EVENT: &str = "extension-frame-event";
 
+/// Sends `event_type` to every open frame of `extension_id` → the frames it went to.
 pub fn emit_to_frames(
     emitter: &dyn Emit,
     host: &ExtensionHost,
     extension_id: Uuid,
     event_type: &str,
     data: &Value,
-) {
+) -> Vec<String> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as u64);
+    let mut frames = Vec::new();
     for session in host.frames.of_extension(extension_id) {
         emitter.emit(
             FRAME_EVENT,
@@ -33,5 +35,7 @@ pub fn emit_to_frames(
                 "timestamp": timestamp,
             }),
         );
+        frames.push(session.frame.clone());
     }
+    frames
 }

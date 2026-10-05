@@ -284,6 +284,11 @@ pub static METHODS: &[Method] = &[
         module: shell::MODULE,
     },
     Method {
+        name: "extension_shell_ack",
+        handler: shell::ack,
+        module: shell::MODULE,
+    },
+    Method {
         name: "extension_shell_resize",
         handler: shell::resize,
         module: shell::MODULE,
