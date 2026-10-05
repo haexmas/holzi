@@ -1,7 +1,9 @@
 //! Entries that belong to a holzi function (spec 038, rule Z14), such as the credentials of a
 //! storage connection: only that function creates them and deletes them for good, and nobody but
 //! the user and that function reaches them ([`crate::passwords::access::sees_owned`]). No command
-//! and no bridge method sets or changes the owner; `create_item` and `update_item` leave it alone.
+//! and no bridge method sets or changes the owner; `create_item` and `update_item` leave it alone,
+//! and the user's copy of such an entry keeps it (`copy.rs`). Deleting one for good does not turn
+//! the user's placeholders that point at it into own values (FR-048): they become "missing".
 
 use haex_crdt::rusqlite::params;
 

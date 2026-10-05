@@ -79,12 +79,15 @@ struct Columns {
     otp_algorithm: Option<String>,
     expires_at: Option<String>,
     autofill_aliases: Option<String>,
+    /// The holzi function the entry belongs to (Z14); a copy keeps it, so the copy of a storage's
+    /// credentials is as hidden from extensions as the original.
+    owner: Option<String>,
 }
 
 fn columns(q: &mut impl Query, item_id: &str) -> Result<Option<Columns>> {
     q.query_row(
         "SELECT title, username, password, note, icon, color, url, otp_secret, otp_digits, \
-                otp_period, otp_algorithm, expires_at, autofill_aliases \
+                otp_period, otp_algorithm, expires_at, autofill_aliases, owner \
          FROM haex_passwords_item_details WHERE id = ?1",
         params![item_id],
         |r| {
@@ -102,6 +105,7 @@ fn columns(q: &mut impl Query, item_id: &str) -> Result<Option<Columns>> {
                 otp_algorithm: r.get(10)?,
                 expires_at: r.get(11)?,
                 autofill_aliases: r.get(12)?,
+                owner: r.get(13)?,
             })
         },
     )
@@ -150,8 +154,8 @@ fn copy_item(
     tx.execute(
         "INSERT INTO haex_passwords_item_details \
          (id, title, username, password, note, icon, color, url, otp_secret, otp_digits, \
-          otp_period, otp_algorithm, expires_at, autofill_aliases, created_at, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15)",
+          otp_period, otp_algorithm, expires_at, autofill_aliases, created_at, updated_at, owner) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16)",
         params![
             id,
             title.or(stored.title),
@@ -168,6 +172,7 @@ fn copy_item(
             stored.expires_at,
             stored.autofill_aliases,
             now,
+            stored.owner,
         ],
     )?;
     let names = tags::names_of_item(tx, source)?;

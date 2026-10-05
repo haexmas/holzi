@@ -12,7 +12,8 @@ use holzi_lib::identity::{
     holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
 };
 use holzi_lib::passwords::access::{Caller, Grant, GrantAction, Scope};
-use holzi_lib::passwords::model::{ItemInput, ItemPatch, Patch, SecretField};
+use holzi_lib::passwords::copy::{CopyOptions, CopyTitle};
+use holzi_lib::passwords::model::{ItemInput, ItemPatch, Patch, SecretField, Target, TargetKind};
 use holzi_lib::passwords::model_references::RefMarkKind;
 use holzi_lib::passwords::service::{Headers, PasswordsService};
 use holzi_lib::vault_gate::VaultGate;
@@ -261,4 +262,43 @@ async fn only_a_holzi_function_creates_owned_entries_and_only_the_owner_deletes_
         service.get_item(&Caller::User, owned).await,
         Err(HolziError::PasswordsNotFound)
     ));
+}
+
+#[tokio::test]
+async fn the_users_copy_of_an_owned_entry_stays_out_of_reach_too() {
+    let (_dir, service) = service();
+    let owned = create_owned(&service).await;
+    let report = service
+        .copy(
+            &Caller::User,
+            vec![Target {
+                kind: TargetKind::Item,
+                id: owned.clone(),
+            }],
+            None,
+            CopyOptions {
+                title: CopyTitle::Suffix(" (Kopie)".to_string()),
+                history: false,
+                username_as_reference: false,
+                password_as_reference: false,
+                passkeys_as_links: None,
+            },
+        )
+        .await
+        .expect("the user copies");
+    assert_eq!(report.items_created, 1);
+    let user_ids = listed(
+        service
+            .list_headers(&Caller::User, &[])
+            .await
+            .expect("list"),
+    );
+    assert_eq!(user_ids.len(), 2, "the user sees original and copy");
+    let ids = listed(
+        service
+            .list_headers(&extension(), &all())
+            .await
+            .expect("list"),
+    );
+    assert!(ids.is_empty(), "the copy keeps its owner: {ids:?}");
 }

@@ -15,7 +15,7 @@ enum Caller {
   BuiltinAgent,                       // Modell im Chat (Spec 032)
   Extension { id },                   // haextension (017–019)
   ExternalAgent { id },               // MCP-Client (021)
-  Internal { feature: &'static str }, // holzi-Funktion, z. B. "s3-storage" (029)
+  Internal { feature: &'static str }, // holzi-Funktion, z. B. "storage" (038, auch für 029)
 }
 enum GrantAction { Read, ReadWrite }  // ReadWrite deckt Read
 enum Scope {                                  // Tag-Namen nach fold; "*" in einer Freigabe ergibt All
@@ -52,10 +52,14 @@ Ordner, Verschieben, Reihenfolge, Tags; `trash.rs`; `history.rs`; `attachments.r
 `presets.rs`; `import.rs`), die alle `Caller::User` verlangen (Z11). Es gibt keine zweite Lese-
 oder Schreibschicht für Tabellen, an der die Prüfung vorbeiliefe; die Commands rufen nur den
 Dienst. `Internal`-Aufrufer legen ihre Freigabe fest im
-Code ab (zum Beispiel `Grant { ReadWrite, Tags({"s3"}) }`); es gibt keine für holzi reservierten
+Code ab (zum Beispiel `Grant { ReadWrite, Tags({"backup"}) }`); es gibt keine für holzi reservierten
 Tags. Einträge, die einer holzi-Funktion gehören (Spalte `owner`, etwa die Zugangsdaten einer
 Speicherverbindung aus Spec 038), legt die Funktion über `create_owned_item` an und löscht sie über
-`delete_owned_item` (`service/owned.rs`); sie gelten nach Z14. Welche Einträge eine holzi-Funktion nutzt, meldet sie über `EntryUsage` (`usage.rs`,
+`delete_owned_item` (`service/owned.rs`); sie gelten nach Z14. Die Zugangsdaten der Speicher liest
+nur die Funktion `storage` (038); auch 029 liest sie über `remote_storage::credentials`, nicht unter
+eigenem Namen. Eine Kopie eines solchen Eintrags durch den Nutzer behält den Eigentümer. Wird er
+endgültig gelöscht, werden Platzhalter in Einträgen des Nutzers, die auf ihn zeigen, nicht in
+eigene Werte umgewandelt (anders als FR-048); sie zeigen dann „fehlt“. Welche Einträge eine holzi-Funktion nutzt, meldet sie über `EntryUsage` (`usage.rs`,
 Hinweis vor dem Löschen, FR-034): ein Trait, das die Funktion beim Start anmeldet und das zu einer
 Eintragskennung die Namen der nutzenden Funktionen liefert.
 
