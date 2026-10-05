@@ -111,10 +111,10 @@ und End-to-End `extension-two-devices`:
 
 ## 8. Netzwerk, Benachrichtigungen, Dateien (US8, US9, L4)
 
-`cargo test … --test extension_web --test extension_fs`: Weiterleitung auf ein nicht berechtigtes Ziel fragt
-bzw. scheitert; Methode wird geprüft; Symlink und `..` aus einem freigegebenen Ordner werden am Ziel geprüft;
-Vault-Datei und App-Daten immer gesperrt; Dialog-Auswahl ohne weitere Rückfrage; Beobachten meldet jeden Pfad
-eines Bündels nur an die eigene Erweiterung. Manuell: haex-calendar zeigt eine Erinnerung, Klick bringt den Tab
+`cargo test … --test extension_web` und `cargo test … --lib extensions::fs`: Weiterleitung auf ein nicht
+berechtigtes Ziel fragt bzw. scheitert; Methode wird geprüft; Symlink und `..` aus einem freigegebenen Ordner
+werden am Ziel geprüft; Vault-Datei und App-Daten immer gesperrt; Dialog-Auswahl ohne weitere Rückfrage;
+Beobachten meldet jeden Pfad eines Bündels nur an die eigene Erweiterung. Manuell: haex-calendar zeigt eine Erinnerung, Klick bringt den Tab
 nach vorn (Linux; macOS und Windows je nach Ergebnis der Machbarkeitsprüfung).
 
 ## 9. Passwörter, entfernter Speicher, Mail, Shell (US10, US11, L5)
