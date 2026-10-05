@@ -2,6 +2,12 @@
 //! R3, R4, R12): resolving with the rights of a caller, the cycle check on save, the marks for the
 //! window, how many entries use a source, and replacing placeholders by their values before a
 //! source is deleted for good. The grammar and the walk are in `references.rs`.
+//!
+//! Maintainability exception (spaex 500-LoC rule): every function here reads the same entry
+//! texts with the caller's rights, so resolving, checking and inlining have stayed together.
+//! Concrete split plan, if this grows further: move the usage views and the inlining before a
+//! final delete (`item_references`, `targets`, `targets_of`, `inline_text`, `inline_all`,
+//! `items_in_groups`) into `references_usage.rs`, leaving resolving and the save check here.
 
 use std::collections::{BTreeSet, HashSet};
 

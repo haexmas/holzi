@@ -9,6 +9,11 @@
  * hand, grouped by entry, with a button that opens the entry and one that saves the report as a
  * text file. Nothing here shows or keeps a secret: the password is cleared once it was used and
  * when the window part goes away.
+ *
+ * Maintainability exception (spaex 500-LoC rule): the four steps share the chosen source, file
+ * and secrets of one run, and most of the length is the template. Concrete split plan, if this
+ * grows further: move the template parts of the steps "preview" and "done" (counts, warnings,
+ * the grouped report) into `ImportPreviewStep.vue` and `ImportReportStep.vue` with props.
  */
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { open, save } from '@tauri-apps/plugin-dialog'

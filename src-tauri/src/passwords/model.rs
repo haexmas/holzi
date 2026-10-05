@@ -4,6 +4,13 @@
 //! Types that carry a secret ([`ItemInput`], [`ItemPatch`], [`KeyValueInput`], [`KeyValuePatch`],
 //! [`RevealedSecret`]) implement `Debug` by hand and print `<redacted>` for the secret fields, so a
 //! log line or an error built with `{:?}` can never carry a value (FR-040, rule Z10).
+//!
+//! Maintainability exception (spaex 500-LoC rule): the file mirrors data-model.md §Rust-Typen one
+//! type at a time and holds no logic beyond the redacting `Debug` impls. Concrete split plan, if
+//! this grows further: move the import types (`AttentionKind`, `AttentionRow`, `ImportReport`,
+//! `ImportPreview`) into `model_import.rs` and the history types (`SnapshotHeader`,
+//! `SnapshotView`, `SnapshotKeyValueView`, `SnapshotAttachmentView`, `HistorySecret`,
+//! `RestoreOutcome`) into `model_history.rs`, as `model_references.rs` already does.
 
 use std::fmt;
 

@@ -6,6 +6,11 @@
 //!
 //! Reading tolerates states written by haex-vault, which know neither `version` nor the TOTP
 //! parameters nor `autofillAliases`.
+//!
+//! Maintainability exception (spaex 500-LoC rule): taking, reading and restoring a state share the
+//! one `SnapshotData` format and its compatibility rules, so they have stayed together. Concrete
+//! split plan, if this grows further: move the restore (`restore`, `restore_key_values`,
+//! `restore_attachments`, `text_patch`, `number_patch`) into `snapshots_restore.rs`.
 
 use std::fmt;
 

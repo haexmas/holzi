@@ -18,6 +18,12 @@
 //! its base lists and is stored once it checks out; only then does each
 //! side look the other up in its effective list: listed with exactly this
 //! endpoint, never removed. Before `Accept` nothing but device lists flows.
+//!
+//! Maintainability exception (spaex 500-LoC rule): both sides of the handshake run the same
+//! transcript, list pushes and admission, so they have stayed in one file. Concrete split plan,
+//! if this grows further: move the device-list exchange (`read_pushes_until`, `push_if_better`,
+//! `push_lists`, `list_ref`, `effective_ref`, `load_lists`, `store_pushed`) into
+//! `handshake_lists.rs`, leaving `accept_with`, `dial_with` and the admission here.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
