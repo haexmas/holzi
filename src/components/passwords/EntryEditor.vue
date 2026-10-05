@@ -21,6 +21,7 @@ import {
   toPatch,
   type Draft,
 } from '~/lib/passwords/draft'
+import { displayTitle } from '~/lib/passwords/format'
 import { entryTab, withEntryTab, type EntryTab } from '~/lib/passwords/registry'
 
 const props = defineProps<{
@@ -164,6 +165,14 @@ async function saveAsync(): Promise<boolean> {
       activeTab.value = 'details'
     } else if (error.kind === 'PasswordsConflict') {
       conflict.value = error.reason === 'deleted' ? 'deleted' : 'changed'
+    } else if (error.kind === 'PasswordsReferenceCycle') {
+      // Spec 036, FR-046: name the entry the loop runs through.
+      const source = store.headersById.get(
+        (cause as { sourceItemId?: string }).sourceItemId ?? '',
+      )
+      saveError.value = t('errors.passwords.referenceCycleNamed', {
+        title: displayTitle(source?.title) ?? t('passwords.untitled'),
+      })
     } else {
       saveError.value = errString(cause)
     }

@@ -56,6 +56,11 @@ const entries = computed(() =>
     .map((header) => ({ header, path: pathOf(header.trashedFromGroupId) })),
 )
 
+const trashedItemIds = computed(() =>
+  store.headers
+    .filter((h) => h.groupId && trashIds.value.has(h.groupId))
+    .map((h) => h.id),
+)
 const totalEntries = computed(
   () =>
     store.headers.filter((h) => h.groupId && trashIds.value.has(h.groupId))
@@ -78,6 +83,32 @@ function pathOf(groupId: string | null): string {
 const emptyDialog = ref(false)
 const deleting = ref<Target | null>(null)
 const deletingLabel = ref('')
+const inlineReferences = ref(true)
+
+/** The entries a delete for good removes: the entry, or every entry inside the folder (spec 036). */
+const deletingItemIds = computed(() => {
+  const target = deleting.value
+  if (!target) return []
+  if (target.kind === 'item') return [target.id]
+  const inside = new Set([target.id])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const group of store.groups) {
+      if (
+        group.parentId &&
+        inside.has(group.parentId) &&
+        !inside.has(group.id)
+      ) {
+        inside.add(group.id)
+        grew = true
+      }
+    }
+  }
+  return store.headers
+    .filter((header) => header.groupId !== null && inside.has(header.groupId))
+    .map((header) => header.id)
+})
 
 function target(kind: 'item' | 'group', id: string): Target {
   return { kind, id }
@@ -96,6 +127,7 @@ async function restoreOneAsync(item: Target) {
 function askDelete(item: Target, label: string) {
   deleting.value = item
   deletingLabel.value = label
+  inlineReferences.value = true
 }
 
 async function confirmDeleteAsync() {
@@ -103,7 +135,7 @@ async function confirmDeleteAsync() {
   deleting.value = null
   if (!item) return
   try {
-    await deletePermanentlyAsync([item])
+    await deletePermanentlyAsync([item], inlineReferences.value)
     await store.quietReloadAsync()
   } catch (cause) {
     toast.error(errString(cause))
@@ -269,6 +301,7 @@ function titleOf(header: ItemHeader): string {
       v-model:open="emptyDialog"
       :entries="totalEntries"
       :folders="totalFolders"
+      :item-ids="trashedItemIds"
     />
 
     <ShadcnAlertDialog
@@ -291,6 +324,10 @@ function titleOf(header: ItemHeader): string {
             }}
           </ShadcnAlertDialogDescription>
         </ShadcnAlertDialogHeader>
+        <PasswordsReferenceUsageNote
+          v-model:inline="inlineReferences"
+          :item-ids="deletingItemIds"
+        />
         <ShadcnAlertDialogFooter>
           <ShadcnAlertDialogCancel>{{
             t('passwords.cancel')

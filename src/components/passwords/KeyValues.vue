@@ -4,9 +4,23 @@
  * remove. The value of a stored field is not loaded: it shows a placeholder until the user types a
  * new one, and an untouched field keeps its stored value (partial update, research R7).
  */
+import type { KeyValueReferences } from '@bindings/KeyValueReferences'
 import type { KeyValueDraft } from '~/lib/passwords/draft'
 
+const props = defineProps<{
+  /** The entry being edited, for the reference picker (spec 036); `null` for a new one. */
+  itemId?: string | null
+  /** The marks of the stored values, by field id. */
+  references?: readonly KeyValueReferences[]
+}>()
+
 const fields = defineModel<KeyValueDraft[]>({ required: true })
+
+function storedMarks(id: string | null) {
+  return id === null
+    ? []
+    : (props.references?.find((entry) => entry.id === id)?.marks ?? [])
+}
 
 const { t } = useI18n()
 const fieldLabels = useFieldLabels()
@@ -77,6 +91,14 @@ function setValue(index: number, value: string) {
       >
         <Icon name="lucide:trash-2" class="size-4" />
       </UiButton>
+      <PasswordsReferenceField
+        class="basis-full"
+        :text="field.value"
+        :stored-marks="storedMarks(field.id)"
+        :item-id="itemId ?? null"
+        :kind="`kv-${index}`"
+        @update:text="setValue(index, $event)"
+      />
     </div>
     <UiButton
       type="button"

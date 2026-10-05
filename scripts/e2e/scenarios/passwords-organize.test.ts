@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
-import { createAndUnlock, type FlowInstance } from '../lib/flows.ts'
+import { createAndUnlock, unwrap, type FlowInstance } from '../lib/flows.ts'
 import type { WaitContext } from '../lib/sync-flows.ts'
 import { dialogClosed } from '../lib/appearance.ts'
 import { KEY, resizeAppWindow, runAction, wmSnapshot } from '../lib/settings.ts'
@@ -9,10 +9,13 @@ import {
   createEntry,
   createFolder,
   dragTo,
+  historyIds,
   openPasswords,
+  overview,
   placeOf,
   rowDimmed,
   selectedRows,
+  updateEntry,
 } from '../lib/passwords.ts'
 
 // Spec 036, quickstart M3 (US3 without copy, US4): the breadcrumbs lead back up the path; a
@@ -206,8 +209,21 @@ scenario('passwords-organize', { timeoutMs: 300_000 }, async (ctx) => {
   )
   ctx.step('a drop on the breadcrumbs moves the whole selection')
 
-  // Part 2: the menus. An entry: open, copy username/password, cut, delete.
-  await clickCrumb(ctx, instance, 'root')
+  // Part 2: the menus. An entry: open, copy username/password, cut, delete. The selection ends
+  // when its rows leave Privat; the breadcrumbs come back after the selection bar.
+  await ctx.waitFor(
+    'the selection to end',
+    async () => (await selectedRows(instance)).length === 0,
+  )
+  await ctx.waitFor('the top level', async () => {
+    const shown = await instance.exec<boolean>(
+      `const el = document.querySelector('[data-testid="passwords-entry-' + arguments[0] + '"]')
+       return Boolean(el && el.getClientRects().length)`,
+      [bank],
+    )
+    if (!shown) await clickCrumb(ctx, instance, 'root').catch(() => undefined)
+    return shown
+  })
   await contextMenu(instance, `passwords-entry-${bank}`)
   for (const id of ['open', 'copyUsername', 'copyPassword', 'cut', 'delete']) {
     await instance.waitForDisplayed(`passwords-menu-${id}`)
@@ -314,4 +330,70 @@ scenario('passwords-organize', { timeoutMs: 300_000 }, async (ctx) => {
   await instance.waitForDisplayed('passwords-menu-open')
   await instance.typeToFocused(KEY.escape)
   ctx.step('at 360 px the row menu button replaces the right click')
+
+  // Part 3 (stage 3): copying with the dialog. A folder copy: cancel makes nothing, confirm makes
+  // the copy with the suffix, and the Ablage stays for another paste.
+  await resizeAppWindow(instance, 'system.passwords', 760, 560)
+  await clickCrumb(ctx, instance, 'root')
+  await contextMenu(instance, `passwords-list-folder-${home}`)
+  await instance.click('passwords-menu-copy')
+  await instance.waitForDisplayed('passwords-ablage')
+  await instance.click(`passwords-list-folder-${work}`)
+  await instance.click('passwords-ablage-paste')
+  await instance.waitForDisplayed('passwords-copy-suffix')
+  await instance.click('passwords-copy-cancel')
+  const groupsNamed = async (prefix: string) =>
+    (await overview(instance)).groups.filter((group) =>
+      (group.name ?? '').startsWith(prefix),
+    )
+  assert.equal((await groupsNamed('Privat ')).length, 0, 'cancel makes nothing')
+  // Privat holds what is left of it after the delete above.
+  const inPrivat = (await overview(instance)).headers.filter(
+    (h) => h.groupId === home,
+  ).length
+  await instance.click('passwords-ablage-paste')
+  await instance.click('passwords-copy-confirm')
+  await ctx.waitFor('the copy of the folder in Arbeit', async () => {
+    const [copy] = await groupsNamed('Privat ')
+    if (!copy || copy.parentId !== work) return false
+    return (
+      (await overview(instance)).headers.filter((h) => h.groupId === copy.id)
+        .length === inPrivat
+    )
+  })
+  await instance.waitForDisplayed('passwords-ablage')
+  ctx.step('a folder copy through the dialog; cancel makes nothing')
+
+  // An entry copy with the password as a reference and the history taken.
+  await updateEntry(instance, mail, { password: 'SECRET-MARKER-E2E-ORG-2' })
+  await clickCrumb(ctx, instance, 'root')
+  await instance.click(`passwords-list-folder-${home}`)
+  await contextMenu(instance, `passwords-entry-${mail}`)
+  await instance.click('passwords-menu-copy')
+  await instance.click('passwords-ablage-paste')
+  await instance.waitForDisplayed('passwords-copy-title')
+  await instance.click('passwords-copy-password-reference')
+  await instance.click('passwords-copy-history')
+  await instance.click('passwords-copy-confirm')
+  const copyId = (await ctx.waitFor('the copy of Mail', async () => {
+    const copy = (await overview(instance)).headers.find(
+      (h) => h.title !== 'Mail' && (h.title ?? '').startsWith('Mail'),
+    )
+    return copy?.id ?? false
+  })) as string
+  const revealed = async (id: string) =>
+    unwrap<{ value: string }>(
+      'passwords_reveal',
+      await instance.invoke('passwords_reveal', {
+        args: { itemId: id, field: { kind: 'password' } },
+      }),
+    ).value
+  assert.equal(await revealed(copyId), 'SECRET-MARKER-E2E-ORG-2')
+  await updateEntry(instance, mail, { password: 'SECRET-MARKER-E2E-ORG-3' })
+  assert.equal(await revealed(copyId), 'SECRET-MARKER-E2E-ORG-3')
+  assert.ok(
+    (await historyIds(instance, copyId)).length >= 3,
+    'the copy took the history',
+  )
+  ctx.step('an entry copy follows the original and took the history')
 })

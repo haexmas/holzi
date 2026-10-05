@@ -697,12 +697,12 @@ async fn restoring_emptying_and_deleting_for_good_are_for_the_user_alone() {
         for result in [
             f.service.restore(caller, vec![id_target(&seeded.s3)]).await,
             f.service
-                .delete_permanently(caller, vec![id_target(&seeded.s3)])
+                .delete_permanently(caller, vec![id_target(&seeded.s3)], false)
                 .await,
             f.service
                 .trash_targets(caller, vec![id_target(&seeded.s3)])
                 .await,
-            f.service.empty_trash(caller).await,
+            f.service.empty_trash(caller, false).await,
         ] {
             assert!(
                 matches!(result, Err(HolziError::PasswordsForbidden)),
@@ -739,7 +739,7 @@ async fn restoring_emptying_and_deleting_for_good_are_for_the_user_alone() {
         .expect("delete");
     assert_eq!(
         f.service
-            .delete_permanently(&Caller::User, vec![id_target(&seeded.s3)])
+            .delete_permanently(&Caller::User, vec![id_target(&seeded.s3)], false)
             .await
             .expect("for good"),
         1

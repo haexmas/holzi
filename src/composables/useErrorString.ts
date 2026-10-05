@@ -65,6 +65,15 @@ export function useErrorString() {
         const mib = typeof limit === 'number' ? Math.floor(limit / 1048576) : 0
         return t('errors.passwords.attachmentTooLarge', { limit: mib })
       }
+      // Spec 036 (contracts/tauri-commands.md §Fehlerarten): references and the copy.
+      if (kind === 'PasswordsReference') {
+        return reason === 'missing'
+          ? t('errors.passwords.referenceMissing')
+          : t('errors.passwords.referenceCycle')
+      }
+      if (kind === 'PasswordsReferenceCycle')
+        return t('errors.passwords.referenceCycleOnSave')
+      if (kind === 'PasswordsIntoTrash') return t('errors.passwords.intoTrash')
       if (kind === 'PasswordsImportFailed') {
         if (typeof reason === 'string' && reason.length > 0) {
           const key = `errors.passwords.importReason.${reason}`

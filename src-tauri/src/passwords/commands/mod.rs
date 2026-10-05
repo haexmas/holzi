@@ -5,6 +5,7 @@
 
 pub mod agent;
 pub mod attachments;
+pub mod copy;
 pub mod history;
 pub mod import;
 pub mod items;
@@ -12,6 +13,7 @@ pub mod organize;
 pub mod passkeys;
 pub mod presets;
 pub mod read;
+pub mod references;
 pub mod trash;
 pub mod usage;
 

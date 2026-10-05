@@ -126,6 +126,7 @@ impl Reader {
                 self.settings_seen = true;
             }
             let mut item = read_entry(&entry);
+            item.source_ref = Some(entry.id().to_string());
             item.history = read_history(&entry);
             item.group_ref = own_ref.map(str::to_string);
             item.trashed = in_bin;

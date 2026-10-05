@@ -302,3 +302,35 @@ pub fn build() -> Fixture {
         rs256,
     }
 }
+
+/// A small database with KeePass references (spec 036, FR-050): "Zweit" takes the password of
+/// "Konto" by id and its user name by a unique title, and its notes ask for a password by a text
+/// that two titles contain (stays text).
+pub fn with_references() -> Vec<u8> {
+    let mut db = Database::new();
+    {
+        let mut root = db.root_mut();
+        let konto = root
+            .add_entry()
+            .edit(|e| {
+                e.set_unprotected(fields::TITLE, "Konto");
+                e.set_unprotected(fields::USERNAME, "anna");
+                e.set_protected(fields::PASSWORD, format!("{MARKER}-konto"));
+            })
+            .id();
+        root.add_entry().edit(|e| {
+            e.set_unprotected(fields::TITLE, "Kontrolle");
+        });
+        let konto_hex = konto.uuid().simple().to_string().to_uppercase();
+        root.add_entry().edit(|e| {
+            e.set_unprotected(fields::TITLE, "Zweit");
+            e.set_unprotected(fields::USERNAME, "{REF:U@T:Konto}");
+            e.set_protected(fields::PASSWORD, format!("{{REF:P@I:{konto_hex}}}"));
+            e.set_unprotected(fields::NOTES, "see {REF:P@T:Kont}");
+        });
+    }
+    let mut bytes = Vec::new();
+    db.save(&mut bytes, key())
+        .expect("save the reference fixture");
+    bytes
+}

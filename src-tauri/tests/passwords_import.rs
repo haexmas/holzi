@@ -504,3 +504,52 @@ fn the_fixture_directory_holds_no_key_material() {
         let _ = params![];
     }
 }
+
+#[tokio::test]
+async fn keepass_references_become_placeholders_on_the_imported_entries() {
+    use holzi_lib::passwords::model::SecretField;
+    let f = fixture();
+    let kdbx = f.dir.path().join("references.kdbx");
+    std::fs::write(&kdbx, kdbx_fixture::with_references()).expect("write kdbx");
+    let key = f.dir.path().join("fixture.key");
+    std::fs::write(&key, KEY_FILE).expect("write key file");
+    let request = ImportRequest {
+        source: ImportSource::Keepass,
+        path: kdbx.to_string_lossy().into_owned(),
+        password: Some(Zeroizing::new(PASSWORD.to_string())),
+        key_file_path: Some(key.to_string_lossy().into_owned()),
+    };
+    let report = run(&f, request, OnDuplicate::Create).await.expect("import");
+    // By id and by a unique title: converted; by a title two entries contain: text.
+    assert_eq!(report.references_converted, 2);
+    assert_eq!(report.references_left_as_text, 1);
+    let (zweit, konto): (String, String) =
+        f.db.with_connection(|c| {
+            let id = |title: &str| -> Result<String, haex_crdt::rusqlite::Error> {
+                c.query_row(
+                    "SELECT id FROM haex_passwords_item_details WHERE title = ?1",
+                    params![title],
+                    |r| r.get(0),
+                )
+            };
+            Ok((id("Zweit")?, id("Konto")?))
+        })
+        .expect("ids");
+    let detail = f
+        .service
+        .get_item(&Caller::User, zweit.clone())
+        .await
+        .expect("zweit");
+    assert_eq!(
+        detail.header.username.as_deref(),
+        Some(format!("{{${konto}:username}}").as_str())
+    );
+    assert_eq!(detail.note.as_deref(), Some("see {REF:P@T:Kont}"));
+    let password = f
+        .service
+        .reveal(&Caller::User, zweit, SecretField::Password)
+        .await
+        .expect("reveal");
+    assert_eq!(password.value.as_str(), format!("{MARKER}-konto"));
+    assert!(!render_text(&report).contains(MARKER));
+}
