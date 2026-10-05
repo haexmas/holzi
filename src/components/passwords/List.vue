@@ -250,11 +250,13 @@ const { focusedId, tabStopId, keepFocus } = usePasswordsListKeys({
 
 const rowCount = computed(() => visibleIds.value.length)
 
-// Another place starts with one page, at the top (the list stays mounted between places).
+// Another place starts with one page, at the top (the list stays mounted between places). The
+// focus starts anew as well: the entry focused before may lie far past the first page there.
 watch(
   () => [router.route.path, router.route.query.q, router.route.query.tag],
   () => {
     shownCount.value = PAGE
+    focusedId.value = null
     area.value?.scrollTo({ top: 0 })
   },
 )
@@ -366,9 +368,11 @@ watch(focusedId, (id) => {
             :label="folders.length ? t('passwords.list.entries') : undefined"
           >
             <PasswordsListItem
-              v-for="header in shown"
+              v-for="(header, index) in shown"
               :key="header.id"
               :header="header"
+              :position="index + 1"
+              :count="visible.length"
               :selected="selection.isIdSelected(header.id)"
               :selecting="selection.active"
               :dimmed="clipboard.dimmed.has(header.id)"

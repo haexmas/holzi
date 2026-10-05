@@ -25,6 +25,10 @@ const props = defineProps<{
   tabStop?: boolean
   /** Builds the menu of a row when it opens; the same function for every row. */
   menuFor: (id: string) => readonly MenuEntry[]
+  /** Position and size of the whole list for assistive technology: only a page of the rows is
+   * mounted, so the list itself would announce too few. */
+  position?: number
+  count?: number
 }>()
 
 const emit = defineEmits<{
@@ -68,6 +72,8 @@ function onDragStart(event: DragEvent) {
   >
     <li
       class="group flex items-center pr-2 hover:bg-foreground/5"
+      :aria-posinset="position"
+      :aria-setsize="count"
       :class="[
         selected ? 'bg-primary/10' : '',
         dimmed ? 'opacity-50 grayscale' : '',
