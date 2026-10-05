@@ -12,7 +12,7 @@ use super::frames::{FrameSession, FrameSource};
 use super::{database, methods, permissions};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
-use crate::extensions::{fs, kv, logs, notifications, passwords, web};
+use crate::extensions::{fs, kv, logs, mail, notifications, passwords, web};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -268,11 +268,58 @@ pub static METHODS: &[Method] = &[
         handler: passwords::delete,
         module: passwords::MODULE,
     },
+    Method {
+        name: "extension_mail_list_mailboxes",
+        handler: mail::commands::list_mailboxes,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_fetch_envelopes",
+        handler: mail::commands::fetch_envelopes,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_fetch_message",
+        handler: mail::commands::fetch_message,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_fetch_attachment",
+        handler: mail::commands::fetch_attachment,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_set_flags",
+        handler: mail::commands::set_flags,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_move_messages",
+        handler: mail::commands::move_messages,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_append_message",
+        handler: mail::commands::append_message,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_send_message",
+        handler: mail::commands::send_message,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_build_rfc822",
+        handler: mail::commands::build_rfc822,
+        module: mail::commands::MODULE,
+    },
 ];
 
 /// Methods of later deliveries (research R1): they answer 8001 until they land.
 const LATER: &[&str] = &[
     "extension_remote_storage_",
+    // The watch of new messages (`extension_mail_start_watch`, `_stop_watch`) waits for a
+    // decision on where its credentials come from (T108).
     "extension_mail_",
     "extension_shell_",
 ];
