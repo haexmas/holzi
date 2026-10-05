@@ -104,6 +104,7 @@ pub fn reveal(q: &mut impl Query, item_id: &str, field: &SecretField) -> Result<
         SecretField::Username => resolved_column(q, item_id, "username", Field::Username)?,
         SecretField::Url => resolved_column(q, item_id, "url", Field::Url)?,
         SecretField::Note => resolved_column(q, item_id, "note", Field::Note)?,
+        SecretField::StoredPassword => column(q, item_id, "password")?,
     };
     Ok(RevealedSecret { value })
 }
@@ -115,6 +116,8 @@ pub fn copy_value(q: &mut impl Query, item_id: &str, field: &CopyField) -> Resul
         CopyField::Password => resolved_column(q, item_id, "password", Field::Password)?,
         CopyField::KeyValue { id } => resolved_key_value(q, item_id, id)?,
         CopyField::Totp => Zeroizing::new(totp_code(q, item_id, unix_now())?.code),
+        CopyField::Url => resolved_column(q, item_id, "url", Field::Url)?,
+        CopyField::Note => resolved_column(q, item_id, "note", Field::Note)?,
     };
     Ok(Copied(value))
 }

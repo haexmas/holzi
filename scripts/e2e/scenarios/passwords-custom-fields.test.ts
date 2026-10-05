@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import { createAndUnlock, unwrap } from '../lib/flows.ts'
-import { KEY } from '../lib/settings.ts'
 import { exists } from '../lib/sync-ui.ts'
 import {
   activeTab,
@@ -56,6 +55,7 @@ scenario('passwords-custom-fields', {}, async (ctx) => {
   await openPasswords(instance)
 
   await instance.click('passwords-new')
+  await instance.click('passwords-new-entry')
   await instance.waitForDisplayed('passwords-editor')
   await instance.type('passwords-field-title', 'Bank')
   await instance.type('passwords-field-password', 'SECRET-MARKER-E2E-PW')
@@ -89,24 +89,29 @@ scenario('passwords-custom-fields', {}, async (ctx) => {
   assert.equal(await revealKeyValue(instance, id, pinId), PIN)
   ctx.step('fields saved with a new entry')
 
-  // Revealing the stored password while editing does not save and leave.
+  // The editor holds the stored password and the stored custom values in plain fields.
   await instance.click('passwords-edit')
   await instance.waitForDisplayed('passwords-editor')
   await selectTab(instance, 'details')
-  await instance.type('passwords-reveal-password', KEY.enter)
-  await ctx.waitFor('the password to show', async () =>
+  await ctx.waitFor('the stored password in its field', async () =>
     instance.exec<boolean>(
-      `return document.querySelector('[data-testid="passwords-value-password"]').textContent.includes('SECRET-MARKER-E2E-PW')`,
+      `return document.querySelector('[data-testid="passwords-field-password"]').value.includes('SECRET-MARKER-E2E-PW')`,
     ),
   )
-  await expectStillEditing(instance, 'revealing the password')
-  ctx.step('reveal stays in the editor')
+  ctx.step('the editor shows the stored password')
 
   // Editing: add a field, remove the second, leave PIN untouched.
   await selectTab(instance, 'extra')
   await ctx.waitFor(
     'the Extra tab',
     async () => (await activeTab(instance)) === 'extra',
+  )
+  assert.equal(
+    await instance.exec<string>(
+      `return document.querySelector('[data-testid="passwords-kv-value-0"]').value`,
+    ),
+    PIN,
+    'the stored custom value is in its field',
   )
   await instance.click('passwords-kv-add')
   await instance.waitForDisplayed('passwords-kv-key-2')

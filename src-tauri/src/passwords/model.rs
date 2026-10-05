@@ -68,13 +68,16 @@ pub enum OtpState {
     Invalid,
 }
 
-/// A custom field in the detail view: its name, never its value.
+/// A custom field in the detail view: its name and its stored value with the placeholders as they
+/// are. Custom values show unmasked in the window (amends spec 034 FR-005); a placeholder's
+/// resolved value still comes only through `passwords_reveal`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(rename_all = "camelCase")]
 pub struct KeyValueView {
     pub id: String,
     pub key: Option<String>,
+    pub value: Option<String>,
     pub has_value: bool,
 }
 
@@ -418,6 +421,9 @@ pub enum SecretField {
     Username,
     Url,
     Note,
+    /// The stored password with its placeholders unresolved, for the editor, which shows the
+    /// password in a plain field and must write placeholders back as they are.
+    StoredPassword,
 }
 
 /// A secret on its way to the user's eyes: the one type that serialises a value to the webview.
@@ -464,6 +470,8 @@ pub enum CopyField {
     KeyValue {
         id: String,
     },
+    Url,
+    Note,
 }
 
 /// The current TOTP code of an entry, computed in Rust (FR-003).

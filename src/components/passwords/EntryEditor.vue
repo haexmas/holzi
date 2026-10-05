@@ -4,8 +4,8 @@
  * US1): create at `/entry/new`, edit at `/entry/:id?edit`, in the tabs Details and Extra (the
  * fields live in `EditorDetails.vue` and `EditorExtra.vue`; Verlauf is for the saved entry and is
  * not offered here). The title is optional. A save that fails at a field jumps to the tab holding
- * it. The password area sends a password only when it was replaced; the custom fields likewise
- * keep their stored value until the user types a new one. A save that finds the entry changed or
+ * it. The password and the custom values load as stored (placeholders unresolved) and are sent
+ * only when they changed. A save that finds the entry changed or
  * deleted meanwhile asks what to do instead of overwriting (`ConflictDialog`), and leaving with
  * unsaved changes asks too (`UnsavedDialog`). The draft is a local object that the quiet reload of
  * the store never touches.
@@ -81,8 +81,12 @@ async function loadAsync() {
   if (props.itemId === null) return
   loading.value = true
   try {
-    detail.value = await getItemAsync(props.itemId)
-    initial.value = draftFromDetail(detail.value)
+    const [loaded, password] = await Promise.all([
+      getItemAsync(props.itemId),
+      revealAsync(props.itemId, { kind: 'storedPassword' }),
+    ])
+    detail.value = loaded
+    initial.value = draftFromDetail(loaded, password.value)
     draft.value = cloneDraft(initial.value)
     loadError.value = null
   } catch (cause) {
@@ -193,17 +197,14 @@ function discardAndLeave() {
   leave()
 }
 
-/** The draft with the stored values of everything the user did not touch, so it can become a new
- * entry. A deleted entry cannot be read any more; those values are then not part of it. */
+/** The draft with the stored TOTP secret if the user did not touch it (every other value is in the
+ * draft already), so it can become a new entry. A deleted entry cannot be read any more; the
+ * secret is then not part of it. */
 async function materialiseAsync(): Promise<Draft> {
   const filled = cloneDraft(draft.value)
   const current = detail.value
   if (props.itemId === null || !current || conflict.value === 'deleted')
     return filled
-  if (filled.password.mode === 'keep' && current.hasPassword) {
-    const revealed = await revealAsync(props.itemId, { kind: 'password' })
-    filled.password = { mode: 'set', value: revealed.value }
-  }
   if (filled.otp.mode === 'keep' && current.hasOtpSecret) {
     const revealed = await revealAsync(props.itemId, { kind: 'otpSecret' })
     filled.otp = {
@@ -212,15 +213,6 @@ async function materialiseAsync(): Promise<Draft> {
       digits: current.otpDigits,
       period: current.otpPeriod,
       algorithm: current.otpAlgorithm,
-    }
-  }
-  for (const field of filled.keyValues) {
-    if (field.id !== null && field.value === null && field.hasStoredValue) {
-      const revealed = await revealAsync(props.itemId, {
-        kind: 'keyValue',
-        id: field.id,
-      })
-      field.value = revealed.value
     }
   }
   return filled

@@ -56,6 +56,10 @@ export function usePasswords() {
   const copyFieldAsync = (itemId: string, field: CopyField) =>
     invoke<CopyResult>('passwords_copy_field', { args: { itemId, field } })
 
+  /** A text the window holds already (an editor value), with the clearing of every other copy. */
+  const copyTextAsync = (text: string) =>
+    invoke<CopyResult>('passwords_copy_text', { args: { text } })
+
   const createItemAsync = (input: ItemInput, groupId?: string) =>
     invoke<CreateItemResult>('passwords_create_item', {
       args: { input, groupId },
@@ -213,6 +217,11 @@ export function usePasswords() {
       args: { snapshotId, field },
     })
 
+  const historyCopyAsync = (snapshotId: string, field: HistorySecret) =>
+    invoke<CopyResult>('passwords_history_copy', {
+      args: { snapshotId, field },
+    })
+
   const historyRestoreAsync = (
     itemId: string,
     snapshotId: string,
@@ -236,6 +245,7 @@ export function usePasswords() {
     historyListAsync,
     historyGetAsync,
     historyRevealAsync,
+    historyCopyAsync,
     historyRestoreAsync,
     presetListAsync,
     presetSaveAsync,
@@ -253,6 +263,7 @@ export function usePasswords() {
     revealAsync,
     totpCodeAsync,
     copyFieldAsync,
+    copyTextAsync,
     createItemAsync,
     updateItemAsync,
     renamePasskeyAsync,

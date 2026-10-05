@@ -2,10 +2,9 @@
 /**
  * The tab Details of an entry in view mode (spec 036, FR-001, FR-005; fields from spec 034 FR-002):
  * username, password (masked until asked), address, expiry, the live TOTP block, the note and the
- * tags. Empty fields are not shown. Copying goes through the parent (`copy`), which also shows the
- * toast; no value passes through here except what the masked value asks for.
+ * tags. Empty fields are not shown; every field copies (`usePasswordsCopy`), a stored value by its
+ * field, so no value passes through here except what the masked value asks for.
  */
-import type { CopyField } from '@bindings/CopyField'
 import type { ItemDetail } from '@bindings/ItemDetail'
 
 defineProps<{
@@ -13,13 +12,13 @@ defineProps<{
   detail: ItemDetail
 }>()
 const emit = defineEmits<{
-  copy: [field: CopyField, label: string]
   edit: []
   removeOtp: []
 }>()
 
 const { t } = useI18n()
 const { revealAsync } = usePasswords()
+const { copyField, copyText } = usePasswordsCopy()
 </script>
 
 <template>
@@ -49,22 +48,21 @@ const { revealAsync } = usePasswords()
         <span
           v-else
           class="min-w-0 truncate"
+          data-no-swipe
           data-testid="passwords-value-username"
           >{{ detail.username }}</span
         >
-        <UiButton
-          variant="ghost"
-          size="icon"
-          :aria-label="
-            t('passwords.copy', { field: t('passwords.fields.username') })
-          "
+        <PasswordsCopyButton
+          :label="t('passwords.fields.username')"
           data-testid="passwords-copy-username"
-          @click="
-            emit('copy', { kind: 'username' }, t('passwords.fields.username'))
+          @copy="
+            copyField(
+              itemId,
+              { kind: 'username' },
+              t('passwords.fields.username'),
+            )
           "
-        >
-          <Icon name="lucide:copy" class="size-4" />
-        </UiButton>
+        />
       </SettingsRow>
       <SettingsRow :title="t('passwords.fields.password')">
         <template v-if="detail.references.password.length" #below>
@@ -83,20 +81,18 @@ const { revealAsync } = usePasswords()
           :present="detail.hasPassword"
           :label="t('passwords.fields.password')"
         />
-        <UiButton
+        <PasswordsCopyButton
           v-if="detail.hasPassword"
-          variant="ghost"
-          size="icon"
-          :aria-label="
-            t('passwords.copy', { field: t('passwords.fields.password') })
-          "
+          :label="t('passwords.fields.password')"
           data-testid="passwords-copy-password"
-          @click="
-            emit('copy', { kind: 'password' }, t('passwords.fields.password'))
+          @copy="
+            copyField(
+              itemId,
+              { kind: 'password' },
+              t('passwords.fields.password'),
+            )
           "
-        >
-          <Icon name="lucide:copy" class="size-4" />
-        </UiButton>
+        />
       </SettingsRow>
       <SettingsRow v-if="detail.url" :title="t('passwords.fields.url')">
         <template v-if="detail.references.url.length" #below>
@@ -119,15 +115,25 @@ const { revealAsync } = usePasswords()
         <span
           v-else
           class="min-w-0 truncate"
+          data-no-swipe
           data-testid="passwords-value-url"
           >{{ detail.url }}</span
         >
+        <PasswordsCopyButton
+          :label="t('passwords.fields.url')"
+          data-testid="passwords-copy-url"
+          @copy="copyField(itemId, { kind: 'url' }, t('passwords.fields.url'))"
+        />
       </SettingsRow>
       <SettingsRow
         v-if="detail.expiresAt"
         :title="t('passwords.fields.expires')"
       >
-        <span>{{ detail.expiresAt }}</span>
+        <span data-no-swipe>{{ detail.expiresAt }}</span>
+        <PasswordsCopyButton
+          :label="t('passwords.fields.expires')"
+          @copy="copyText(detail.expiresAt, t('passwords.fields.expires'))"
+        />
       </SettingsRow>
     </SettingsGroup>
 
@@ -139,7 +145,9 @@ const { revealAsync } = usePasswords()
         <PasswordsTotpCode
           :item-id="itemId"
           :state="detail.otpState"
-          @copy="emit('copy', { kind: 'totp' }, t('passwords.fields.totp'))"
+          @copy="
+            copyField(itemId, { kind: 'totp' }, t('passwords.fields.totp'))
+          "
           @replace="emit('edit')"
           @remove="emit('removeOtp')"
         />
@@ -148,9 +156,18 @@ const { revealAsync } = usePasswords()
 
     <SettingsGroup v-if="detail.note" :label="t('passwords.fields.note')">
       <li
-        class="px-4 py-3 text-sm whitespace-pre-wrap"
+        class="relative px-4 py-3 pr-14 text-sm whitespace-pre-wrap"
+        data-no-swipe
         data-testid="passwords-value-note"
       >
+        <PasswordsCopyButton
+          class="absolute top-1.5 right-2"
+          :label="t('passwords.fields.note')"
+          data-testid="passwords-copy-note"
+          @copy="
+            copyField(itemId, { kind: 'note' }, t('passwords.fields.note'))
+          "
+        />
         <template v-if="detail.references.note.length">
           <PasswordsReferenceValue
             :marks="detail.references.note"

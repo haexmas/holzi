@@ -478,10 +478,15 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-005**: Passwörter, TOTP-Secrets, eigene Felder und Passkey-Schlüssel MÜSSEN
   standardmäßig verdeckt sein; Aufdecken MUSS eine bewusste Handlung des Nutzers sein (Halten
   mit der Maus, Tippen auf Mobilgeräten) und MUSS beim Verlassen des Eintrags enden.
+  *Geändert 2026-10-05:* Die Werte eigener Felder zeigt die Ansicht unverdeckt; im Editor
+  stehen Passwort und eigene Felder als gespeicherte Werte (Platzhalter unaufgelöst) in
+  normalen Eingabefeldern, ohne „Ersetzen“. Aufgelöste Platzhalter bleiben verdeckt.
 - **FR-006**: Das System MUSS Benutzername, Passwort und TOTP-Code in die Zwischenablage
   kopieren können und sie nach einer einstellbaren Zeit leeren (Standard 30 Sekunden), sofern
   sie noch den kopierten Wert enthält; die Einstellung speichert bei Auswahl, ohne Knopf zum
   Übernehmen.
+  *Erweitert 2026-10-05:* Jedes Feld hat einen Kopierknopf, in Ansicht, Editor und Verlauf;
+  jede Kopie läuft durch Rust und wird gleich geleert.
 - **FR-007**: Das System MUSS Einträge nach Titel, Benutzername, Adresse und Tag-Namen
   durchsuchen und in einer Liste und einem Baum mit Ordnern darstellen; Geheimnisse und
   Notizen DÜRFEN nicht Gegenstand der Suche sein.

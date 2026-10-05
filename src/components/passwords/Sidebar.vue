@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * The sidebar of the password manager (spec 034, US2, FR-009, FR-011): all entries, the folder
- * tree with expand and collapse, the tags with their counts, the trash and the actions for folders
- * and tags. Folders reorder by drag and drop and by the menu actions "up" and "down" (also with
+ * tree with expand and collapse, the trash and the actions for folders and tags (the tag filter
+ * sits beside the search, `TagFilter.vue`). Folders reorder by drag and drop and by the menu actions "up" and "down" (also with
  * keyboard and touch); entries dragged from the list move into a folder. Only ids travel.
  */
 import { toast } from 'vue-sonner'
@@ -250,37 +250,6 @@ async function onRootDrop(event: DragEvent) {
         @menu="runFolderCommand"
       />
     </ul>
-
-    <section v-if="store.displayTags.length" class="flex flex-col gap-1">
-      <h2 class="px-3 text-xs font-semibold text-muted-foreground uppercase">
-        {{ t('passwords.fields.tags') }}
-      </h2>
-      <ul class="flex flex-col gap-0.5">
-        <li v-for="tag in store.displayTags" :key="tag.id">
-          <button
-            type="button"
-            class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
-            :class="
-              activeTag !== null && tag.ids.includes(activeTag)
-                ? 'bg-foreground/10 font-medium'
-                : ''
-            "
-            :data-testid="`passwords-tag-filter-${tag.id}`"
-            @click="go(`/?tag=${tag.id}`)"
-          >
-            <Icon
-              name="lucide:tag"
-              class="size-4 shrink-0"
-              :style="tag.color ? { color: tag.color } : undefined"
-            />
-            <span class="min-w-0 flex-1 truncate">{{ tag.name }}</span>
-            <span class="text-xs text-muted-foreground">{{
-              tag.itemCount
-            }}</span>
-          </button>
-        </li>
-      </ul>
-    </section>
 
     <div class="mt-auto flex flex-col gap-1">
       <PasswordsEntryMenu

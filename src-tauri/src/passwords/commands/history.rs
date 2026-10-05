@@ -1,12 +1,12 @@
 //! History commands (spec 034, US4, FR-017, `contracts/tauri-commands.md` §Verlauf). Each calls
 //! only the service as `Caller::User`. A state is read masked; a secret of a state comes only
-//! through `passwords_history_reveal`.
+//! through `passwords_history_reveal` (or goes to the clipboard through `passwords_history_copy`).
 
 use serde::Deserialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 use ts_rs::TS;
 
-use super::read::ItemIdArgs;
+use super::read::{copy_to_clipboard, CopyResult, ItemIdArgs};
 use super::service;
 use crate::error::Result;
 use crate::passwords::access::Caller;
@@ -67,6 +67,20 @@ pub async fn passwords_history_reveal(
     service(&state)?
         .history_reveal(&Caller::User, args.snapshot_id, args.field)
         .await
+}
+
+/// Copies a secret of a state to the clipboard; like `passwords_copy_field`, the value is not
+/// returned.
+#[tauri::command]
+pub async fn passwords_history_copy(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: HistoryRevealArgs,
+) -> Result<CopyResult> {
+    let secret = service(&state)?
+        .history_reveal(&Caller::User, args.snapshot_id, args.field)
+        .await?;
+    copy_to_clipboard(app, &state, &secret.value).await
 }
 
 #[tauri::command]

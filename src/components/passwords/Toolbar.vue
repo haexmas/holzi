@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * The first row of the password manager frame (spec 034, FR-007, FR-039): the sidebar button, the
- * search field bound to `?q=` of the place, the button for a new entry and the settings menu.
+ * search field bound to `?q=` of the place with the tag filter beside it, the settings menu and
+ * "Neu", which creates an entry or a folder (in the open folder).
  * The search text is the only free text a place carries; it is never a secret (the search looks
  * at title, username, URL and tag names only).
  */
@@ -49,6 +50,14 @@ const sidebarLabel = computed(() =>
 )
 
 const settingsOpen = ref(false)
+
+const folderDialog = ref(false)
+/** A new folder goes into the folder the list shows, else to the top level. */
+const openFolderId = computed(() =>
+  router.route.path.startsWith('/folder/')
+    ? (router.route.params.id ?? null)
+    : null,
+)
 </script>
 
 <template>
@@ -79,6 +88,7 @@ const settingsOpen = ref(false)
       @update:model-value="onUpdate"
       @keydown.esc.prevent.stop="clear"
     />
+    <PasswordsTagFilter />
     <div class="ml-auto flex items-center gap-1">
       <UiButton
         variant="ghost"
@@ -91,16 +101,42 @@ const settingsOpen = ref(false)
       >
         <Icon name="lucide:settings-2" class="size-4" />
       </UiButton>
-      <UiButton
-        class="shrink-0"
-        :aria-label="t('passwords.new')"
-        data-testid="passwords-new"
-        @click="router.push('/entry/new')"
-      >
-        <Icon name="lucide:plus" class="size-4" />
-        <span class="hidden @md:inline">{{ t('passwords.new') }}</span>
-      </UiButton>
+      <ShadcnDropdownMenu>
+        <ShadcnDropdownMenuTrigger as-child>
+          <UiButton
+            class="shrink-0"
+            :aria-label="t('passwords.new')"
+            data-testid="passwords-new"
+          >
+            <Icon name="lucide:plus" class="size-4" />
+            <span class="hidden @md:inline">{{ t('passwords.new') }}</span>
+          </UiButton>
+        </ShadcnDropdownMenuTrigger>
+        <ShadcnDropdownMenuContent align="end">
+          <ShadcnDropdownMenuItem
+            class="gap-2"
+            data-testid="passwords-new-entry"
+            @select="router.push('/entry/new')"
+          >
+            <Icon name="lucide:key-round" class="size-4" />
+            {{ t('passwords.newMenu.entry') }}
+          </ShadcnDropdownMenuItem>
+          <ShadcnDropdownMenuItem
+            class="gap-2"
+            data-testid="passwords-new-folder-menu"
+            @select="folderDialog = true"
+          >
+            <Icon name="lucide:folder-plus" class="size-4" />
+            {{ t('passwords.newMenu.folder') }}
+          </ShadcnDropdownMenuItem>
+        </ShadcnDropdownMenuContent>
+      </ShadcnDropdownMenu>
     </div>
     <PasswordsClipboardSetting v-model:open="settingsOpen" />
+    <PasswordsFolderDialog
+      v-model:open="folderDialog"
+      :group="null"
+      :parent-id="openFolderId"
+    />
   </div>
 </template>

@@ -1,35 +1,23 @@
 <script setup lang="ts">
 /**
  * The custom fields of the entry editor (spec 034, FR-002): name and value per field, add and
- * remove. The value of a stored field is not loaded: it shows a placeholder until the user types a
- * new one, and an untouched field keeps its stored value (partial update, research R7).
+ * remove. The values are plain, visible fields holding the stored values with their placeholders.
  */
-import type { KeyValueReferences } from '@bindings/KeyValueReferences'
 import type { KeyValueDraft } from '~/lib/passwords/draft'
 
-const props = defineProps<{
+defineProps<{
   /** The entry being edited, for the reference picker (spec 036); `null` for a new one. */
   itemId?: string | null
-  /** The marks of the stored values, by field id. */
-  references?: readonly KeyValueReferences[]
 }>()
 
 const fields = defineModel<KeyValueDraft[]>({ required: true })
 
-function storedMarks(id: string | null) {
-  return id === null
-    ? []
-    : (props.references?.find((entry) => entry.id === id)?.marks ?? [])
-}
-
 const { t } = useI18n()
 const fieldLabels = useFieldLabels()
+const { copyText } = usePasswordsCopy()
 
 function add() {
-  fields.value = [
-    ...fields.value,
-    { id: null, key: '', value: '', hasStoredValue: false },
-  ]
+  fields.value = [...fields.value, { id: null, key: '', value: '' }]
 }
 
 function remove(index: number) {
@@ -66,19 +54,29 @@ function setValue(index: number, value: string) {
         />
       </div>
       <div class="min-w-32 flex-1">
-        <UiInputPassword
-          :model-value="field.value ?? ''"
-          :labels="fieldLabels.password.value"
+        <UiInput
+          :model-value="field.value"
+          :labels="fieldLabels.input.value"
           autocomplete="off"
-          :placeholder="
-            field.value === null && field.hasStoredValue
-              ? t('passwords.editor.keepValue')
-              : t('passwords.editor.fieldValue')
-          "
+          :placeholder="t('passwords.editor.fieldValue')"
           :aria-label="t('passwords.editor.fieldValue')"
           :data-testid="`passwords-kv-value-${index}`"
           @update:model-value="setValue(index, String($event ?? ''))"
-        />
+        >
+          <template #append>
+            <PasswordsCopyButton
+              v-if="field.value"
+              :label="field.key"
+              @copy="copyText(field.value, field.key)"
+            />
+            <PasswordsReferenceInsert
+              :text="field.value"
+              :item-id="itemId ?? null"
+              :kind="`kv-${index}`"
+              @update:text="setValue(index, $event)"
+            />
+          </template>
+        </UiInput>
       </div>
       <UiButton
         type="button"
@@ -94,8 +92,6 @@ function setValue(index: number, value: string) {
       <PasswordsReferenceField
         class="basis-full"
         :text="field.value"
-        :stored-marks="storedMarks(field.id)"
-        :item-id="itemId ?? null"
         :kind="`kv-${index}`"
         @update:text="setValue(index, $event)"
       />

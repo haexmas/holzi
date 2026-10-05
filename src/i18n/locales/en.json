@@ -1126,6 +1126,14 @@
     "expired": "Expired",
     "expiredOn": "Expired on {date}",
     "new": "New",
+    "newMenu": {
+      "entry": "Key",
+      "folder": "Folder"
+    },
+    "tagFilter": {
+      "label": "Filter by tag",
+      "all": "All tags"
+    },
     "back": "Back",
     "edit": "Edit",
     "save": "Save",
@@ -1183,7 +1191,6 @@
       "replace": "Replace",
       "fieldName": "Name",
       "fieldValue": "Value",
-      "keepValue": "(unchanged)",
       "addField": "Add field",
       "removeField": "Remove field",
       "otpLabel": "TOTP secret or otpauth address",
