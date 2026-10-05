@@ -353,6 +353,18 @@ fn each_server_and_port_needs_its_own_permission() {
         "a fetch grant does not send"
     );
     assert!(s.server.lock().unwrap().sent.is_empty());
+
+    s.grant("send", "*");
+    s.call(
+        "extension_mail_send_message",
+        json!({ "smtp": s.smtp(), "message": outgoing("x") }),
+    )
+    .unwrap();
+    assert_eq!(
+        s.server.lock().unwrap().sent.len(),
+        1,
+        "`*` covers every server"
+    );
 }
 
 #[test]
