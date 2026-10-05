@@ -91,6 +91,33 @@ export async function importExport(
   }
 }
 
+/** Attaches files to an entry through the command, as the file dialog would: each is written to a
+ * fresh folder of the device, which is removed again afterwards. Returns the attachment ids in
+ * order. */
+export async function addAttachments(
+  instance: Pick<FlowInstance, 'invoke'>,
+  itemId: string,
+  files: readonly { name: string; content: string | Uint8Array }[],
+): Promise<string[]> {
+  const folder = deviceFiles('e2e-passwords-attachments-')
+  try {
+    const ids: string[] = []
+    for (const file of files) {
+      folder.write(file.name, file.content)
+      const view = unwrap<{ id: string }>(
+        'passwords_attachment_add',
+        await instance.invoke('passwords_attachment_add', {
+          args: { itemId, path: folder.path(file.name) },
+        }),
+      )
+      ids.push(view.id)
+    }
+    return ids
+  } finally {
+    folder.remove()
+  }
+}
+
 /** The folder of an entry, or the parent of a folder, as the backend holds it (`null` is the top). */
 export async function placeOf(
   instance: Pick<FlowInstance, 'invoke'>,
@@ -353,4 +380,31 @@ export async function historyIds(
     'passwords_history_list',
     await instance.invoke('passwords_history_list', { args: { itemId: id } }),
   ).map((state) => state.id)
+}
+
+/** How far anything in the password manager frame sticks out to the right or scrolls sideways, in
+ * pixels (FR-042: nothing at 360 px). Content clipped by an ancestor does not count. */
+export async function horizontalOverflow(
+  instance: FlowInstance,
+): Promise<number> {
+  return instance.exec<number>(
+    `const frame = document.querySelector('[data-testid="passwords-search"]').closest('[data-wm-window-id]')
+     const right = frame.getBoundingClientRect().right
+     const clipped = (el) => {
+       for (let node = el.parentElement; node && node !== frame; node = node.parentElement) {
+         if (getComputedStyle(node).overflowX !== 'visible') return true
+       }
+       return false
+     }
+     let worst = 0
+     for (const el of frame.querySelectorAll('*')) {
+       const style = getComputedStyle(el)
+       if (style.visibility === 'hidden') continue
+       if (style.overflowX === 'auto' || style.overflowX === 'scroll') {
+         worst = Math.max(worst, el.scrollWidth - el.clientWidth)
+       }
+       if (!clipped(el)) worst = Math.max(worst, el.getBoundingClientRect().right - right)
+     }
+     return worst`,
+  )
 }

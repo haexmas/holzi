@@ -69,6 +69,21 @@ export function imageMime(fileName: string): string | null {
   return IMAGE_MIME[fileName.slice(dot + 1).toLowerCase()] ?? null
 }
 
+/** How an attachment is shown (spec 036, FR-037): an image gets a thumbnail and the lightbox, the
+ * others a type icon and "Speichern unter". SVG counts as other: it can carry script. */
+export type FileKind = 'image' | 'pdf' | 'text' | 'other'
+
+const TEXT_EXTENSIONS = new Set(['txt', 'md', 'json', 'csv', 'log'])
+
+/** The kind of an attachment by its file name. */
+export function fileKind(fileName: string): FileKind {
+  if (imageMime(fileName)) return 'image'
+  const dot = fileName.lastIndexOf('.')
+  const extension = dot < 0 ? '' : fileName.slice(dot + 1).toLowerCase()
+  if (extension === 'pdf') return 'pdf'
+  return TEXT_EXTENSIONS.has(extension) ? 'text' : 'other'
+}
+
 const RELATIVE_STEPS: readonly [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 3600],
   ['month', 30 * 24 * 3600],
