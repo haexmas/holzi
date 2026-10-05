@@ -109,6 +109,7 @@ pub async fn extension_frame_close(
         let last = host.frames.of_extension(closed.extension_id).is_empty();
         host.fs.frame_closed(&frame, closed.extension_id, last);
         if last {
+            host.mail_watches.end_all(closed.extension_id);
             host.shells.end_all(closed.extension_id);
         }
     }
