@@ -190,7 +190,11 @@ scenario('extension-lifecycle', { timeoutMs: 300_000 }, async (ctx) => {
     { timeoutMs: 10_000 },
   )
   assert.equal((await listed(page, probe))?.enabled, false)
-  assert.equal(await inLauncher(page, probe), false, 'not in the launcher')
+  await ctx.waitFor(
+    'the extension gone from the launcher',
+    async () => !(await inLauncher(page, probe)),
+    { timeoutMs: 10_000 },
+  )
   ctx.step('disabled: its tab closed, not in the launcher')
 
   await page.click('extension-enabled')
@@ -199,7 +203,12 @@ scenario('extension-lifecycle', { timeoutMs: 300_000 }, async (ctx) => {
     async () => (await listed(page, probe))?.enabled === true,
     { timeoutMs: 10_000 },
   )
-  assert.equal(await inLauncher(page, probe), true, 'in the launcher again')
+  // The launcher reloads its list after holzi stored the change.
+  await ctx.waitFor(
+    'the extension in the launcher again',
+    () => inLauncher(page, probe),
+    { timeoutMs: 10_000 },
+  )
   await page.click('extension-remove')
   await page.click('extension-remove-keep')
   await ctx.waitFor(
