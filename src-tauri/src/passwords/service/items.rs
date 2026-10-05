@@ -255,7 +255,8 @@ impl PasswordsService {
 
     /// Applies a partial update if the token `expected_updated_at` is still current. For a caller
     /// with a tag scope the entry must lie in the scope before and after, tags outside the scope
-    /// stay as they are and none can be added (Z7, Z12).
+    /// stay as they are and none can be added (Z7, Z12); a list of custom fields keeps those the
+    /// caller cannot see (spec 036, FR-047).
     pub async fn update_item(
         &self,
         caller: &Caller,
@@ -304,6 +305,15 @@ impl PasswordsService {
                     caller: &caller,
                     grants: &grants,
                 };
+                // Spec 036, FR-047: a caller from outside that replaces the custom fields keeps
+                // those it cannot see, without learning that they exist.
+                if !matches!(caller, Caller::User) {
+                    if let Some(fields) = patch.key_values.as_mut() {
+                        let hidden = reveal::hidden_key_values(tx, reader, &item_id)?;
+                        fields.retain(|field| !hidden.iter().any(|kept| kept.id == field.id));
+                        fields.extend(hidden);
+                    }
+                }
                 let set = [&patch.username, &patch.password, &patch.url, &patch.note]
                     .into_iter()
                     .filter_map(|value| match value {

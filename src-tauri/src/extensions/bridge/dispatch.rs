@@ -12,7 +12,7 @@ use super::frames::{FrameSession, FrameSource};
 use super::{database, methods, permissions};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
-use crate::extensions::{fs, kv, logs, notifications, web};
+use crate::extensions::{fs, kv, logs, notifications, passwords, web};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -243,11 +243,35 @@ pub static METHODS: &[Method] = &[
         handler: web::check_web,
         module: web::MODULE,
     },
+    Method {
+        name: "extension_password_list",
+        handler: passwords::list,
+        module: passwords::MODULE,
+    },
+    Method {
+        name: "extension_password_read",
+        handler: passwords::read,
+        module: passwords::MODULE,
+    },
+    Method {
+        name: "extension_password_create",
+        handler: passwords::create,
+        module: passwords::MODULE,
+    },
+    Method {
+        name: "extension_password_update",
+        handler: passwords::update,
+        module: passwords::MODULE,
+    },
+    Method {
+        name: "extension_password_delete",
+        handler: passwords::delete,
+        module: passwords::MODULE,
+    },
 ];
 
 /// Methods of later deliveries (research R1): they answer 8001 until they land.
 const LATER: &[&str] = &[
-    "extension_password_",
     "extension_remote_storage_",
     "extension_mail_",
     "extension_shell_",

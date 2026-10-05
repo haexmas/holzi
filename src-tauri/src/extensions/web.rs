@@ -7,7 +7,6 @@
 //! `Proxy-Authorization` are dropped. Only `http` and `https`; run time and answer size come from
 //! the extension's limits.
 
-use std::future::Future;
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -16,6 +15,7 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Method, StatusCode, Url};
 use serde_json::{json, Map, Value};
 
+use crate::extensions::bridge::blocking::block_on;
 use crate::extensions::bridge::dispatch::CallContext;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::permissions::store::candidates;
@@ -67,19 +67,6 @@ fn client() -> &'static reqwest::Client {
             .build()
             .expect("the HTTP client of extensions builds with static settings")
     })
-}
-
-/// Runs `future` from a bridge call, which runs on a blocking thread of the app's runtime (or, in
-/// tests without one, on a runtime of its own).
-fn block_on<F: Future>(future: F) -> F::Output {
-    match tokio::runtime::Handle::try_current() {
-        Ok(handle) => handle.block_on(future),
-        Err(_) => tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("a runtime for one request")
-            .block_on(future),
-    }
 }
 
 /// What a question about `url` asks for: its whole origin (`scheme://host[:port]/*`), so one
