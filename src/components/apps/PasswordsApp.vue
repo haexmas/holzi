@@ -26,7 +26,10 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   openFrames -= 1
-  if (openFrames === 0) clipboard.clear()
+  if (openFrames > 0) return
+  clipboard.clear()
+  // Spec 036, research R14: the thumbnails go with the last frame.
+  clearPasswordsThumbnails()
 })
 
 // Spec 036 (FR-016): the list shortcuts act with the focus anywhere in this window.

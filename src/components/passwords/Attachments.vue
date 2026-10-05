@@ -1,16 +1,17 @@
 <script setup lang="ts">
 /**
- * The attachments of an entry (spec 034, US5, FR-019..FR-021): add through the system's file dialog
- * or by dropping files on the list, rename, remove, download through the save dialog, and a preview
- * for images. Files travel as paths, never through the webview; a path is never stored. An
- * attachment is saved at once (it has no draft), so the editor can show this too. A preview is a
- * blob URL that is revoked when it closes or the list goes away.
+ * The attachments of an entry (spec 034, US5, FR-019..FR-021; spec 036, US6, FR-037..FR-041): cards
+ * in a grid of three, two or one columns by the width of the container; a tap on an image opens the
+ * lightbox over the entry's images in card order, a tap on anything else saves it. Adding through
+ * the system's file dialog or by dropping files, renaming, removing and saving work as in 034.
+ * Files travel as paths, never through the webview; a path is never stored. An attachment is saved
+ * at once (it has no draft), so the editor can show this too.
  */
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { toast } from 'vue-sonner'
 import type { AttachmentView } from '@bindings/AttachmentView'
-import { formatFileSize, imageMime, safeFileName } from '~/lib/passwords/format'
+import { fileKind, safeFileName } from '~/lib/passwords/format'
 
 const props = defineProps<{
   itemId: string
@@ -30,16 +31,21 @@ const {
   attachmentRenameAsync,
   attachmentRemoveAsync,
   attachmentSaveAsync,
-  attachmentPreviewAsync,
 } = usePasswords()
 
 const root = ref<HTMLElement | null>(null)
 const busy = ref(false)
 const dragging = ref(false)
-const editing = ref<string | null>(null)
-const fileName = ref('')
-const previewId = ref<string | null>(null)
-const previewUrl = ref<string | null>(null)
+const lightbox = useTemplateRef<{ open: (index: number) => Promise<void> }>(
+  'lightbox',
+)
+
+/** The images in card order: what the lightbox shows (FR-038). */
+const images = computed(() =>
+  props.attachments.filter(
+    (attachment) => fileKind(attachment.fileName) === 'image',
+  ),
+)
 
 async function addPathsAsync(paths: string[]) {
   if (props.readonly || busy.value || !paths.length) return
@@ -76,40 +82,14 @@ async function downloadAsync(attachment: AttachmentView) {
   }
 }
 
-function closePreview() {
-  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
-  previewUrl.value = null
-  previewId.value = null
+function openImage(attachment: AttachmentView) {
+  const index = images.value.findIndex((image) => image.id === attachment.id)
+  if (index >= 0) void lightbox.value?.open(index)
 }
 
-async function togglePreviewAsync(attachment: AttachmentView) {
-  if (previewId.value === attachment.id) {
-    closePreview()
-    return
-  }
-  const mime = imageMime(attachment.fileName)
-  if (!mime) return
-  try {
-    const bytes = await attachmentPreviewAsync(attachment.id)
-    closePreview()
-    previewUrl.value = URL.createObjectURL(new Blob([bytes], { type: mime }))
-    previewId.value = attachment.id
-  } catch (cause) {
-    toast.error(errString(cause))
-  }
-}
-
-function startRename(attachment: AttachmentView) {
-  editing.value = attachment.id
-  fileName.value = attachment.fileName
-}
-
-async function saveRenameAsync(attachment: AttachmentView) {
-  const name = fileName.value.trim()
-  if (!name) return
+async function renameAsync(attachment: AttachmentView, name: string) {
   try {
     await attachmentRenameAsync(attachment.id, name)
-    editing.value = null
     emit('changed')
   } catch (cause) {
     toast.error(errString(cause))
@@ -117,7 +97,6 @@ async function saveRenameAsync(attachment: AttachmentView) {
 }
 
 async function removeAsync(attachment: AttachmentView) {
-  if (previewId.value === attachment.id) closePreview()
   try {
     await attachmentRemoveAsync(attachment.id)
     emit('changed')
@@ -158,100 +137,33 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unlisten?.()
-  closePreview()
 })
 </script>
 
 <template>
   <div ref="root" data-testid="passwords-attachments">
     <SettingsGroup :label="t('passwords.attachments.title')">
-      <SettingsRow
-        v-for="attachment in attachments"
-        :key="attachment.id"
-        :title="attachment.fileName"
-        :description="formatFileSize(attachment.size)"
-        icon="lucide:paperclip"
+      <div
+        v-if="attachments.length"
+        class="@container/attachments p-2"
+        data-testid="passwords-attachment-grid"
       >
-        <template v-if="editing === attachment.id">
-          <div class="w-48">
-            <UiInput
-              v-model="fileName"
-              :aria-label="t('passwords.attachments.name')"
-              :data-testid="`passwords-attachment-name-${attachment.id}`"
-              @keydown.enter.prevent="saveRenameAsync(attachment)"
-              @keydown.esc.prevent="editing = null"
+        <ul
+          class="grid grid-cols-1 gap-2 @xs/attachments:grid-cols-2 @lg/attachments:grid-cols-3"
+          role="list"
+        >
+          <li v-for="attachment in attachments" :key="attachment.id">
+            <PasswordsAttachmentCard
+              :attachment="attachment"
+              :readonly="readonly"
+              @open="openImage(attachment)"
+              @save="downloadAsync(attachment)"
+              @rename="(name: string) => renameAsync(attachment, name)"
+              @remove="removeAsync(attachment)"
             />
-          </div>
-          <UiButton
-            type="button"
-            size="sm"
-            @click="saveRenameAsync(attachment)"
-            >{{ t('passwords.save') }}</UiButton
-          >
-        </template>
-        <template v-else>
-          <UiButton
-            v-if="imageMime(attachment.fileName)"
-            type="button"
-            variant="ghost"
-            size="icon"
-            :aria-label="t('passwords.attachments.preview')"
-            :tooltip="t('passwords.attachments.preview')"
-            :data-testid="`passwords-attachment-preview-${attachment.id}`"
-            @click="togglePreviewAsync(attachment)"
-          >
-            <Icon
-              :name="
-                previewId === attachment.id ? 'lucide:eye-off' : 'lucide:eye'
-              "
-              class="size-4"
-            />
-          </UiButton>
-          <UiButton
-            type="button"
-            variant="ghost"
-            size="icon"
-            :aria-label="t('passwords.attachments.download')"
-            :tooltip="t('passwords.attachments.download')"
-            :data-testid="`passwords-attachment-download-${attachment.id}`"
-            @click="downloadAsync(attachment)"
-          >
-            <Icon name="lucide:download" class="size-4" />
-          </UiButton>
-          <template v-if="!readonly">
-            <UiButton
-              type="button"
-              variant="ghost"
-              size="icon"
-              :aria-label="t('passwords.attachments.rename')"
-              :tooltip="t('passwords.attachments.rename')"
-              :data-testid="`passwords-attachment-rename-${attachment.id}`"
-              @click="startRename(attachment)"
-            >
-              <Icon name="lucide:pencil" class="size-4" />
-            </UiButton>
-            <UiButton
-              type="button"
-              variant="ghost"
-              size="icon"
-              :aria-label="t('passwords.attachments.remove')"
-              :tooltip="t('passwords.attachments.remove')"
-              :data-testid="`passwords-attachment-remove-${attachment.id}`"
-              @click="removeAsync(attachment)"
-            >
-              <Icon name="lucide:trash-2" class="size-4" />
-            </UiButton>
-          </template>
-        </template>
-        <template v-if="previewId === attachment.id && previewUrl" #below>
-          <img
-            :src="previewUrl"
-            :alt="attachment.fileName"
-            class="max-h-64 max-w-full rounded-lg object-contain"
-            :data-testid="`passwords-attachment-image-${attachment.id}`"
-          />
-        </template>
-      </SettingsRow>
+          </li>
+        </ul>
+      </div>
       <SettingsRow
         v-if="!readonly"
         :class="dragging ? 'bg-foreground/10' : ''"
@@ -274,5 +186,10 @@ onBeforeUnmount(() => {
         </UiButton>
       </SettingsRow>
     </SettingsGroup>
+    <PasswordsAttachmentLightbox
+      ref="lightbox"
+      :images="images"
+      @save="downloadAsync"
+    />
   </div>
 </template>

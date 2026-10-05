@@ -6,8 +6,10 @@
  */
 import type { MenuCommand, MenuEntry } from '~/lib/passwords/menus'
 
-defineProps<{
-  entries: readonly MenuEntry[]
+const props = defineProps<{
+  /** The list, or a function that builds it when the menu opens (a row does not build it on every
+   * render of the list). */
+  entries: readonly MenuEntry[] | (() => readonly MenuEntry[])
 }>()
 
 const emit = defineEmits<{
@@ -18,6 +20,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { shortcut } = usePasswordsMenuText()
+
+function shown(): readonly MenuEntry[] {
+  return typeof props.entries === 'function' ? props.entries() : props.entries
+}
 </script>
 
 <template>
@@ -29,7 +35,7 @@ const { shortcut } = usePasswordsMenuText()
       class="min-w-52"
       data-testid="passwords-context-menu"
     >
-      <template v-for="(entry, index) in entries" :key="index">
+      <template v-for="(entry, index) in shown()" :key="index">
         <ShadcnContextMenuSeparator v-if="'separator' in entry" />
         <ShadcnContextMenuItem
           v-else

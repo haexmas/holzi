@@ -240,6 +240,66 @@ fn a_redirect_to_an_address_without_permission_asks_for_that_address() {
 }
 
 #[test]
+fn a_post_redirected_to_an_address_without_permission_answers_with_the_redirect() {
+    let s = setup();
+    let (first, second) = (s.server(), s.server());
+    s.mount(
+        &first,
+        Mock::given(path("/create"))
+            .respond_with(redirect(&format!("{}/created", second.uri()), 303)),
+    );
+    s.grant_server(&first);
+    let body = base64::engine::general_purpose::STANDARD.encode("{}");
+    // Asking would make the SDK send the POST again from the start: the extension gets the
+    // redirect and follows it itself.
+    let answer = s
+        .fetch(json!({ "url": format!("{}/create", first.uri()), "method": "POST", "body": body }))
+        .unwrap();
+    assert_eq!(answer["status"], 303);
+    assert_eq!(
+        answer["headers"]["location"],
+        format!("{}/created", second.uri())
+    );
+    assert_eq!(answer["url"], format!("{}/create", first.uri()));
+    assert_eq!(s.received(&first).len(), 1, "sent once");
+    assert!(s.received(&second).is_empty());
+}
+
+#[test]
+fn a_patch_kept_by_a_temporary_redirect_answers_with_the_redirect() {
+    let s = setup();
+    let (first, second) = (s.server(), s.server());
+    s.mount(
+        &first,
+        Mock::given(path("/item")).respond_with(redirect(&format!("{}/item", second.uri()), 307)),
+    );
+    s.grant_server(&first);
+    let answer = s
+        .fetch(json!({ "url": format!("{}/item", first.uri()), "method": "PATCH" }))
+        .unwrap();
+    assert_eq!(answer["status"], 307);
+    assert_eq!(s.received(&first).len(), 1);
+    assert!(s.received(&second).is_empty());
+}
+
+#[test]
+fn a_post_redirected_to_a_denied_address_is_refused() {
+    let s = setup();
+    let (first, second) = (s.server(), s.server());
+    s.mount(
+        &first,
+        Mock::given(path("/create")).respond_with(redirect(&format!("{}/x", second.uri()), 308)),
+    );
+    s.grant_server(&first);
+    s.grant("POST", &format!("{}/*", second.uri()), "denied");
+    let refused = s
+        .fetch(json!({ "url": format!("{}/create", first.uri()), "method": "POST" }))
+        .unwrap_err();
+    assert_eq!(refused.code.as_u16(), 1002);
+    assert!(s.received(&second).is_empty());
+}
+
+#[test]
 fn credentials_stay_with_their_origin() {
     let s = setup();
     let (first, second) = (s.server(), s.server());
@@ -287,15 +347,19 @@ fn a_see_other_redirect_turns_a_post_into_a_get_without_body() {
             .respond_with(ResponseTemplate::new(200)),
     );
     s.grant("POST", &format!("{}/*", server.uri()), "granted");
-    assert_eq!(
-        code(s.fetch(json!({
+    let first = s
+        .fetch(json!({
             "url": format!("{}/form", server.uri()),
             "method": "POST",
             "body": base64::engine::general_purpose::STANDARD.encode("a=1"),
-        }))),
-        1004,
-        "the GET after the redirect needs its own permission"
+        }))
+        .unwrap();
+    assert_eq!(
+        first["status"], 303,
+        "the GET after the redirect needs its own permission; asking would send the POST again, \
+         so the redirect is the answer"
     );
+    assert_eq!(s.received(&server).len(), 1, "the POST went out once");
     s.grant("GET", &format!("{}/*", server.uri()), "granted");
     s.fetch(json!({
         "url": format!("{}/form", server.uri()),

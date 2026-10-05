@@ -187,11 +187,12 @@ src/
 ├── lib/passwords/
 │   ├── menus.ts, shortcuts.ts, breadcrumb.ts   # reine Bausteine (Node-Tests)                       [neu]
 │   ├── clipboard.ts                            # Ablage: Zustandsmaschine, Kreis- und Fehlprüfung   [neu]
-│   ├── thumbnails.ts                           # Vorschaubilder (LRU, Verkleinern)                  [neu]
+│   ├── thumbnails.ts                           # Vorschaubilder (LRU, Warteschlange)                [neu]
 │   ├── registry.ts                             # Abfrageschlüssel `tab`                             [ändern]
 │   └── search.ts                               # Platzhalter wegfalten                              [ändern]
 ├── stores/passwordsClipboard.ts                # Ablage                                             [neu]
 ├── composables/usePasswords.ts                 # + copy, references_*, usage, unlink                [ändern]
+├── composables/usePasswordsThumbnails.ts      # Vorschaubilder verkleinern (Canvas), ein Speicher  [neu]
 ├── composables/usePasswordsActions.ts          # eine Handler-Menge für Leiste, Menü und Kürzel     [neu]
 ├── composables/usePasswordsShortcuts.ts, usePasswordsListKeys.ts, usePasswordsMenuText.ts # Kürzel (Rahmen, Liste), Kürzeltext [neu]
 ├── components/passwords/
@@ -199,7 +200,7 @@ src/
 │   ├── HistoryTimeline.vue, HistorySnapshot.vue                                                     [neu; HistoryView.vue entfällt]
 │   ├── Breadcrumbs.vue, SelectionBar.vue (ersetzt SelectionToolbar.vue), EntryMenu.vue, EntryMenuButton.vue, ClipboardBar.vue, FolderRow.vue [neu / ersetzt]
 │   ├── CopyDialog.vue, ReferenceValue.vue, ReferenceField.vue, ReferencePicker.vue, ReferenceUsageNote.vue [neu]
-│   ├── AttachmentCard.vue, AttachmentLightbox.vue                                                   [neu]
+│   ├── AttachmentCard.vue, AttachmentLightbox.vue, PasskeyDeleteNote.vue                            [neu]
 │   ├── EntryEditor.vue, EntryView.vue, EntryPage.vue, List.vue, ListItem.vue, Sidebar.vue, TreeItem.vue, TrashView.vue, Passkeys.vue, Attachments.vue, DeleteDialog.vue, EmptyTrashDialog.vue [ändern]
 │   └── components/apps/PasswordsApp.vue        # Kürzel, Ablage-Lebensdauer                         [ändern]
 ├── i18n/locales/{de,en}.json                   # passwords.tabs, breadcrumb, menu, clipboard, copy, references, lightbox, errors [ändern]
@@ -208,7 +209,7 @@ src/
 
 scripts/
 ├── check-passwords-menus.ts, -shortcuts.ts, -breadcrumb.ts, -clipboard.ts, -tabs.ts, -thumbnails.ts [neu]
-└── e2e/scenarios/passwords-{tabs,organize,references,passkeys,attachments}.test.ts, lib/passwords.ts (+ Hilfen) [neu / ändern]
+└── e2e/scenarios/passwords-{tabs,organize,references,passkeys,attachments}.test.ts, lib/passwords.ts (+ Hilfen), lib/png.ts [neu / ändern]
 
 docs/adr/0009-references-resolved-in-service-and-passkey-service.md                                  [neu]
 package.json                                    # swiper, photoswipe                                 [ändern]

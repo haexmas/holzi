@@ -13,7 +13,7 @@ import type { GroupRow } from '@bindings/GroupRow'
 import type { CopyRequest } from '~/composables/usePasswordsActions'
 import type { BreadcrumbPlace } from '~/lib/passwords/breadcrumb'
 import { buildMenu, type MenuCommand } from '~/lib/passwords/menus'
-import { filterHeaders, fold } from '~/lib/passwords/search'
+import { filterHeaders, sortByTitle } from '~/lib/passwords/search'
 import {
   buildTree,
   findNode,
@@ -67,14 +67,15 @@ const visible = computed(() => {
     query: router.route.query.q ?? '',
     ...(tagId.value ? { tagIds: store.tagIdsOf(tagId.value) } : {}),
   })
-  return [...found].sort((a, b) => {
-    const left = fold(a.title ?? '')
-    const right = fold(b.title ?? '')
-    // Entries without a title come last, then by title and id.
-    if (!left !== !right) return left ? -1 : 1
-    return left.localeCompare(right) || a.id.localeCompare(b.id)
-  })
+  return sortByTitle(found)
 })
+
+// ponytail: the entries mount in pages of `PAGE` as the list scrolls near its end, so opening the
+// manager or a folder mounts at most one page. Ceiling: after scrolling to the end of a large vault
+// every row is mounted again; the upgrade is a virtual list that unmounts rows out of view.
+const PAGE = 100
+const shownCount = ref(PAGE)
+const shown = computed(() => visible.value.slice(0, shownCount.value))
 
 /** The rows as the list shows them: folders first, then entries. */
 const visibleIds = computed(() => [
@@ -248,6 +249,34 @@ const { focusedId, tabStopId, keepFocus } = usePasswordsListKeys({
 })
 
 const rowCount = computed(() => visibleIds.value.length)
+
+// Another place starts with one page, at the top (the list stays mounted between places). The
+// focus starts anew as well: the entry focused before may lie far past the first page there.
+watch(
+  () => [router.route.path, router.route.query.q, router.route.query.tag],
+  () => {
+    shownCount.value = PAGE
+    focusedId.value = null
+    area.value?.scrollTo({ top: 0 })
+  },
+)
+
+useInfiniteScroll(
+  area,
+  () => {
+    shownCount.value += PAGE
+  },
+  {
+    distance: 800,
+    canLoadMore: () => shownCount.value < visible.value.length,
+  },
+)
+
+// The keyboard can move the focus to a row past the shown page; that page then mounts.
+watch(focusedId, (id) => {
+  const index = id === null ? -1 : visible.value.findIndex((h) => h.id === id)
+  if (index >= shownCount.value) shownCount.value = index + 1
+})
 </script>
 
 <template>
@@ -325,7 +354,7 @@ const rowCount = computed(() => visibleIds.value.length)
               :selecting="selection.active"
               :dimmed="clipboard.dimmed.has(node.group.id)"
               :tab-stop="tabStopId === node.group.id"
-              :menu-entries="folderMenu(node.group.id)"
+              :menu-for="folderMenu"
               @activate="activate(node.group.id, $event)"
               @long-press="longPress(node.group.id)"
               @focus="focusedId = node.group.id"
@@ -339,14 +368,16 @@ const rowCount = computed(() => visibleIds.value.length)
             :label="folders.length ? t('passwords.list.entries') : undefined"
           >
             <PasswordsListItem
-              v-for="header in visible"
+              v-for="(header, index) in shown"
               :key="header.id"
               :header="header"
+              :position="index + 1"
+              :count="visible.length"
               :selected="selection.isIdSelected(header.id)"
               :selecting="selection.active"
               :dimmed="clipboard.dimmed.has(header.id)"
               :tab-stop="tabStopId === header.id"
-              :menu-entries="entryMenu(header.id)"
+              :menu-for="entryMenu"
               @activate="activate(header.id, $event)"
               @long-press="longPress(header.id)"
               @focus="focusedId = header.id"

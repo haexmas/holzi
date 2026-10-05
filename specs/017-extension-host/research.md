@@ -572,7 +572,11 @@ Schleife kann auch für das Weiterleitungsziel fragen.
 
 **Umgesetzt (T098)**: Die Anfrage an den Nutzer nennt die Methode und den Ursprung `schema://host[:port]/*`, nicht
 die volle Adresse; sonst fragte jede Symboldatei neu. Eine Weiterleitung auf ein Ziel ohne Berechtigung antwortet
-1004 für dieses Ziel, das SDK wiederholt danach die ganze Anfrage (bei POST wird sie also erneut gesendet).
+1004 für dieses Ziel, das SDK wiederholt danach die ganze Anfrage. Das gilt nur, wenn die erste Methode wiederholbar ist
+(GET, HEAD, OPTIONS, TRACE, PUT, DELETE, PROPFIND, REPORT); sonst, etwa bei POST oder PATCH, ist die Weiterleitung selbst
+die Antwort (wie `fetch` mit `redirect: "manual"`), damit der erste Server die Anfrage nicht zweimal bekommt (Betreiber,
+2026-10-05). Die Erweiterung folgt ihr mit einer eigenen Anfrage, für die gefragt werden darf. Ein verweigertes Ziel
+bleibt 1002.
 
 **Alternativen**: `Policy::custom` (synchron, kann nicht fragen); `tauri-plugin-http` (unnötig).
 
