@@ -21,7 +21,7 @@ use uuid::Uuid;
 use super::flow::Flow;
 use super::{shell_error, EXIT, MAX_SESSIONS, OUTPUT};
 use crate::extensions::bridge::dispatch::{is_enabled, CallContext, Emit};
-use crate::extensions::bridge::events::emit_to_frames;
+use crate::extensions::bridge::events::{emit_to_frames, emit_to_frames_counted};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
 use crate::vault_gate::{kill_process_tree, ChildGuard, ChildRegistry};
@@ -149,6 +149,12 @@ impl Session {
         self.flow.acknowledge(frame, count);
     }
 
+    /// The output events `frame` has open, if the reading waits for it.
+    #[cfg(test)]
+    pub(super) fn open_events(&self, frame: &str) -> Option<u64> {
+        self.flow.open_of(frame)
+    }
+
     /// Ends the shell: a hangup now, a kill of its whole session after [`HANGUP_GRACE`]. Never
     /// waits. The terminal and the input go with `self`; the output thread reports the end.
     pub(super) fn end(self) {
@@ -198,6 +204,14 @@ impl ShellState {
         };
         for session in ended {
             session.end();
+        }
+    }
+
+    /// `frame` loaded a new page with a new SDK: the output events its old page had open are
+    /// lost, so no session waits for it until it acknowledges again.
+    pub fn frame_reloaded(&self, frame: &str) {
+        for session in self.lock().values() {
+            session.flow.forget(frame);
         }
     }
 
@@ -336,8 +350,8 @@ struct Pump {
 }
 
 impl Pump {
-    fn emit(&self, event: &str, data: serde_json::Value) -> Vec<String> {
-        emit_to_frames(&*self.emitter, &self.host, self.extension_id, event, &data)
+    fn emit(&self, event: &str, data: serde_json::Value) {
+        emit_to_frames(&*self.emitter, &self.host, self.extension_id, event, &data);
     }
 
     fn open_frames(&self) -> Vec<String> {
@@ -363,13 +377,15 @@ impl Pump {
                 Ok(n) => {
                     let data = stream.push(&buffer[..n]);
                     if !data.is_empty() {
-                        let frames = self.emit(
+                        // Counted before it goes out: an acknowledgement never comes first.
+                        emit_to_frames_counted(
+                            &*self.emitter,
+                            &self.host,
+                            self.extension_id,
                             OUTPUT,
-                            json!({ "sessionId": self.session_id, "data": data }),
+                            &json!({ "sessionId": self.session_id, "data": data }),
+                            |frame| self.flow.sent(frame),
                         );
-                        for frame in frames {
-                            self.flow.sent(&frame);
-                        }
                     }
                 }
             }
