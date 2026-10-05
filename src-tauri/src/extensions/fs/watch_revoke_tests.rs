@@ -67,3 +67,29 @@ fn removing_a_decision_held_in_memory_ends_the_watch_it_allowed() {
     .unwrap();
     assert!(!s.host.fs.watches.running(extension_id, "held"));
 }
+
+#[test]
+fn a_watch_call_checks_the_running_watches_again_once_its_own_runs() {
+    // A revocation whose sweep ran while a watch was still starting missed that watch: the watch
+    // call itself checks again, here seen on a watch the sweep never reached.
+    let s = setup();
+    let ctx = s.frame("good-notes-like.xt");
+    let extension_id = ctx.session.extension_id;
+    s.grant(&ctx, "read", &s.root);
+    s.grant(&ctx, "read", &s.outside);
+    let raced = s.root.join("raced");
+    std::fs::create_dir(&raced).unwrap();
+    let watch = |rule: &str, path: &std::path::Path| {
+        call(
+            &ctx,
+            "extension_filesystem_watch",
+            &json!({ "ruleId": rule, "path": path.to_string_lossy() }),
+        )
+    };
+    watch("raced", &raced).unwrap();
+    s.remember(&ctx, "read", &s.root, "denied");
+
+    watch("next", &s.outside).unwrap();
+    assert!(!s.host.fs.watches.running(extension_id, "raced"));
+    assert!(s.host.fs.watches.running(extension_id, "next"));
+}

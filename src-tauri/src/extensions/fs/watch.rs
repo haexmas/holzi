@@ -14,7 +14,7 @@
 
 use serde_json::{json, Value};
 
-use super::{authorize_by, Access, Allowed, Reach};
+use super::{authorize_by, end_revoked_watches, Access, Allowed, Reach};
 use crate::extensions::bridge::dispatch::CallContext;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 
@@ -228,13 +228,24 @@ pub fn watch(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
             std::sync::Arc::downgrade(&ctx.host),
             std::sync::Arc::clone(&ctx.emitter),
             ctx.session.extension_id,
-            rule,
+            rule.clone(),
             root,
             frame,
         )
         .map_err(|e| {
             BridgeError::new(ExtensionErrorCode::Filesystem, format!("watch failed: {e}"))
         })?;
+    // A permission revoked between the check above and the start ended the running watches
+    // before this one was among them: check again now that it is (FR-020).
+    if allowed == Allowed::Permission {
+        end_revoked_watches(&ctx.db, &ctx.host, ctx.device);
+        if !ctx.host.fs.watches.running(ctx.session.extension_id, &rule) {
+            return Err(BridgeError::new(
+                ExtensionErrorCode::PermissionDenied,
+                "permission denied",
+            ));
+        }
+    }
     Ok(Value::Null)
 }
 
