@@ -24,7 +24,7 @@ use crate::storage::known_devices;
 use crate::vault_gate::{VaultDb, VaultGate};
 
 #[derive(Default)]
-pub(super) struct Recorded(pub(super) Mutex<Vec<Value>>);
+pub(crate) struct Recorded(pub(crate) Mutex<Vec<Value>>);
 
 impl Emit for Recorded {
     fn emit(&self, event: &str, payload: Value) {
@@ -36,9 +36,9 @@ impl Emit for Recorded {
 
 /// Dialogs that answer with what the test put in, and a viewer that remembers what it opened.
 #[derive(Default)]
-pub(super) struct FakeDialogs {
-    pub(super) choice: Mutex<Option<PathBuf>>,
-    pub(super) opened: Mutex<Vec<PathBuf>>,
+pub(crate) struct FakeDialogs {
+    pub(crate) choice: Mutex<Option<PathBuf>>,
+    pub(crate) opened: Mutex<Vec<PathBuf>>,
 }
 
 impl FileDialogs for FakeDialogs {
@@ -57,22 +57,22 @@ impl FileDialogs for FakeDialogs {
     }
 }
 
-pub(super) struct Setup {
+pub(crate) struct Setup {
     _vault_dir: tempfile::TempDir,
     _files: tempfile::TempDir,
     /// A folder the tests grant, holding a protected folder of holzi.
-    pub(super) root: PathBuf,
-    pub(super) outside: PathBuf,
-    pub(super) protected: PathBuf,
-    pub(super) scratch: PathBuf,
-    pub(super) dialogs: Arc<FakeDialogs>,
-    pub(super) recorded: Arc<Recorded>,
-    pub(super) host: Arc<ExtensionHost>,
-    pub(super) vault: VaultDb,
-    pub(super) device: Uuid,
+    pub(crate) root: PathBuf,
+    pub(crate) outside: PathBuf,
+    pub(crate) protected: PathBuf,
+    pub(crate) scratch: PathBuf,
+    pub(crate) dialogs: Arc<FakeDialogs>,
+    pub(crate) recorded: Arc<Recorded>,
+    pub(crate) host: Arc<ExtensionHost>,
+    pub(crate) vault: VaultDb,
+    pub(crate) device: Uuid,
 }
 
-pub(super) fn setup() -> Setup {
+pub(crate) fn setup() -> Setup {
     let (vault_dir, db) = open_test_vault();
     let vault = VaultGate::new().vault_db(Arc::new(db)).unwrap();
     let device = vault
@@ -115,7 +115,7 @@ pub(super) fn setup() -> Setup {
 
 impl Setup {
     /// A frame of the fixture extension `name` (installed on first use).
-    pub(super) fn frame(&self, name: &str) -> CallContext {
+    pub(crate) fn frame(&self, name: &str) -> CallContext {
         let bytes = std::fs::read(
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/fixtures/extension_bundles")
@@ -141,12 +141,18 @@ impl Setup {
         }
     }
 
-    pub(super) fn grant(&self, ctx: &CallContext, action: &str, target: &Path) {
+    pub(crate) fn grant(&self, ctx: &CallContext, action: &str, target: &Path) {
+        self.remember(ctx, action, target, "granted");
+    }
+
+    /// Remembers a `filesystem` permission of the frame's extension with `status` for every
+    /// device; the same key again changes its status.
+    pub(crate) fn remember(&self, ctx: &CallContext, action: &str, target: &Path, status: &str) {
         let (id, target) = (
             ctx.session.extension_id,
             target.to_string_lossy().into_owned(),
         );
-        let action = action.to_owned();
+        let (action, status) = (action.to_owned(), status.to_owned());
         self.vault
             .write_blocking(move |tx| {
                 permission_store::put(
@@ -156,7 +162,7 @@ impl Setup {
                         kind: "filesystem",
                         action: &action,
                         target: &target,
-                        status: "granted",
+                        status: &status,
                         declared: false,
                         vault_device_uuid: VAULT_WIDE,
                     },

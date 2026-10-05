@@ -37,6 +37,9 @@ impl PermissionRow {
 const SYNCED: &str = "extension_permissions";
 const DEV: &str = "dev_extension_permissions_no_sync";
 
+/// The tables that hold remembered permissions: a write to one can change what an extension may.
+pub const TABLES: [&str; 2] = [SYNCED, DEV];
+
 /// The table that holds the permissions of `extension_id`.
 fn table_of(q: &mut impl Query, extension_id: Uuid) -> Result<&'static str> {
     let dev = q

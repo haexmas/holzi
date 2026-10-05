@@ -21,10 +21,12 @@ use uuid::Uuid;
 
 use crate::extensions::bridge::dispatch::CallContext;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
+use crate::extensions::host::ExtensionHost;
 use crate::extensions::permissions::store::candidates;
 use crate::extensions::permissions::{
     evaluate, Action, Decision, PermissionKind, PermissionRequest, RequestTarget,
 };
+use crate::vault_gate::VaultDb;
 
 pub use dialogs::FileDialogs;
 pub use resolve::resolve;
@@ -203,18 +205,22 @@ fn touches_denied(environment: &FsEnvironment, path: &Path, reach: Reach) -> boo
         .any(|root| path.starts_with(root) || (reach == Reach::Tree && root.starts_with(path)))
 }
 
-/// What the extension's permissions say about `path` (its dialog choices aside).
-fn decision(ctx: &CallContext, path: &Path, access: Access) -> Result<Decision, BridgeError> {
-    let (extension_id, device) = (ctx.session.extension_id, ctx.device);
-    let mut grants = ctx
-        .db
+/// What the permissions of `extension_id` on `device` say about `path` (dialog choices aside).
+fn decision(
+    db: &VaultDb,
+    host: &ExtensionHost,
+    extension_id: Uuid,
+    device: Uuid,
+    path: &Path,
+    access: Access,
+) -> Result<Decision, BridgeError> {
+    let mut grants = db
         .read_blocking(move |q| {
             candidates(q, extension_id, PermissionKind::Filesystem, device).map_err(Into::into)
         })
         .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))?;
     grants.extend(
-        ctx.host
-            .permissions
+        host.permissions
             .temporary(extension_id, PermissionKind::Filesystem),
     );
     let request = PermissionRequest {
@@ -268,7 +274,8 @@ pub fn authorize_by(
         Access::Read => "read",
         Access::Write => "readWrite",
     };
-    match decision(ctx, &path, access)? {
+    let (extension_id, device) = (ctx.session.extension_id, ctx.device);
+    match decision(&ctx.db, &ctx.host, extension_id, device, &path, access)? {
         Decision::Allow => Ok((path, Allowed::Permission)),
         Decision::Deny => Err(BridgeError::new(
             ExtensionErrorCode::PermissionDenied,
@@ -284,6 +291,19 @@ pub fn authorize_by(
             "target": path.to_string_lossy(),
         }))),
     }
+}
+
+/// Ends the watches a permission allowed once no permission lets their extension read their
+/// folder any more: a changed or revoked permission holds at once, also for a watch that is
+/// already running (FR-020). A watch a dialog choice allowed ends with its frame (FR-048).
+/// Blocking: reads the permissions; one that cannot be read ends the watch.
+pub fn end_revoked_watches(db: &VaultDb, host: &ExtensionHost, device: Uuid) {
+    host.fs.watches.end_unless(|extension_id, root| {
+        matches!(
+            decision(db, host, extension_id, device, root, Access::Read),
+            Ok(Decision::Allow)
+        )
+    });
 }
 
 /// `{path, operation: read | write}` → `{status: granted | denied | ask}`; asks nothing.
@@ -311,7 +331,10 @@ pub fn check(
 }
 
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 #[cfg(test)]
 #[path = "fs_tests.rs"]
 mod tests;
+#[cfg(all(test, not(any(target_os = "android", target_os = "ios"))))]
+#[path = "watch_revoke_tests.rs"]
+mod watch_revoke_tests;

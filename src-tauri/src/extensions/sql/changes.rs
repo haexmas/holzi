@@ -9,6 +9,9 @@
 //! A migration changes a schema without writing rows, which the commit report does not show. Its
 //! journal row does: then the tables of extensions are compared with the last snapshot of their
 //! `CREATE` statements, and every table created, altered or dropped is reported as well.
+//!
+//! A written permission, from this device or another one, holds at once for running folder
+//! watches too: those no permission allows any more end (FR-020).
 
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
@@ -25,8 +28,10 @@ use crate::extensions::bridge::database::policy_for;
 use crate::extensions::bridge::dispatch::Emit;
 use crate::extensions::bridge::events::emit_to_frames;
 use crate::extensions::commands::frames::WindowEmitter;
+use crate::extensions::fs::end_revoked_watches;
 use crate::extensions::host::ExtensionHost;
 use crate::extensions::ids::ExtensionTable;
+use crate::extensions::permissions::store::TABLES as PERMISSION_TABLES;
 use crate::state::AppState;
 use crate::storage::query::Query;
 use crate::storage::wm_session_commands::current_device_uuid;
@@ -137,7 +142,8 @@ fn drain(
     }
 }
 
-/// Handles one batch: adds the schema changes a migration made, then notifies. Blocking.
+/// Handles one batch: ends the watches a changed permission no longer allows, adds the schema
+/// changes a migration made, then notifies. Blocking.
 fn handle(
     db: &VaultDb,
     host: &ExtensionHost,
@@ -146,6 +152,13 @@ fn handle(
     known: &mut Schema,
     mut batch: Batch,
 ) {
+    if batch.lagged
+        || PERMISSION_TABLES
+            .iter()
+            .any(|table| batch.tables.contains(*table))
+    {
+        end_revoked_watches(db, host, device);
+    }
     if batch.lagged || batch.tables.contains(MIGRATION_JOURNAL) {
         match db.read_blocking(|q| schema(q)) {
             Ok(now) => {

@@ -268,6 +268,7 @@ fn denied_beats_granted_and_a_change_applies_to_the_next_call() {
     remove(
         &s.ctx.db,
         &s.ctx.host,
+        s.ctx.device,
         PermissionRemoveArgs {
             extension_id: ext.clone(),
             permission_id: denial.id.clone(),

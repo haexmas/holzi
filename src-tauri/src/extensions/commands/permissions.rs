@@ -12,6 +12,7 @@ use super::frames::WindowEmitter;
 use crate::error::{HolziError, Result};
 use crate::extensions::bridge::dispatch::Emit;
 use crate::extensions::bridge::events::emit_to_frames;
+use crate::extensions::fs::end_revoked_watches;
 use crate::extensions::host::ExtensionHost;
 use crate::extensions::permissions::prompts::{PermissionDecision, Question};
 use crate::extensions::permissions::store::{self as permission_store, NewPermission};
@@ -183,7 +184,15 @@ pub struct PermissionRemoveArgs {
     pub temporary_key: Option<String>,
 }
 
-pub fn remove(db: &VaultDb, host: &ExtensionHost, args: PermissionRemoveArgs) -> Result<()> {
+/// Revokes a remembered row or a decision held in memory. A row's removal reaches the running
+/// watches through the vault's change report (`sql::changes`); a decision in memory has none, so
+/// its watches are checked here.
+pub fn remove(
+    db: &VaultDb,
+    host: &ExtensionHost,
+    device: Uuid,
+    args: PermissionRemoveArgs,
+) -> Result<()> {
     let extension_id = parse_id(&args.extension_id)?;
     if let Some(key) = args.temporary_key {
         let mut parts = key.splitn(3, '|');
@@ -193,6 +202,7 @@ pub fn remove(db: &VaultDb, host: &ExtensionHost, args: PermissionRemoveArgs) ->
         };
         let kind = PermissionKind::parse(kind).ok_or_else(|| invalid("unknown kind"))?;
         host.permissions.forget(extension_id, kind, action, target);
+        end_revoked_watches(db, host, device);
         return Ok(());
     }
     let id = parse_id(args.permission_id.as_deref().unwrap_or_default())?;
@@ -273,6 +283,8 @@ pub fn resolve(
         })?;
     } else {
         host.permissions.hold(&question, status);
+        // No row was written, so no change report reaches the running watches (`remove`).
+        end_revoked_watches(db, host, device);
     }
     emit_to_frames(
         emitter,
@@ -325,12 +337,14 @@ pub async fn extension_permission_set(
 
 #[tauri::command]
 pub async fn extension_permission_remove(
+    app: AppHandle,
     state: State<'_, AppState>,
     args: PermissionRemoveArgs,
 ) -> Result<()> {
     let db = active_database(&state)?;
+    let device = current_device_uuid(&app, &db)?;
     let host = state.extensions();
-    tauri::async_runtime::spawn_blocking(move || remove(&db, &host, args))
+    tauri::async_runtime::spawn_blocking(move || remove(&db, &host, device, args))
         .await
         .map_err(|e| invalid(&format!("permissions task: {e}")))?
 }

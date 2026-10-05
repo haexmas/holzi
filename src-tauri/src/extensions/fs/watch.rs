@@ -2,8 +2,9 @@
 //! (extension, `ruleId`), so an extension can only end or ask about its own. Every path of a
 //! debounced batch reaches only the frames of that extension as `filesync:file-changed` with
 //! `ruleId`, `changeType` and the path relative to the watched folder (flat, as the SDK reads it).
-//! A watch ends with `unwatch` or when the last frame of its extension closes. Android and iOS
-//! offer no watching (FR-066).
+//! A watch ends with `unwatch`, when the last frame of its extension closes, or when no permission
+//! allows its folder any more ([`super::end_revoked_watches`]). Android and iOS offer no watching
+//! (FR-066).
 
 // Without a watcher (Android, iOS) only the "not available" answers remain.
 #![cfg_attr(
@@ -58,9 +59,11 @@ mod desktop {
 
     type Watcher = Debouncer<RecommendedWatcher, RecommendedCache>;
 
-    /// A running watch and, when only a dialog choice allowed it, the frame of that choice.
+    /// A running watch, its folder and, when only a dialog choice allowed it, the frame of that
+    /// choice.
     struct Watch {
         _watcher: Watcher,
+        root: PathBuf,
         frame: Option<String>,
     }
 
@@ -130,6 +133,7 @@ mod desktop {
                 (extension_id, rule_id),
                 Watch {
                     _watcher: watcher,
+                    root,
                     frame,
                 },
             );
@@ -155,6 +159,14 @@ mod desktop {
         pub fn end_all(&self, extension_id: Uuid) {
             self.map().retain(|(owner, _), _| *owner != extension_id);
         }
+
+        /// Ends every watch a permission allowed whose folder `allowed` no longer grants its
+        /// extension; a watch a dialog choice allowed ends with its frame instead.
+        pub fn end_unless(&self, allowed: impl Fn(Uuid, &Path) -> bool) {
+            self.map().retain(|(extension_id, _), watch| {
+                watch.frame.is_some() || allowed(*extension_id, &watch.root)
+            });
+        }
     }
 
     /// `path` below `root` as the SDK reports it; a path outside the watched folder is not
@@ -178,6 +190,7 @@ pub struct Watches;
 impl Watches {
     pub fn end_frame(&self, _frame: &str) {}
     pub fn end_all(&self, _extension_id: uuid::Uuid) {}
+    pub fn end_unless(&self, _allowed: impl Fn(uuid::Uuid, &std::path::Path) -> bool) {}
 }
 
 /// `{ruleId, path}`: watches the folder and everything below it; a watch with the same `ruleId`
