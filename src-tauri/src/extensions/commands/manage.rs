@@ -69,6 +69,7 @@ pub async fn extension_remove(
         host.fs.watches.end_all(id);
         host.notifications.close_all(id);
         host.mail_watches.end_all(id);
+        host.shells.end_all(id);
         Ok(())
     })
     .await
@@ -109,6 +110,7 @@ pub async fn extension_set_enabled(
             host.fs.watches.end_all(id);
             host.notifications.close_all(id);
             host.mail_watches.end_all(id);
+            host.shells.end_all(id);
         }
         Ok(())
     })

@@ -110,6 +110,7 @@ pub async fn extension_frame_close(
         host.fs.frame_closed(&frame, closed.extension_id, last);
         if last {
             host.mail_watches.end_all(closed.extension_id);
+            host.shells.end_all(closed.extension_id);
         }
     }
     host.drop_dialogs_of(&frame);

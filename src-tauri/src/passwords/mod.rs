@@ -39,10 +39,15 @@ pub mod items;
 mod items_tests;
 pub mod maintenance;
 pub mod model;
+pub mod model_passkeys;
 pub mod model_references;
 #[cfg(test)]
 mod model_tests;
+pub mod passkey_links;
+#[cfg(test)]
+mod passkey_links_tests;
 pub mod passkeys;
+pub mod passkeys_ops;
 #[cfg(test)]
 mod passkeys_tests;
 pub mod presets;
@@ -77,3 +82,6 @@ mod trash_tests;
 pub mod usage;
 #[cfg(test)]
 mod usage_tests;
+pub mod webauthn;
+#[cfg(test)]
+mod webauthn_tests;

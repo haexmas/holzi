@@ -2,6 +2,12 @@
 //! R3, R4, R12): resolving with the rights of a caller, the cycle check on save, the marks for the
 //! window, how many entries use a source, and replacing placeholders by their values before a
 //! source is deleted for good. The grammar and the walk are in `references.rs`.
+//!
+//! Maintainability exception (spaex 500-LoC rule): every function here reads the same entry
+//! texts with the caller's rights, so resolving, checking and inlining have stayed together.
+//! Concrete split plan, if this grows further: move the usage views and the inlining before a
+//! final delete (`item_references`, `targets`, `targets_of`, `inline_text`, `inline_all`,
+//! `items_in_groups`) into `references_usage.rs`, leaving resolving and the save check here.
 
 use std::collections::{BTreeSet, HashSet};
 
@@ -427,9 +433,11 @@ fn targets(q: &mut impl Query, sources: &[String]) -> Result<Vec<(String, BTreeS
     Ok(out)
 }
 
-/// How many other entries point at each of `sources` (FR-048, research R12).
+/// How many other entries point at each of `sources` (FR-048, research R12), and how many links
+/// to its passkeys other entries hold (research R6; they drop with it).
 pub fn targets_of(q: &mut impl Query, sources: &[String]) -> Result<Vec<ReferenceUsage>> {
     let found = targets(q, sources)?;
+    let links = super::passkey_links::links_to_items(q, sources)?;
     Ok(sources
         .iter()
         .map(|source| ReferenceUsage {
@@ -441,8 +449,7 @@ pub fn targets_of(q: &mut impl Query, sources: &[String]) -> Result<Vec<Referenc
                     .count(),
             )
             .unwrap_or(u32::MAX),
-            // ponytail: passkey links come with migration 0024 in stage 4 (T065); until then none.
-            passkey_links: 0,
+            passkey_links: links.get(source).copied().unwrap_or(0),
         })
         .collect())
 }

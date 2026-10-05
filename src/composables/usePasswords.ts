@@ -76,6 +76,10 @@ export function usePasswords() {
   const deletePasskeyAsync = (passkeyId: string) =>
     invoke<null>('passwords_passkey_delete', { args: { passkeyId } })
 
+  /** "Verweis lösen": drops the link that shows another entry's passkey here. */
+  const passkeyUnlinkAsync = (itemId: string, passkeyId: string) =>
+    invoke<null>('passwords_passkey_unlink', { args: { itemId, passkeyId } })
+
   // Files travel as paths from the system's dialogs, never as bytes (FR-019).
   const attachmentAddAsync = (itemId: string, path: string) =>
     invoke<AttachmentView>('passwords_attachment_add', {
@@ -253,6 +257,7 @@ export function usePasswords() {
     updateItemAsync,
     renamePasskeyAsync,
     deletePasskeyAsync,
+    passkeyUnlinkAsync,
     attachmentAddAsync,
     attachmentRenameAsync,
     attachmentRemoveAsync,

@@ -1,6 +1,7 @@
 import { onScopeDispose, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { DevModeState } from '@bindings/DevModeState'
 import { useColorScheme } from '~/composables/useColorScheme'
 import { useExtensionPermissionsStore } from '~/stores/extensionPermissions'
@@ -41,6 +42,23 @@ async function reloadForDevModeAsync(): Promise<boolean> {
   return true
 }
 
+/** Brings this native window to the front. Mobile has no such window calls; their failure leaves
+ * the window as it is. */
+async function raiseWindowAsync(): Promise<void> {
+  const window = getCurrentWindow()
+  for (const step of [
+    () => window.unminimize(),
+    () => window.show(),
+    () => window.setFocus(),
+  ]) {
+    try {
+      await step()
+    } catch {
+      // Not offered on this platform.
+    }
+  }
+}
+
 export function useExtensionHost() {
   const extensions = useExtensionsStore()
   const permissions = useExtensionPermissionsStore()
@@ -60,9 +78,10 @@ export function useExtensionHost() {
     { immediate: true },
   )
 
-  // A click on a notification of an extension brings its tab forward (spec 017 US8, FR-052); the
-  // extension itself hears the click through its frame. Registered once per scope; a listener that
-  // arrives after the scope ended is dropped at once, and a failure does not stop the start.
+  // A click on a notification of an extension brings its tab forward (spec 017 US8, FR-052), and
+  // the native window that now shows the tab comes to the front, no other. The extension itself
+  // hears the click through its frame. Registered once per scope; a listener that arrives after the
+  // scope ended is dropped at once, and a failure does not stop the start.
   const wm = useWindowManagerStore()
   let disposed = false
   let unlistenClick: UnlistenFn | null = null
@@ -70,9 +89,9 @@ export function useExtensionHost() {
     disposed = true
     unlistenClick?.()
   })
-  listen<{ extensionId: string }>('extension-notification-click', (event) =>
-    wm.showExtension(event.payload.extensionId),
-  )
+  listen<{ extensionId: string }>('extension-notification-click', (event) => {
+    if (wm.showExtension(event.payload.extensionId)) void raiseWindowAsync()
+  })
     .then((unlisten) => {
       if (disposed) unlisten()
       else unlistenClick = unlisten

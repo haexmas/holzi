@@ -246,3 +246,41 @@ fn each_open_extension_hears_what_it_may_read_and_a_migration_its_new_table() {
     );
     assert!(known.contains_key(&created), "the snapshot follows");
 }
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[test]
+fn a_written_permission_ends_the_watches_it_no_longer_allows() {
+    let s = crate::extensions::fs::test_support::setup();
+    let ctx = s.frame("good-notes-like.xt");
+    s.grant(&ctx, "read", &s.root);
+    let watched = s.root.join("watched");
+    std::fs::create_dir(&watched).unwrap();
+    let watch = serde_json::json!({ "ruleId": "r1", "path": watched.to_string_lossy() });
+    crate::extensions::bridge::dispatch::call(&ctx, "extension_filesystem_watch", &watch).unwrap();
+    s.remember(&ctx, "read", &s.root, "denied");
+    let running = || s.host.fs.watches.running(ctx.session.extension_id, "r1");
+
+    let batch = |tables: &[&str]| Batch {
+        tables: set(tables),
+        lagged: false,
+    };
+    let mut known = Schema::new();
+    handle(
+        &s.vault,
+        &s.host,
+        &Recorded::default(),
+        s.device,
+        &mut known,
+        batch(&["chat_threads"]),
+    );
+    assert!(running(), "no permission was written in this batch");
+    handle(
+        &s.vault,
+        &s.host,
+        &Recorded::default(),
+        s.device,
+        &mut known,
+        batch(&["extension_permissions"]),
+    );
+    assert!(!running());
+}

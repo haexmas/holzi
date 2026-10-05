@@ -17,7 +17,7 @@ use serde_json::json;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use super::connect::{imap_login, imap_logout, ImapSession};
+use super::connect::{imap_login, ImapSession};
 use super::{check_mailbox, MailError, ServerConfig};
 use crate::extensions::bridge::dispatch::Emit;
 use crate::extensions::bridge::events::emit_to_frames;
@@ -39,6 +39,7 @@ pub const MAX_WATCHES: usize = 16;
 /// The pauses before opening a lost connection again.
 const FIRST_RETRY: Duration = Duration::from_secs(5);
 const LAST_RETRY: Duration = Duration::from_secs(300);
+const WATCH_OPERATION_TIMEOUT: Duration = Duration::from_secs(60);
 
 type Key = (Uuid, String, String);
 
@@ -49,6 +50,7 @@ pub struct MailWatches {
 }
 
 impl MailWatches {
+    /// Locks the registry while recovering from a poisoned mutex.
     fn lock(&self) -> MutexGuard<'_, HashMap<Key, CancellationToken>> {
         self.running.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -71,6 +73,7 @@ impl MailWatches {
         });
     }
 
+    /// Counts the watches currently registered for an extension.
     pub fn count(&self, extension_id: Uuid) -> usize {
         self.lock()
             .keys()
@@ -86,6 +89,7 @@ struct Seen {
     highest: u32,
 }
 
+/// Converts an async-IMAP protocol error into the mail boundary error.
 fn imap_err(error: async_imap::error::Error) -> MailError {
     MailError::Imap(error.to_string())
 }
@@ -128,6 +132,7 @@ struct Report {
 }
 
 impl Report {
+    /// Emits the SDK event when the polling/search operation found new messages.
     fn new_messages(&self, count: u32) {
         if count == 0 {
             return;
@@ -151,48 +156,72 @@ async fn connected(
     seen: &mut Option<Seen>,
     stop: &CancellationToken,
 ) -> Result<(), MailError> {
-    let mut session = imap_login(config).await?;
-    let idle = session
-        .capabilities()
+    let mut session = tokio::time::timeout(WATCH_OPERATION_TIMEOUT, imap_login(config))
         .await
+        .map_err(|_| MailError::Timeout)??;
+    let idle = tokio::time::timeout(WATCH_OPERATION_TIMEOUT, session.capabilities())
+        .await
+        .map_err(|_| MailError::Timeout)?
         .map_err(imap_err)?
         .has_str("IDLE");
-    select(&mut session, &report.mailbox, seen).await?;
+    tokio::time::timeout(
+        WATCH_OPERATION_TIMEOUT,
+        select(&mut session, &report.mailbox, seen),
+    )
+    .await
+    .map_err(|_| MailError::Timeout)??;
     loop {
         let mut current = seen.unwrap_or(Seen {
             validity: 0,
             highest: 0,
         });
-        report.new_messages(new_messages(&mut session, &mut current).await?);
+        let count = tokio::time::timeout(
+            WATCH_OPERATION_TIMEOUT,
+            new_messages(&mut session, &mut current),
+        )
+        .await
+        .map_err(|_| MailError::Timeout)??;
+        report.new_messages(count);
         *seen = Some(current);
         if idle {
             let mut handle = session.idle();
-            handle.init().await.map_err(imap_err)?;
+            tokio::time::timeout(WATCH_OPERATION_TIMEOUT, handle.init())
+                .await
+                .map_err(|_| MailError::Timeout)?
+                .map_err(imap_err)?;
             let (waiting, _interrupt) = handle.wait_with_timeout(IDLE_RENEW);
             tokio::select! {
                 () = stop.cancelled() => return Ok(()),
                 result = waiting => { result.map_err(imap_err)?; }
             }
-            session = handle.done().await.map_err(imap_err)?;
+            session = tokio::time::timeout(WATCH_OPERATION_TIMEOUT, handle.done())
+                .await
+                .map_err(|_| MailError::Timeout)?
+                .map_err(imap_err)?;
         } else {
             tokio::select! {
-                () = stop.cancelled() => {
-                    imap_logout(session).await;
-                    return Ok(());
-                }
+                () = stop.cancelled() => return Ok(()),
                 () = tokio::time::sleep(interval) => {}
             }
             // NOOP lets the server tell about new messages of the selected mailbox.
-            session.noop().await.map_err(imap_err)?;
+            tokio::time::timeout(WATCH_OPERATION_TIMEOUT, session.noop())
+                .await
+                .map_err(|_| MailError::Timeout)?
+                .map_err(imap_err)?;
         }
     }
 }
 
+/// Reconnects a watch after failures until its cancellation token is triggered.
 async fn run(config: ServerConfig, report: Report, interval: Duration, stop: CancellationToken) {
     let mut seen = None;
     let mut pause = FIRST_RETRY;
     loop {
-        match connected(&config, &report, interval, &mut seen, &stop).await {
+        let outcome = tokio::select! {
+            () = stop.cancelled() => return,
+            outcome = connected(&config, &report, interval, &mut seen, &stop) => outcome,
+        };
+        match outcome {
             Ok(()) => return,
             Err(error) => log::warn!("mail watch of an extension: {error}; trying again"),
         }

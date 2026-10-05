@@ -82,6 +82,7 @@ fn tls_config() -> Result<Arc<ClientConfig>, MailError> {
         .ok_or(MailError::Tls)
 }
 
+/// Upgrades a TCP stream to TLS for the requested server name.
 async fn tls(host: &str, tcp: TcpStream) -> Result<TlsStream<TcpStream>, MailError> {
     let name = ServerName::try_from(host.to_owned()).map_err(|_| MailError::Tls)?;
     TlsConnector::from(tls_config()?)
@@ -90,12 +91,14 @@ async fn tls(host: &str, tcp: TcpStream) -> Result<TlsStream<TcpStream>, MailErr
         .map_err(|_| MailError::Tls)
 }
 
+/// Opens the TCP connection described by a server configuration.
 async fn tcp(config: &ServerConfig) -> Result<TcpStream, MailError> {
     TcpStream::connect((config.host.as_str(), config.port))
         .await
         .map_err(|_| MailError::Connect)
 }
 
+/// Converts an async-IMAP protocol error into the mail boundary error.
 fn imap_err(error: async_imap::error::Error) -> MailError {
     MailError::Imap(error.to_string())
 }

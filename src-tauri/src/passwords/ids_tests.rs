@@ -1,7 +1,8 @@
 //! Tests for the derived identifiers of the password manager (spec 034, T008).
 
 use super::ids::{
-    fold, fold_for_search, item_tag_id, passkey_id, tag_id, NS_ITEM_TAG, NS_PASSKEY, NS_TAG,
+    fold, fold_for_search, item_tag_id, passkey_id, passkey_link_id, tag_id, NS_ITEM_TAG,
+    NS_PASSKEY, NS_PASSKEY_LINK, NS_TAG,
 };
 
 // Escapes keep the two forms visibly different in the source. The pinned ids below were
@@ -23,6 +24,10 @@ fn the_namespaces_never_change() {
         NS_PASSKEY.to_string(),
         "e9e2f6e7-716b-43c4-85ba-a83fb47392c8"
     );
+    assert_eq!(
+        NS_PASSKEY_LINK.to_string(),
+        "963a3351-35d8-4686-9653-ca7ce493b077"
+    );
 }
 
 #[test]
@@ -38,6 +43,10 @@ fn derived_ids_are_pinned_for_fixed_inputs() {
     assert_eq!(
         passkey_id("Y3JlZA==").to_string(),
         "da51b0ea-5961-56d0-808e-1af8077b606e"
+    );
+    assert_eq!(
+        passkey_link_id("item-1", "passkey-1").to_string(),
+        "552970e7-dff9-5a22-a72c-18d24aa417ac"
     );
 }
 
@@ -63,6 +72,7 @@ fn different_names_give_different_ids() {
     assert_ne!(tag_id("Work"), tag_id("Home"));
     assert_ne!(item_tag_id("a", "b"), item_tag_id("b", "a"));
     assert_ne!(passkey_id("one"), passkey_id("two"));
+    assert_ne!(passkey_link_id("a", "b"), passkey_link_id("b", "a"));
 }
 
 #[test]

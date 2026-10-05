@@ -144,6 +144,7 @@ pub async fn extension_dev_unload(
         host.fs.watches.end_all(id);
         host.notifications.close_all(id);
         host.mail_watches.end_all(id);
+        host.shells.end_all(id);
         reconcile(
             &db,
             &host,

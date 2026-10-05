@@ -7,6 +7,12 @@
 //! accepts `holzi-sync/1`; the accepting side opens the handshake stream.
 //! Per device at most one connection lives: when both dial each other at
 //! once, the connection dialed by the smaller endpoint id stays.
+//!
+//! Maintainability exception (spaex 500-LoC rule): the node's state and the life of one
+//! connection read and write the same `Inner`, so they have stayed together; the device problems
+//! already live in `endpoint_devices.rs`. Concrete split plan, if this grows further: move
+//! `run_connection`, `register`, `closed_as_duplicate` and `handshake_close_code` into
+//! `endpoint_connection.rs`, leaving `SyncNode` and its dialing here.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::net::SocketAddr;

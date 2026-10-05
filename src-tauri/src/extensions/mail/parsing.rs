@@ -5,12 +5,14 @@ use mail_parser::{Address as ParsedAddress, MessageParser, MimeHeaders};
 
 use super::{Address, Attachment, MailError, Message, MessageEnvelope};
 
+/// Parses RFC 822 bytes or returns the mail parse error used by the bridge.
 fn parsed(rfc822: &[u8]) -> Result<mail_parser::Message<'_>, MailError> {
     MessageParser::default()
         .parse(rfc822)
         .ok_or_else(|| MailError::Parse("not a message".into()))
 }
 
+/// Converts parser addresses while dropping entries without an email address.
 fn addresses(header: Option<&ParsedAddress<'_>>) -> Vec<Address> {
     header
         .map(|h| {

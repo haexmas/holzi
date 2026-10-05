@@ -52,6 +52,7 @@ pub type Shared = Arc<Mutex<State>>;
 #[path = "test_server_smtp.rs"]
 mod smtp;
 
+/// Builds a deterministic RFC 822 message for the IMAP and SMTP tests.
 pub fn message(subject: &str, with_attachment: bool) -> Vec<u8> {
     let mut text = format!(
         "From: Anna <anna@example.org>\r\nTo: Ben <ben@example.org>\r\nSubject: {subject}\r\n\
@@ -70,6 +71,7 @@ pub fn message(subject: &str, with_attachment: bool) -> Vec<u8> {
     text.into_bytes()
 }
 
+/// Creates the shared test server state with two initial messages.
 pub fn state() -> Shared {
     let mut state = State {
         next_uid: 10,

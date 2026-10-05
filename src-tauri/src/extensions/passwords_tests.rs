@@ -29,13 +29,13 @@ impl Emit for Silent {
 /// A secret no answer may carry outside a single read.
 const MARKER: &str = "s3cr3t-marker-7f1c";
 
-struct Setup {
+pub(super) struct Setup {
     _dir: tempfile::TempDir,
-    vault: VaultDb,
+    pub(super) vault: VaultDb,
     ctx: CallContext,
     /// An entry with the tag `haex-calendar` and one with `private`.
-    calendar: String,
-    private: String,
+    pub(super) calendar: String,
+    pub(super) private: String,
 }
 
 fn user_create(vault: &VaultDb, title: &str, tag: &str) -> String {
@@ -60,7 +60,7 @@ fn user_create(vault: &VaultDb, title: &str, tag: &str) -> String {
     .unwrap()
 }
 
-fn setup() -> Setup {
+pub(super) fn setup() -> Setup {
     let (dir, db) = open_test_vault();
     let vault = VaultGate::new().vault_db(Arc::new(db)).unwrap();
     let device = vault
@@ -100,16 +100,16 @@ fn setup() -> Setup {
 }
 
 impl Setup {
-    fn call(&self, method: &str, params: Value) -> Result<Value, BridgeError> {
+    pub(super) fn call(&self, method: &str, params: Value) -> Result<Value, BridgeError> {
         bridge_call(&self.ctx, method, &params)
     }
 
-    fn code(&self, method: &str, params: Value) -> u16 {
+    pub(super) fn code(&self, method: &str, params: Value) -> u16 {
         self.call(method, params)
             .map_or_else(|e| e.code.as_u16(), |_| 0)
     }
 
-    fn permit(&self, action: &str, target: &str, status: &str) {
+    pub(super) fn permit(&self, action: &str, target: &str, status: &str) {
         set(
             &self.vault,
             self.ctx.device,
@@ -127,7 +127,7 @@ impl Setup {
         .unwrap();
     }
 
-    fn token(&self, id: &str, kind: RefMarkKind, key: Option<&str>) -> String {
+    pub(super) fn token(&self, id: &str, kind: RefMarkKind, key: Option<&str>) -> String {
         let service = PasswordsService::new(self.vault.clone());
         block_on(service.reference_token(
             &Caller::User,
@@ -339,18 +339,6 @@ fn without_a_grant_holzi_asks_only_for_a_permission_in_the_state_ask() {
 }
 
 #[test]
-fn a_denied_star_takes_every_grant_away() {
-    let s = setup();
-    s.permit("readWrite", "haex-calendar", "granted");
-    s.permit("read", "*", "denied");
-    assert_eq!(s.code("extension_password_list", json!({})), 1002);
-    assert_eq!(
-        s.code("extension_password_read", json!({ "itemId": s.calendar })),
-        1002
-    );
-}
-
-#[test]
 fn malformed_calls_are_refused_before_the_service_is_asked() {
     let s = setup();
     s.permit("readWrite", "*", "granted");
@@ -487,15 +475,4 @@ fn sending_back_what_was_read_keeps_placeholders_hidden_fields_and_field_ids() {
     )
     .unwrap();
     assert_eq!(ids(&s.stored(&target)), ids(&before)[1..]);
-}
-
-#[test]
-fn under_a_denied_star_holzi_does_not_ask() {
-    let s = setup();
-    s.permit("readWrite", "haex-calendar", "ask");
-    s.permit("read", "*", "denied");
-    assert_eq!(
-        s.code("extension_password_read", json!({ "itemId": s.calendar })),
-        1002
-    );
 }

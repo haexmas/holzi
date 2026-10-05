@@ -45,9 +45,6 @@ pub trait Desktop: Send + Sync {
     ) -> Result<Box<dyn ShownNotification>, String> {
         Err("notifications are not available".to_owned())
     }
-
-    /// Brings holzi's window to the front.
-    fn focus_window(&self) {}
 }
 
 #[derive(Default)]
@@ -61,6 +58,8 @@ pub struct ExtensionHost {
     pub notifications: NotificationState,
     /// Mailboxes extensions watch for new messages (US11).
     pub mail_watches: super::mail::watch::MailWatches,
+    /// Shells started by extensions (US11).
+    pub shells: super::shell::ShellState,
     /// Entry and Content-Security-Policy per bundle started in this process.
     started: Mutex<HashMap<Uuid, Arc<Started>>>,
     /// The bundle each extension last started with on this device, to see an update.

@@ -14,6 +14,7 @@ use super::{check_server, Address, ConnectionSecurity, MailError, OutgoingMessag
 /// How long one SMTP exchange may take.
 const SMTP_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Creates a validation/build error without exposing message content.
 fn build_error(message: &str) -> MailError {
     MailError::Build(message.to_owned())
 }
@@ -35,6 +36,7 @@ fn message_id(text: &str) -> Result<String, MailError> {
     Ok(format!("<{id}>"))
 }
 
+/// Converts and validates an SDK address for lettre.
 fn mailbox(address: &Address) -> Result<Mailbox, MailError> {
     let email = single_line(&address.email)?
         .parse()
@@ -48,6 +50,7 @@ fn mailbox(address: &Address) -> Result<Mailbox, MailError> {
     Ok(Mailbox::new(name, email))
 }
 
+/// Builds the multipart body and validates all attachment metadata.
 fn body(message: &OutgoingMessage) -> Result<MultiPart, MailError> {
     let alternative = match (&message.body_text, &message.body_html) {
         (None, None) => None,
@@ -143,6 +146,7 @@ pub fn build_rfc822(message: &OutgoingMessage) -> Result<Vec<u8>, MailError> {
     Ok(build(message)?.formatted())
 }
 
+/// Builds the SMTP transport with the configured security and timeout.
 fn transport(config: &ServerConfig) -> Result<AsyncSmtpTransport<Tokio1Executor>, MailError> {
     check_server(&config.host, config.port, config.security)?;
     let builder = match config.security {

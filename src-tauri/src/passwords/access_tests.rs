@@ -211,6 +211,63 @@ fn a_star_grant_covers_everything() {
     );
 }
 
+// Spec 017, FR-017: a denied tag hides its entries from a grant for all, unless the entry also
+// carries a granted tag.
+#[test]
+fn a_scope_for_all_but_denied_tags_yields_to_a_granted_tag() {
+    let caller = Caller::Extension {
+        id: "ext-1".to_string(),
+    };
+    let grants = [
+        Grant::new(GrantAction::ReadWrite, Scope::all_except(["Private"])),
+        read(&["bank"]),
+    ];
+    for (tags, visible) in [
+        (&[][..], true),
+        (&["other"][..], true),
+        (&["private"][..], false),
+        (&["private", "other"][..], false),
+        (&["private", "bank"][..], true),
+    ] {
+        let tags = names(tags);
+        assert_eq!(
+            authorize_read(&caller, &grants, &item(&tags)).is_ok(),
+            visible,
+            "{tags:?}"
+        );
+    }
+    assert_eq!(authorize_create(&caller, &grants, &names(&[])), Ok(()));
+    assert_eq!(
+        authorize_create(&caller, &grants, &names(&["other", "PRIVATE"])),
+        Err(Denied::Forbidden)
+    );
+    assert_eq!(
+        authorize_update(
+            &caller,
+            &grants,
+            &item(&names(&["other"])),
+            Some(&names(&["private"]))
+        ),
+        Err(Denied::Forbidden),
+        "a denied tag cannot be added"
+    );
+    assert_eq!(
+        authorize_update(
+            &caller,
+            &grants,
+            &item(&names(&["other"])),
+            Some(&names(&[]))
+        ),
+        Ok(names(&[])),
+        "an entry without tags stays in a scope for all"
+    );
+    assert_eq!(
+        authorize_unassigned(&caller, &grants, GrantAction::Read),
+        Ok(())
+    );
+    assert_eq!(Scope::all_except(Vec::<String>::new()), Scope::All);
+}
+
 // Z6: create with a tag scope.
 #[test]
 fn create_needs_tags_of_the_scope_and_only_those() {

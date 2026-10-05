@@ -14,6 +14,7 @@ use super::{
     MessageEnvelope, ServerConfig,
 };
 
+/// Converts an async-IMAP protocol error into the mail boundary error.
 fn imap_err(error: async_imap::error::Error) -> MailError {
     MailError::Imap(error.to_string())
 }
@@ -28,6 +29,7 @@ macro_rules! with_session {
     }};
 }
 
+/// Formats UIDs as the comma-separated IMAP set used by commands.
 fn uid_list(uids: &[u32]) -> String {
     uids.iter()
         .map(u32::to_string)
@@ -54,6 +56,7 @@ pub async fn list_mailboxes(
     })
 }
 
+/// Runs LIST and optional STATUS operations on an already authenticated session.
 async fn list_inner(
     session: &mut ImapSession,
     reference: Option<&str>,
@@ -176,7 +179,7 @@ async fn fetch_body(
         .find(|f| f.uid == Some(uid))
         .ok_or(MailError::NotFound)?
         .size
-        .unwrap_or(0);
+        .ok_or_else(|| MailError::Imap("no size in the answer".into()))?;
     if size as usize > max_bytes {
         return Err(MailError::TooLarge);
     }
@@ -342,6 +345,7 @@ fn decode_header(raw: &[u8]) -> String {
     }
 }
 
+/// Converts an IMAP envelope address into the SDK address shape.
 fn address_of(a: &ImapAddress) -> Address {
     let text = |b: &Option<std::borrow::Cow<'_, [u8]>>| {
         b.as_ref()
@@ -371,6 +375,7 @@ fn has_attachments(structure: &BodyStructure<'_>) -> bool {
     }
 }
 
+/// Converts an IMAP fetch response into the SDK envelope shape.
 fn envelope_of(fetch: &Fetch) -> MessageEnvelope {
     let envelope = fetch.envelope();
     let addresses = |list: Option<&Vec<ImapAddress<'_>>>| {

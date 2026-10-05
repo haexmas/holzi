@@ -5,6 +5,11 @@
 //! An update writes only the columns that really change: haex-crdt merges per column, so two
 //! devices that change different fields of one entry both keep their change (FR-037). Writes use
 //! check-then-write instead of `ON CONFLICT DO UPDATE` (see `storage/preferences.rs`).
+//!
+//! Maintainability exception (spaex 500-LoC rule): reads, create and update of an entry share the
+//! column set and the TOTP rules, so they have stayed in one file. Concrete split plan, if this
+//! grows further: move the update path (`Stored`, `update_item`, `apply_otp`, `write_parts`,
+//! `replace_key_values`) into `items_update.rs`, leaving the reads and `create_item` here.
 
 use std::collections::{HashMap, HashSet};
 

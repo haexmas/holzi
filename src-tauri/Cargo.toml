@@ -136,6 +136,11 @@ pkcs8 = "0.11"
 spki = "0.8"
 unicode-normalization = "0.1"
 tauri-plugin-clipboard-manager = "2"
+# Passkey service (spec 036, research R8, R9): CBOR for COSE keys and the attestation object, the
+# public suffix list for the relying party check, URL parsing for the origin.
+ciborium = "0.2.2"
+psl = "2.1.239"
+url = "2.5.8"
 
 # haex-crdt 0.4.0, originally pinned per plans/001-desktop-mvp.md at commit
 # 1c069ef; no tagged releases past v0.1.0 exist yet, so holzi pins main by

@@ -22,6 +22,7 @@ pub const MODULE: &str = module_path!();
 /// How long one call may talk to a server.
 const MAIL_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Deserializes one required bridge parameter and maps malformed input to validation.
 fn field<T: DeserializeOwned>(params: &Value, name: &str) -> Result<T, BridgeError> {
     let value = params.get(name).cloned().unwrap_or(Value::Null);
     serde_json::from_value(value).map_err(|_| {
@@ -32,6 +33,7 @@ fn field<T: DeserializeOwned>(params: &Value, name: &str) -> Result<T, BridgeErr
     })
 }
 
+/// Deserializes an optional bridge parameter, treating absent and null values alike.
 fn optional<T: DeserializeOwned>(params: &Value, name: &str) -> Result<Option<T>, BridgeError> {
     match params.get(name) {
         None | Some(Value::Null) => Ok(None),
@@ -49,6 +51,7 @@ fn run<T>(work: impl Future<Output = Result<T, MailError>>) -> Result<T, BridgeE
     .map_err(Into::into)
 }
 
+/// Serializes an operation result into the bridge's JSON response value.
 fn to_json<T: serde::Serialize>(value: T) -> Result<Value, BridgeError> {
     serde_json::to_value(value)
         .map_err(|_| BridgeError::new(ExtensionErrorCode::Web, "answer not understood"))
