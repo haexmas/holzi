@@ -30,7 +30,9 @@ Richtung B aus ADR-0004. Protokoll des vault-sdk v3.7.0 (`src/messages.ts`, `src
 
 ## Rahmen-Shim (holzi, zweiter Port)
 
-Inline-Skript, das holzi in jedes ausgelieferte HTML-Dokument der Erweiterung einfügt (CSP-Hash). holzi
+Inline-Skript, das holzi in jedes ausgelieferte HTML-Dokument der Erweiterung einfügt (CSP-Hash). Der Seite
+einer Entwicklungsfassung gibt holzi denselben Shim als Init-Skript für alle Rahmen, nur wirksam in einem
+Rahmen auf `http://localhost:*` oder `http://127.0.0.1:*` (research R16, Nachtrag). holzi
 schickt `{type: "holzi:frame:init", shortcuts: [...]}` mit einem eigenen Port; der Shim nimmt es nur von
 `window.parent` an. holzi schickt das Init bei jedem `load`; der Shim antwortet zuerst mit `hello {fresh}`,
 `fresh` nur beim ersten Init seines Dokuments.

@@ -26,3 +26,18 @@ fn the_shim_only_accepts_its_init_from_the_parent_and_never_from_the_top_window(
     assert!(SHIM.contains("if (window.top === window) return;"));
     assert!(!SHIM.contains("eval("));
 }
+
+#[test]
+fn the_title_observer_does_not_need_the_root_element() {
+    assert!(SHIM.contains("new MutationObserver(reportTitle).observe(document, {"));
+    assert!(!SHIM.contains("document.documentElement"));
+}
+
+#[test]
+fn a_development_page_gets_the_same_shim_only_on_a_loopback_http_address() {
+    let script = dev_init_script();
+    let at = script.find(SHIM).expect("the shim itself, unchanged");
+    let guard = &script[..at];
+    assert!(guard.contains("if (at.protocol !== 'http:' || (at.hostname !== 'localhost' && at.hostname !== '127.0.0.1')) return;"));
+    assert_eq!(script[at + SHIM.len()..].trim(), "})();");
+}

@@ -45,9 +45,10 @@ use crate::vault_gate::VaultDb;
 /// The device setting that switches developer mode on.
 pub const MODE_KEY: &str = "extensions.devMode";
 
-/// The hosts a development server may have. Not `[::1]`: a Content-Security-Policy source cannot
-/// name an IPv6 address, so holzi's window could not frame it.
-const LOOPBACK: [&str; 2] = ["localhost", "127.0.0.1"];
+/// The hosts a development server may have; the frame shim acts on the same (`protocol::shim`).
+/// Not `[::1]`: a Content-Security-Policy source cannot name an IPv6 address, so holzi's window
+/// could not frame it.
+pub(crate) const LOOPBACK: [&str; 2] = ["localhost", "127.0.0.1"];
 
 fn refused(reason: &str) -> HolziError {
     HolziError::ExtensionInstall {

@@ -32,8 +32,6 @@ const PORT_INIT = 'haexspace:port:init'
 const PORT_READY = 'haexspace:port:ready'
 const INIT_INTERVAL_MS = 200
 const INIT_TIMEOUT_MS = 10_000
-/** After a development page's probe timed out, how often a channel is still offered. */
-const LATE_OFFER_INTERVAL_MS = 1_000
 
 export type FrameState = 'loading' | 'ready' | 'error'
 
@@ -72,7 +70,7 @@ export function useExtensionFrame(
   const error = ref<string | null>(null)
   const src = ref<string | null>(null)
   const dialog = ref<FrameDialog | null>(null)
-  /** A development version (spec 017, US12): no shim, and its console output is shown. */
+  /** A development version (spec 017, US12): its console output is shown. */
   const dev = ref(false)
   const consoleLines = ref<DevConsoleLine[]>([])
 
@@ -158,14 +156,8 @@ export function useExtensionFrame(
     const channel = new MessageChannel()
     attempts.push(channel)
     channel.port1.onmessage = (event: MessageEvent) => {
-      // An offered channel the SDK takes; a development page may replace a working one.
-      if (
-        sdkPort !== channel.port1 &&
-        attempts.includes(channel) &&
-        event.data?.type === PORT_READY
-      ) {
+      if (sdkPort === null && event.data?.type === PORT_READY) {
         stopInit()
-        sdkPort?.close()
         sdkPort = channel.port1
         for (const other of attempts) if (other !== channel) other.port1.close()
         attempts = []
@@ -235,43 +227,10 @@ export function useExtensionFrame(
     armDeadline()
   }
 
-  /** A development page's `load` while its channel works. Without a shim holzi cannot tell a new
-   * document from a hash navigation, for which WebKitGTK fires `load` too, and the SDK takes
-   * `port:init` once per document: new channels are offered while the old one keeps working, and
-   * the SDK of a new document takes one of them. */
-  function probeHandshake(): void {
-    stopInit()
-    for (const attempt of attempts) attempt.port1.close()
-    attempts = []
-    // Events wait for the probe: a new document gets them on its channel, otherwise the old one.
-    events.reset()
-    offerPort()
-    initTimer = setInterval(offerPort, INIT_INTERVAL_MS)
-    initDeadline = setTimeout(() => {
-      stopInit()
-      events.ready()
-      // Still a channel on offer, one at a time: a new document whose SDK starts late (a slow
-      // reload of the dev server) takes it; until then the old channel stays.
-      // The previous offer stays open for one more round, for an answer on its way.
-      initTimer = setInterval(() => {
-        const previous = attempts.at(-1)
-        for (const attempt of attempts)
-          if (attempt !== previous) attempt.port1.close()
-        attempts = previous ? [previous] : []
-        offerPort()
-      }, LATE_OFFER_INTERVAL_MS)
-    }, INIT_TIMEOUT_MS)
-  }
-
   /** Every `load` of the frame; the shim's `hello` then says whether its document is new. A
-   * development server's page has no shim (`probeHandshake`). */
+   * development server's page gets the same shim through holzi's init script (research R16). */
   function onLoad(): void {
     if (!frame) return
-    if (dev.value) {
-      if (state.value === 'ready') probeHandshake()
-      else startHandshake()
-      return
-    }
     startShim()
     if (state.value !== 'ready') armDeadline()
   }

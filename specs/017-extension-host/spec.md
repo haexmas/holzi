@@ -888,7 +888,9 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   ohne Signatur laden, ihren Tab dauerhaft kennzeichnen und ihre erklärten Berechtigungen beim
   Laden bestätigen lassen. Sonst gelten alle Regeln dieser Spec, mit einer Ausnahme: Für Antworten des
   Entwicklungsservers setzt holzi keine eigene Inhaltsrichtlinie, die Netzsperre aus FR-010 gilt dort also
-  nicht. Host-Funktionen prüft holzi weiter wie bei einer installierten Erweiterung.
+  nicht. Host-Funktionen prüft holzi weiter wie bei einer installierten Erweiterung. Ihr Tab verhält
+  sich wie der einer installierten Erweiterung: Titel, Zurück/Vor, Schließen-Schutz, `window.close()` und
+  holzis Tastenkürzel wirken auch dort.
 - **FR-065**: Eine Erweiterung im Entwicklermodus DARF keine installierte Erweiterung mit
   demselben Herausgeberschlüssel und Namen ersetzen oder deren Daten oder Berechtigungen
   nutzen. Ihre Registrierung, Berechtigungen und Tabellen MÜSSEN auf dem Gerät bleiben und

@@ -4,7 +4,7 @@
 import type { FlowInstance } from './flows.ts'
 
 /** The window manager store, reached through the Vue app the page mounted on `#__nuxt`. */
-const WM = `document.querySelector('#__nuxt').__vue_app__.config.globalProperties.$pinia._s.get('windowManager')`
+export const WM = `document.querySelector('#__nuxt').__vue_app__.config.globalProperties.$pinia._s.get('windowManager')`
 
 /**
  * The workspace can remount while a vault is being reopened. The mount check and the following
