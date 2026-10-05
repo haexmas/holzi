@@ -9,7 +9,9 @@ use haex_crdt::rusqlite::params;
 use zeroize::Zeroizing;
 
 use super::items::otp_params_of;
-use super::model::{CopyField, RevealedSecret, SecretField, SecretItem, SecretKeyValue, TotpCode};
+use super::model::{
+    CopyField, KeyValuePatch, RevealedSecret, SecretField, SecretItem, SecretKeyValue, TotpCode,
+};
 use super::references::Field;
 use super::references_db::{resolve_or_error, resolve_value, Reader};
 use super::totp::{code_at, remaining_seconds};
@@ -140,23 +142,55 @@ pub fn resolve_secret_item(
     }
     let mut kept = Vec::with_capacity(item.key_values.len());
     for entry in item.key_values.drain(..) {
-        let Some(raw) = entry.value.clone() else {
-            kept.push(entry);
-            continue;
-        };
-        // A field without a key is resolved too (as the empty key, which no placeholder names), so
-        // its placeholder never leaves raw.
-        let field = Field::Extra(entry.key.clone().unwrap_or_default());
-        if let Ok(resolved) = resolve_value(q, reader, &id, field, &raw)? {
-            kept.push(SecretKeyValue {
-                id: entry.id,
-                key: entry.key,
-                value: Some(resolved.to_string()),
-            });
-        }
+        kept.extend(visible_key_value(q, reader, &id, entry)?);
     }
     item.key_values = kept;
     Ok(())
+}
+
+/// A custom field as `reader` sees it: resolved, or `None` when its placeholder does not resolve
+/// for this caller.
+fn visible_key_value(
+    q: &mut impl Query,
+    reader: Reader<'_>,
+    item_id: &str,
+    entry: SecretKeyValue,
+) -> Result<Option<SecretKeyValue>> {
+    let Some(raw) = entry.value.as_deref() else {
+        return Ok(Some(entry));
+    };
+    // A field without a key is resolved too (as the empty key, which no placeholder names), so its
+    // placeholder never leaves raw.
+    let field = Field::Extra(entry.key.clone().unwrap_or_default());
+    Ok(resolve_value(q, reader, item_id, field, raw)?
+        .ok()
+        .map(|resolved| SecretKeyValue {
+            id: entry.id,
+            key: entry.key,
+            value: Some(resolved.to_string()),
+        }))
+}
+
+/// The custom fields [`resolve_secret_item`] leaves out for `reader`, as patch entries that keep
+/// them unchanged: a caller from outside that replaces the custom fields cannot delete one it never
+/// saw (spec 036, FR-047).
+pub fn hidden_key_values(
+    q: &mut impl Query,
+    reader: Reader<'_>,
+    item_id: &str,
+) -> Result<Vec<KeyValuePatch>> {
+    let mut hidden = Vec::new();
+    for entry in stored_key_values(q, item_id)? {
+        let (id, key) = (entry.id.clone(), entry.key.clone());
+        if visible_key_value(q, reader, item_id, entry)?.is_none() {
+            hidden.push(KeyValuePatch {
+                id: Some(id),
+                key: key.unwrap_or_default(),
+                value: None,
+            });
+        }
+    }
+    Ok(hidden)
 }
 
 /// The code of the entry at a Unix time with the seconds until it changes. `PasswordsNotFound` for
@@ -218,7 +252,12 @@ pub fn secret_item(q: &mut impl Query, item_id: &str) -> Result<Option<SecretIte
         return Ok(None);
     };
     item.tags = super::tags::names_of_item(q, item_id)?;
-    item.key_values = q.query_map(
+    item.key_values = stored_key_values(q, item_id)?;
+    Ok(Some(item))
+}
+
+fn stored_key_values(q: &mut impl Query, item_id: &str) -> Result<Vec<SecretKeyValue>> {
+    Ok(q.query_map(
         "SELECT id, key, value FROM haex_passwords_item_key_values WHERE item_id = ?1 \
          ORDER BY rowid",
         params![item_id],
@@ -229,6 +268,5 @@ pub fn secret_item(q: &mut impl Query, item_id: &str) -> Result<Option<SecretIte
                 value: r.get(2)?,
             })
         },
-    )?;
-    Ok(Some(item))
+    )?)
 }

@@ -6,7 +6,7 @@
 //! A refusal asks the user only for a permission the extension holds in the state "ask" (declared
 //! in its manifest and not ticked at install, or remembered so); without one it is 1002 (Z3).
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -22,6 +22,7 @@ use crate::extensions::permissions::{
 use crate::passwords::access::{Caller, Grant, GrantAction, Scope};
 use crate::passwords::model::{
     ItemHeader, ItemInput, ItemPatch, KeyValueInput, KeyValuePatch, Patch, SecretItem,
+    SecretKeyValue,
 };
 use crate::passwords::service::{Headers, PasswordsService};
 
@@ -61,13 +62,16 @@ fn permissions(ctx: &CallContext) -> Result<Vec<Permission>, BridgeError> {
     Ok(permissions)
 }
 
+fn denies_all(permissions: &[Permission]) -> bool {
+    permissions
+        .iter()
+        .any(|p| p.status == PermissionStatus::Denied && p.target == Target::Any)
+}
+
 /// The grants of the service: every granted permission. A denied `*` takes them all away; a
 /// denied tag removes nothing the service could subtract, it only keeps holzi from asking again.
 pub fn grants_of(permissions: &[Permission]) -> Vec<Grant> {
-    let denied_all = permissions
-        .iter()
-        .any(|p| p.status == PermissionStatus::Denied && p.target == Target::Any);
-    if denied_all {
+    if denies_all(permissions) {
         return Vec::new();
     }
     permissions
@@ -90,8 +94,12 @@ pub fn grants_of(permissions: &[Permission]) -> Vec<Grant> {
 }
 
 /// The answer to a refusal of the service: a question for a permission in the state "ask" that
-/// would cover the call (one of `tags` first, for a write that names them), else 1002.
+/// would cover the call (one of `tags` first, for a write that names them), else 1002. Under a
+/// denied `*` no answer could help, so nothing is asked.
 fn refused(permissions: &[Permission], write: bool, tags: &[String]) -> BridgeError {
+    if denies_all(permissions) {
+        return BridgeError::new(ExtensionErrorCode::PermissionDenied, "permission denied");
+    }
     let needed = if write {
         Action::ReadWrite
     } else {
@@ -162,7 +170,7 @@ struct SdkInput {
     otp_digits: Option<u32>,
     otp_period: Option<u32>,
     otp_algorithm: Option<String>,
-    autofill_aliases: Option<HashMap<String, Vec<String>>>,
+    autofill_aliases: Option<Aliases>,
     expires_at: Option<String>,
     tags: Vec<String>,
     key_values: Option<Vec<SdkKeyValue>>,
@@ -192,8 +200,27 @@ fn item_id(params: &Value) -> Result<String, BridgeError> {
         .ok_or_else(|| invalid("itemId must be a string"))
 }
 
-fn aliases_text(aliases: Option<HashMap<String, Vec<String>>>) -> Option<String> {
+/// The autofill aliases; ordered, so the stored text does not change with the order of a map.
+type Aliases = BTreeMap<String, Vec<String>>;
+
+fn aliases_text(aliases: Option<Aliases>) -> Option<String> {
     aliases.and_then(|a| serde_json::to_string(&a).ok())
+}
+
+/// The stored aliases as the SDK's map; a text of another shape reads as none.
+fn aliases_of(text: Option<&str>) -> Option<Aliases> {
+    text.and_then(|text| serde_json::from_str(text).ok())
+}
+
+/// A field of the whole entry the SDK sends, against what the extension read: the same value is
+/// `Keep`, so a placeholder stays a placeholder and a field the extension could not see stays as
+/// it is (spec 036, FR-047); anything else is set or, when left out, cleared.
+fn against<T: PartialEq>(sent: Option<T>, seen: &Option<T>) -> Patch<T> {
+    if sent == *seen {
+        Patch::Keep
+    } else {
+        sent.map_or(Patch::Clear, Patch::Set)
+    }
 }
 
 impl SdkInput {
@@ -225,40 +252,84 @@ impl SdkInput {
         }
     }
 
-    /// The SDK sends the whole entry: every field it leaves out is cleared, the tags and the
-    /// custom fields are replaced.
-    fn into_patch(self) -> ItemPatch {
-        fn set<T>(value: Option<T>) -> Patch<T> {
-            value.map_or(Patch::Clear, Patch::Set)
+    /// The SDK sends the whole entry, so the patch is its difference to `seen`, the entry as the
+    /// extension read it: a field left out is cleared, the tags and custom fields are replaced.
+    fn into_patch(self, seen: &SecretItem) -> ItemPatch {
+        fn otp<T>(same: bool, sent: Option<T>) -> Patch<T> {
+            if same {
+                Patch::Keep
+            } else {
+                sent.map_or(Patch::Clear, Patch::Set)
+            }
         }
+        // The TOTP parts go together: a new secret without its parts would reset them.
+        let otp_same = self.otp_secret == seen.otp_secret
+            && self.otp_digits == seen.otp_digits
+            && self.otp_period == seen.otp_period
+            && self.otp_algorithm == seen.otp_algorithm;
         ItemPatch {
-            title: set(self.title),
-            username: set(self.username),
-            password: set(self.password),
-            note: set(self.note),
-            url: set(self.url),
-            icon: set(self.icon),
-            color: set(self.color),
-            expires_at: set(self.expires_at),
-            otp_secret: set(self.otp_secret),
-            otp_digits: set(self.otp_digits),
-            otp_period: set(self.otp_period),
-            otp_algorithm: set(self.otp_algorithm),
-            autofill_aliases: set(aliases_text(self.autofill_aliases)),
-            tags: Some(self.tags),
-            key_values: Some(
-                self.key_values
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|kv| KeyValuePatch {
-                        id: None,
-                        key: kv.key.unwrap_or_default(),
-                        value: kv.value,
-                    })
-                    .collect(),
+            title: against(self.title, &seen.title),
+            username: against(self.username, &seen.username),
+            password: against(self.password, &seen.password),
+            note: against(self.note, &seen.note),
+            url: against(self.url, &seen.url),
+            icon: against(self.icon, &seen.icon),
+            color: against(self.color, &seen.color),
+            expires_at: against(self.expires_at, &seen.expires_at),
+            otp_secret: otp(otp_same, self.otp_secret),
+            otp_digits: otp(otp_same, self.otp_digits),
+            otp_period: otp(otp_same, self.otp_period),
+            otp_algorithm: otp(otp_same, self.otp_algorithm),
+            autofill_aliases: against(
+                aliases_text(self.autofill_aliases),
+                &aliases_text(aliases_of(seen.autofill_aliases.as_deref())),
             ),
+            tags: (self.tags != seen.tags).then_some(self.tags),
+            key_values: key_values_against(self.key_values.unwrap_or_default(), &seen.key_values),
         }
     }
+}
+
+/// The custom fields the SDK sends, against those the extension read. They carry no id, so a sent
+/// field takes the row of the first unclaimed read field with its key: an unchanged value keeps
+/// the stored one (a placeholder stays), the row keeps its id. `None` when nothing changed; the
+/// service keeps the fields the extension cannot see.
+fn key_values_against(
+    sent: Vec<SdkKeyValue>,
+    seen: &[SecretKeyValue],
+) -> Option<Vec<KeyValuePatch>> {
+    let unchanged = sent.len() == seen.len()
+        && sent
+            .iter()
+            .zip(seen)
+            .all(|(s, r)| s.key == r.key && s.value == r.value);
+    if unchanged {
+        return None;
+    }
+    let mut unclaimed: Vec<&SecretKeyValue> = seen.iter().collect();
+    Some(
+        sent.into_iter()
+            .map(|kv| {
+                let read = unclaimed
+                    .iter()
+                    .position(|r| r.key == kv.key)
+                    .map(|at| unclaimed.remove(at));
+                let key = kv.key.unwrap_or_default();
+                match read {
+                    Some(read) => KeyValuePatch {
+                        id: Some(read.id.clone()),
+                        key,
+                        value: (kv.value != read.value).then(|| kv.value.unwrap_or_default()),
+                    },
+                    None => KeyValuePatch {
+                        id: None,
+                        key,
+                        value: kv.value,
+                    },
+                }
+            })
+            .collect(),
+    )
 }
 
 /// The SDK's `PasswordItemSummary`.
@@ -278,10 +349,7 @@ fn summary(header: ItemHeader) -> Value {
 
 /// The SDK's `PasswordItemFull`.
 fn full(item: SecretItem) -> Value {
-    let aliases = item
-        .autofill_aliases
-        .as_deref()
-        .and_then(|text| serde_json::from_str::<HashMap<String, Vec<String>>>(text).ok());
+    let aliases = aliases_of(item.autofill_aliases.as_deref());
     json!({
         "id": item.id,
         "title": item.title,
@@ -358,20 +426,22 @@ pub fn create(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
         .map_err(|e| map_error(e, &c.permissions, true, &tags))
 }
 
-/// `extension_password_update {itemId, input}`: the SDK has no version token, so the current one
-/// is read first, through the same checks (Z7, Z12).
+/// `extension_password_update {itemId, input}`: the SDK has no version token, so the entry is read
+/// first, through the same checks (Z7, Z12); its token guards the write, and the patch is the
+/// difference to what was read.
 pub fn update(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let id = item_id(params)?;
     let input = input_of(params)?;
     let tags = input.tags.clone();
     let c = call(ctx)?;
     let fail = |e| map_error(e, &c.permissions, true, &tags);
-    let current =
+    let seen =
         block_on(c.service.read_secret_item(&c.caller, &c.grants, id.clone())).map_err(fail)?;
-    let token = current.updated_at.unwrap_or_default();
+    let patch = input.into_patch(&seen);
+    let token = seen.updated_at.unwrap_or_default();
     block_on(
         c.service
-            .update_item(&c.caller, &c.grants, id, token, input.into_patch()),
+            .update_item(&c.caller, &c.grants, id, token, patch),
     )
     .map(|_| Value::Null)
     .map_err(fail)

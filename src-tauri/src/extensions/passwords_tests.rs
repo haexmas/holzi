@@ -14,6 +14,8 @@ use crate::extensions::commands::permissions::{set, PermissionSetArgs};
 use crate::extensions::host::ExtensionHost;
 use crate::extensions::registry::effective::effective_bundle;
 use crate::extensions::registry::install::install;
+use crate::passwords::model_references::RefMarkKind;
+use crate::passwords::reveal::secret_item;
 use crate::passwords::test_support::open_test_vault;
 use crate::storage::known_devices;
 use crate::vault_gate::{VaultDb, VaultGate};
@@ -123,6 +125,26 @@ impl Setup {
             2,
         )
         .unwrap();
+    }
+
+    fn token(&self, id: &str, kind: RefMarkKind, key: Option<&str>) -> String {
+        let service = PasswordsService::new(self.vault.clone());
+        block_on(service.reference_token(
+            &Caller::User,
+            id.to_owned(),
+            kind,
+            key.map(str::to_owned),
+        ))
+        .unwrap()
+    }
+
+    /// The entry as stored, placeholders unresolved.
+    fn stored(&self, id: &str) -> SecretItem {
+        let id = id.to_owned();
+        self.vault
+            .read_blocking(move |q| secret_item(q, &id).map_err(Into::into))
+            .unwrap()
+            .unwrap()
     }
 
     fn user_title(&self, id: &str) -> Option<String> {
@@ -343,5 +365,137 @@ fn malformed_calls_are_refused_before_the_service_is_asked() {
             json!({ "input": { "tags": "x" } })
         ),
         3001
+    );
+}
+
+/// The SDK's `PasswordInput` from a read `PasswordItemFull`, as an extension sends it back.
+fn sent_back(read: &Value) -> Value {
+    let mut input = read.clone();
+    let map = input.as_object_mut().unwrap();
+    for field in ["id", "createdAt", "updatedAt"] {
+        map.remove(field);
+    }
+    for kv in map["keyValues"].as_array_mut().unwrap() {
+        kv.as_object_mut().unwrap().remove("id");
+    }
+    map.retain(|_, value| !value.is_null());
+    input
+}
+
+#[test]
+fn sending_back_what_was_read_keeps_placeholders_hidden_fields_and_field_ids() {
+    let s = setup();
+    s.permit("readWrite", "haex-calendar", "granted");
+    // A user name pointing into the scope, a password and a custom field pointing outside it.
+    let username = s.token(&s.calendar, RefMarkKind::Username, None);
+    let password = s.token(&s.private, RefMarkKind::Password, None);
+    let hidden = s.token(&s.private, RefMarkKind::Extra, Some("pin"));
+    let target = block_on(PasswordsService::new(s.vault.clone()).create_item(
+        &Caller::User,
+        &[],
+        ItemInput {
+            title: Some("shared".into()),
+            username: Some(username.clone()),
+            password: Some(password.clone()),
+            tags: vec!["haex-calendar".into()],
+            key_values: vec![
+                KeyValueInput {
+                    key: "server".into(),
+                    value: Some("dav.example.org".into()),
+                },
+                KeyValueInput {
+                    key: "bank-pin".into(),
+                    value: Some(hidden.clone()),
+                },
+            ],
+            autofill_aliases: Some(r#"{"username":["login","user"],"password":["pw"]}"#.into()),
+            ..ItemInput::default()
+        },
+        None,
+    ))
+    .unwrap();
+    let read = s
+        .call("extension_password_read", json!({ "itemId": target }))
+        .unwrap();
+    assert_eq!(read["username"], "caldav-user");
+    assert_eq!(
+        read["password"],
+        Value::Null,
+        "the source is outside the scope"
+    );
+    assert_eq!(read["keyValues"].as_array().unwrap().len(), 1);
+    let before = s.stored(&target);
+
+    let mut input = sent_back(&read);
+    input["title"] = json!("renamed");
+    s.call(
+        "extension_password_update",
+        json!({ "itemId": target, "input": input }),
+    )
+    .unwrap();
+    let after = s.stored(&target);
+    assert_eq!(after.title.as_deref(), Some("renamed"));
+    assert_eq!(
+        after.username.as_deref(),
+        Some(username.as_str()),
+        "still a placeholder"
+    );
+    assert_eq!(
+        after.password.as_deref(),
+        Some(password.as_str()),
+        "never seen, kept"
+    );
+    assert_eq!(after.autofill_aliases, before.autofill_aliases);
+    let ids = |item: &SecretItem| {
+        item.key_values
+            .iter()
+            .map(|kv| kv.id.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        ids(&after),
+        ids(&before),
+        "same rows, the hidden one included"
+    );
+    assert_eq!(after.key_values[1].value.as_deref(), Some(hidden.as_str()));
+
+    // A changed custom field keeps its row; one the extension drops goes, the hidden one stays.
+    let read = s
+        .call("extension_password_read", json!({ "itemId": target }))
+        .unwrap();
+    let mut input = sent_back(&read);
+    input["keyValues"] = json!([{ "key": "server", "value": "cal.example.org" }]);
+    s.call(
+        "extension_password_update",
+        json!({ "itemId": target, "input": input }),
+    )
+    .unwrap();
+    let changed = s.stored(&target);
+    assert_eq!(ids(&changed), ids(&before));
+    assert_eq!(
+        changed.key_values[0].value.as_deref(),
+        Some("cal.example.org")
+    );
+    let read = s
+        .call("extension_password_read", json!({ "itemId": target }))
+        .unwrap();
+    let mut input = sent_back(&read);
+    input["keyValues"] = json!([]);
+    s.call(
+        "extension_password_update",
+        json!({ "itemId": target, "input": input }),
+    )
+    .unwrap();
+    assert_eq!(ids(&s.stored(&target)), ids(&before)[1..]);
+}
+
+#[test]
+fn under_a_denied_star_holzi_does_not_ask() {
+    let s = setup();
+    s.permit("readWrite", "haex-calendar", "ask");
+    s.permit("read", "*", "denied");
+    assert_eq!(
+        s.code("extension_password_read", json!({ "itemId": s.calendar })),
+        1002
     );
 }
