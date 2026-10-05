@@ -89,6 +89,9 @@ are that direction's normal traffic.
   attribute a host operation to an in-flight agent call.
 - Prompt handling for direction B needs the queue and duplicate-request
   handling that haex-vault's prompt code already has.
+- The bundle format and the two independent checks of extension SQL that spec 017
+  settled are recorded in
+  [ADR-0008](./0008-extension-bundle-signature-and-sql-authorizer.md).
 
 ## Considered alternatives
 
