@@ -18,6 +18,10 @@ pub fn kind_name(kind: AttentionKind) -> &'static str {
         AttentionKind::IconNotMapped => "icon_not_mapped",
         AttentionKind::ValueNotStorable => "value_not_storable",
         AttentionKind::SourceSetting => "source_setting",
+        AttentionKind::HistoryUnreadable => "history_unreadable",
+        AttentionKind::GroupReparented => "group_reparented",
+        AttentionKind::TagMerged => "tag_merged",
+        AttentionKind::UnknownSourceData => "unknown_source_data",
     }
 }
 

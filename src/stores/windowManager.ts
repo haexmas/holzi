@@ -5,7 +5,12 @@ import {
   tabTitleFor,
   type AppDefinition,
 } from '~/lib/wm/apps'
-import { allApps, tabsOfStoppedExtensions } from '~/lib/extensions/apps'
+import {
+  allApps,
+  extensionAppId,
+  tabOfExtension,
+  tabsOfStoppedExtensions,
+} from '~/lib/extensions/apps'
 import { useExtensionsStore } from '~/stores/extensions'
 import {
   closeWindow as closeWindowReducer,
@@ -308,6 +313,18 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     },
   )
 
+  /** Brings an extension's tab forward, or opens the extension when it has none (a click on one
+   * of its notifications, spec 017 US8). */
+  function showExtension(extensionId: string) {
+    const found = tabOfExtension(state.windows, extensionId)
+    if (!found) {
+      openApp(extensionAppId(extensionId))
+      return
+    }
+    focusWindow(found.windowId)
+    switchTab(found.windowId, found.tabId)
+  }
+
   /** Restores and raises a window, debouncing its new stack position. */
   function focusWindow(windowId: string) {
     focusWindowReducer(state, windowId)
@@ -449,6 +466,7 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     addTab,
     switchTab,
     focusWindow,
+    showExtension,
     minimizeWindow,
     toggleMaximizeWindow,
     updateWindowGeometry,

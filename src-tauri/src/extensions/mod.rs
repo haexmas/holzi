@@ -7,6 +7,7 @@
 pub mod bridge;
 pub mod bundle;
 pub mod commands;
+pub mod desktop;
 pub mod dev;
 pub mod dev_csp;
 pub mod error;
@@ -16,10 +17,12 @@ pub mod ids;
 pub mod kv;
 pub mod logs;
 pub mod mime;
+pub mod notifications;
 pub mod permissions;
 pub mod protocol;
 pub mod registry;
 pub mod sql;
+pub mod web;
 
 // The limits of a bundle (size, entries, ratio) belong to the bundle format and live in the crate
 // `haex-bundle` (`haex_bundle::format::limits`), the one implementation shared with the `haex` tool.

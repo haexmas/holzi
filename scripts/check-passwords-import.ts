@@ -5,9 +5,11 @@ import { test } from 'node:test'
 
 import {
   baseName,
+  canPreviewImport,
   groupReport,
   importFailureReason,
   progressPercent,
+  sourceSecrets,
 } from '../src/lib/passwords/importReport.ts'
 
 const row = (over: Record<string, unknown>) => ({
@@ -79,4 +81,35 @@ test('a file name comes from either kind of path', () => {
   assert.equal(baseName('C:\\Users\\a\\export.csv'), 'export.csv')
   assert.equal(baseName('plain.json'), 'plain.json')
   assert.equal(baseName('/trailing/'), 'trailing')
+})
+
+test('haex-vault asks for its vault password and no key file, KeePass for both', () => {
+  assert.deepEqual(sourceSecrets('haexvault'), {
+    password: true,
+    keyFile: false,
+  })
+  assert.deepEqual(sourceSecrets('keepass'), { password: true, keyFile: true })
+  assert.deepEqual(sourceSecrets('bitwarden'), {
+    password: false,
+    keyFile: false,
+  })
+})
+
+test('the preview needs the file and what the source needs to open it', () => {
+  assert.equal(canPreviewImport('haexvault', true, false, false), false)
+  assert.equal(canPreviewImport('haexvault', true, false, true), false)
+  assert.equal(canPreviewImport('haexvault', true, true, false), true)
+  assert.equal(canPreviewImport('haexvault', false, true, false), false)
+  assert.equal(canPreviewImport('keepass', true, false, true), true)
+  assert.equal(canPreviewImport('keepass', true, false, false), false)
+  assert.equal(canPreviewImport('lastpass', true, false, false), true)
+})
+
+test('the reasons of the haex-vault source are read like the others', () => {
+  for (const reason of ['haex_vault_locked', 'no_passwords']) {
+    assert.equal(
+      importFailureReason({ kind: 'PasswordsImportFailed', reason }),
+      reason,
+    )
+  }
 })

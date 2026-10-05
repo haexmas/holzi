@@ -6,9 +6,11 @@
 //! The mapping of every format is in `specs/034-password-manager/contracts/import-mapping.md`.
 
 pub mod apply;
+pub mod apply_extras;
 pub mod apply_references;
 pub mod bitwarden;
 pub mod csv;
+pub mod haex_vault;
 pub mod icons;
 pub mod keepass;
 pub mod lastpass;
@@ -26,7 +28,7 @@ use serde::Deserialize;
 use ts_rs::TS;
 use zeroize::Zeroizing;
 
-use super::model::{AttentionKind, ImportPreview, KeyValueInput};
+use super::model::{AttentionKind, ImportPreview, KeyValueInput, PresetInput};
 use super::passkeys::PasskeyInput;
 use super::snapshots::SnapshotData;
 use super::ATTACHMENT_LIMIT_BYTES;
@@ -40,6 +42,9 @@ pub enum ImportSource {
     Keepass,
     Bitwarden,
     Lastpass,
+    /// The vault file of haex-vault (spec 037); read from disk, not from bytes.
+    #[serde(rename = "haexvault")]
+    HaexVault,
 }
 
 /// The password and key file of a KeePass database. Both are zeroed when dropped and `Debug` prints
@@ -123,6 +128,8 @@ pub struct ImportGroup {
     pub is_recycle_bin: bool,
     /// The folder a trashed folder came from, if the source names it.
     pub previous_parent_ref: Option<String>,
+    pub color: Option<String>,
+    pub sort_order: Option<i64>,
 }
 
 /// An attachment with its bytes (never above the limit; a larger one is a [`Problem`]).
@@ -180,6 +187,9 @@ pub struct ImportItem {
     pub otp_digits: Option<i64>,
     pub otp_period: Option<i64>,
     pub otp_algorithm: Option<String>,
+    pub color: Option<String>,
+    /// The JSON object of the autofill aliases (`{ field: [alias, …] }`).
+    pub autofill_aliases: Option<serde_json::Value>,
     pub tags: Vec<String>,
     pub key_values: Vec<KeyValueInput>,
     pub attachments: Vec<ImportAttachment>,
@@ -215,15 +225,23 @@ pub struct ImportModel {
     pub items: Vec<ImportItem>,
     /// Problems of the source as a whole (its application settings).
     pub source_problems: Vec<Problem>,
+    /// Colours of tags by tag name; a tag of the vault without a colour takes it.
+    pub tag_colors: Vec<(String, String)>,
+    /// Passkeys that belong to no entry.
+    pub passkeys: Vec<PasskeyInput>,
+    /// Presets of the password generator (empty `id`: new ones).
+    pub presets: Vec<PresetInput>,
 }
 
 /// Reads a file of `source`. Pure: no database, no clock. `Bitwarden` is told apart by its first
-/// character (`{` is the JSON export, anything else the CSV).
+/// character (`{` is the JSON export, anything else the CSV). `HaexVault` is a database file and is
+/// read by [`haex_vault::read`] from its path, not from bytes.
 pub fn parse(source: ImportSource, bytes: &[u8], credentials: &Credentials) -> Result<ImportModel> {
     match source {
         ImportSource::Keepass => keepass::parse(bytes, credentials),
         ImportSource::Bitwarden => bitwarden::parse(bytes),
         ImportSource::Lastpass => lastpass::parse(bytes),
+        ImportSource::HaexVault => Err(failed("unsupported_format")),
     }
 }
 
@@ -284,6 +302,8 @@ pub(crate) fn ensure_group_path(
                     icon: None,
                     is_recycle_bin: false,
                     previous_parent_ref: None,
+                    color: None,
+                    sort_order: None,
                 });
                 reference
             }
@@ -378,10 +398,13 @@ pub fn preview(model: &ImportModel, existing: &ExistingKeys) -> ImportPreview {
         trashed_entries: 0,
         history_states: 0,
         attachments: 0,
-        passkeys: 0,
+        passkeys: model.passkeys.len() as u32,
         duplicates: 0,
+        tags: 0,
+        presets: model.presets.len() as u32,
         warnings: Vec::new(),
     };
+    let mut tag_names: HashSet<String> = HashSet::new();
     let mut kinds: Vec<AttentionKind> = model.source_problems.iter().map(|p| p.kind).collect();
     for item in &model.items {
         if item.trashed {
@@ -395,6 +418,7 @@ pub fn preview(model: &ImportModel, existing: &ExistingKeys) -> ImportPreview {
                 .map(|s| s.attachments.len())
                 .sum::<usize>()) as u32;
         preview.passkeys += item.passkeys.len() as u32;
+        tag_names.extend(item.tags.iter().map(|t| super::ids::fold(t)));
         let key = duplicate_key(
             item.title.as_deref(),
             item.username.as_deref(),
@@ -405,6 +429,7 @@ pub fn preview(model: &ImportModel, existing: &ExistingKeys) -> ImportPreview {
         }
         kinds.extend(item.problems.iter().map(|p| p.kind));
     }
+    preview.tags = tag_names.len() as u32;
     for kind in kinds {
         let name = report::kind_name(kind).to_string();
         if !preview.warnings.contains(&name) {

@@ -3,4 +3,4 @@
 /**
  * What an import could not bring over unchanged (contracts/import-mapping.md §Bericht).
  */
-export type AttentionKind = "attachment_too_large" | "attachment_unreadable" | "passkey_key_unreadable" | "passkey_public_key_missing" | "passkey_duplicate" | "totp_invalid" | "icon_not_mapped" | "value_not_storable" | "source_setting";
+export type AttentionKind = "attachment_too_large" | "attachment_unreadable" | "passkey_key_unreadable" | "passkey_public_key_missing" | "passkey_duplicate" | "totp_invalid" | "icon_not_mapped" | "value_not_storable" | "source_setting" | "history_unreadable" | "group_reparented" | "tag_merged" | "unknown_source_data";

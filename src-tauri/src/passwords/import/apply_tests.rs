@@ -509,6 +509,8 @@ async fn a_problem_at_one_place_does_not_stop_the_import_and_is_reported_without
         icon: None,
         is_recycle_bin: false,
         previous_parent_ref: None,
+        color: None,
+        sort_order: None,
     });
     model
         .source_problems

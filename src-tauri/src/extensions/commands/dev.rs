@@ -142,6 +142,7 @@ pub async fn extension_dev_unload(
         // The id is the same when the project loads again: no decision of this session carries over.
         host.permissions.forget_extension(id);
         host.fs.watches.end_all(id);
+        host.notifications.close_all(id);
         reconcile(
             &db,
             &host,
