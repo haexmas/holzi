@@ -125,17 +125,16 @@ fn unlisted_methods_are_not_supported_and_later_ones_not_available() {
         "extension_signal_ready",
         "extension_permissions_grant",
         "extension_webview_broadcast",
+        "extension_mail_list_accounts",
         "__proto__",
         "",
     ] {
         assert_eq!(code(call(&s.ctx, method, &Value::Null)), 8000, "{method}");
     }
-    for method in [
-        "extension_remote_storage_list",
-        "extension_mail_list_accounts",
-    ] {
-        assert_eq!(code(call(&s.ctx, method, &Value::Null)), 8001, "{method}");
-    }
+    assert_eq!(
+        code(call(&s.ctx, "extension_remote_storage_list", &Value::Null)),
+        8001
+    );
 }
 
 #[test]

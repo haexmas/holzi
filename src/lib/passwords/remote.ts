@@ -26,6 +26,27 @@ export function entryFreshness(options: {
   return 'fresh'
 }
 
+/** The reloaded list with every item that did not change replaced by its old object, so a quiet
+ * reload re-renders only what changed; when nothing changed at all it is the old list itself.
+ * Items compare by id and content. */
+export function keepUnchanged<T extends { id: string }>(
+  previous: readonly T[],
+  next: readonly T[],
+): readonly T[] {
+  const old = new Map(previous.map((item) => [item.id, item]))
+  const kept = next.map((item) => {
+    const before = old.get(item.id)
+    return before !== undefined &&
+      JSON.stringify(before) === JSON.stringify(item)
+      ? before
+      : item
+  })
+  const same =
+    kept.length === previous.length &&
+    kept.every((item, index) => item === previous[index])
+  return same ? previous : kept
+}
+
 export type TagLike = {
   id: string
   name: string

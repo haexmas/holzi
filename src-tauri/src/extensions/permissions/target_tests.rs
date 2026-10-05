@@ -212,6 +212,10 @@ fn a_mail_target_names_a_host_and_optionally_a_port() {
         &imap
     ));
     assert!(!matches(PermissionKind::Mail, "example.org", &imap));
+    assert!(
+        matches(PermissionKind::Mail, "*", &imap),
+        "every server, as haex-mail declares it"
+    );
 }
 
 #[test]

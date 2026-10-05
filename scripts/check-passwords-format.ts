@@ -5,6 +5,7 @@ import { test } from 'node:test'
 
 import {
   displayTitle,
+  fileKind,
   formatFileSize,
   imageMime,
   isExpired,
@@ -84,4 +85,24 @@ test('relativeTime names a past time in the largest fitting unit, in the languag
 test('relativeTime of a time that is not in the past reads as now', () => {
   const now = new Date('2026-10-04T12:00:00Z')
   assert.equal(relativeTime(new Date(now.getTime() + 5000), now, 'en'), 'now')
+})
+
+test('an attachment has a kind by its extension: image, pdf, text or other', () => {
+  for (const name of ['a.png', 'b.JPG', 'c.jpeg', 'd.gif', 'e.webp']) {
+    assert.equal(fileKind(name), 'image', name)
+  }
+  assert.equal(fileKind('Vertrag.PDF'), 'pdf')
+  for (const name of ['a.txt', 'b.md', 'c.json', 'd.csv', 'e.log']) {
+    assert.equal(fileKind(name), 'text', name)
+  }
+  // SVG can carry script; it is never previewed.
+  for (const name of [
+    'logo.svg',
+    'archiv.zip',
+    'ohne-endung',
+    '.png.exe',
+    'punkt.',
+  ]) {
+    assert.equal(fileKind(name), 'other', name)
+  }
 })

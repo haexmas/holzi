@@ -56,6 +56,8 @@ pub struct ExtensionHost {
     pub permissions: PermissionState,
     /// System notifications shown for extensions (US8).
     pub notifications: NotificationState,
+    /// Mailboxes extensions watch for new messages (US11).
+    pub mail_watches: super::mail::watch::MailWatches,
     /// Shells started by extensions (US11).
     pub shells: super::shell::ShellState,
     /// Entry and Content-Security-Policy per bundle started in this process.

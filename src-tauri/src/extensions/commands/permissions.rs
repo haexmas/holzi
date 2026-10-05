@@ -14,6 +14,7 @@ use crate::extensions::bridge::dispatch::Emit;
 use crate::extensions::bridge::events::emit_to_frames;
 use crate::extensions::fs::end_revoked_watches;
 use crate::extensions::host::ExtensionHost;
+use crate::extensions::mail::watch::end_revoked as end_revoked_mail_watches;
 use crate::extensions::permissions::prompts::{Asked, PermissionDecision, Question};
 use crate::extensions::permissions::store::{self as permission_store, NewPermission};
 use crate::extensions::permissions::{Permission, PermissionKind, PermissionStatus, VAULT_WIDE};
@@ -203,6 +204,7 @@ pub fn remove(
         let kind = PermissionKind::parse(kind).ok_or_else(|| invalid("unknown kind"))?;
         host.permissions.forget(extension_id, kind, action, target);
         end_revoked_watches(db, host, device);
+        end_revoked_mail_watches(db, host, device);
         return Ok(());
     }
     let id = parse_id(args.permission_id.as_deref().unwrap_or_default())?;
@@ -285,6 +287,7 @@ pub fn resolve(
         host.permissions.hold(&question, status);
         // No row was written, so no change report reaches the running watches (`remove`).
         end_revoked_watches(db, host, device);
+        end_revoked_mail_watches(db, host, device);
     }
     // The SDK waits for the target its 1004 named.
     for target in told {

@@ -21,6 +21,27 @@ export function fold(text: string): string {
     .toLowerCase()
 }
 
+const collator = new Intl.Collator()
+
+/** The entries in the order of the list: by folded title, entries without a title last, then by
+ * id. Each title is folded once, not in every comparison. */
+export function sortByTitle<T extends { id: string; title: string | null }>(
+  headers: readonly T[],
+): T[] {
+  const keyed = headers.map((header) => ({
+    header,
+    key: fold(header.title ?? ''),
+  }))
+  keyed.sort((a, b) => {
+    if (!a.key !== !b.key) return a.key ? -1 : 1
+    return (
+      collator.compare(a.key, b.key) ||
+      collator.compare(a.header.id, b.header.id)
+    )
+  })
+  return keyed.map((entry) => entry.header)
+}
+
 /** The words of a query, folded; empty for a blank query. */
 function terms(query: string): string[] {
   return fold(query)

@@ -65,7 +65,7 @@ Die Zahl der Verweise auf einen Eintrag ist abgeleitet (R12), nicht gespeichert.
 | Auswahl        | `stores/passwordsSelection.ts` | unverändert (034); endet beim Ordnerwechsel und Öffnen eines Eintrags                                                   |
 | Tab            | Ort des Fenster-Tabs (`?tab=`) | `details` \| `extra`; `entry/:id/history` = Verlauf                                                                     |
 | Kopier-Dialog  | `CopyDialog.vue` (lokal)       | Titel/Zusatz, `history`, `usernameAsReference`, `passwordAsReference`, `passkeysAsLinks`                                |
-| Vorschaubilder | `lib/passwords/thumbnails.ts`  | LRU 200, Blob-URLs nach Prüfsumme; beim Schließen des Fensters freigegeben                                              |
+| Vorschaubilder | `lib/passwords/thumbnails.ts`  | LRU 200, Blob-URLs nach Prüfsumme; freigegeben, wenn das letzte Passwort-Fenster schließt                               |
 
 ## Typänderungen (ts-rs nach `src/types/bindings/`)
 
