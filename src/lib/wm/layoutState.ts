@@ -145,14 +145,17 @@ export function openApp(
 }
 
 /** Removes the window (and its tabs) without asking anything — guard confirmation (FR-014) runs
- * at the store/UI layer before this is called (data-model.md). */
+ * at the store/UI layer before this is called (data-model.md). If it was active, the next
+ * front-most *visible* window of its workspace becomes active, as after `minimizeWindow`: a
+ * minimized window must not receive the focused window's shortcuts. */
 export function closeWindow(state: WmState, windowId: string): void {
   const closed = state.windows.find((w) => w.id === windowId)
   if (!closed) return
   const wasActive = state.activeWindowId === windowId
   state.windows = state.windows.filter((w) => w.id !== windowId)
   if (!wasActive) return
-  state.activeWindowId = frontmostWindow(state, closed.workspaceId)?.id ?? null
+  state.activeWindowId =
+    frontmostWindow(state, closed.workspaceId, true)?.id ?? null
 }
 
 /** Appends a new, empty workspace at the end (FR-019). Its id is provided by the caller —
@@ -165,10 +168,14 @@ export function createWorkspace(state: WmState, id: string): Workspace {
   return workspace
 }
 
-/** Activates `workspaceId`, if it exists. */
+/** Activates `workspaceId`, if it exists, and its front-most visible window: the active window
+ * always lies in the active workspace (data-model.md), so shortcuts never reach a window of a
+ * workspace that is not shown. */
 export function switchWorkspace(state: WmState, workspaceId: string): void {
   if (!state.workspaces.some((w) => w.id === workspaceId)) return
+  if (state.activeWorkspaceId === workspaceId) return
   state.activeWorkspaceId = workspaceId
+  state.activeWindowId = frontmostWindow(state, workspaceId, true)?.id ?? null
 }
 
 /** Deletes a workspace and its windows/tabs (FR-021 — confirmation runs at the store/UI layer
@@ -188,11 +195,13 @@ export function deleteWorkspace(state: WmState, workspaceId: string): void {
   const neighborIndex = Math.max(0, index - 1)
   const neighbor = state.workspaces.find((_, i) => i === neighborIndex)
   state.activeWorkspaceId = neighbor?.id ?? ''
+  state.activeWindowId =
+    frontmostWindow(state, state.activeWorkspaceId, true)?.id ?? null
 }
 
 /** Moves a window (with all its tabs) to another workspace without touching its content (FR-020).
- * If it was the active window and it just left the active workspace, the next front-most window
- * remaining there becomes active instead (same rule as `closeWindow`/`minimizeWindow`). */
+ * If it was the active window and it just left the active workspace, the next front-most visible
+ * window remaining there becomes active instead (same rule as `closeWindow`/`minimizeWindow`). */
 export function moveWindowToWorkspace(
   state: WmState,
   windowId: string,
@@ -206,7 +215,7 @@ export function moveWindowToWorkspace(
   window.workspaceId = workspaceId
   if (!wasActive) return
   state.activeWindowId =
-    frontmostWindow(state, state.activeWorkspaceId)?.id ?? null
+    frontmostWindow(state, state.activeWorkspaceId, true)?.id ?? null
 }
 
 /**

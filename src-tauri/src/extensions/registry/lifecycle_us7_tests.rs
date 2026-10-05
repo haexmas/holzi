@@ -6,6 +6,8 @@
 
 use super::test_support::*;
 use super::*;
+use crate::extensions::permissions::prompts::Question;
+use crate::extensions::permissions::{PermissionKind, PermissionStatus};
 use crate::extensions::registry::list::list;
 use crate::extensions::registry::remove::{purge_kept_data, remove, set_enabled};
 
@@ -130,4 +132,65 @@ fn deleting_kept_data_on_a_drops_the_tables_on_b_and_a_reinstall_starts_fresh() 
     b.follow();
     assert!(ready(&b, ext));
     assert_eq!(b.count("SELECT COUNT(*) FROM `{t}`"), Some(0));
+}
+
+/// A decision held on `node` for `extension` for the rest of the process.
+fn hold_decision(node: &Node, extension: Uuid) {
+    let question = Question {
+        extension_id: extension,
+        kind: PermissionKind::Database,
+        action: "read".into(),
+        target: "*".into(),
+    };
+    node.host
+        .permissions
+        .hold(&question, PermissionStatus::Granted);
+}
+
+#[test]
+fn disabling_or_removing_on_a_closes_the_notifications_on_b() {
+    let (a, b) = (Node::new(), Node::new());
+    let ext = a.install(&bundle("1.0.0", &[INIT]));
+    a.follow();
+    b.pull(&a);
+    b.follow();
+    assert!(ready(&b, ext));
+    let open = |node: &Node| node.host.notifications.of_extension(ext).len();
+
+    b.host.notifications.open_for_test(ext);
+    hold_decision(&b, ext);
+    set_enabled(&a.vault, ext, false, now()).expect("disable");
+    b.pull(&a);
+    b.follow();
+    assert_eq!(open(&b), 0, "closed on b although it was disabled on a");
+    assert_eq!(b.host.permissions.held(ext).len(), 1, "kept while disabled");
+
+    set_enabled(&a.vault, ext, true, now()).expect("enable");
+    b.pull(&a);
+    b.follow();
+    b.host.notifications.open_for_test(ext);
+    b.follow();
+    assert_eq!(open(&b), 1, "a running extension keeps its notifications");
+
+    remove(&a.vault, ext, false, now()).expect("remove");
+    b.pull(&a);
+    b.follow();
+    assert_eq!(open(&b), 0, "closed on b although it was removed on a");
+    assert!(
+        b.host.permissions.held(ext).is_empty(),
+        "forgotten once removed"
+    );
+}
+
+#[test]
+fn a_reconcile_that_read_the_registry_before_an_enable_keeps_what_the_extension_has() {
+    let node = Node::new();
+    let ext = node.install(&bundle("1.0.0", &[INIT]));
+    node.follow();
+    // The reconcile began while the extension was still disabled; it was enabled since.
+    node.host.notifications.open_for_test(ext);
+    hold_decision(&node, ext);
+    stopped_here(&node.vault, &node.host, ext);
+    assert_eq!(node.host.notifications.of_extension(ext).len(), 1);
+    assert_eq!(node.host.permissions.held(ext).len(), 1);
 }

@@ -6,7 +6,7 @@
 //! notification or one of its buttons reaches every open frame of the extension as
 //! `haextension:notification:click {notificationId, actionId?, path?}`, and holzi's window brings
 //! the extension's tab forward (`extension-notification-click`). How the system shows it and
-//! whether it reports clicks is the [`Desktop`]'s part.
+//! whether it reports clicks is the [`Desktop`](super::host::Desktop)'s part.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -20,7 +20,7 @@ use super::bridge::dispatch::{CallContext, Emit};
 use super::bridge::events::emit_to_frames;
 use super::bundle::store::read_verified_file;
 use super::error::{BridgeError, ExtensionErrorCode};
-use super::host::{Desktop, ExtensionHost};
+use super::host::ExtensionHost;
 use super::permissions::store::candidates;
 use super::permissions::{
     evaluate, Action, Decision, PermissionKind, PermissionRequest, RequestTarget,
@@ -154,6 +154,14 @@ impl NotificationState {
         for id in self.of_extension(extension_id) {
             self.close_own(extension_id, &id);
         }
+    }
+
+    /// An open notification of `extension_id` without a system behind it (tests elsewhere).
+    #[cfg(test)]
+    pub(crate) fn open_for_test(&self, extension_id: Uuid) -> String {
+        let id = Uuid::new_v4().to_string();
+        self.admit(extension_id, &id, None);
+        id
     }
 
     /// Enters the notification `id` of `extension_id` before it shows, so a response that comes at
@@ -366,11 +374,11 @@ fn check_permission(ctx: &CallContext) -> Result<(), BridgeError> {
 }
 
 /// What happens on a response: the notification is forgotten; a click goes to the extension's
-/// frames and to holzi's window, which brings its tab forward.
+/// frames and to holzi's window, which brings its tab and itself forward (only the window that
+/// shows the tab comes to the front).
 fn respond(
     host: Arc<ExtensionHost>,
     emitter: Arc<dyn Emit>,
-    desktop: Arc<dyn Desktop>,
     extension_id: Uuid,
     id: String,
     links: Links,
@@ -399,7 +407,6 @@ fn respond(
             CLICKED,
             json!({ "extensionId": extension_id.to_string(), "path": path }),
         );
-        desktop.focus_window();
     })
 }
 
@@ -419,7 +426,6 @@ pub fn show(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let on_response = respond(
         Arc::clone(&ctx.host),
         Arc::clone(&ctx.emitter),
-        Arc::clone(&desktop),
         extension_id,
         id.clone(),
         links,

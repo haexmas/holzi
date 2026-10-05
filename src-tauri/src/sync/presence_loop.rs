@@ -16,6 +16,12 @@
 //! that claims a newer device list is dialed once, to fetch that list (a copy
 //! of a main device enrolled itself, FR-007); a request from an unknown
 //! device is kept for the main devices to decide on.
+//!
+//! Maintainability exception (spaex 500-LoC rule): publishing, subscribing and handling incoming
+//! presence share the mailbox keys and the roster of one loop, so they have stayed together.
+//! Concrete split plan, if this grows further: move the handling of incoming events
+//! (`handle_incoming`, `note_newer_list`, `handle_request`, `record_listed`, `Roster`,
+//! `read_roster`) into `presence_incoming.rs`, leaving `run` and the subscription here.
 
 use std::collections::HashSet;
 
