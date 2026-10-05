@@ -315,14 +315,12 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
 
   /** Brings an extension's tab forward, or opens the extension when it has none (a click on one
    * of its notifications, spec 017 US8). */
-  function showExtension(extensionId: string) {
+  function showExtension(extensionId: string): boolean {
     const found = tabOfExtension(state.windows, extensionId)
-    if (!found) {
-      openApp(extensionAppId(extensionId))
-      return
-    }
+    if (!found) return openApp(extensionAppId(extensionId)) !== null
     focusWindow(found.windowId)
     switchTab(found.windowId, found.tabId)
+    return true
   }
 
   /** Restores and raises a window, debouncing its new stack position. */

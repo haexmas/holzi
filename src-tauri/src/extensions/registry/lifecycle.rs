@@ -21,7 +21,7 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use super::purge::{self, Removal};
-use super::start::{self as starting, start, Effective};
+use super::start::{self as starting, start, Effective, Registration};
 use super::status::{self, DeviceStatus};
 use crate::error::Result;
 use crate::extensions::commands::{ExtensionsChanged, EXTENSIONS_CHANGED};
@@ -136,6 +136,30 @@ pub fn reconcile(
     Ok(changed)
 }
 
+/// What an extension that does not run here leaves behind in this process: its file watches end,
+/// its notifications close and, once removed, its held permission decisions go. This runs on every
+/// reconcile, so also when it was disabled or removed on another device and the change came
+/// through sync; with nothing left each step does nothing. Its registration is read again, not
+/// taken from the list the reconcile began with: enabled or installed again here meanwhile, it
+/// keeps what it has (the next reconcile follows that change). A development version has ids of
+/// its own (`dev_extension_id`) and is not touched. A failed read leaves everything as it is.
+fn stopped_here(db: &VaultDb, host: &ExtensionHost, extension_id: Uuid) {
+    let removed = match db.read_blocking(move |q| Ok(starting::registration(q, extension_id))) {
+        Ok(Ok(Registration::Enabled)) => return,
+        Ok(Ok(Registration::Disabled)) => false,
+        Ok(Ok(Registration::Missing)) => true,
+        Ok(Err(error)) | Err(error) => {
+            log::warn!("extension {extension_id}: its registration could not be read: {error}");
+            return;
+        }
+    };
+    host.fs.watches.end_all(extension_id);
+    host.notifications.close_all(extension_id);
+    if removed {
+        host.permissions.forget_extension(extension_id);
+    }
+}
+
 /// Brings one extension on `device` in line; returns its state when that changed.
 fn follow(
     db: &VaultDb,
@@ -165,6 +189,7 @@ fn follow(
         if !extension.purge_data {
             keep_tables(db, extension, now_ms);
         }
+        stopped_here(db, host, extension.id);
         return Ok(None);
     }
     let before = shown(db, extension.id, device)?;
@@ -172,6 +197,7 @@ fn follow(
         start(db, extension.id, device, now_ms).ok()
     } else {
         keep_tables(db, extension, now_ms);
+        stopped_here(db, host, extension.id);
         let id = extension.id;
         db.write_blocking(move |tx| {
             status::set(tx, id, device, DeviceStatus::Disabled, None, None, now_ms)

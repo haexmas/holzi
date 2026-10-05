@@ -29,13 +29,13 @@ pub struct Started {
     pub csp: String,
 }
 
-enum Registration {
+pub(super) enum Registration {
     Missing,
     Disabled,
     Enabled,
 }
 
-fn registration(q: &mut impl Query, extension_id: Uuid) -> Result<Registration> {
+pub(super) fn registration(q: &mut impl Query, extension_id: Uuid) -> Result<Registration> {
     let row = q.query_row(
         "SELECT enabled, state FROM extensions WHERE id = ?1",
         &[&extension_id.to_string()],

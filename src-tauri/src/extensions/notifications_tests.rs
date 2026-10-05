@@ -1,10 +1,10 @@
 use std::path::Path;
-use std::sync::atomic::AtomicUsize;
 
 use super::*;
 use crate::extensions::bridge::dispatch::call;
 use crate::extensions::bridge::events::FRAME_EVENT;
 use crate::extensions::commands::permissions::{set, PermissionSetArgs};
+use crate::extensions::host::Desktop;
 use crate::extensions::registry::effective::effective_bundle;
 use crate::extensions::registry::install::install;
 use crate::passwords::test_support::open_test_vault;
@@ -37,7 +37,6 @@ impl Recorded {
 struct FakeDesktop {
     shown: Mutex<Vec<(NotificationSpec, Option<Respond>)>>,
     closed: Arc<Mutex<Vec<usize>>>,
-    focused: AtomicUsize,
 }
 
 struct FakeShown {
@@ -67,10 +66,6 @@ impl Desktop for FakeDesktop {
             index: shown.len() - 1,
             closed: Arc::clone(&self.closed),
         }))
-    }
-
-    fn focus_window(&self) {
-        self.focused.fetch_add(1, Ordering::SeqCst);
     }
 }
 
@@ -241,7 +236,6 @@ fn a_click_reaches_the_frames_and_brings_the_tab_forward() {
             json!({"extensionId": s.notes.session.extension_id.to_string(), "path": "/event/1/snooze"})
         ]
     );
-    assert_eq!(s.desktop.focused.load(Ordering::SeqCst), 1);
     assert_eq!(
         code(call(
             &s.notes,

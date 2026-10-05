@@ -177,14 +177,6 @@ impl<R: Runtime> Desktop for AppDesktop<R> {
             id,
         }))
     }
-
-    fn focus_window(&self) {
-        for window in self.app.webview_windows().values() {
-            let _ = window.unminimize();
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-    }
 }
 
 #[cfg(test)]
