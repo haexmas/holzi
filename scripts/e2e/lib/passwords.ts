@@ -216,8 +216,12 @@ export async function activeTab(
   )
 }
 
-/** Taps a tab of the open entry, scrolled into the middle first: in a long editor the tab bar can
- * sit under the top edge after typing further down. */
+/**
+ * Taps a tab of the open entry, scrolled into the middle first (in a long editor the tab bar can
+ * sit under the top edge after typing further down), and waits until its slide stands still: the
+ * tab bar switches at once, the slide moves for 300 ms, and a tap on a button of the slide while
+ * it moves misses it.
+ */
 export async function selectTab(
   instance: FlowInstance,
   tab: 'details' | 'extra' | 'history',
@@ -229,6 +233,26 @@ export async function selectTab(
     [tab],
   )
   await instance.click(`entry-tab-${tab}`)
+  const end = Date.now() + 5_000
+  while (!(await slideSettled(instance, tab))) {
+    if (Date.now() > end)
+      throw new Error(`the ${tab} slide did not settle within 5000 ms`)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
+/** Whether the swipe surface shows `tab`'s slide and is not moving (Swiper's `animating`). */
+async function slideSettled(
+  instance: FlowInstance,
+  tab: 'details' | 'extra' | 'history',
+): Promise<boolean> {
+  return instance.exec<boolean>(
+    `const surface = document.querySelector('[data-testid="entry-tabs-swiper"]')
+     const slide = document.querySelector('[data-testid="entry-panel-' + arguments[0] + '"]')
+     return Boolean(surface && surface.swiper && !surface.swiper.animating &&
+       slide && slide.classList.contains('swiper-slide-active'))`,
+    [tab],
+  )
 }
 
 /** Whether the swipe surface shows this tab's slide: the slide follows the tab bar (spec 036 FR-002). */
