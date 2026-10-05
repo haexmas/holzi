@@ -18,7 +18,7 @@ use std::path::Path;
 use serde_json::{json, Value};
 
 use crate::extensions::bridge::dispatch::CallContext;
-use crate::extensions::error::{BridgeError, ExtensionErrorCode};
+use crate::extensions::error::{Asks, BridgeError, ExtensionErrorCode};
 use crate::extensions::permissions::store::candidates;
 use crate::extensions::permissions::{
     evaluate, Action, Decision, PermissionKind, PermissionRequest, RequestTarget,
@@ -55,9 +55,15 @@ fn not_found() -> BridgeError {
     BridgeError::new(ExtensionErrorCode::NotFound, "not found")
 }
 
-/// Whether the extension may run `program`. With `askable` false (a name no permission can name)
-/// a question becomes a refusal.
-fn check_program(ctx: &CallContext, program: &Path, askable: bool) -> Result<(), BridgeError> {
+/// Whether the extension may run `program`, the path a permission names; `None` for a bare name
+/// that is not on `PATH`, which no permission can name. Every answer tells the program as the
+/// extension `named` it (`details.target`); the question asks about `program`, so the answer
+/// tells neither where a link points nor whether a name is on `PATH`.
+fn check_program(
+    ctx: &CallContext,
+    program: Option<&Path>,
+    named: &str,
+) -> Result<(), BridgeError> {
     let (extension_id, device) = (ctx.session.extension_id, ctx.device);
     let mut grants = ctx
         .db
@@ -73,21 +79,24 @@ fn check_program(ctx: &CallContext, program: &Path, askable: bool) -> Result<(),
     let request = PermissionRequest {
         kind: PermissionKind::Shell,
         action: Action::Execute,
-        target: RequestTarget::Program(program.to_path_buf()),
+        target: RequestTarget::Program(program.unwrap_or(Path::new(named)).to_path_buf()),
     };
     let code = match evaluate(&grants, &request, device) {
         Decision::Allow => return Ok(()),
         Decision::Deny => ExtensionErrorCode::PermissionDenied,
-        Decision::Prompt if askable => ExtensionErrorCode::PermissionPromptRequired,
-        Decision::Prompt => ExtensionErrorCode::PermissionDenied,
+        Decision::Prompt => ExtensionErrorCode::PermissionPromptRequired,
     };
-    Err(
-        BridgeError::new(code, "permission required").with_details(json!({
+    let asks = match program {
+        Some(program) => Asks::Target(program.to_string_lossy().into_owned()),
+        None => Asks::Nothing,
+    };
+    Err(BridgeError::new(code, "permission required")
+        .with_details(json!({
             "resourceType": "shell",
             "action": "execute",
-            "target": program.to_string_lossy(),
-        })),
-    )
+            "target": named,
+        }))
+        .asking(asks))
 }
 
 fn size(value: Option<&Value>, default: u16) -> Result<u16, BridgeError> {
@@ -165,14 +174,10 @@ pub fn create(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     }
     // The permission comes first: without it, an answer must not tell which files exist. A
     // program that is not there is asked about by the absolute path it was named by; a bare name
-    // that is not on `PATH` cannot be granted, so it is refused without a question.
-    match &program {
-        Some(found) => check_program(ctx, found, true)?,
-        None => match lexical_absolute(&named) {
-            Some(named) => check_program(ctx, &named, true)?,
-            None => check_program(ctx, Path::new(&named), false)?,
-        },
-    }
+    // that is not on `PATH` cannot be granted, so nobody is asked, and the extension waits as for
+    // a question nobody answers.
+    let asked = program.clone().or_else(|| lexical_absolute(&named));
+    check_program(ctx, asked.as_deref(), &named)?;
     let program = program.ok_or_else(|| shell_error("program not found"))?;
     if ctx.host.shells.count(ctx.session.extension_id) >= MAX_SESSIONS {
         return Err(BridgeError::new(

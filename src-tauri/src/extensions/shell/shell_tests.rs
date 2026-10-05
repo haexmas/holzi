@@ -18,6 +18,9 @@ use crate::passwords::test_support::open_test_vault;
 use crate::storage::known_devices;
 use crate::vault_gate::{VaultDb, VaultGate};
 
+#[path = "shell_permissions_tests.rs"]
+mod permissions;
+
 /// Only a guard against a hanging test: every wait ends on an event the shell sends.
 const PATIENCE: Duration = Duration::from_secs(30);
 
@@ -210,69 +213,6 @@ fn a_granted_shell_runs_echo_resizes_and_reports_its_end() {
     assert_eq!(s.recorded.waited_for_exit(&session)["exitCode"], 3);
     assert_eq!(s.host.shells.count(s.notes.session.extension_id), 0);
     assert_eq!(code(s.write(&s.notes, &session, "x")), 1001, "gone");
-}
-
-#[test]
-fn without_a_permission_holzi_asks_for_the_canonical_program() {
-    let s = setup();
-    let asked = call(
-        &s.notes,
-        "extension_shell_create",
-        &json!({ "options": { "shell": "sh" } }),
-    )
-    .unwrap_err();
-    assert_eq!(asked.code.as_u16(), 1004);
-    assert_eq!(
-        asked.details,
-        Some(json!({
-            "resourceType": "shell",
-            "action": "execute",
-            "target": resolve_program("sh").unwrap().to_string_lossy(),
-        }))
-    );
-    s.allow(&s.notes, Path::new("/bin/false-not-sh"));
-    assert_eq!(
-        code(call(
-            &s.notes,
-            "extension_shell_create",
-            &json!({ "options": { "shell": "/bin/sh" } })
-        )),
-        1004,
-        "another program's permission does not count"
-    );
-}
-
-#[test]
-fn a_missing_program_is_told_only_after_the_permission() {
-    let s = setup();
-    let create = |shell: &str| {
-        call(
-            &s.notes,
-            "extension_shell_create",
-            &json!({ "options": { "shell": shell } }),
-        )
-    };
-    // Without a permission a missing file answers like an existing one: with a question.
-    for named in ["/no/such/shell", "/no/such/../such/./shell"] {
-        let asked = create(named).unwrap_err();
-        assert_eq!(asked.code.as_u16(), 1004, "{named}");
-        assert_eq!(
-            asked.details.unwrap()["target"],
-            "/no/such/shell",
-            "{named}"
-        );
-    }
-    // A bare name nobody can grant is refused without a question.
-    assert_eq!(code(create("no-such-program-holzi")), 1002);
-
-    s.allow(&s.notes, Path::new("/no/such/shell"));
-    assert_eq!(
-        code(create("/no/such/shell")),
-        2003,
-        "granted, then looked at"
-    );
-    s.allow(&s.notes, Path::new("*"));
-    assert_eq!(code(create("no-such-program-holzi")), 2003);
 }
 
 #[test]

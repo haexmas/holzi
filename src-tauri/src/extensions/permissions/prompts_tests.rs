@@ -13,16 +13,30 @@ fn question(ext: Uuid, target: &str) -> Question {
 fn identical_questions_of_several_frames_are_one_and_vanish_with_their_frames() {
     let state = PermissionState::default();
     let ext = Uuid::new_v4();
-    let (id, new) = state.ask(question(ext, "t"), "f1");
+    let (id, new) = state.ask(question(ext, "t"), "f1", "t");
     assert!(new);
-    let (again, new) = state.ask(question(ext, "t"), "f2");
+    let (again, new) = state.ask(question(ext, "t"), "f2", "t");
     assert_eq!((again.as_str(), new), (id.as_str(), false));
-    let (other, new) = state.ask(question(ext, "u"), "f1");
+    let (other, new) = state.ask(question(ext, "u"), "f1", "u");
     assert!(new && other != id);
 
     assert!(state.frame_closed("f1").contains(&other));
     assert!(state.frame_closed("f2").contains(&id));
     assert!(state.take(&id).is_none());
+}
+
+#[test]
+fn a_question_remembers_every_target_its_callers_were_told() {
+    let state = PermissionState::default();
+    let ext = Uuid::new_v4();
+    let (id, _) = state.ask(question(ext, "/usr/bin/dash"), "f1", "sh");
+    state.ask(question(ext, "/usr/bin/dash"), "f2", "/bin/sh");
+    let asked = state.take(&id).expect("open");
+    assert_eq!(asked.question.target, "/usr/bin/dash");
+    assert_eq!(
+        asked.told.into_iter().collect::<Vec<_>>(),
+        ["/bin/sh", "sh"]
+    );
 }
 
 #[test]

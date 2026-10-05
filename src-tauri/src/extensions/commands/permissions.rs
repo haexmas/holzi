@@ -14,7 +14,7 @@ use crate::extensions::bridge::dispatch::Emit;
 use crate::extensions::bridge::events::emit_to_frames;
 use crate::extensions::fs::end_revoked_watches;
 use crate::extensions::host::ExtensionHost;
-use crate::extensions::permissions::prompts::{PermissionDecision, Question};
+use crate::extensions::permissions::prompts::{Asked, PermissionDecision, Question};
 use crate::extensions::permissions::store::{self as permission_store, NewPermission};
 use crate::extensions::permissions::{Permission, PermissionKind, PermissionStatus, VAULT_WIDE};
 use crate::passwords::clock::unix_millis;
@@ -242,7 +242,7 @@ pub fn resolve(
     args: PermissionResolveArgs,
     now_ms: i64,
 ) -> Result<()> {
-    let Some(question) = host.permissions.take(&args.request_id) else {
+    let Some(Asked { question, told }) = host.permissions.take(&args.request_id) else {
         return Ok(());
     };
     let status = match args.decision {
@@ -286,18 +286,21 @@ pub fn resolve(
         // No row was written, so no change report reaches the running watches (`remove`).
         end_revoked_watches(db, host, device);
     }
-    emit_to_frames(
-        emitter,
-        host,
-        question.extension_id,
-        "extension:permission-resolved",
-        &json!({
-            "resourceType": question.kind.as_str(),
-            "action": question.action,
-            "target": question.target,
-            "decision": if status == PermissionStatus::Granted { "granted" } else { "denied" },
-        }),
-    );
+    // The SDK waits for the target its 1004 named.
+    for target in told {
+        emit_to_frames(
+            emitter,
+            host,
+            question.extension_id,
+            "extension:permission-resolved",
+            &json!({
+                "resourceType": question.kind.as_str(),
+                "action": question.action,
+                "target": target,
+                "decision": if status == PermissionStatus::Granted { "granted" } else { "denied" },
+            }),
+        );
+    }
     Ok(())
 }
 
