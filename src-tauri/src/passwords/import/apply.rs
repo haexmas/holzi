@@ -10,6 +10,13 @@
 //! them. ponytail: ceiling is a crash mid-import (the user deletes the leftovers or re-runs with
 //! "skip duplicates"); upgrade path is a `_no_sync` table of import runs that a restart can finish
 //! rolling back.
+//!
+//! Maintainability exception (spaex 500-LoC rule): the step control, the ledger and the per-row
+//! writers form one write pipeline whose rollback must know every row the writers create, so they
+//! have stayed together. Concrete split plan, if this grows further: move the per-row writers
+//! (`write_groups`, `existing_group`, `write_item`, `link_group`, `write_state`,
+//! `write_attachment`, `otp_columns`, `icon_text`) into `apply_rows.rs` next to
+//! `apply_extras.rs`, leaving `run`, `write_all`, the ledger and `rollback` here.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};

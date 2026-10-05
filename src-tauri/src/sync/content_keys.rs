@@ -14,6 +14,12 @@
 //!
 //! In spec 024 the key seals the device names in the device list and derives
 //! the presence mailbox (R7).
+//!
+//! Maintainability exception (spaex 500-LoC rule): issuing, verifying and unwrapping share the
+//! signed records and their checks, so they have stayed together; sealed names already live in
+//! `content_keys_names.rs`. Concrete split plan, if this grows further: move the selection of
+//! held keys (`current_key`, `current_key_for_list`, `listening_keys`) into
+//! `content_keys_held.rs`, leaving issuing and the envelopes here.
 
 use std::collections::BTreeMap;
 
