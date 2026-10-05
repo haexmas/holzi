@@ -17,6 +17,7 @@ mod imap;
 mod parsing;
 mod smtp;
 mod types;
+pub mod watch;
 
 use std::net::IpAddr;
 
@@ -169,5 +170,9 @@ mod mail_tests;
 #[cfg(test)]
 mod test_server;
 #[cfg(test)]
+mod test_setup;
+#[cfg(test)]
 #[path = "mod_tests.rs"]
 mod tests;
+#[cfg(test)]
+mod watch_tests;

@@ -164,6 +164,47 @@ pub fn send_message(ctx: &CallContext, params: &Value) -> Result<Value, BridgeEr
     Ok(Value::String(run(smtp::send(&config, &message))?))
 }
 
+/// `{accountId, mailboxName, intervalSeconds, imap}`: watches the mailbox for new messages, after
+/// the `poll` check for the IMAP host and port (`watch.rs`).
+pub fn start_watch(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
+    let account: String = field(params, "accountId")?;
+    let mailbox: String = field(params, "mailboxName")?;
+    let config: ServerConfig = field(params, "imap")?;
+    let interval = optional::<u64>(params, "intervalSeconds")?.unwrap_or(300);
+    check_permission(ctx, Action::Poll, &config.host, config.port)?;
+    super::watch::start(
+        &ctx.host,
+        &ctx.emitter,
+        ctx.session.extension_id,
+        account,
+        mailbox,
+        config,
+        Duration::from_secs(interval),
+    )
+    .map_err(|e| match e {
+        MailError::TooLarge => {
+            BridgeError::new(ExtensionErrorCode::LimitExceeded, "too many watches")
+        }
+        other => other.into(),
+    })?;
+    Ok(Value::Null)
+}
+
+/// `{accountId, mailboxName}`: ends a watch of the calling extension; 1001 when it has none.
+pub fn stop_watch(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
+    let account: String = field(params, "accountId")?;
+    let mailbox: String = field(params, "mailboxName")?;
+    if ctx
+        .host
+        .mail_watches
+        .stop(ctx.session.extension_id, &account, &mailbox)
+    {
+        Ok(Value::Null)
+    } else {
+        Err(BridgeError::new(ExtensionErrorCode::NotFound, "not found"))
+    }
+}
+
 /// `{imapHost, message}` → the RFC 822 bytes as base64; nothing is sent.
 pub fn build_rfc822(_ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let message: OutgoingMessage = field(params, "message")?;

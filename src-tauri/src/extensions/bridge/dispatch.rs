@@ -313,16 +313,20 @@ pub static METHODS: &[Method] = &[
         handler: mail::commands::build_rfc822,
         module: mail::commands::MODULE,
     },
+    Method {
+        name: "extension_mail_start_watch",
+        handler: mail::commands::start_watch,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_stop_watch",
+        handler: mail::commands::stop_watch,
+        module: mail::commands::MODULE,
+    },
 ];
 
 /// Methods of later deliveries (research R1): they answer 8001 until they land.
-const LATER: &[&str] = &[
-    "extension_remote_storage_",
-    // The watch of new messages (`extension_mail_start_watch`, `_stop_watch`) waits for a
-    // decision on where its credentials come from (T108).
-    "extension_mail_",
-    "extension_shell_",
-];
+const LATER: &[&str] = &["extension_remote_storage_", "extension_shell_"];
 
 /// Whether the caller may run host functions: an installed, enabled extension, or a development
 /// version while developer mode is on for this device (US12).

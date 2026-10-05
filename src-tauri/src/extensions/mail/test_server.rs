@@ -5,8 +5,6 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine as _;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -28,9 +26,31 @@ pub struct State {
     pub sent: Vec<(Vec<String>, Vec<u8>)>,
     /// Every command line the IMAP server read.
     pub commands: Vec<String>,
+    /// Whether the server offers IDLE.
+    pub no_idle: bool,
+    /// Wakes the sessions in IDLE when a message arrives.
+    pub arrived: Option<tokio::sync::broadcast::Sender<()>>,
+}
+
+/// A new message in `mailbox`, as if it arrived from outside; sessions in IDLE hear of it.
+pub fn deliver(state: &Shared, mailbox: &str, subject: &str) {
+    let mut s = state.lock().unwrap();
+    let uid = s.next_uid;
+    s.next_uid += 1;
+    s.boxes.entry(mailbox.to_owned()).or_default().push(Stored {
+        uid,
+        flags: vec![],
+        raw: message(subject, false),
+    });
+    if let Some(arrived) = &s.arrived {
+        let _ = arrived.send(());
+    }
 }
 
 pub type Shared = Arc<Mutex<State>>;
+
+#[path = "test_server_smtp.rs"]
+mod smtp;
 
 pub fn message(subject: &str, with_attachment: bool) -> Vec<u8> {
     let mut text = format!(
@@ -53,6 +73,7 @@ pub fn message(subject: &str, with_attachment: bool) -> Vec<u8> {
 pub fn state() -> Shared {
     let mut state = State {
         next_uid: 10,
+        arrived: Some(tokio::sync::broadcast::channel(16).0),
         ..State::default()
     };
     state.boxes.insert(
@@ -188,7 +209,41 @@ async fn imap_session(stream: TcpStream, state: Shared) {
         let mut out: Vec<u8> = Vec::new();
         let ok = |text: &str| format!("{tag} OK {text}\r\n").into_bytes();
         match command.to_ascii_uppercase().as_str() {
-            "CAPABILITY" => out.extend(b"* CAPABILITY IMAP4rev1 MOVE\r\n"),
+            "CAPABILITY" => {
+                if state.lock().unwrap().no_idle {
+                    out.extend(b"* CAPABILITY IMAP4rev1 MOVE\r\n");
+                } else {
+                    out.extend(b"* CAPABILITY IMAP4rev1 MOVE IDLE\r\n");
+                }
+            }
+            "NOOP" => {
+                let n = state
+                    .lock()
+                    .unwrap()
+                    .boxes
+                    .get(&selected)
+                    .map_or(0, Vec::len);
+                out.extend(format!("* {n} EXISTS\r\n").into_bytes());
+            }
+            "IDLE" => {
+                let mut arrived = state.lock().unwrap().arrived.as_ref().unwrap().subscribe();
+                let _ = write.write_all(b"+ idling\r\n").await;
+                loop {
+                    let mut done = String::new();
+                    tokio::select! {
+                        read = reader.read_line(&mut done) => {
+                            if read.unwrap_or(0) == 0 {
+                                return;
+                            }
+                            break;
+                        }
+                        _ = arrived.recv() => {
+                            let n = state.lock().unwrap().boxes.get(&selected).map_or(0, Vec::len);
+                            let _ = write.write_all(format!("* {n} EXISTS\r\n").as_bytes()).await;
+                        }
+                    }
+                }
+            }
             "LOGIN" => {
                 let w = words(args);
                 if w.first().map(String::as_str) != Some(USER)
@@ -377,61 +432,6 @@ async fn imap_session(stream: TcpStream, state: Shared) {
     }
 }
 
-async fn smtp_session(stream: TcpStream, state: Shared) {
-    let (read, mut write) = stream.into_split();
-    let mut reader = BufReader::new(read);
-    let _ = write.write_all(b"220 test ESMTP\r\n").await;
-    let mut recipients = Vec::new();
-    loop {
-        let mut line = String::new();
-        if reader.read_line(&mut line).await.unwrap_or(0) == 0 {
-            return;
-        }
-        let upper = line.trim_end().to_ascii_uppercase();
-        let reply: String = if upper.starts_with("EHLO") {
-            "250-test\r\n250 AUTH PLAIN\r\n".into()
-        } else if let Some(token) = line.trim_end().strip_prefix("AUTH PLAIN ") {
-            let decoded = STANDARD.decode(token).unwrap_or_default();
-            if decoded == format!("\0{USER}\0{PASSWORD}").as_bytes() {
-                "235 ok\r\n".into()
-            } else {
-                "535 5.7.8 authentication failed\r\n".into()
-            }
-        } else if upper.starts_with("MAIL FROM") {
-            "250 ok\r\n".into()
-        } else if upper.starts_with("RCPT TO") {
-            recipients.push(
-                line.trim_end()[8..]
-                    .trim_matches(['<', '>', ' '])
-                    .to_owned(),
-            );
-            "250 ok\r\n".into()
-        } else if upper == "DATA" {
-            let _ = write.write_all(b"354 go\r\n").await;
-            let mut data = Vec::new();
-            loop {
-                let mut l = String::new();
-                if reader.read_line(&mut l).await.unwrap_or(0) == 0 || l == ".\r\n" {
-                    break;
-                }
-                data.extend(l.as_bytes());
-            }
-            state
-                .lock()
-                .unwrap()
-                .sent
-                .push((std::mem::take(&mut recipients), data));
-            "250 queued\r\n".into()
-        } else if upper == "QUIT" {
-            let _ = write.write_all(b"221 bye\r\n").await;
-            return;
-        } else {
-            "250 ok\r\n".into()
-        };
-        let _ = write.write_all(reply.as_bytes()).await;
-    }
-}
-
 /// Starts both servers on `runtime`; returns the IMAP and the SMTP port.
 pub fn start(runtime: &tokio::runtime::Runtime, state: Shared) -> (u16, u16) {
     runtime.block_on(async {
@@ -449,7 +449,7 @@ pub fn start(runtime: &tokio::runtime::Runtime, state: Shared) -> (u16, u16) {
         });
         tokio::spawn(async move {
             while let Ok((stream, _)) = smtp.accept().await {
-                tokio::spawn(smtp_session(stream, Arc::clone(&state)));
+                tokio::spawn(smtp::session(stream, Arc::clone(&state)));
             }
         });
         ports

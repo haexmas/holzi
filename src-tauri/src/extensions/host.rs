@@ -59,6 +59,8 @@ pub struct ExtensionHost {
     pub permissions: PermissionState,
     /// System notifications shown for extensions (US8).
     pub notifications: NotificationState,
+    /// Mailboxes extensions watch for new messages (US11).
+    pub mail_watches: super::mail::watch::MailWatches,
     /// Entry and Content-Security-Policy per bundle started in this process.
     started: Mutex<HashMap<Uuid, Arc<Started>>>,
     /// The bundle each extension last started with on this device, to see an update.
