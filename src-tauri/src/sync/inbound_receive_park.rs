@@ -4,19 +4,30 @@
 
 use std::cmp::Ordering;
 
-use haex_crdt::compare_hlc_strings;
+use haex_crdt::{compare_hlc_strings, Database};
 use uuid::Uuid;
 
 use super::hold::Group;
 use super::park::{self, Context, Parked, Sorted};
 use super::{InboundError, Inbox};
+use crate::storage::query;
 use crate::sync::change::group_bytes;
 
 /// The groups a page parks, and the extensions that reached their limit in it.
-#[derive(Default)]
-pub(super) struct Parking {
+pub(super) struct Parking<'a> {
+    db: &'a Database,
     pub parked: Vec<(String, Parked, usize)>,
     pub newly_full: Vec<String>,
+}
+
+impl<'a> Parking<'a> {
+    pub(super) fn new(db: &'a Database) -> Self {
+        Self {
+            db,
+            parked: Vec::new(),
+            newly_full: Vec::new(),
+        }
+    }
 }
 
 impl Inbox {
@@ -25,12 +36,12 @@ impl Inbox {
     pub(super) fn park_group(
         &mut self,
         context: &mut Context,
-        parking: &mut Parking,
+        parking: &mut Parking<'_>,
         origin: Uuid,
         hlc: String,
         group: Parked,
         bytes: usize,
-    ) {
+    ) -> Result<(), InboundError> {
         if let Some(snapshot) = &mut self.snapshot {
             snapshot.rows.extend(
                 group
@@ -38,6 +49,12 @@ impl Inbox {
                     .iter()
                     .map(|c| (c.table_name.clone(), c.row_pks.clone())),
             );
+        }
+        // Fetched again (progress stayed below it): stored and counted already.
+        let origin_text = origin.to_string();
+        if query::read(parking.db, |r| park::is_stored(r, &origin_text, &hlc))? {
+            parking.parked.push((hlc, group, bytes));
+            return Ok(());
         }
         let limit = self.park_limit.unwrap_or(park::PARKED_LIMIT_BYTES);
         let full = self.full_prefixes.contains(&group.prefix)
@@ -58,7 +75,7 @@ impl Inbox {
             {
                 self.blocked.insert(origin, hlc);
             }
-            return;
+            return Ok(());
         }
         log::info!(
             "sync: parked a group for extension {} ({})",
@@ -67,6 +84,7 @@ impl Inbox {
         );
         context.add_parked(&group.prefix, &hlc, bytes);
         parking.parked.push((hlc, group, bytes));
+        Ok(())
     }
 
     /// Parks every group of `candidates` whose extension has parked groups, earlier ones of this
@@ -76,7 +94,7 @@ impl Inbox {
     pub(super) fn park_with_parked(
         &mut self,
         context: &mut Context,
-        parking: &mut Parking,
+        parking: &mut Parking<'_>,
         candidates: Vec<Group>,
     ) -> Result<Vec<Group>, InboundError> {
         let mut kept = Vec::with_capacity(candidates.len());
@@ -88,7 +106,7 @@ impl Inbox {
                 Sorted::Apply(columns) => kept.push(Group { columns, ..group }),
                 Sorted::Park(parked) => {
                     let bytes = group_bytes(&parked.columns)?;
-                    self.park_group(context, parking, group.origin, group.hlc, parked, bytes);
+                    self.park_group(context, parking, group.origin, group.hlc, parked, bytes)?;
                 }
             }
         }

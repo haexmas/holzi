@@ -10,6 +10,7 @@ pub mod commands;
 pub mod dev;
 pub mod dev_csp;
 pub mod error;
+pub mod fs;
 pub mod host;
 pub mod ids;
 pub mod kv;

@@ -60,13 +60,35 @@ export function encodeBytes(value: unknown, depth = 0): unknown {
   return value
 }
 
-/** The message on the port for an event: `{type, data, timestamp}` as the SDK reads it. */
+/** Events the SDK reads flat, with their fields next to `type` (contracts/bridge.md §Meldungen). */
+const FLAT_EVENTS = new Set([
+  'filesync:file-changed',
+  'shell:output',
+  'shell:exit',
+])
+
+/**
+ * The message on the port for an event: `{type, data, timestamp}` as the SDK reads it; a flat
+ * event also carries the fields of its data next to `type`.
+ */
 export function eventMessage(event: FrameEvent): {
   type: string
   data: unknown
   timestamp: number
+  [field: string]: unknown
 } {
-  return { type: event.type, data: event.data, timestamp: event.timestamp }
+  const message = {
+    type: event.type,
+    data: event.data,
+    timestamp: event.timestamp,
+  }
+  if (
+    !FLAT_EVENTS.has(event.type) ||
+    typeof event.data !== 'object' ||
+    event.data === null
+  )
+    return message
+  return { ...(event.data as Record<string, unknown>), ...message }
 }
 
 /**

@@ -29,9 +29,29 @@ const { revealAsync } = usePasswords()
         v-if="detail.username"
         :title="t('passwords.fields.username')"
       >
-        <span class="min-w-0 truncate" data-testid="passwords-value-username">{{
-          detail.username
-        }}</span>
+        <template v-if="detail.references.username.length" #below>
+          <PasswordsReferenceValue
+            :marks="detail.references.username"
+            :text="detail.username"
+            kind="username"
+          />
+        </template>
+        <PasswordsMaskedValue
+          v-if="detail.references.username.length"
+          :fetch="
+            async () => (await revealAsync(itemId, { kind: 'username' })).value
+          "
+          :identity="`${itemId}:username:${detail.username}`"
+          kind="username-resolved"
+          present
+          :label="t('passwords.fields.username')"
+        />
+        <span
+          v-else
+          class="min-w-0 truncate"
+          data-testid="passwords-value-username"
+          >{{ detail.username }}</span
+        >
         <UiButton
           variant="ghost"
           size="icon"
@@ -47,6 +67,13 @@ const { revealAsync } = usePasswords()
         </UiButton>
       </SettingsRow>
       <SettingsRow :title="t('passwords.fields.password')">
+        <template v-if="detail.references.password.length" #below>
+          <PasswordsReferenceValue
+            :marks="detail.references.password"
+            :text="null"
+            kind="password"
+          />
+        </template>
         <PasswordsMaskedValue
           :fetch="
             async () => (await revealAsync(itemId, { kind: 'password' })).value
@@ -72,9 +99,29 @@ const { revealAsync } = usePasswords()
         </UiButton>
       </SettingsRow>
       <SettingsRow v-if="detail.url" :title="t('passwords.fields.url')">
-        <span class="min-w-0 truncate" data-testid="passwords-value-url">{{
-          detail.url
-        }}</span>
+        <template v-if="detail.references.url.length" #below>
+          <PasswordsReferenceValue
+            :marks="detail.references.url"
+            :text="detail.url"
+            kind="url"
+          />
+        </template>
+        <PasswordsMaskedValue
+          v-if="detail.references.url.length"
+          :fetch="
+            async () => (await revealAsync(itemId, { kind: 'url' })).value
+          "
+          :identity="`${itemId}:url:${detail.url}`"
+          kind="url-resolved"
+          present
+          :label="t('passwords.fields.url')"
+        />
+        <span
+          v-else
+          class="min-w-0 truncate"
+          data-testid="passwords-value-url"
+          >{{ detail.url }}</span
+        >
       </SettingsRow>
       <SettingsRow
         v-if="detail.expiresAt"
@@ -104,7 +151,24 @@ const { revealAsync } = usePasswords()
         class="px-4 py-3 text-sm whitespace-pre-wrap"
         data-testid="passwords-value-note"
       >
-        {{ detail.note }}
+        <template v-if="detail.references.note.length">
+          <PasswordsReferenceValue
+            :marks="detail.references.note"
+            :text="detail.note"
+            kind="note"
+          />
+          <PasswordsMaskedValue
+            class="mt-2"
+            :fetch="
+              async () => (await revealAsync(itemId, { kind: 'note' })).value
+            "
+            :identity="`${itemId}:note:${detail.note}`"
+            kind="note-resolved"
+            present
+            :label="t('passwords.fields.note')"
+          />
+        </template>
+        <template v-else>{{ detail.note }}</template>
       </li>
     </SettingsGroup>
 

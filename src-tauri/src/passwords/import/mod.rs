@@ -7,6 +7,7 @@
 
 pub mod apply;
 pub mod apply_extras;
+pub mod apply_references;
 pub mod bitwarden;
 pub mod csv;
 pub mod haex_vault;
@@ -14,6 +15,9 @@ pub mod icons;
 pub mod keepass;
 pub mod lastpass;
 pub mod passkey;
+pub mod references;
+#[cfg(test)]
+mod references_tests;
 pub mod registry;
 pub mod report;
 
@@ -198,6 +202,11 @@ pub struct ImportItem {
     /// The folder the source names for a deleted entry.
     pub trashed_from_ref: Option<String>,
     pub problems: Vec<Problem>,
+    /// The id of the entry in the source file (KeePass), for the references between its entries
+    /// (spec 036, FR-050).
+    pub source_ref: Option<String>,
+    /// The id the import gives the entry, set before writing so references can point at it.
+    pub assigned_id: Option<String>,
 }
 
 impl fmt::Debug for ImportItem {

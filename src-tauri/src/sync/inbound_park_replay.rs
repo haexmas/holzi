@@ -24,7 +24,9 @@ pub struct Replayed {
 /// one that still fails (a row completed only by a group not ready yet) stays parked and the other
 /// extensions go on. Waits for running migrations, so no group lands between two of them. Safe to
 /// run concurrently: applying a group twice changes nothing.
-pub fn replay_ready(db: &Database) -> haex_crdt::Result<Replayed> {
+/// `stop` is asked before each extension; a closing vault ends the replay there (the rest
+/// stays parked for the next run).
+pub fn replay_ready(db: &Database, stop: &dyn Fn() -> bool) -> haex_crdt::Result<Replayed> {
     let _migrations = crate::extensions::sql::migrate::applying()
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
@@ -45,6 +47,9 @@ pub fn replay_ready(db: &Database) -> haex_crdt::Result<Replayed> {
         }
         let mut progressed = false;
         for (prefix, mut groups) in by_prefix {
+            if stop() {
+                return Ok(replayed);
+            }
             groups.sort_by(|a, b| compare_hlc_strings(&a.1, &b.1));
             let mut ready: Vec<i64> = Vec::new();
             let mut columns: Vec<ColumnChange> = Vec::new();

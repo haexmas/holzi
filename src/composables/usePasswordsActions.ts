@@ -14,6 +14,9 @@ import { isInTrash, trashGroupIds, TRASH_GROUP_ID } from '~/lib/passwords/tree'
  * as one command (all or nothing, FR-022); targets deleted meanwhile are skipped and counted, a
  * folder that would go into itself is refused before anything moves (FR-014).
  */
+/** What the copy dialog copies where (spec 036, FR-015). */
+export type CopyRequest = { targets: Target[]; into: string | null }
+
 export function usePasswordsActions() {
   const { t } = useI18n()
   const { errString } = useErrorString()
@@ -123,8 +126,17 @@ export function usePasswordsActions() {
     return moveTargetsAsync(targetsOf(ids), to)
   }
 
-  /** Einfügen into `to`: a cut moves and empties the Ablage; on a failure it stays. */
-  async function pasteAsync(to: string | null) {
+  /** Einfügen into `to`: a cut moves and empties the Ablage; on a failure it stays. A copy opens the
+   * copy dialog of the window that pastes (`openCopy`, FR-015); the Ablage stays filled. */
+  async function pasteAsync(
+    to: string | null,
+    openCopy?: (request: CopyRequest) => void,
+  ) {
+    const ablage = clipboard.ablage
+    if (ablage?.mode === 'copy') {
+      openCopy?.({ targets: [...ablage.targets], into: to })
+      return
+    }
     const operation = clipboard.beginPaste()
     // A copy is pasted through the copy dialog of stage 3 (FR-015), and only one paste may run at
     // a time because all password-manager windows share this Ablage.

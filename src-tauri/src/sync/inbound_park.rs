@@ -24,14 +24,12 @@ use haex_crdt::{compare_hlc_strings, ColumnChange, CrdtTransaction};
 
 use super::{InboundError, DELETED_ROWS_TABLE};
 use crate::extensions::ids::{ExtensionName, ExtensionTable, PublicKey, TablePrefix};
-use crate::storage::query::Query;
-use crate::sync::replica::synced_tables;
 
 /// At most this many parked bytes per extension. At the limit no group is dropped: the progress
 /// of its origin stops before it, so it is fetched again later (R10).
 pub(super) const PARKED_LIMIT_BYTES: usize = 256 * 1024 * 1024;
 
-const PARKED_TABLE: &str = "sync_parked_groups_no_sync";
+pub(super) const PARKED_TABLE: &str = "sync_parked_groups_no_sync";
 
 /// Why a group was parked.
 pub(super) const MISSING_TABLE: &str = "missing_table";
@@ -40,221 +38,9 @@ pub(super) const AFTER_PARKED: &str = "after_parked";
 pub(super) const AWAITING_PURGE: &str = "awaiting_purge";
 pub(super) const DEV_VERSION: &str = "dev_version";
 
-/// The registry table whose `purge_hlc` column records a removal.
-const EXTENSIONS_TABLE: &str = "extensions";
-
-/// What this device has, read once per page.
-#[derive(Debug, Default)]
-pub(super) struct Context {
-    /// Every synced table, by its name.
-    synced: HashSet<String>,
-    /// The extension tables with their columns, lower case; `None` when the table's SQL cannot be
-    /// read (its columns are then not checked).
-    extension_tables: HashMap<String, Option<HashSet<String>>>,
-    /// Parked bytes and the earliest parked HLC per extension prefix.
-    parked: HashMap<String, (usize, String)>,
-    /// `purge_hlc` per prefix of an extension removed with "delete data".
-    purges: HashMap<String, String>,
-    /// The prefixes of [`Self::purges`] this device has not cleared up for yet.
-    pending: HashSet<String>,
-    /// Prefix and "delete data" per registered extension id, to read a removal from the wire.
-    registry: HashMap<String, (String, bool)>,
-    /// The last `purge_hlc` cleared up for, per extension id.
-    applied: HashMap<String, String>,
-    /// Prefixes of development versions on this device: their tables are not the synced ones
-    /// (spec 017, US12, research R16).
-    dev: HashSet<String>,
-}
-
-/// A removal read from a group that was applied: the `purge_hlc` of `prefix` and whether it
-/// deletes data.
-#[derive(Debug, Clone)]
-pub(super) struct Noted {
-    prefix: String,
-    extension_id: String,
-    purge_hlc: String,
-    purge_data: bool,
-}
-
-impl Context {
-    pub(super) fn read(q: &mut impl Query) -> haex_crdt::Result<Self> {
-        let synced = synced_tables(q)?.into_iter().collect();
-        // The read connection allows no PRAGMA; SQLite keeps the CREATE statement current
-        // (an added column is appended to it).
-        let tables: Vec<(String, Option<String>)> = q.query_map(
-            "SELECT name, sql FROM sqlite_master WHERE type = 'table'",
-            &[],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )?;
-        let extension_tables = tables
-            .into_iter()
-            .filter(|(name, _)| ExtensionTable::parse(name).is_ok())
-            .map(|(name, sql)| {
-                (
-                    name.to_ascii_lowercase(),
-                    sql.as_deref().and_then(columns_of),
-                )
-            })
-            .collect();
-        let mut parked: HashMap<String, (usize, String)> = HashMap::new();
-        let rows: Vec<(String, String, i64)> = q.query_map(
-            &format!("SELECT extension_prefix, hlc, bytes FROM {PARKED_TABLE}"),
-            &[],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        )?;
-        for (prefix, hlc, bytes) in rows {
-            let entry = parked.entry(prefix).or_insert((0, hlc.clone()));
-            entry.0 = entry.0.saturating_add(usize::try_from(bytes).unwrap_or(0));
-            if compare_hlc_strings(&hlc, &entry.1) == Ordering::Less {
-                entry.1 = hlc;
-            }
-        }
-        type Row = (String, String, String, bool, Option<String>);
-        let registered: Vec<Row> = q.query_map(
-            "SELECT id, public_key, name, purge_data, purge_hlc FROM extensions",
-            &[],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
-        )?;
-        let applied: HashMap<String, String> = q
-            .query_map(
-                "SELECT extension_id, purge_hlc FROM extension_purges_applied_no_sync",
-                &[],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )?
-            .into_iter()
-            .collect();
-        let mut context = Self {
-            synced,
-            extension_tables,
-            parked,
-            applied,
-            dev: crate::extensions::dev::prefixes(q)?,
-            ..Self::default()
-        };
-        for (id, key, name, purge_data, purge_hlc) in registered {
-            let Some(prefix) = prefix_of(&key, &name) else {
-                continue;
-            };
-            context
-                .registry
-                .insert(id.clone(), (prefix.clone(), purge_data));
-            if let Some(purge_hlc) = purge_hlc {
-                context.set_purge(Noted {
-                    prefix,
-                    extension_id: id,
-                    purge_hlc,
-                    purge_data,
-                });
-            }
-        }
-        Ok(context)
-    }
-
-    /// Records the current removal of an extension.
-    fn set_purge(&mut self, removal: Noted) {
-        self.purges.remove(&removal.prefix);
-        self.pending.remove(&removal.prefix);
-        if !removal.purge_data {
-            return;
-        }
-        let cleared = self
-            .applied
-            .get(&removal.extension_id)
-            .is_some_and(|applied| {
-                compare_hlc_strings(&removal.purge_hlc, applied) != Ordering::Greater
-            });
-        if !cleared {
-            self.pending.insert(removal.prefix.clone());
-        }
-        self.purges.insert(removal.prefix, removal.purge_hlc);
-    }
-
-    /// Reads the removals an applied group writes, so later groups of the same pull already obey
-    /// them (the clear-up runs only after the pull); returns them for the pages still to come.
-    pub(super) fn note(&mut self, columns: &[ColumnChange]) -> Vec<Noted> {
-        let cell = |row: &str, column: &str| {
-            columns.iter().find(|c| {
-                c.table_name == EXTENSIONS_TABLE && c.row_pks == row && c.column_name == column
-            })
-        };
-        let mut noted = Vec::new();
-        for change in columns {
-            if change.table_name != EXTENSIONS_TABLE || change.column_name != "purge_hlc" {
-                continue;
-            }
-            let Some(purge_hlc) = change.value.as_str() else {
-                continue;
-            };
-            let Some(id) = serde_json::from_str::<serde_json::Value>(&change.row_pks)
-                .ok()
-                .and_then(|pks| pks.get("id")?.as_str().map(str::to_owned))
-            else {
-                continue;
-            };
-            let known = self.registry.get(&id).cloned();
-            let text = |column| cell(&change.row_pks, column).and_then(|c| c.value.as_str());
-            let prefix = match (text("public_key"), text("name")) {
-                (Some(key), Some(name)) => prefix_of(key, name),
-                _ => known.as_ref().map(|(prefix, _)| prefix.clone()),
-            };
-            let purge_data = cell(&change.row_pks, "purge_data")
-                .and_then(|c| c.value.as_i64().or(c.value.as_bool().map(i64::from)))
-                .map(|value| value != 0)
-                .or(known.map(|(_, purge_data)| purge_data));
-            let (Some(prefix), Some(purge_data)) = (prefix, purge_data) else {
-                continue;
-            };
-            let removal = Noted {
-                prefix,
-                extension_id: id,
-                purge_hlc: purge_hlc.to_owned(),
-                purge_data,
-            };
-            self.set_purge(removal.clone());
-            noted.push(removal);
-        }
-        noted
-    }
-
-    /// Takes over the removals earlier pages of the same pull noted.
-    pub(super) fn extend_noted(&mut self, noted: &[Noted]) {
-        for removal in noted {
-            let newer = self.purges.get(&removal.prefix).is_none_or(|current| {
-                compare_hlc_strings(&removal.purge_hlc, current) == Ordering::Greater
-            });
-            if newer || !removal.purge_data {
-                self.set_purge(removal.clone());
-            }
-        }
-    }
-
-    /// Whether `prefix` has parked groups.
-    pub(super) fn has_parked(&self, prefix: &str) -> bool {
-        self.parked.contains_key(prefix)
-    }
-
-    /// Whether any extension has parked groups.
-    pub(super) fn has_any_parked(&self) -> bool {
-        !self.parked.is_empty()
-    }
-
-    /// Parked bytes of `prefix`.
-    pub(super) fn parked_bytes(&self, prefix: &str) -> usize {
-        self.parked.get(prefix).map_or(0, |(bytes, _)| *bytes)
-    }
-
-    /// Records a group parked in this page.
-    pub(super) fn add_parked(&mut self, prefix: &str, hlc: &str, bytes: usize) {
-        let entry = self
-            .parked
-            .entry(prefix.to_owned())
-            .or_insert((0, hlc.to_owned()));
-        entry.0 = entry.0.saturating_add(bytes);
-        if compare_hlc_strings(hlc, &entry.1) == Ordering::Less {
-            entry.1 = hlc.to_owned();
-        }
-    }
-}
+#[path = "inbound_park_context.rs"]
+mod context;
+pub(super) use context::{Context, Noted};
 
 /// A group to park.
 #[derive(Debug, Clone)]
@@ -409,25 +195,14 @@ pub(super) fn store(
         let origin = crate::sync::progress::origin_of(hlc)
             .map(|o| o.to_string())
             .unwrap_or_default();
-        let known = tx
-            .query_row(
-                &format!("SELECT COUNT(*) FROM {PARKED_TABLE} WHERE origin = ?1 AND hlc = ?2"),
-                params![origin, hlc],
-                |r| r.get::<_, i64>(0),
-            )?
-            .unwrap_or(0)
-            > 0;
-        if known {
-            continue;
-        }
         let blob = serde_json::to_vec(&group.columns)
             .map_err(|e| haex_crdt::Error::consumer(format!("parked group: {e}")))?;
         let tables = serde_json::to_string(&group.tables)
             .map_err(|e| haex_crdt::Error::consumer(format!("parked tables: {e}")))?;
         tx.execute(
             &format!(
-                "INSERT INTO {PARKED_TABLE} (origin, hlc, extension_prefix, tables, group_blob, \
-                 bytes, reason, parked_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
+                "INSERT OR IGNORE INTO {PARKED_TABLE} (origin, hlc, extension_prefix, tables, \
+                 group_blob, bytes, reason, parked_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
             ),
             params![
                 origin,
@@ -442,6 +217,21 @@ pub(super) fn store(
         )?;
     }
     Ok(())
+}
+
+/// Whether the group of `origin` at `hlc` is parked already (fetched again).
+pub(super) fn is_stored(
+    q: &mut impl crate::storage::query::Query,
+    origin: &str,
+    hlc: &str,
+) -> haex_crdt::Result<bool> {
+    Ok(q.query_row(
+        &format!("SELECT COUNT(*) FROM {PARKED_TABLE} WHERE origin = ?1 AND hlc = ?2"),
+        params![origin, hlc],
+        |r| r.get::<_, i64>(0),
+    )?
+    .unwrap_or(0)
+        > 0)
 }
 
 /// Records on `device` that the parked groups of the extensions with `prefixes` reached their

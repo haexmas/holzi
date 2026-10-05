@@ -271,6 +271,7 @@ pub fn get_item(q: &mut impl Query, id: &str) -> Result<Option<ItemDetail>> {
         key_values,
         attachments,
         passkeys: passkeys::list_for_item(q, id)?,
+        references: Default::default(),
     }))
 }
 

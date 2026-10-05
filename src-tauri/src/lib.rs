@@ -82,6 +82,7 @@ use passwords::commands::attachments::{
     passwords_attachment_add, passwords_attachment_preview, passwords_attachment_remove,
     passwords_attachment_rename, passwords_attachment_save,
 };
+use passwords::commands::copy::passwords_copy;
 use passwords::commands::history::{
     passwords_history_get, passwords_history_list, passwords_history_restore,
     passwords_history_reveal,
@@ -102,6 +103,10 @@ use passwords::commands::presets::{
 use passwords::commands::read::{
     passwords_copy_field, passwords_get_item, passwords_load_overview, passwords_reveal,
     passwords_totp_code,
+};
+use passwords::commands::references::{
+    passwords_item_key_names, passwords_reference_token, passwords_reference_usage,
+    passwords_references_parse,
 };
 use passwords::commands::trash::{
     passwords_delete_permanently, passwords_empty_trash, passwords_restore, passwords_trash,
@@ -241,6 +246,11 @@ pub fn run() {
                 .build()?;
             // Spec 032: actions of a model's tool call go out as events; `ChatState` is managed
             // without an `AppHandle`, so the emitter is set here.
+            // Spec 017, US9: holzi's protected places, known places and dialogs for extensions.
+            app.state::<AppState>()
+                .extensions()
+                .fs
+                .set_environment(extensions::fs::environment_for(app.handle()));
             let handle = app.handle().clone();
             app.state::<ChatState>()
                 .action_bridge
@@ -346,6 +356,11 @@ pub fn run() {
             passwords_preset_save,
             passwords_preset_delete,
             passwords_item_usage,
+            passwords_references_parse,
+            passwords_copy,
+            passwords_reference_token,
+            passwords_item_key_names,
+            passwords_reference_usage,
             passwords_agent_search,
             passwords_trash,
             passwords_restore,

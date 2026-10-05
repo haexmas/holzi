@@ -7,6 +7,7 @@
  */
 import { toast } from 'vue-sonner'
 import type { GroupRow } from '@bindings/GroupRow'
+import type { CopyRequest } from '~/composables/usePasswordsActions'
 import type { Target } from '@bindings/Target'
 import { FOLDER_MIME, ITEMS_MIME, parseItemsPayload } from '~/lib/passwords/dnd'
 import { buildMenu, type MenuCommand } from '~/lib/passwords/menus'
@@ -152,7 +153,10 @@ async function runFolderCommand(command: MenuCommand, group: GroupRow) {
       actions.copy([group.id])
       break
     case 'paste':
-      await actions.pasteAsync(group.id)
+      await actions.pasteAsync(group.id, (request) => {
+        copyRequest.value = request
+        copyOpen.value = true
+      })
       break
     case 'delete':
       askDeleteFolder(group)
@@ -163,11 +167,19 @@ async function runFolderCommand(command: MenuCommand, group: GroupRow) {
 }
 
 const emptyTrashOpen = ref(false)
+const copyRequest = ref<CopyRequest | null>(null)
+const copyOpen = ref(false)
 const trashedFolders = computed(
   () =>
     tree.value.trash.groups.filter((group) => group.id !== TRASH_GROUP_ID)
       .length,
 )
+const trashedItemIds = computed(() => {
+  const ids = new Set(tree.value.trash.groups.map((group) => group.id))
+  return store.headers
+    .filter((header) => header.groupId !== null && ids.has(header.groupId))
+    .map((header) => header.id)
+})
 const trashMenu = computed(() =>
   buildMenu({
     kind: 'trashNode',
@@ -346,10 +358,12 @@ async function onRootDrop(event: DragEvent) {
       :targets="deleteTargets"
       @done="afterFolderDelete"
     />
+    <PasswordsCopyDialog v-model:open="copyOpen" :request="copyRequest" />
     <PasswordsEmptyTrashDialog
       v-model:open="emptyTrashOpen"
       :entries="tree.trash.itemCount"
       :folders="trashedFolders"
+      :item-ids="trashedItemIds"
     />
   </div>
 </template>

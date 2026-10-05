@@ -215,6 +215,12 @@ async fn write_all(
     progress(done, Phase::Groups);
     let group_ids = Arc::new(group_result.ids);
 
+    // Spec 036, FR-050: the ids are given before writing, so KeePass references become holzi
+    // placeholders in the first state of each entry.
+    let (converted, left_as_text) = super::apply_references::prepare(&mut model.items, &skipped);
+    report.references_converted = converted;
+    report.references_left_as_text = left_as_text;
+
     // Entries, each in a write of its own.
     let mut jobs: Vec<Job> = Vec::new();
     let items = std::mem::take(&mut model.items);
@@ -477,7 +483,10 @@ fn write_item(
     state_files: &[Vec<ImportAttachment>],
     snapshot_now: bool,
 ) -> Result<ItemOutcome> {
-    let id = Uuid::new_v4().to_string();
+    let id = item
+        .assigned_id
+        .clone()
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = clock::now();
     let created = item.created_at.clone().unwrap_or_else(|| now.clone());
     let updated = item.updated_at.clone().unwrap_or_else(|| created.clone());

@@ -66,6 +66,7 @@ pub async fn extension_remove(
         remove(db, id, delete_data, now)?;
         // An install of the same key and name gets the same id again: no decision carries over.
         host.permissions.forget_extension(id);
+        host.fs.watches.end_all(id);
         Ok(())
     })
     .await
@@ -99,8 +100,13 @@ pub async fn extension_set_enabled(
     extension_id: String,
     enabled: bool,
 ) -> Result<()> {
+    let host = state.extensions();
     change(&app, &state, extension_id, move |db, id, now| {
-        set_enabled(db, id, enabled, now)
+        set_enabled(db, id, enabled, now)?;
+        if !enabled {
+            host.fs.watches.end_all(id);
+        }
+        Ok(())
     })
     .await
 }

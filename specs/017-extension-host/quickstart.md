@@ -135,6 +135,6 @@ nach vorn (Linux; macOS und Windows je nach Ergebnis der Machbarkeitsprüfung).
 
 ## 11. Erfolgskriterien
 
-SC-001 manuell mit haex-notes, haex-calendar, haex-pass (gebaut mit `haex` v2); SC-002 über
+SC-001 manuell mit haex-notes und haex-calendar (gebaut mit `haex` v2; haex-pass ist durch Spec 034 abgelöst); SC-002 über
 `extension_sql_bypass` und `extension-isolation`; SC-003 über `extension-two-devices`; SC-005 und SC-006
 grob im Betrieb (keine Messaufgaben); SC-007 über die Testtabelle in `extension_bridge_contract`.

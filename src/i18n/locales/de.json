@@ -927,7 +927,12 @@
         "unwritable": "Die Datei ließ sich nicht schreiben.",
         "haex_vault_locked": "Das Vault-Passwort passt nicht, oder die Datei ist keine haex-vault-Vault.",
         "no_passwords": "Diese Vault enthält keine Passwörter."
-      }
+      },
+      "referenceMissing": "Die Quelle eines Verweises ist nicht verfügbar.",
+      "referenceCycle": "Ein Verweis bildet einen Kreis oder ist zu tief verschachtelt.",
+      "referenceCycleOnSave": "Dieser Verweis würde einen Kreis bilden.",
+      "referenceCycleNamed": "Dieser Verweis würde über „{title}“ zu sich selbst zurückführen.",
+      "intoTrash": "In den Papierkorb lässt sich nichts kopieren."
     },
     "extensions": {
       "install": "Die Erweiterung konnte nicht installiert werden.",
@@ -1448,7 +1453,9 @@
         "imported": "Eingelesene Einträge",
         "trashed": "davon im Papierkorb",
         "historyStates": "Verlaufsstände",
-        "skippedDuplicates": "Übersprungene Doppelte"
+        "skippedDuplicates": "Übersprungene Doppelte",
+        "referencesConverted": "Umgewandelte KeePass-Verweise",
+        "referencesLeftAsText": "{count} als Text gelassen (keine eindeutige Quelle)"
       },
       "needsAttention": "Hier musst du nacharbeiten",
       "sourceGroup": "Quelle insgesamt",
@@ -1530,6 +1537,42 @@
         "delete": "Entf",
         "enter": "Eingabe"
       }
+    },
+    "references": {
+      "listMark": "Verweis",
+      "kind": {
+        "username": "Benutzername",
+        "password": "Passwort",
+        "extra": "Feld „{key}“"
+      },
+      "mark": "{value} von {source}",
+      "open": "Quelle öffnen",
+      "status": {
+        "missing": "Quelle nicht verfügbar",
+        "cycle": "Verweiskreis oder zu tief"
+      },
+      "insert": "Verweis einfügen",
+      "remove": "Verweis entfernen",
+      "searchEntry": "Eintrag suchen",
+      "pickValue": "Welcher Wert?",
+      "usage": "{count} Eintrag verwendet Werte von hier per Verweis. | {count} Einträge verwenden Werte von hier per Verweis.",
+      "inline": "Verweise in eigene Werte umwandeln",
+      "inlineOn": "Die Einträge behalten die heutigen Werte.",
+      "inlineOff": "Die Verweise zeigen danach „Quelle nicht verfügbar“.",
+      "passkeyLinks": "{count} Passkey-Verbindung fällt weg. | {count} Passkey-Verbindungen fallen weg."
+    },
+    "copyDialog": {
+      "title": "Kopie einfügen",
+      "suffix": " – Kopie",
+      "suffixLabel": "Zusatz zum Namen",
+      "history": "Verlauf übernehmen",
+      "historyHint": "Aus: Die Kopie beginnt mit einem eigenen Anfangsstand.",
+      "usernameReference": "Benutzername als Verweis auf das Original",
+      "passwordReference": "Passwort als Verweis auf das Original",
+      "noPasskeys": "Passkeys werden nicht mitkopiert.",
+      "confirm": "Kopieren",
+      "created": "{count} Eintrag kopiert | {count} Einträge kopiert",
+      "createdFolders": "{count} Ordner kopiert | {count} Ordner kopiert"
     }
   },
   "extensions": {

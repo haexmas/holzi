@@ -387,7 +387,7 @@ async fn deleting_an_entry_with_children_removes_every_row_on_the_other_device()
         .await
         .expect("trash");
     a.service
-        .delete_permanently(&Caller::User, item_target(&id))
+        .delete_permanently(&Caller::User, item_target(&id), false)
         .await
         .expect("delete");
     settle(&a, &b);
@@ -415,7 +415,7 @@ async fn an_older_state_that_arrives_after_the_delete_does_not_bring_the_entry_b
         .await
         .expect("trash");
     a.service
-        .delete_permanently(&Caller::User, item_target(&id))
+        .delete_permanently(&Caller::User, item_target(&id), false)
         .await
         .expect("delete");
     // B still holds the old state and offers it to A first; A has already deleted it.
@@ -470,4 +470,50 @@ async fn a_parent_delete_alone_cascades_with_a_marker_for_every_child() {
         0
     );
     assert_eq!(b.count("SELECT COUNT(*) FROM haex_passwords_item_tags"), 0);
+}
+
+/// Spec 036, T044: a placeholder that arrives before its source is marked missing (no panic, no
+/// change of the entry) and resolves once the source arrives.
+#[tokio::test]
+async fn a_reference_that_arrives_before_its_source_resolves_once_the_source_is_there() {
+    use holzi_lib::passwords::model_references::{RefMarkKind, RefStatus};
+    let laptop = Dev::new();
+    let phone = Dev::new();
+    let source = create(&laptop, full_item("Konto", &[])).await;
+    let token = laptop
+        .service
+        .reference_token(&Caller::User, source.clone(), RefMarkKind::Password, None)
+        .await
+        .expect("token");
+    // The phone writes the reference before it has the source.
+    let target = create(
+        &phone,
+        ItemInput {
+            title: Some("Zweit".to_string()),
+            password: Some(token.clone()),
+            ..ItemInput::default()
+        },
+    )
+    .await;
+    let detail = phone
+        .service
+        .get_item(&Caller::User, target.clone())
+        .await
+        .expect("get");
+    assert_eq!(detail.references.password[0].status, RefStatus::Missing);
+    let early = phone
+        .service
+        .reveal(&Caller::User, target.clone(), SecretField::Password)
+        .await;
+    assert!(early.is_err(), "a missing source is an error, not the text");
+
+    settle(&laptop, &phone);
+    assert_eq!(password_of(&phone, &target).await, format!("{MARKER}-pw"));
+    assert_eq!(password_of(&laptop, &target).await, format!("{MARKER}-pw"));
+    let detail = phone
+        .service
+        .get_item(&Caller::User, target)
+        .await
+        .expect("get");
+    assert_eq!(detail.references.password[0].status, RefStatus::Ok);
 }

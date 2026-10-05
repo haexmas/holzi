@@ -50,6 +50,8 @@ pub struct ReportBuilder {
     pub trashed: u32,
     pub history_states: u32,
     pub skipped_duplicates: u32,
+    pub references_converted: u32,
+    pub references_left_as_text: u32,
     rows: Vec<AttentionRow>,
 }
 
@@ -79,6 +81,8 @@ impl ReportBuilder {
             trashed: self.trashed,
             history_states: self.history_states,
             skipped_duplicates: self.skipped_duplicates,
+            references_converted: self.references_converted,
+            references_left_as_text: self.references_left_as_text,
             needs_attention: self.rows,
         }
     }
@@ -91,6 +95,12 @@ pub fn render_text(report: &ImportReport) -> String {
         "Import report\n\nImported entries: {}\nIn the trash: {}\nHistory states: {}\nSkipped duplicates: {}\n",
         report.imported, report.trashed, report.history_states, report.skipped_duplicates
     );
+    if report.references_converted + report.references_left_as_text > 0 {
+        text.push_str(&format!(
+            "References converted: {}\nReferences left as text: {}\n",
+            report.references_converted, report.references_left_as_text
+        ));
+    }
     if report.needs_attention.is_empty() {
         text.push_str("\nNothing needs your attention.\n");
         return text;

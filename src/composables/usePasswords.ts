@@ -1,5 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { CopyField } from '@bindings/CopyField'
+import type { CopyOptions } from '@bindings/CopyOptions'
+import type { CopyReport } from '@bindings/CopyReport'
 import type { CopyResult } from '@bindings/CopyResult'
 import type { CreateGroupResult } from '@bindings/CreateGroupResult'
 import type { CreateItemResult } from '@bindings/CreateItemResult'
@@ -8,6 +10,9 @@ import type { ItemDetail } from '@bindings/ItemDetail'
 import type { ItemInput } from '@bindings/ItemInput'
 import type { ItemPatch } from '@bindings/ItemPatch'
 import type { Preset } from '@bindings/Preset'
+import type { RefMark } from '@bindings/RefMark'
+import type { RefMarkKind } from '@bindings/RefMarkKind'
+import type { ReferenceUsage } from '@bindings/ReferenceUsage'
 import type { PresetInput } from '@bindings/PresetInput'
 import type { PresetSaveResult } from '@bindings/PresetSaveResult'
 import type { MoveResult } from '@bindings/MoveResult'
@@ -143,12 +148,52 @@ export function usePasswords() {
   const restoreAsync = (targets: Target[]) =>
     invoke<AffectedResult>('passwords_restore', { args: { targets } })
 
-  const deletePermanentlyAsync = (targets: Target[]) =>
+  /** With `inlineReferences` the placeholders on the deleted entries become own values first
+   * (spec 036, FR-048). */
+  const deletePermanentlyAsync = (
+    targets: Target[],
+    inlineReferences = false,
+  ) =>
     invoke<AffectedResult>('passwords_delete_permanently', {
-      args: { targets },
+      args: { targets, inlineReferences },
     })
 
-  const emptyTrashAsync = () => invoke<AffectedResult>('passwords_empty_trash')
+  const emptyTrashAsync = (inlineReferences = false) =>
+    invoke<AffectedResult>('passwords_empty_trash', {
+      args: { inlineReferences },
+    })
+
+  // Spec 036, references (contracts/tauri-commands.md): the window never parses or builds a
+  // placeholder itself.
+  const referencesParseAsync = (text: string) =>
+    invoke<RefMark[]>('passwords_references_parse', { args: { text } })
+
+  const referenceTokenAsync = (
+    itemId: string,
+    kind: RefMarkKind,
+    key?: string,
+  ) =>
+    invoke<string>('passwords_reference_token', {
+      args: key === undefined ? { itemId, kind } : { itemId, kind, key },
+    })
+
+  const itemKeyNamesAsync = (itemId: string) =>
+    invoke<string[]>('passwords_item_key_names', { args: { itemId } })
+
+  const referenceUsageAsync = (itemIds: string[]) =>
+    invoke<ReferenceUsage[]>('passwords_reference_usage', {
+      args: { itemIds },
+    })
+
+  /** Copies entries and folders in one transaction (spec 036, FR-015). */
+  const copyAsync = (
+    targets: Target[],
+    intoGroupId: string | null,
+    options: CopyOptions,
+  ) =>
+    invoke<CopyReport>('passwords_copy', {
+      args: { targets, intoGroupId, options },
+    })
 
   const itemUsageAsync = (itemId: string) =>
     invoke<ItemUsageResult>('passwords_item_usage', { args: { itemId } })
@@ -174,6 +219,11 @@ export function usePasswords() {
     })
 
   return {
+    referencesParseAsync,
+    referenceTokenAsync,
+    itemKeyNamesAsync,
+    referenceUsageAsync,
+    copyAsync,
     trashAsync,
     restoreAsync,
     deletePermanentlyAsync,
