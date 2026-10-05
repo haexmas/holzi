@@ -240,6 +240,30 @@ fn a_redirect_to_an_address_without_permission_asks_for_that_address() {
 }
 
 #[test]
+fn a_post_redirected_to_an_address_without_permission_is_refused_not_asked() {
+    let s = setup();
+    let (first, second) = (s.server(), s.server());
+    s.mount(
+        &first,
+        Mock::given(path("/create"))
+            .respond_with(redirect(&format!("{}/created", second.uri()), 303)),
+    );
+    s.grant_server(&first);
+    let body = base64::engine::general_purpose::STANDARD.encode("{}");
+    let refused = s
+        .fetch(json!({ "url": format!("{}/create", first.uri()), "method": "POST", "body": body }))
+        .unwrap_err();
+    // Asking would make the SDK send the POST again from the start.
+    assert_eq!(refused.code.as_u16(), 1002);
+    assert_eq!(
+        refused.details.unwrap()["target"],
+        format!("{}/*", second.uri())
+    );
+    assert_eq!(s.received(&first).len(), 1, "sent once");
+    assert!(s.received(&second).is_empty());
+}
+
+#[test]
 fn credentials_stay_with_their_origin() {
     let s = setup();
     let (first, second) = (s.server(), s.server());
@@ -293,9 +317,11 @@ fn a_see_other_redirect_turns_a_post_into_a_get_without_body() {
             "method": "POST",
             "body": base64::engine::general_purpose::STANDARD.encode("a=1"),
         }))),
-        1004,
-        "the GET after the redirect needs its own permission"
+        1002,
+        "the GET after the redirect needs its own permission, held before: asking would send \
+         the POST again"
     );
+    assert_eq!(s.received(&server).len(), 1, "the POST went out once");
     s.grant("GET", &format!("{}/*", server.uri()), "granted");
     s.fetch(json!({
         "url": format!("{}/form", server.uri()),

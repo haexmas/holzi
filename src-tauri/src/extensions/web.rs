@@ -109,29 +109,48 @@ fn decide(
     evaluate(grants, &request, device)
 }
 
+/// Methods the SDK may send again after a question: repeating them changes nothing on the server
+/// (RFC 9110 9.2.2; `PROPFIND` and `REPORT` of WebDAV only read).
+const REPEATABLE: &[&str] = &[
+    "GET", "HEAD", "OPTIONS", "TRACE", "PUT", "DELETE", "PROPFIND", "REPORT",
+];
+
+/// Whether a request with `method` may be sent again from the start.
+fn repeatable(method: &Method) -> bool {
+    REPEATABLE.contains(&method.as_str())
+}
+
 /// Allowed, or the 1002/1004 answer with `{resourceType, action, target}`. A target no answer
-/// could ever cover (holzi cannot store it) is refused instead of asked.
+/// could ever cover (holzi cannot store it) is refused instead of asked, and so is one that may
+/// not be asked for (`ask` false: a redirect of a request the SDK could not repeat).
 fn check(
     grants: &[Permission],
     device: uuid::Uuid,
     method: &Method,
     url: &WebRequest,
+    ask: bool,
 ) -> Result<(), BridgeError> {
     let target = prompt_target(url);
-    let code = match decide(grants, device, method, url) {
+    let (code, message) = match decide(grants, device, method, url) {
         Decision::Allow => return Ok(()),
-        Decision::Prompt if Target::parse(PermissionKind::Web, &target).is_some() => {
-            ExtensionErrorCode::PermissionPromptRequired
+        Decision::Prompt if !ask => (
+            ExtensionErrorCode::PermissionDenied,
+            "permission required before the request: it was sent and redirected, and is not \
+             repeated",
+        ),
+        Decision::Prompt if Target::parse(PermissionKind::Web, &target).is_some() => (
+            ExtensionErrorCode::PermissionPromptRequired,
+            "permission required",
+        ),
+        Decision::Prompt | Decision::Deny => {
+            (ExtensionErrorCode::PermissionDenied, "permission required")
         }
-        Decision::Prompt | Decision::Deny => ExtensionErrorCode::PermissionDenied,
     };
-    Err(
-        BridgeError::new(code, "permission required").with_details(json!({
-            "resourceType": "web",
-            "action": method.as_str(),
-            "target": target,
-        })),
-    )
+    Err(BridgeError::new(code, message).with_details(json!({
+        "resourceType": "web",
+        "action": method.as_str(),
+        "target": target,
+    })))
 }
 
 /// An `http`/`https` address.
@@ -272,16 +291,19 @@ fn method_after(status: StatusCode, method: &Method) -> Method {
 }
 
 /// Sends `request`, following redirects that `allowed` lets through, and reads the answer up to
-/// `max_body` bytes.
+/// `max_body` bytes. `allowed` hears whether it may ask: after a question the SDK sends the whole
+/// request again, so for a redirect only when the first method is [`repeatable`] (a `POST` would
+/// reach the first server twice).
 async fn send(
     mut request: Request,
     max_body: usize,
-    allowed: impl Fn(&Method, &WebRequest) -> Result<(), BridgeError>,
+    allowed: impl Fn(&Method, &WebRequest, bool) -> Result<(), BridgeError>,
 ) -> Result<Value, BridgeError> {
     let deadline = tokio::time::Instant::now() + request.timeout;
     let timed_out = || limit("time limit exceeded");
+    let first_repeatable = repeatable(&request.method);
     for hop in 0..=MAX_REDIRECTS {
-        allowed(&request.method, &request.web)?;
+        allowed(&request.method, &request.web, hop == 0 || first_repeatable)?;
         let mut builder = client()
             .request(request.method.clone(), request.url.clone())
             .headers(request.headers.clone());
@@ -371,8 +393,8 @@ pub fn fetch(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let request = parse_request(params, &limits)?;
     let grants = grants(ctx)?;
     let device = ctx.device;
-    block_on(send(request, max_body(&limits), |method, url| {
-        check(&grants, device, method, url)
+    block_on(send(request, max_body(&limits), |method, url, ask| {
+        check(&grants, device, method, url, ask)
     }))
 }
 
@@ -380,7 +402,7 @@ pub fn fetch(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
 /// that address (FR-051).
 pub fn open(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let (url, web) = parse_url(text(params, "url")?)?;
-    check(&grants(ctx)?, ctx.device, &Method::GET, &web)?;
+    check(&grants(ctx)?, ctx.device, &Method::GET, &web, true)?;
     ctx.host
         .desktop()
         .ok_or_else(BridgeError::not_available)?
