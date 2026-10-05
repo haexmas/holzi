@@ -274,36 +274,39 @@ async function onRootDrop(event: DragEvent) {
           >
         </button>
       </PasswordsEntryMenu>
-      <UiButton
-        variant="ghost"
-        size="sm"
-        class="justify-start"
+      <button
+        type="button"
+        class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
         data-testid="passwords-open-generator"
         @click="go('/generator')"
       >
-        <Icon name="lucide:dices" class="size-4" />
-        {{ t('passwords.generator.title') }}
-      </UiButton>
-      <UiButton
-        variant="ghost"
-        size="sm"
-        class="justify-start"
+        <Icon name="lucide:dices" class="size-4 shrink-0" />
+        <span class="min-w-0 flex-1 truncate">{{
+          t('passwords.generator.title')
+        }}</span>
+      </button>
+      <button
+        type="button"
+        class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
         data-testid="passwords-open-import"
         @click="go('/import')"
       >
-        <Icon name="lucide:file-down" class="size-4" />
-        {{ t('passwords.import.open') }}
-      </UiButton>
-      <UiButton
-        variant="ghost"
-        size="sm"
-        class="justify-start"
+        <Icon name="lucide:file-down" class="size-4 shrink-0" />
+        <span class="min-w-0 flex-1 truncate">{{
+          t('passwords.import.open')
+        }}</span>
+      </button>
+      <button
+        type="button"
+        class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
         data-testid="passwords-manage-tags"
         @click="tagManager = true"
       >
-        <Icon name="lucide:tags" class="size-4" />
-        {{ t('passwords.tags.manage') }}
-      </UiButton>
+        <Icon name="lucide:tags" class="size-4 shrink-0" />
+        <span class="min-w-0 flex-1 truncate">{{
+          t('passwords.tags.manage')
+        }}</span>
+      </button>
     </div>
 
     <PasswordsFolderDialog
