@@ -346,7 +346,7 @@ pub fn authorize_delete(
 }
 
 /// A record without an entry (a passkey with no `item_id`) belongs to no tag scope; only a grant
-/// for all entries covers it (Z9).
+/// for all entries covers it, also one that excepts denied tags (Z9).
 pub fn authorize_unassigned(
     caller: &Caller,
     grants: &[Grant],

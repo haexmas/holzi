@@ -104,6 +104,61 @@ fn a_denied_tag_hides_its_entries_from_a_star_grant_also_behind_a_reference() {
 }
 
 #[test]
+fn holzi_does_not_ask_for_a_permission_a_denied_tag_makes_useless() {
+    let s = setup();
+    s.permit("read", "private", "denied");
+    s.permit("readWrite", "private", "ask");
+    assert_eq!(
+        s.code("extension_password_read", json!({ "itemId": s.private })),
+        1002,
+        "a grant for a denied tag is void"
+    );
+
+    s.permit("readWrite", "*", "ask");
+    let create = json!({ "input": { "title": "x", "tags": ["PRIVATE"] } });
+    assert_eq!(
+        s.code("extension_password_create", create.clone()),
+        1002,
+        "not even `*` lets an entry with a denied tag be created"
+    );
+    s.permit("readWrite", "*", "granted");
+    assert_eq!(s.code("extension_password_create", create), 1002);
+    let input = json!({ "title": "caldav", "tags": ["haex-calendar", "private"] });
+    assert_eq!(
+        s.code(
+            "extension_password_update",
+            json!({ "itemId": s.calendar, "input": input })
+        ),
+        1002,
+        "nor can a denied tag be added"
+    );
+}
+
+#[test]
+fn an_entry_that_carries_a_denied_tag_still_asks_for_its_granted_one() {
+    let s = setup();
+    s.permit("read", "private", "granted");
+    s.permit("read", "haex-calendar", "denied");
+    s.permit("readWrite", "private", "ask");
+    let both = s.create(tagged("both", &["private", "haex-calendar"]));
+
+    let asked = s
+        .call(
+            "extension_password_update",
+            json!({
+                "itemId": both,
+                "input": { "title": "renamed", "tags": ["private", "haex-calendar"] }
+            }),
+        )
+        .unwrap_err();
+    assert_eq!(asked.code.as_u16(), 1004);
+    assert_eq!(
+        asked.details,
+        Some(json!({"resourceType": "passwords", "action": "readWrite", "target": "private"}))
+    );
+}
+
+#[test]
 fn a_granted_tag_beats_a_denied_one_on_the_same_entry() {
     let s = setup();
     s.permit("read", "private", "granted");
