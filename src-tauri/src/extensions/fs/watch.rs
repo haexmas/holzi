@@ -39,6 +39,7 @@ fn rule_id(params: &Value) -> Result<String, BridgeError> {
 mod desktop {
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
     use std::time::Duration;
 
@@ -65,6 +66,15 @@ mod desktop {
         _watcher: Watcher,
         root: PathBuf,
         frame: Option<String>,
+        /// Cleared when the watch ends: the debouncer's thread outlives it by one tick and may
+        /// still hand over a batch, which must not reach the extension any more.
+        live: Arc<AtomicBool>,
+    }
+
+    impl Drop for Watch {
+        fn drop(&mut self) {
+            self.live.store(false, Ordering::SeqCst);
+        }
     }
 
     /// The running watches, by (extension, `ruleId`).
@@ -89,6 +99,8 @@ mod desktop {
         ) -> Result<(), String> {
             let rule = rule_id.clone();
             let base = root.clone();
+            let live = Arc::new(AtomicBool::new(true));
+            let handler_live = Arc::clone(&live);
             let handler = move |result: DebounceEventResult| {
                 let Ok(events) = result else {
                     return;
@@ -104,6 +116,9 @@ mod desktop {
                         _ => "any",
                     };
                     for path in event.paths.iter().filter_map(|p| relative(&base, p)) {
+                        if !handler_live.load(Ordering::SeqCst) {
+                            return;
+                        }
                         emit_to_frames(
                             emitter.as_ref(),
                             &host,
@@ -135,6 +150,7 @@ mod desktop {
                     _watcher: watcher,
                     root,
                     frame,
+                    live,
                 },
             );
             Ok(())
