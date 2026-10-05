@@ -25,11 +25,14 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](.
 - **Daten** (R3): Migration `0027_passwords_owner` (Spalte `owner` in `haex_passwords_item_details`,
   mit PR B) und `0028_storage_connections`: `haex_storage_connections` und `haex_storages`
   (synchronisiert), `storage_tests_no_sync` (geräteeigen); Trigger-Version jeweils erhöht.
-- **Erweiterungen** (R4–R7): Präfix `holzi-ext/<extension_id>/`, strenge Schlüsselprüfung vor jedem
-  Aufruf, Liste nur mit Namen, Dialog nach dem Muster von `extension_dialog_confirm`, Grenzen und
-  Fehlerarten aus Spec 017; Aufrufe mit Zugangsdaten werden abgelehnt.
+- **Erweiterungen** (R4–R7): Präfix `holzi-ext/<vault_id>/<extension_id>/` (Entwicklerversionen
+  getrennt unter `holzi-ext-dev/`), strenge Schlüsselprüfung vor jedem Aufruf, Liste nur mit Namen,
+  Dialog nach dem Muster von `extension_dialog_confirm` (nur Bestätigung; Zugangsdaten nur im Fenster
+  von holzi über der ganzen App), Grenzen und Fehlerarten aus Spec 017; Aufrufe mit Zugangsdaten werden
+  abgelehnt.
 - **Sicherheit des Transports** (R8): `https` immer, `http` nur zu lokalen Adressen und gekennzeichnet;
-  keine Weiterleitungen.
+  jede aufgelöste Adresse geprüft und für die Verbindung festgehalten, Link-Local nie, lokale Adressen
+  nur für Endpunkte des Nutzers; keine Weiterleitungen.
 - **vault-sdk** (R11): eigener PR, der die Zugangsdaten aus `AddBackendRequest`/`UpdateBackendRequest`
   nimmt und die Liste auf Namen reduziert.
 
@@ -130,7 +133,8 @@ src-tauri/src/
 
 src/
 ├── components/settings/storage/        # Kategorie „Speicher“: Liste, Verbindung/Speicher-Formular, Entfernen-Vorschau
-├── components/extensions/StorageDialog.vue   # Dialog für Erweiterungen (R6)
+├── components/extensions/StorageDialog.vue   # Dialog für Erweiterungen über dem Tab, nur Bestätigung (R6)
+├── components/StorageCredentialsModal.vue    # Zugangsdaten über der ganzen App (R6)
 ├── lib/settings/registry.ts            # Kategorie „storage“
 ├── components/wm/appRoutes.ts          # Ansichten
 └── i18n/locales/{de,en}.json

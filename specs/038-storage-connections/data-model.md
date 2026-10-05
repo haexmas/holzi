@@ -16,14 +16,25 @@ Eine Speicherverbindung (Spec: Begriffe, FR-001, FR-006).
 | `provider_name`       | TEXT | Pflicht, 1–80 Zeichen, vom Nutzer (z. B. „Hetzner“); in der Liste der Erweiterung |
 | `provider_kind`       | TEXT | `aws`, `rustfs`, `other` (Vorbelegung von Endpunkt und Adressierung)              |
 | `endpoint`            | TEXT | `https://…` oder `http://…` nur für lokale Adressen (R8); bei `aws` leer erlaubt  |
+| `endpoint_origin`     | TEXT | `user` oder `extension` (R8, Review 2026-10-06); lokale Adressen nur bei `user`   |
 | `region`              | TEXT | Pflicht, 1–64 Zeichen                                                             |
 | `addressing`          | TEXT | `path` oder `virtual`                                                             |
 | `credentials_item_id` | TEXT | Kennung des Eintrags im Passwortmanager (`owner = 'storage'`), Pflicht            |
 | `created_at`          | TEXT | ISO 8601                                                                          |
 | `updated_at`          | TEXT | ISO 8601                                                                          |
 
-Kein Fremdschlüssel auf den Eintrag (anderer Bereich, Löschen über den Dienst von 034). Fehlt der
-Eintrag (vom Nutzer gelöscht), zeigt holzi „neue Zugangsdaten nötig“ (Edge Case).
+Kein Fremdschlüssel auf den Eintrag (anderer Bereich, Löschen über den Dienst von 034). Zustand der
+Zugangsdaten (`ConnectionView.credentials`, Review 2026-10-06, statt `credentialsMissing: bool`):
+
+- `present`: der Eintrag ist da.
+- `missing` („neue Zugangsdaten nötig“): der Eintrag fehlt, und `haex_deleted_rows` hat einen
+  Löschvermerk für ihn (vom Nutzer gelöscht).
+- `syncing` („wird synchronisiert“, Edge Case): der Eintrag fehlt ohne Löschvermerk, ist also noch nicht
+  angekommen. Ist ein Vermerk schon aufgeräumt (nach 90 Tagen, Spec 024 R20), zeigt holzi weiter
+  `syncing`; der Hinweis bietet dort auch das Eingeben neuer Zugangsdaten an.
+
+Ein Aufruf einer Erweiterung scheitert bei `syncing` mit 2002 `network` (Edge Case), bei `missing` mit
+2002 `accessDenied`.
 
 ## haex_storages (synchronisiert)
 
@@ -83,11 +94,14 @@ für jeden Aufrufer außer `User` und `Internal { feature }` mit `feature == own
 
 ## Abgeleitet, nicht gespeichert
 
-- **Bereich einer Erweiterung**: `holzi-ext/<extension_id>/` (R4).
+- **Bereich einer Erweiterung**: `holzi-ext/<vault_id>/<extension_id>/`, für eine Entwicklerversion
+  `holzi-ext-dev/<vault_id>/<dev_extension_id>/`; `vault_id` aus `vault_identity.pubkey` (R4, Review
+  2026-10-06).
 - **Liste für eine Erweiterung** (FR-009a): `{ id, type: "s3", name, providerName, bucket }` je Speicher,
   den eine Leseberechtigung deckt.
 
 ## Zustände eines Speichers in den Einstellungen
 
 `ungetestet` → (Test) → `bereit` | `Fehler <Grund>`; ein Aufruf mit `accessDenied` setzt `Fehler
-accessDenied` (Hinweis „neue Zugangsdaten nötig“); neue Zugangsdaten → erneuter Test.
+accessDenied` (Hinweis „neue Zugangsdaten nötig“); neue Zugangsdaten → erneuter Test. Unabhängig davon
+zeigt der Speicher den Zustand der Zugangsdaten seiner Verbindung (`syncing` oder `missing`, siehe oben).

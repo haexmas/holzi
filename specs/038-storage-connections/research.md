@@ -77,16 +77,30 @@ einer Verbindung an, die Verbindung muss ohne Bucket bestehen können (Spec Anna
 
 ## R4 — Bereich einer Erweiterung im Bucket
 
-**Entscheidung**: Präfix `holzi-ext/<extension_id>/`, mit `extension_id = UUIDv5(NS_EXT,
-"<publicKey>:<name>")` (`extensions/ids.rs::extension_id`), auch für Entwicklerversionen (nicht deren
-geräteeigene `dev_extension_id`). Schlüssel der Erweiterung sind relativ dazu.
+**Entscheidung** (Review 2026-10-06): Präfix `holzi-ext/<vault_id>/<extension_id>/`, mit
+`extension_id = UUIDv5(NS_EXT, "<publicKey>:<name>")` (`extensions/ids.rs::extension_id`) und
+`vault_id = UUIDv5(NS_VAULT, hex(vault_identity.pubkey))` (Vault-Identität aus Spec 024, nicht der
+Schlüssel selbst; `NS_VAULT` neu in `extensions/ids.rs`). Eine Entwicklerversion bekommt ein eigenes Präfix
+`holzi-ext-dev/<vault_id>/<dev_extension_id>/` aus ihrer geräteeigenen `dev_extension_id`, nie das der
+installierten Fassung. Schlüssel der Erweiterung sind relativ zum Präfix.
 
-**Begründung**: Die Kennung hängt nur an Herausgeberschlüssel und Name, ist also auf allen Geräten und
-über Neuinstallationen gleich (FR-010), und mit 36 Zeichen kurz genug für die 1024-Byte-Grenze von S3.
-Eine Entwicklerversion soll dieselben Objekte sehen wie die installierte Fassung derselben Erweiterung.
+**Begründung**: Die Kennung der Erweiterung hängt nur an Herausgeberschlüssel und Name, die der Vault an
+ihrer Identität, die alle Geräte einer Vault teilen und die bei der Genesis entsteht. Beide sind also auf
+allen Geräten und über Neuinstallationen gleich (FR-010), und das Präfix ist mit höchstens 88 Bytes kurz genug
+für die 1024-Byte-Grenze von S3. Mit der Vault im Präfix teilen sich zwei Vaults auf demselben Bucket keinen
+Bereich. Das Manifest einer Entwicklerversion ist nicht signiert; es könnte Herausgeberschlüssel und Namen
+einer installierten Erweiterung nennen und so deren Objekte erreichen. Deshalb trennt holzi sie wie ihre
+Tabellen (Spec 017, `extensions/dev.rs::conflict`). Eine Entwicklerversion sieht die Objekte der
+installierten Fassung nicht, und ihre eigenen nur auf dem Gerät, auf dem sie geladen ist.
 
-**Verworfen**: `TablePrefix` (`<publicKey>__<name>__`): bis über 100 Zeichen und mit dem Namen im
-Schlüssel; der öffentliche Schlüssel im Bucket verrät beim Anbieter mehr als nötig.
+**Verworfen**:
+
+- `TablePrefix` (`<publicKey>__<name>__`): bis über 100 Zeichen und mit dem Namen im Schlüssel; der
+  öffentliche Schlüssel im Bucket verrät beim Anbieter mehr als nötig. Aus demselben Grund steht die
+  Vault nur als abgeleitete Kennung im Präfix.
+- Präfix ohne Vault (bis Review 2026-10-06): Zwei Vaults desselben Nutzers oder zweier Nutzer auf einem
+  Bucket hätten denselben Bereich je Erweiterung.
+- Entwicklerversion mit dem Präfix der installierten Fassung (bis Review 2026-10-06): siehe oben.
 
 ## R5 — Schlüsselprüfung
 
@@ -104,17 +118,34 @@ unterschiedlich; ein strenger Satz Regeln vor dem Aufruf hält die Bereiche sich
 
 **Entscheidung**: Wie `extension_dialog_confirm` (`bridge/methods.rs`, `host.open_dialog`): Der
 Bridge-Aufruf meldet `extension-storage-request {requestId, frame, kind, proposal}` und wartet
-(`recv_timeout`, 300 s wie `DIALOG_WAIT`); ein Vue-Dialog (`StorageDialog.vue`, im Rahmen wie
-`FrameDialog.vue`) zeigt Vorschlag und Felder für Zugangsdaten und antwortet über den Command
-`storage_dialog_resolve(requestId, answer)`. Die Antwort mit Zugangsdaten geht nur vom Fenster von holzi
-an Rust, nie an die Erweiterung; Rust legt an, testet und gibt der Erweiterung nur Kennung oder Fehler.
-Schließen des Rahmens oder Ablauf zählt als Abbruch (`drop_dialogs_of`).
+(`recv_timeout`, 300 s wie `DIALOG_WAIT`). Zwei Stufen (Review 2026-10-06):
+
+1. Ein Vue-Dialog über dem Tab (`StorageDialog.vue`, im Rahmen wie `FrameDialog.vue`) zeigt Erweiterung,
+   Vorschlag und die Wahl einer vorhandenen Verbindung und fragt nur nach Bestätigung. Er enthält **nie**
+   Felder für Zugangsdaten.
+2. Braucht die Bestätigung neue Zugangsdaten (neue Verbindung oder „neue Zugangsdaten“), öffnet holzi
+   danach ein eigenes Fenster für die ganze App (`StorageCredentialsModal.vue`, an der Wurzel der App
+   eingehängt, nicht in `ExtensionFrame.vue`). Es liegt über Tableiste und Werkzeugleiste von holzi, also
+   über Flächen, die der Rahmen einer Erweiterung nie erreicht, und enthält als einzige Stelle neben
+   Einstellungen → Speicher (FR-001) Felder für Zugangsdaten.
+
+Beide antworten über den Command `storage_dialog_resolve(requestId, answer)`. Die Antwort mit
+Zugangsdaten geht nur vom Fenster von holzi an Rust, nie an die Erweiterung; Rust legt an, testet und
+gibt der Erweiterung nur Kennung oder Fehler. Schließen des Rahmens oder Ablauf zählt als Abbruch
+(`drop_dialogs_of`), auch wenn das Fenster für die Zugangsdaten schon offen ist; es schließt dann.
 
 **Begründung**: Ein vorhandenes, getestetes Muster für „Erweiterung wartet auf den Nutzer“; FR-013,
-FR-013a. Eine native Dialogbox (wie der Speichern-Dialog) kann keine Formularfelder.
+FR-013a. Eine native Dialogbox (wie der Speichern-Dialog) kann keine Formularfelder. Was im Rahmen eines
+Tabs liegt, kann eine Erweiterung pixelgleich nachzeichnen; ein Formular für Zugangsdaten dort könnte sie
+also fälschen und die Eingabe selbst lesen. Eine Bestätigung ohne Felder zu fälschen bringt ihr nichts.
+Lernt der Nutzer „Zugangsdaten nur im Fenster über der ganzen App“, erkennt er ein Formular im Tab als
+falsch.
 
-**Verworfen**: Rückfrage über den Weg der Berechtigungen (1004 und Wiederholung): Sie trägt keine
-Eingaben und keine Antwort an die Erweiterung (Kennung des neuen Speichers).
+**Verworfen**:
+
+- Rückfrage über den Weg der Berechtigungen (1004 und Wiederholung): Sie trägt keine Eingaben und keine
+  Antwort an die Erweiterung (Kennung des neuen Speichers).
+- Felder für Zugangsdaten im Dialog über dem Tab (bis Review 2026-10-06): fälschbar, siehe oben.
 
 ## R7 — Grenzen, Auflisten, Fehler
 
@@ -136,18 +167,47 @@ Grenzwert.
 
 ## R8 — Unverschlüsselte Endpunkte
 
-**Entscheidung**: `https` immer; `http` nur, wenn der Host eine Loopback-Adresse, `localhost` oder eine
-private Adresse (RFC 1918, RFC 4193, Link-Local) ist; der Dialog und die Einstellungen kennzeichnen ihn.
-Prüfung beim Speichern und vor jedem Aufruf (die Adresse eines Namens kann sich ändern; geprüft wird die
-aufgelöste Adresse wie in `web.rs`). Keine Weiterleitungen folgen (S3 antwortet mit Fehler statt
+**Entscheidung** (Review 2026-10-06): Jede Verbindung merkt sich, woher ihr Endpunkt kommt
+(`endpoint_origin`: `user` = vom Nutzer in holzi eingegeben, `extension` = Vorschlag einer Erweiterung,
+auch wenn der Nutzer ihn bestätigt hat). Vor jedem Aufruf, auch vor dem Verbindungstest, löst holzi den
+Host des Endpunkts selbst auf und prüft **jede** aufgelöste Adresse:
+
+- Immer abgelehnt: Link-Local (`169.254.0.0/16` samt `169.254.169.254` für Metadaten der Cloud,
+  `fe80::/10`), unspezifizierte Adressen (`0.0.0.0`, `::`), Multicast und Broadcast, jeweils auch in
+  IPv4-gemappter Form (`::ffff:a.b.c.d`).
+- Loopback (`127.0.0.0/8`, `::1`, `localhost`) und private Adressen (RFC 1918, RFC 4193) nur bei
+  `endpoint_origin = user`, nie für den Endpunkt aus einem Vorschlag einer Erweiterung.
+- Alle übrigen Adressen erlaubt.
+
+Ist eine aufgelöste Adresse nicht erlaubt, scheitert der Aufruf (2002 `network`, im Test „Endpunkt nicht
+erreichbar“). Die Verbindung geht an genau die geprüfte Adresse (`reqwest::ClientBuilder::resolve` für
+diesen Aufruf); reqwest löst den Namen nicht ein zweites Mal auf, ein Wechsel der Adresse dazwischen (DNS
+rebinding) erreicht also nichts. Der Hostname bleibt für TLS (SNI, Zertifikat) und die Signatur (`Host`).
+
+`https` immer; `http` nur, wenn alle aufgelösten Adressen Loopback oder privat sind, also nur bei
+`endpoint_origin = user` und nie zu Link-Local; der Dialog und die Einstellungen kennzeichnen ihn. Ein
+Vorschlag einer Erweiterung mit `http`, mit `localhost` oder mit einer IP-Adresse als Host, die für ihn
+nach den Regeln oben nicht erlaubt ist, wird schon beim Aufruf abgelehnt (3001, vor dem Dialog); löst ein vorgeschlagener Name erst später auf eine
+solche Adresse auf, scheitert der Test bzw. der Aufruf. Einen Speicher im Heimnetz legt der Nutzer in den
+Einstellungen an und gibt ihn frei. Ändert der Nutzer den Endpunkt einer Verbindung in den Einstellungen,
+wird `endpoint_origin` zu `user`. Keine Weiterleitungen folgen (S3 antwortet mit Fehler statt
 Umleitung; eine Umleitung wäre ein Fehler 2002).
 
-**Begründung**: FR-017. Selbst betriebenes RustFS im Heimnetz ohne Zertifikat ist ein Kernfall.
+**Begründung**: FR-017. Selbst betriebenes RustFS im Heimnetz ohne Zertifikat ist ein Kernfall, aber nur
+als Eingabe des Nutzers. `extensions/web.rs` prüft aufgelöste Adressen nicht; ohne eigene Prüfung könnte
+eine Erweiterung über einen vorgeschlagenen Endpunkt signierte Anfragen von holzi an Dienste im lokalen
+Netz oder an den Metadatendienst einer Cloud-Maschine schicken (SSRF), auch über einen Namen, der erst
+nach der Prüfung auf eine solche Adresse zeigt.
+
+**Verworfen**: Prüfung nur des eingegebenen Namens oder nur beim Speichern (bis Review 2026-10-06):
+DNS rebinding umgeht sie.
 
 ## R9 — Der Verbindungstest
 
 **Entscheidung**: Schreiben, Lesen, Auflisten und Löschen eines Testobjekts
-`holzi-test/<UUID>` im Bucket; Löschen auch, wenn ein Zwischenschritt scheitert. Ergebnis
+`holzi-test/<UUID>` im Bucket; Löschen auch, wenn ein Zwischenschritt scheitert. Scheitert das Löschen
+selbst (Recht fehlt, Anbieter nicht erreichbar), nennt das Ergebnis den Schlüssel des Objekts, mehr kann
+holzi nicht tun (SC-004). Ergebnis
 „bestanden“ oder ein Grund aus R7 (Zugangsdaten falsch, Endpunkt nicht erreichbar, Bucket fehlt, Recht
 fehlt). In den Einstellungen nur nach Bestätigung gespeichert; das Ergebnis landet in
 `storage_tests_no_sync`.
@@ -170,8 +230,9 @@ Quickstart-Anleitung und im e2e-Rig, nicht in `cargo test`.
 
 **Entscheidung**: Eigener PR im vault-sdk (haex-space/vault-sdk, über den haexmas-Fork):
 
-- `AddBackendRequest`: `{ name, type: "s3", config: { endpoint?, region, bucket, pathStyle? },
-sameProviderAs?: backendId }`, ohne Zugangsdaten.
+- `AddBackendRequest`: `{ name, type: "s3", config: { endpoint?, region?, bucket, pathStyle? },
+sameProviderAs?: backendId }`, ohne Zugangsdaten. Mit `sameProviderAs` kommen Endpunkt, Region und
+  Adressierung aus der vorhandenen Verbindung, `config` trägt dann nur `bucket` (Review 2026-10-06).
 - `UpdateBackendRequest`: `{ backendId, name?, config?: { bucket? } }`, ohne Zugangsdaten.
 - `StorageBackendInfo`: `{ id, type, name, providerName, bucket }`.
 - `S3Config` mit Zugangsdaten als veraltet markiert und entfernt im nächsten Major.
