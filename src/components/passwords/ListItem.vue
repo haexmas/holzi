@@ -23,7 +23,12 @@ const props = defineProps<{
   dimmed?: boolean
   /** The row holds the one tab stop of the list. */
   tabStop?: boolean
-  menuEntries: readonly MenuEntry[]
+  /** Builds the menu of a row when it opens; the same function for every row. */
+  menuFor: (id: string) => readonly MenuEntry[]
+  /** Position and size of the whole list for assistive technology: only a page of the rows is
+   * mounted, so the list itself would announce too few. */
+  position?: number
+  count?: number
 }>()
 
 const emit = defineEmits<{
@@ -61,12 +66,14 @@ function onDragStart(event: DragEvent) {
 
 <template>
   <PasswordsEntryMenu
-    :entries="menuEntries"
+    :entries="() => menuFor(header.id)"
     @run="emit('menu', $event)"
     @open="emit('menuOpen')"
   >
     <li
       class="group flex items-center pr-2 hover:bg-foreground/5"
+      :aria-posinset="position"
+      :aria-setsize="count"
       :class="[
         selected ? 'bg-primary/10' : '',
         dimmed ? 'opacity-50 grayscale' : '',
@@ -177,7 +184,7 @@ function onDragStart(event: DragEvent) {
         </span>
       </button>
       <PasswordsEntryMenuButton
-        :entries="menuEntries"
+        :entries="() => menuFor(header.id)"
         :label="
           t('passwords.menu.button', { name: title ?? t('passwords.untitled') })
         "

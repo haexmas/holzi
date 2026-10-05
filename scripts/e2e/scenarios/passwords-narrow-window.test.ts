@@ -4,6 +4,7 @@ import { createAndUnlock } from '../lib/flows.ts'
 import {
   activeTab,
   createEntry,
+  horizontalOverflow,
   openPasswords,
   selectTab,
 } from '../lib/passwords.ts'
@@ -66,27 +67,7 @@ scenario('passwords-narrow-window', {}, async (ctx) => {
   ctx.step('narrow: open over the content, a choice and Escape close')
 
   await resizeAppWindow(instance, APP, 360)
-  const overflow = () =>
-    instance.exec<number>(
-      `const frame = document.querySelector('[data-testid="passwords-search"]').closest('[data-wm-window-id]')
-       const right = frame.getBoundingClientRect().right
-       const clipped = (el) => {
-         for (let node = el.parentElement; node && node !== frame; node = node.parentElement) {
-           if (getComputedStyle(node).overflowX !== 'visible') return true
-         }
-         return false
-       }
-       let worst = 0
-       for (const el of frame.querySelectorAll('*')) {
-         const style = getComputedStyle(el)
-         if (style.visibility === 'hidden') continue
-         if (style.overflowX === 'auto' || style.overflowX === 'scroll') {
-           worst = Math.max(worst, el.scrollWidth - el.clientWidth)
-         }
-         if (!clipped(el)) worst = Math.max(worst, el.getBoundingClientRect().right - right)
-       }
-       return worst`,
-    )
+  const overflow = () => horizontalOverflow(instance)
   // The list, the entry and the editor at 360 px; the sidebar's own choice leads back to the list.
   await instance.click('passwords-sidebar-toggle')
   await ctx.waitFor('the sidebar to open at 360 px', () =>

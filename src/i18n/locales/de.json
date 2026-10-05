@@ -1379,8 +1379,23 @@
       "rename": "Umbenennen",
       "remove": "Anhang entfernen",
       "download": "Herunterladen",
-      "preview": "Vorschau",
-      "saved": "Datei gespeichert."
+      "saved": "Datei gespeichert.",
+      "open": "{name} ansehen",
+      "saveAs": "{name} speichern unter",
+      "loading": "Vorschau wird geladen",
+      "noPreview": "Keine Vorschau",
+      "kinds": {
+        "other": "Datei"
+      }
+    },
+    "lightbox": {
+      "of": " von ",
+      "close": "Schließen (Esc)",
+      "zoom": "Vergrößern",
+      "previous": "Vorheriges Bild",
+      "next": "Nächstes Bild",
+      "unreadable": "{name} lässt sich nicht anzeigen.",
+      "unreadableShort": "Das Bild lässt sich nicht anzeigen."
     },
     "import": {
       "open": "Import",

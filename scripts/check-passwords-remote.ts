@@ -5,6 +5,7 @@ import { test } from 'node:test'
 
 import {
   entryFreshness,
+  keepUnchanged,
   mergeTagsForDisplay,
   tagIdsFor,
 } from '../src/lib/passwords/remote.ts'
@@ -100,4 +101,26 @@ test('a filter by any id of a merged tag accepts the whole group', () => {
   assert.deepEqual(tagIdsFor('t-z', merged), ['t-a', 't-z'])
   assert.deepEqual(tagIdsFor('t-a', merged), ['t-a', 't-z'])
   assert.deepEqual(tagIdsFor('unknown', merged), ['unknown'])
+})
+
+test('a reload keeps the old object of every unchanged item', () => {
+  const previous = [
+    { id: '1', title: 'Mail', tags: ['a'] },
+    { id: '2', title: 'Bank', tags: [] },
+  ]
+  const next = [
+    { id: '1', title: 'Mail', tags: ['a'] },
+    { id: '2', title: 'Bank 2', tags: [] },
+    { id: '3', title: 'New', tags: [] },
+  ]
+  const kept = keepUnchanged(previous, next)
+  assert.equal(kept[0], previous[0])
+  assert.equal(kept[1], next[1])
+  assert.equal(kept[2], next[2])
+})
+
+test('a reload that changed nothing returns the old list itself', () => {
+  const previous = [{ id: '1', title: 'Mail' }]
+  assert.equal(keepUnchanged(previous, [{ id: '1', title: 'Mail' }]), previous)
+  assert.notEqual(keepUnchanged(previous, []), previous)
 })

@@ -1379,8 +1379,23 @@
       "rename": "Rename",
       "remove": "Remove attachment",
       "download": "Download",
-      "preview": "Preview",
-      "saved": "File saved."
+      "saved": "File saved.",
+      "open": "View {name}",
+      "saveAs": "Save {name} as",
+      "loading": "Loading preview",
+      "noPreview": "No preview",
+      "kinds": {
+        "other": "File"
+      }
+    },
+    "lightbox": {
+      "of": " of ",
+      "close": "Close (Esc)",
+      "zoom": "Zoom",
+      "previous": "Previous image",
+      "next": "Next image",
+      "unreadable": "{name} cannot be shown.",
+      "unreadableShort": "The image cannot be shown."
     },
     "import": {
       "open": "Import",
