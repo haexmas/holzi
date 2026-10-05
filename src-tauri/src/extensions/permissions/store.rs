@@ -37,7 +37,8 @@ impl PermissionRow {
 const SYNCED: &str = "extension_permissions";
 const DEV: &str = "dev_extension_permissions_no_sync";
 
-/// The tables that hold remembered permissions: a write to one can change what an extension may.
+/// The tables that hold remembered permissions: a write to one can change what an extension may
+/// read.
 pub const TABLES: [&str; 2] = [SYNCED, DEV];
 
 /// The table that holds the permissions of `extension_id`.
