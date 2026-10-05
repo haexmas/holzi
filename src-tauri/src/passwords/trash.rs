@@ -279,8 +279,8 @@ fn purge(tx: &mut CrdtTransaction<'_>, target: &Target) -> Result<u32> {
 
 /// Removes an entry and everything that hangs on it, children first: passkey links (as target and
 /// to its own passkeys), passkeys, custom fields, tag links, attachment links, history states with
-/// their links, the folder link, then the entry. The tag itself and the binary data stay (see the module doc). No check whether it is in the trash:
-/// the import rollback uses this too.
+/// their links, the folder link, then the entry. The tag itself and the binary data stay (see the
+/// module doc). No check whether it is in the trash: the import rollback uses this too.
 pub fn purge_item(tx: &mut CrdtTransaction<'_>, item_id: &str) -> Result<u32> {
     if !item_exists(tx, item_id)? {
         return Ok(0);
