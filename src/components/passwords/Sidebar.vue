@@ -295,16 +295,6 @@ async function onRootDrop(event: DragEvent) {
         {{ t('passwords.import.open') }}
       </UiButton>
       <UiButton
-        variant="outline"
-        size="sm"
-        class="justify-start"
-        data-testid="passwords-new-folder"
-        @click="newFolder(null)"
-      >
-        <Icon name="lucide:folder-plus" class="size-4" />
-        {{ t('passwords.folders.new') }}
-      </UiButton>
-      <UiButton
         variant="ghost"
         size="sm"
         class="justify-start"
