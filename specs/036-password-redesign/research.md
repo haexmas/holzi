@@ -329,10 +329,13 @@ schon die Platzhalter.
 **Entscheidung**: Karten (`AttachmentCard.vue`) im Raster aus `Attachments.vue`
 (Container-Query, 3 → 2 → 1 Spalten). Vorschaubilder erzeugt das Frontend: je Karte im
 sichtbaren Bereich (`useIntersectionObserver` aus VueUse, im Repo bisher unbenutzt) holt es
-die Bytes über `passwords_attachment_preview`, verkleinert mit `createImageBitmap` und
-`OffscreenCanvas`/`canvas` auf 160 px, hält das Ergebnis als Blob-URL in einem
-LRU-Zwischenspeicher (200 Stück, nach Prüfsumme) und gibt die vollen Bytes sofort frei;
-höchstens zwei gleichzeitig. Die Lightbox ist `photoswipe` 5.4 (MIT, auch in haex-vault),
+die Bytes über `passwords_attachment_preview`, liest die Pixelgröße aus dem Bildkopf (über
+100 Megapixel keine Vorschau, auch nicht in der Lightbox, sonst bringt ein kleines Bild mit
+riesiger Fläche die Webview zum Absturz), verkleinert mit `createImageBitmap` und `canvas` auf
+320 px (doppelte Kartenbreite für scharfe Bilder auf dichten Bildschirmen), hält das Ergebnis
+als WebP-Blob-URL in einem LRU-Zwischenspeicher (200 Stück, nach Prüfsumme) und gibt die vollen
+Bytes sofort frei; höchstens zwei gleichzeitig. Ein Bild, das nicht dekodiert, bleibt als
+Fehler gemerkt; konnten nur die Bytes nicht gelesen werden, versucht die nächste Anfrage es neu. Die Lightbox ist `photoswipe` 5.4 (MIT, auch in haex-vault),
 zur Laufzeit geladen (`import()`), mit den Bildern des Eintrags in Kartenreihenfolge;
 volle Größe wird erst beim Öffnen einer Folie geholt (`passwords_attachment_preview`).
 Anhänge ohne Vorschau (PDF, Text, anderes, auch SVG) bieten „Speichern unter“

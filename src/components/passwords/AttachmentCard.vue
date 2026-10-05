@@ -43,31 +43,38 @@ const typeLabel = computed(() => {
 
 const card = useTemplateRef<HTMLElement>('card')
 const thumbnail = ref<Thumbnail | null>(
-  storedThumbnail(props.attachment) ?? null,
+  kind.value === 'image' ? (storedThumbnail(props.attachment) ?? null) : null,
 )
-const loading = ref(false)
 
 async function loadThumbnailAsync() {
-  if (kind.value !== 'image' || thumbnail.value || loading.value) return
-  loading.value = true
-  try {
-    thumbnail.value = await thumbnailAsync(props.attachment)
-  } finally {
-    loading.value = false
+  if (kind.value !== 'image' || thumbnail.value) return
+  // The cache asks once per checksum, however often this runs.
+  const hash = props.attachment.binaryHash
+  const result = await thumbnailAsync(props.attachment)
+  if (props.attachment.binaryHash === hash && kind.value === 'image') {
+    thumbnail.value = result
   }
 }
 
 // FR-041: only the cards in view render their thumbnails.
+const seen = ref(false)
 const { stop } = useIntersectionObserver(card, ([entry]) => {
   if (!entry?.isIntersecting) return
   stop()
+  seen.value = true
   void loadThumbnailAsync()
 })
 
+// New bytes or a new name (a rename can turn a file into an image or back): the stored thumbnail
+// of the new state, rendered when the card has been in view.
 watch(
-  () => props.attachment.binaryHash,
+  () => [props.attachment.binaryHash, kind.value] as const,
   () => {
-    thumbnail.value = storedThumbnail(props.attachment) ?? null
+    thumbnail.value =
+      kind.value === 'image'
+        ? (storedThumbnail(props.attachment) ?? null)
+        : null
+    if (seen.value) void loadThumbnailAsync()
   },
 )
 

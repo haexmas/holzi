@@ -2,16 +2,19 @@
 /**
  * The lightbox over the images of an entry (spec 036, US6, FR-038, FR-041, research R14):
  * PhotoSwipe, loaded only when it opens, with the images in card order. A slide fetches the full
- * bytes only when it is shown (and the next and previous one in advance); its size is read from the
- * decoded image. Counter "2 von 5", the name, Speichern unter, zoom by tap, pinch and wheel, arrows,
- * arrow keys and swipe, Escape and the close button come from PhotoSwipe; the focus returns to the
- * card that opened it. An image that cannot be shown leaves a message on its slide and the lightbox
- * open. Every object URL is revoked when it closes. Only images enter; a PDF never does.
+ * bytes only when it is shown (and the next and previous one in advance, around the loop); a slide
+ * more than one step away gives its bytes back. An image with more pixels than `MAX_PREVIEW_PIXELS`
+ * is not decoded; else its size is read from the decoded image. Counter "2 von 5", the name,
+ * Speichern unter, zoom by tap, pinch and wheel, arrows, arrow keys and swipe, Escape and the close
+ * button come from PhotoSwipe; the focus returns to the card that opened it. An image that cannot be
+ * shown leaves a message on its slide and the lightbox open. Every object URL is revoked when it
+ * closes, also one whose load ends after that. Only images enter; a PDF never does.
  */
 import type { AttachmentView } from '@bindings/AttachmentView'
 import type PhotoSwipe from 'photoswipe'
 import type { SlideData } from 'photoswipe'
 import { imageMime } from '~/lib/passwords/format'
+import { previewableSize } from '~/lib/passwords/imageSize'
 
 const props = defineProps<{
   /** The images of the entry in card order. */
@@ -28,7 +31,7 @@ const { attachmentPreviewAsync } = usePasswords()
 const reducedMotion = usePreferredReducedMotion()
 
 let pswp: PhotoSwipe | null = null
-let urls: string[] = []
+let opening = false
 
 function escapeHtml(text: string): string {
   return text.replace(
@@ -46,64 +49,128 @@ function messageSlide(text: string, testid: string): SlideData {
   }
 }
 
+const PLACEHOLDER =
+  '<div class="passwords-lightbox-message" aria-busy="true"></div>'
+
+/** What one open lightbox holds, by slide index: the object URL of each loaded slide, the slides
+ * that only show a message, and a token for each load still running (a load whose token was taken
+ * away gives its bytes back). */
+interface Session {
+  instance: PhotoSwipe
+  urls: Map<number, string>
+  failed: Set<number>
+  loading: Map<number, symbol>
+  closed: boolean
+}
+
 /** The full image of one slide as an object URL with its natural size. */
-async function loadSlide(attachment: AttachmentView): Promise<SlideData> {
+async function loadSlide(
+  attachment: AttachmentView,
+): Promise<{ url: string; data: SlideData }> {
   const mime = imageMime(attachment.fileName)
   if (!mime) throw new Error('not an image')
   const bytes = await attachmentPreviewAsync(attachment.id)
+  if (!previewableSize(bytes)) throw new Error('too many pixels')
   const url = URL.createObjectURL(new Blob([bytes], { type: mime }))
-  urls.push(url)
-  const image = new Image()
-  image.src = url
-  await image.decode()
-  return {
-    src: url,
-    width: image.naturalWidth,
-    height: image.naturalHeight,
-    alt: attachment.fileName,
+  try {
+    const image = new Image()
+    image.src = url
+    await image.decode()
+    return {
+      url,
+      data: {
+        src: url,
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+        alt: attachment.fileName,
+      },
+    }
+  } catch (error) {
+    URL.revokeObjectURL(url)
+    throw error
   }
 }
 
-const loaded = new Set<number>()
+/** The index `step` slides away from `index`, around the loop. */
+function wrapped(index: number, step: number, count: number): number {
+  return (((index + step) % count) + count) % count
+}
 
-async function ensureSlide(instance: PhotoSwipe, index: number) {
-  const count = props.images.length
-  if (index < 0 || index >= count || loaded.has(index)) return
-  loaded.add(index)
+async function ensureSlide(session: Session, index: number) {
+  if (
+    session.urls.has(index) ||
+    session.failed.has(index) ||
+    session.loading.has(index)
+  ) {
+    return
+  }
   const attachment = props.images[index]
   if (!attachment) return
+  const token = Symbol(index)
+  session.loading.set(index, token)
+  const current = () => !session.closed && session.loading.get(index) === token
   let data: SlideData
   try {
-    data = await loadSlide(attachment)
+    const slide = await loadSlide(attachment)
+    // Closed, or moved far away, while it loaded: give the bytes back at once.
+    if (!current()) {
+      URL.revokeObjectURL(slide.url)
+      return
+    }
+    session.urls.set(index, slide.url)
+    data = slide.data
   } catch {
+    if (!current()) return
+    session.failed.add(index)
     data = messageSlide(
       t('passwords.lightbox.unreadable', { name: attachment.fileName }),
       `passwords-lightbox-error-${attachment.id}`,
     )
+  } finally {
+    if (session.loading.get(index) === token) session.loading.delete(index)
   }
-  if (pswp !== instance) return
-  ;(instance.options.dataSource as SlideData[])[index] = data
-  instance.refreshSlideContent(index)
+  ;(session.instance.options.dataSource as SlideData[])[index] = data
+  session.instance.refreshSlideContent(index)
 }
 
-function ensureAround(instance: PhotoSwipe) {
-  const index = instance.currIndex
-  void ensureSlide(instance, index)
-  void ensureSlide(instance, index + 1)
-  void ensureSlide(instance, index - 1)
+/** Loads the shown slide and its neighbours; a slide further away gives its object URL back. */
+function ensureAround(session: Session) {
+  const count = props.images.length
+  const index = session.instance.currIndex
+  const near = new Set([
+    index,
+    wrapped(index, 1, count),
+    wrapped(index, -1, count),
+  ])
+  const dataSource = session.instance.options.dataSource as SlideData[]
+  for (const [far, url] of session.urls) {
+    if (near.has(far)) continue
+    session.urls.delete(far)
+    dataSource[far] = { html: PLACEHOLDER }
+    session.instance.refreshSlideContent(far)
+    URL.revokeObjectURL(url)
+  }
+  for (const far of session.loading.keys()) {
+    if (!near.has(far)) session.loading.delete(far)
+  }
+  for (const slide of near) void ensureSlide(session, slide)
 }
 
 /** Opens the lightbox on the image at `index`. */
 async function open(index: number) {
-  if (pswp || !props.images.length) return
-  const [{ default: PhotoSwipeClass }] = await Promise.all([
-    import('photoswipe'),
-    import('photoswipe/style.css'),
-  ])
-  loaded.clear()
-  urls = []
+  if (pswp || opening || !props.images.length) return
+  opening = true
+  let PhotoSwipeClass: typeof PhotoSwipe
+  try {
+    ;[{ default: PhotoSwipeClass }] = await Promise.all([
+      import('photoswipe'),
+      import('photoswipe/style.css'),
+    ])
+  } finally {
+    opening = false
+  }
   const dataSource: SlideData[] = props.images.map(() => ({
-    html: '<div class="passwords-lightbox-message" aria-busy="true"></div>',
+    html: PLACEHOLDER,
   }))
   const still = reducedMotion.value === 'reduce'
   const instance = new PhotoSwipeClass({
@@ -122,6 +189,13 @@ async function open(index: number) {
     mainClass: 'passwords-lightbox',
   })
   pswp = instance
+  const session: Session = {
+    instance,
+    urls: new Map(),
+    failed: new Set(),
+    loading: new Map(),
+    closed: false,
+  }
   instance.on('uiRegister', () => {
     instance.ui?.registerElement({
       name: 'save',
@@ -153,12 +227,13 @@ async function open(index: number) {
       },
     })
   })
-  instance.on('afterInit', () => ensureAround(instance))
-  instance.on('change', () => ensureAround(instance))
+  instance.on('afterInit', () => ensureAround(session))
+  instance.on('change', () => ensureAround(session))
   instance.on('destroy', () => {
-    for (const url of urls) URL.revokeObjectURL(url)
-    urls = []
-    loaded.clear()
+    session.closed = true
+    for (const url of session.urls.values()) URL.revokeObjectURL(url)
+    session.urls.clear()
+    session.loading.clear()
     if (pswp === instance) pswp = null
     emit('closed')
   })

@@ -7,6 +7,7 @@ import { test } from 'node:test'
 import {
   createThumbnailCache,
   THUMBNAIL_CACHE_SIZE,
+  ThumbnailNotNow,
 } from '../src/lib/passwords/thumbnails.ts'
 
 /** A render whose calls stay open until the test settles them. */
@@ -120,4 +121,20 @@ test('a render that ends after clear revokes its URL instead of storing it', asy
   assert.deepEqual(await late, { kind: 'failed' })
   assert.deepEqual(revoked, ['blob:a'])
   assert.equal(cache.get('a'), undefined)
+})
+
+test('a render that fails for now is not remembered and is tried again', async () => {
+  let calls = 0
+  const cache = createThumbnailCache({
+    render: async (key) => {
+      calls += 1
+      if (calls === 1) throw new ThumbnailNotNow('reading failed')
+      return `blob:${key}`
+    },
+    revoke: () => {},
+  })
+  assert.deepEqual(await cache.request('a'), { kind: 'failed' })
+  assert.equal(cache.get('a'), undefined)
+  assert.deepEqual(await cache.request('a'), { kind: 'ready', url: 'blob:a' })
+  assert.equal(calls, 2)
 })

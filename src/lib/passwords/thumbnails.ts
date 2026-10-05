@@ -2,8 +2,9 @@
  * The cache of the attachment thumbnails (spec 036, FR-041, research R14): an LRU of rendered
  * thumbnails by key (the checksum of the bytes, so the same file in two entries renders once), with
  * at most two renders at a time, because each render briefly holds the full bytes of the file. A
- * failed render is remembered as a failure and not tried again. Rendering and revoking a URL are
- * injected; this module stays free of the DOM.
+ * failed render is remembered as a failure and not tried again, unless it threw `ThumbnailNotNow`
+ * (the bytes could not be read this time). Rendering and revoking a URL are injected; this module
+ * stays free of the DOM.
  */
 
 export const THUMBNAIL_CACHE_SIZE = 200
@@ -31,6 +32,9 @@ export interface ThumbnailCache {
 }
 
 const FAILED: Thumbnail = { kind: 'failed' }
+
+/** A render that failed for now (the bytes could not be read); the next request tries again. */
+export class ThumbnailNotNow extends Error {}
 
 export function createThumbnailCache(
   options: ThumbnailCacheOptions,
@@ -83,8 +87,10 @@ export function createThumbnailCache(
       const thumbnail: Thumbnail = { kind: 'ready', url }
       store(key, thumbnail)
       return thumbnail
-    } catch {
-      if (mine === generation) store(key, FAILED)
+    } catch (error) {
+      if (mine === generation && !(error instanceof ThumbnailNotNow)) {
+        store(key, FAILED)
+      }
       return FAILED
     } finally {
       release()

@@ -1,14 +1,17 @@
 /**
  * Thumbnails of image attachments (spec 036, FR-041, research R14). One cache for the whole window
  * (`lib/passwords/thumbnails.ts`), keyed by the checksum, so the same file in two entries is
- * rendered once. A render fetches the bytes, scales them down in a canvas and keeps only the small
- * image as an object URL; the full bytes are dropped at once. The cache is cleared when the last
- * password manager frame closes (`clearPasswordsThumbnails`).
+ * rendered once. A render fetches the bytes, reads the pixel size from the header (above
+ * `MAX_PREVIEW_PIXELS` there is no thumbnail), lets the engine decode at the small size and keeps
+ * only the small image as an object URL; the full bytes are dropped at once. The cache is cleared
+ * when the last password manager frame closes (`clearPasswordsThumbnails`).
  */
 import type { AttachmentView } from '@bindings/AttachmentView'
 import { imageMime } from '~/lib/passwords/format'
+import { previewableSize } from '~/lib/passwords/imageSize'
 import {
   createThumbnailCache,
+  ThumbnailNotNow,
   type Thumbnail,
   type ThumbnailCache,
 } from '~/lib/passwords/thumbnails'
@@ -22,7 +25,19 @@ const sources = new Map<string, { attachmentId: string; mime: string }>()
 let cache: ThumbnailCache | null = null
 
 async function scaledUrl(bytes: ArrayBuffer, mime: string): Promise<string> {
-  const bitmap = await createImageBitmap(new Blob([bytes], { type: mime }))
+  const size = previewableSize(bytes)
+  if (!size) throw new Error('no readable size or too many pixels')
+  // Only the width is given, so the engine keeps the aspect ratio, also of a turned (EXIF) photo.
+  const headerScale = THUMBNAIL_EDGE / Math.max(size.width, size.height)
+  const bitmap = await createImageBitmap(
+    new Blob([bytes], { type: mime }),
+    headerScale < 1
+      ? {
+          resizeWidth: Math.max(1, Math.round(size.width * headerScale)),
+          resizeQuality: 'medium',
+        }
+      : {},
+  )
   try {
     const scale = Math.min(
       1,
@@ -34,8 +49,10 @@ async function scaledUrl(bytes: ArrayBuffer, mime: string): Promise<string> {
     const context = canvas.getContext('2d')
     if (!context) throw new Error('no 2d context')
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    // WebP keeps transparency and is much smaller than PNG for photos; an engine without it falls
+    // back to PNG.
     const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, 'image/png'),
+      canvas.toBlob(resolve, 'image/webp', 0.8),
     )
     if (!blob) throw new Error('no thumbnail')
     return URL.createObjectURL(blob)
@@ -49,9 +66,17 @@ function cacheWith(
 ): ThumbnailCache {
   cache ??= createThumbnailCache({
     async render(key) {
+      // Without the bytes the next request tries again; only an image that does not decode is
+      // remembered as a failure.
       const source = sources.get(key)
-      if (!source) throw new Error('unknown attachment')
-      return scaledUrl(await preview(source.attachmentId), source.mime)
+      if (!source) throw new ThumbnailNotNow('unknown attachment')
+      let bytes: ArrayBuffer
+      try {
+        bytes = await preview(source.attachmentId)
+      } catch (cause) {
+        throw new ThumbnailNotNow('reading the attachment failed', { cause })
+      }
+      return scaledUrl(bytes, source.mime)
     },
     revoke: (url) => URL.revokeObjectURL(url),
   })
