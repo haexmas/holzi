@@ -88,8 +88,11 @@ Schlüssel-Wert-Speicher). Die Entscheidungen von ADR-0004 gelten. Referenzen: h
   Datenfreigaben. Die Space-Funktionen des vault-sdk, die Datenzeilen einem Space zuordnen,
   bildet diese Spec deshalb bewusst nicht nach (FR-061). Spec 028 baut auf dieser Spec auf:
   Sie ergänzt das Manifest um Freigabetypen und die Brücke um zwei Anfragen.
-- [`029-own-s3-storage`](../029-own-s3-storage/spec.md): Die Funktionen für entfernten
-  Speicher nutzen die Speicher aus 029.
+- [`038-storage-connections`](../038-storage-connections/spec.md): Die Funktionen für entfernten
+  Speicher nutzen die Speicher aus 038, mit einer Berechtigung `remoteStorage` je Speicher
+  (`backendId`) oder für `*`. Zugangsdaten gibt nur der Nutzer in holzi ein, keine Erweiterung
+  bekommt oder schickt sie. [`029-own-s3-storage`](../029-own-s3-storage/spec.md) baut für Spaces
+  auf denselben Speicherverbindungen auf (Review 2026-10-06).
 - [`032-model-operates-holzi`](../032-model-operates-holzi/spec.md): Kein Weg aus einer
   Erweiterung erreicht den eingebauten Agenten oder ein Modell (ADR-0004, FR-009).
 - [`034-password-manager`](../034-password-manager/spec.md): Diese Spec erteilt, speichert,
@@ -494,12 +497,12 @@ dem Ordner herauszukommen (abgelehnt) und beobachtet den Ordner.
 ### User Story 10 - Passwörter und entfernter Speicher über holzi (Priority: P3)
 
 haex-calendar legt die Zugangsdaten eines CalDAV-Kontos im Passwortmanager von holzi ab und
-liest sie später wieder. Eine Backup-Erweiterung lädt Dateien in den eigenen S3-Speicher aus
-Spec 029. Beide arbeiten nur über die Funktionen von holzi und nur innerhalb ihrer
+liest sie später wieder. Eine Backup-Erweiterung lädt Dateien in einen S3-Speicher aus
+Spec 038. Beide arbeiten nur über die Funktionen von holzi und nur innerhalb ihrer
 Berechtigungen.
 
 **Why this priority**: Nur einzelne Erweiterungen brauchen das. Der Passwortmanager (034) ist
-gebaut, der eigene S3-Speicher (029) noch nicht; die Story bindet ihn an, sobald es ihn gibt.
+gebaut, die Speicherverbindungen (038) noch nicht; die Story bindet sie an, sobald es sie gibt.
 
 **Independent Test**: Mit Passwortmanager eine Berechtigung für Einträge mit dem Tag
 „haex-calendar“ erteilen, einen Eintrag anlegen, lesen, ändern und löschen. Einen Eintrag mit
@@ -519,7 +522,8 @@ verfügbar“. Mit S3-Speicher eine Datei hoch- und herunterladen.
    nie bei einem anderen Speicher.
 4. **Given** eine Erweiterung, **When** sie einen entfernten Speicher anlegen, ändern oder
    entfernen will, **Then** muss der Nutzer das jedes Mal in einem Dialog von holzi
-   bestätigen, und die Zugangsdaten sieht die Erweiterung danach nicht.
+   bestätigen. Zugangsdaten gibt nur der Nutzer in holzi ein; die Erweiterung schickt und sieht
+   sie nie (038 FR-013a, Review 2026-10-06).
 
 ---
 
@@ -852,8 +856,9 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   löschen) MÜSSEN die Speicher aus 038 nutzen, mit einer Berechtigung je Speicher. Gibt es
   038 noch nicht, MÜSSEN sie „nicht verfügbar“ antworten.
 - **FR-055**: Anlegen, Ändern, Prüfen und Entfernen eines Speichers durch eine Erweiterung
-  MUSS jedes Mal eine Bestätigung in einem Dialog von holzi verlangen. Zugangsdaten DÜRFEN die
-  Erweiterung danach nicht mehr erreichen.
+  MUSS jedes Mal eine Bestätigung in einem Dialog von holzi verlangen. Zugangsdaten DÜRFEN nur
+  in holzi eingegeben werden und eine Erweiterung nie erreichen; ein Aufruf einer Erweiterung,
+  der Zugangsdaten enthält, MUSS abgelehnt werden (038 FR-012, FR-013a; Review 2026-10-06).
 
 **Mail und Shell**
 

@@ -53,10 +53,14 @@ Erwartet: `0027_passwords_owner` und `0028_storage_connections` laufen, die neue
 
 Mit einer Test-Erweiterung (Fixture aus `tests/fixtures/extension_e2e`, um `remoteStorage` erweitert):
 
-1. `backends.add` ohne Zugangsdaten → Dialog von holzi, Zugangsdaten eingeben → Kennung zurück, die
-   Erweiterung hat „Lesen und Schreiben“.
+1. `backends.add` ohne Zugangsdaten mit `sameProviderAs` (ein Speicher, in den Einstellungen angelegt wie in §4
+   Schritt 1, für den die Erweiterung Lesen hat) und einem zweiten Bucket → Dialog von holzi über dem Tab (ohne Felder für Zugangsdaten)
+   bestätigen → Kennung zurück, die Erweiterung hat „Lesen und Schreiben“. `backends.add` mit eigenem
+   Endpunkt `http://127.0.0.1:9000` → 3001 ohne Dialog (R8: lokale Endpunkte nur vom Nutzer). Das Fenster
+   für Zugangsdaten über der ganzen App: `backends.update`, im Dialog „neue Zugangsdaten“ wählen und
+   bestätigen → Fenster über Tableiste und Werkzeugleiste, Zugangsdaten dort eingeben → Test bestanden.
 2. `upload("a/b.txt")`, `list()`, `download("a/b.txt")`, `delete("a/b.txt")` → gelingt; im Bucket liegt das
-   Objekt unter `holzi-ext/<extension_id>/a/b.txt`.
+   Objekt unter `holzi-ext/<vault_id>/<extension_id>/a/b.txt`.
 3. `upload("../x")` → 3001; `backends.add` mit `accessKeyId` → 3001 ohne Dialog.
 4. Passwort-Funktionen der Erweiterung mit Freigabe für `*` → der Eintrag „S3: RustFS“ fehlt in `list`,
    `read` mit seiner Kennung → 1001 (SC-002).

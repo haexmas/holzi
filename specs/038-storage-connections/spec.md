@@ -60,7 +60,9 @@ Schlüsselpräfix (Spec 017 T106, die neun Funktionen `extension_remote_storage_
   Mal nur nach Bestätigung in einem Dialog von holzi (Spec 017 FR-055).
 - Q: Wer gibt die Zugangsdaten ein, wenn eine Erweiterung einen Speicher vorschlägt? → A: Nur der
   Nutzer, in holzi. Zugangsdaten werden ausschließlich in den Einstellungen oder im Dialog von holzi
-  angelegt und geändert und landen direkt im Passwortmanager. Eine Erweiterung kann einen neuen
+  angelegt und geändert und landen direkt im Passwortmanager (Review 2026-10-06: beim Anstoß durch
+  eine Erweiterung im Fenster von holzi über der ganzen App, nicht im Dialog über dem Tab, FR-013a).
+  Eine Erweiterung kann einen neuen
   Anbieter oder Bucket anstoßen und dafür Name, Anbieter, Endpunkt, Region und Bucket vorschlagen,
   aber keine Zugangsdaten; ein Aufruf mit Zugangsdaten wird abgelehnt.
 - Q: Was sieht eine Erweiterung von den Speichern? → A: Mit einer Leseberechtigung für S3-Speicher nur
@@ -130,7 +132,9 @@ erreichbar.
    `*`), jeweils nur mit Kennung, Name des Speichers, Name des Anbieters und Name des Buckets, nie mit
    Endpunkt, Region oder Zugangsdaten, und kann sie als Auswahl anbieten.
 5. **Given** eine Erweiterung ohne Leseberechtigung für S3-Speicher, **When** sie die Speicher
-   auflistet, **Then** erhält sie eine leere Liste oder die Rückfrage nach Spec 017, nie Namen.
+   auflistet, **Then** fragt holzi nach Spec 017, wenn eine solche Berechtigung im Zustand „fragen“
+   ist, und lehnt sonst ab; sie erhält nie Namen (Review 2026-10-06: keine leere Liste, wie
+   `contracts/bridge.md`).
 6. **Given** ein Speicher im Zustand „fragen“, **When** die Erweiterung ihn nutzt, **Then** fragt holzi
    wie bei jeder Berechtigung (Spec 017), und eine Verweigerung beendet den Aufruf.
 7. **Given** ein Objekt, das größer ist als die Grenzwerte der Erweiterung erlauben, **When** sie es
@@ -144,7 +148,8 @@ erreichbar.
 Eine Erweiterung bietet an, einen neuen Anbieter oder Bucket einzurichten. Sie ruft dazu die Funktion
 des SDK auf und schlägt Name, Anbieter, Endpunkt, Region und Bucket vor, oder einen neuen Bucket auf
 einem schon verbundenen Anbieter. holzi öffnet seinen eigenen Dialog; dort prüft Anna die Angaben und
-gibt die Zugangsdaten ein, nur hier. holzi testet, legt die Zugangsdaten direkt im Passwortmanager ab
+bestätigt. Die Zugangsdaten gibt sie danach in einem Fenster von holzi über der ganzen App ein, nie im
+Tab der Erweiterung (Review 2026-10-06). holzi testet, legt die Zugangsdaten direkt im Passwortmanager ab
 und gibt der Erweiterung danach eine Berechtigung für genau diesen Speicher. Ändern, Testen und
 Entfernen durch eine Erweiterung laufen ebenso über einen Dialog von holzi.
 
@@ -152,14 +157,15 @@ Entfernen durch eine Erweiterung laufen ebenso über einen Dialog von holzi.
 denselben Speicher auch in den Einstellungen anlegen (US1) und freigeben.
 
 **Independent Test**: Die Test-Erweiterung ruft „Speicher hinzufügen“ ohne Zugangsdaten auf; im Dialog
-die Zugangsdaten eingeben und bestätigen (Speicher angelegt, Zugangsdaten im Passwortmanager,
+bestätigen, im Fenster über der ganzen App die Zugangsdaten eingeben (Speicher angelegt, Zugangsdaten im Passwortmanager,
 Berechtigung erteilt) oder abbrechen (nichts angelegt). Derselbe Aufruf mit Zugangsdaten wird
 abgelehnt, ohne dass ein Dialog erscheint.
 
 **Acceptance Scenarios**:
 
 1. **Given** eine Erweiterung ruft „Speicher hinzufügen“ mit Name, Anbieter, Endpunkt, Region und
-   Bucket auf, **When** Anna im Dialog von holzi die Zugangsdaten eingibt und bestätigt, **Then** testet
+   Bucket auf, **When** Anna im Dialog von holzi bestätigt und die Zugangsdaten im Fenster von holzi
+   über der ganzen App eingibt, **Then** testet
    holzi den Speicher (wie US1), legt die Zugangsdaten im Passwortmanager ab, legt Verbindung und
    Speicher an, erteilt der Erweiterung „Lesen und Schreiben“ dafür und gibt ihr die Kennung des
    Speichers zurück.
@@ -172,7 +178,8 @@ abgelehnt, ohne dass ein Dialog erscheint.
    den Aufruf erhält, **Then** lehnt holzi ihn ab, bevor ein Dialog erscheint, und speichert nichts.
 5. **Given** ein Speicher, **When** eine Erweiterung ihn ändern (Name, Bucket), testen oder entfernen
    will, **Then** geht das nur mit einer Berechtigung „Lesen und Schreiben“ für diesen Speicher und
-   nur nach Bestätigung im Dialog von holzi; neue Zugangsdaten gibt Anna dort ein.
+   nur nach Bestätigung im Dialog von holzi; neue Zugangsdaten gibt Anna danach im Fenster von holzi
+   über der ganzen App ein.
 6. **Given** eine Erweiterung entfernt einen Speicher, den auch andere Erweiterungen nutzen, **When**
    der Dialog erscheint, **Then** nennt er diese Erweiterungen.
 7. **Given** die Zugangsdaten eines Speichers, **When** eine Erweiterung irgendeine Funktion nutzt,
@@ -236,11 +243,12 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
 - **FR-002**: Der Nutzer MUSS auf einer Verbindung Speicher anlegen, umbenennen und entfernen können:
   je Speicher ein Name und ein Bucket. Mehrere Speicher DÜRFEN sich eine Verbindung teilen; die
   Zugangsdaten werden dann nicht erneut eingegeben.
-- **FR-003**: Vor dem ersten Speichern und nach jeder Änderung der Zugangsdaten, des Endpunkts oder
-  des Buckets MUSS holzi den Verbindungstest ausführen. Schlägt er fehl, MUSS holzi den Grund
+- **FR-003**: Vor dem ersten Speichern und nach jeder Änderung der Zugangsdaten, des Endpunkts, der
+  Region, der Adressierung oder des Buckets (Region und Adressierung: Review 2026-10-06) MUSS holzi den Verbindungstest ausführen. Schlägt er fehl, MUSS holzi den Grund
   verständlich nennen (Zugangsdaten falsch, Endpunkt nicht erreichbar, Bucket fehlt, Recht fehlt)
   und DARF nichts speichern. Ein Test DARF beim Anbieter nichts außer seinem eigenen Testobjekt
-  zurücklassen.
+  zurücklassen, und das nur, wenn der Anbieter das Löschen verweigert oder nicht mehr erreichbar ist;
+  dann nennt holzi den Schlüssel des Objekts (SC-004).
 - **FR-004**: Der Nutzer MUSS einen gespeicherten Speicher jederzeit erneut testen können.
 - **FR-005**: Die Zugangsdaten MÜSSEN im Passwortmanager (034) liegen und DÜRFEN sonst nirgends in
   lesbarer Form gespeichert werden. Das Geheimnis zeigt nur der Passwortmanager auf eine eigene Aktion
@@ -267,9 +275,11 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   Namen des Speichers, Namen des Anbieters und Namen des Buckets enthalten, nie Endpunkt, Region oder
   Zugangsdaten.
 - **FR-010**: Jede Erweiterung MUSS in jedem Speicher einen eigenen Bereich haben: alle ihre
-  Schlüssel liegen unter einem Präfix, das nur ihr gehört, auf allen Geräten gleich ist und eine
-  Neuinstallation derselben Erweiterung überdauert. Die Erweiterung sieht und nennt Schlüssel ohne
-  dieses Präfix. Kein Aufruf DARF ein Objekt außerhalb ihres Bereichs auflisten, lesen, schreiben
+  Schlüssel liegen unter einem Präfix, das nur ihr in dieser Vault gehört, auf allen Geräten gleich
+  ist und eine Neuinstallation derselben Erweiterung überdauert. Zwei Vaults auf demselben Bucket
+  haben getrennte Bereiche; eine Entwicklerversion hat einen eigenen Bereich, nie den der installierten
+  Erweiterung mit demselben Herausgeberschlüssel und Namen (Review 2026-10-06). Die Erweiterung sieht
+  und nennt Schlüssel ohne dieses Präfix. Kein Aufruf DARF ein Objekt außerhalb ihres Bereichs auflisten, lesen, schreiben
   oder löschen.
 - **FR-011**: holzi MUSS jeden Schlüssel einer Erweiterung vor dem Aufruf beim Anbieter prüfen und
   Schlüssel ablehnen, die aus dem Bereich führen oder ungültig sind (`..`, führendes `/`, leere Teile,
@@ -283,7 +293,10 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   Ein bestätigtes Hinzufügen MUSS der Erweiterung „Lesen und Schreiben“ für den neuen Speicher
   erteilen.
 - **FR-013a**: Zugangsdaten DÜRFEN nur in holzi angelegt und geändert werden: in den Einstellungen
-  (FR-001) oder im Dialog von holzi, den eine Erweiterung anstößt. holzi MUSS sie direkt im
+  (FR-001) oder, wenn eine Erweiterung es anstößt, in einem Fenster von holzi über der ganzen App, das
+  holzi erst nach der Bestätigung im Dialog öffnet. Felder für Zugangsdaten DÜRFEN nie im Bereich des
+  Tabs einer Erweiterung erscheinen, auch nicht im Dialog über dem Tab, weil eine Erweiterung dort ein
+  gleich aussehendes Formular zeichnen könnte (Review 2026-10-06). holzi MUSS sie direkt im
   Passwortmanager ablegen. Eine Erweiterung DARF beim Hinzufügen nur Name, Anbieter, Endpunkt, Region
   und Bucket vorschlagen, oder einen neuen Bucket auf einer vorhandenen Verbindung; ein Aufruf, der
   Zugangsdaten enthält, MUSS abgelehnt werden, bevor ein Dialog erscheint.
@@ -300,14 +313,19 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
 - **FR-017**: holzi MUSS das S3-Protokoll selbst sprechen; eine Erweiterung erreicht den Anbieter nur
   über holzi. Verschlüsselte Verbindungen zum Anbieter MÜSSEN die Zertifikate prüfen; unverschlüsselte
   Endpunkte (`http`) DÜRFEN nur für Adressen im lokalen Netz oder auf dem eigenen Rechner erlaubt sein
-  und MÜSSEN im Dialog als unverschlüsselt gekennzeichnet sein.
+  und MÜSSEN im Dialog als unverschlüsselt gekennzeichnet sein. Adressen im lokalen Netz oder auf dem
+  eigenen Rechner DÜRFEN nur Endpunkte haben, die der Nutzer in holzi eingegeben hat, nie der Vorschlag
+  einer Erweiterung; Link-Local-Adressen (auch der Metadatendienst `169.254.169.254`) DÜRFEN nie
+  erreicht werden. holzi MUSS die Adresse vor jedem Aufruf prüfen und genau die geprüfte Adresse
+  verbinden (Review 2026-10-06, research R8).
 
 ### Key Entities
 
 - **Speicherverbindung**: Anbieter, Endpunkt, Region, Adressierung, Verweis auf die Zugangsdaten im
   Passwortmanager. Gehört der Vault, synchronisiert auf alle eigenen Geräte. Von 029 mitgenutzt.
-- **Speicher**: Name, Bucket, zugehörige Speicherverbindung, Zeitpunkt der Anlage, Ergebnis des
-  letzten Tests. Ziel der Berechtigungen der Art `remoteStorage`.
+- **Speicher**: Name, Bucket, zugehörige Speicherverbindung, Zeitpunkt der Anlage. Ziel der
+  Berechtigungen der Art `remoteStorage`. Das Ergebnis des letzten Tests gehört je Gerät dazu und wird
+  nicht synchronisiert (data-model `storage_tests_no_sync`).
 - **Bereich einer Erweiterung**: abgeleitet aus Speicher und Identität der Erweiterung; wird nicht
   gespeichert.
 - **Berechtigung `remoteStorage`**: wie in Spec 017, mit einem Speicher als Ziel.
@@ -323,7 +341,9 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
 - **SC-003**: In 100 % der Fälle eines Prüfkatalogs aus Schlüsseln, die aus dem Bereich führen sollen,
   erreicht eine Erweiterung kein Objekt außerhalb ihres Bereichs.
 - **SC-004**: Ein gescheiterter Verbindungstest hinterlässt in 100 % der Fälle keine Zugangsdaten in der
-  Vault und kein Testobjekt beim Anbieter.
+  Vault. Sein Testobjekt löscht holzi auch nach einem gescheiterten Schritt; verweigert der Anbieter das
+  Löschen oder ist er nicht mehr erreichbar, nennt das Ergebnis den Schlüssel des liegengebliebenen
+  Objekts (`holzi-test/<UUID>`), damit der Nutzer es selbst entfernen kann.
 - **SC-005**: Ein auf einem Gerät angelegter Speicher ist nach dem Sync auf einem zweiten Gerät ohne
   erneute Eingabe nutzbar.
 - **SC-006**: Die neun Funktionen arbeiten nachweislich mit RustFS (selbst betrieben, auch im Test).
@@ -335,8 +355,10 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   keine. Das Anlegen von Buckets gehört zu 029.
 - Der **Verbindungstest** schreibt, liest, listet und löscht ein eigenes kleines Testobjekt im Bucket;
   Versionierung und eingeschränkte Zugangsschlüssel prüft erst die Eignungsprüfung von 029.
-- Das **Präfix** einer Erweiterung leitet sich aus ihrer dauerhaften Identität (Herausgeberschlüssel
-  und Name, Spec 017) ab, nicht aus einer Kennung je Installation oder je Gerät.
+- Das **Präfix** einer Erweiterung leitet sich aus der Identität der Vault (bei allen ihren Geräten
+  gleich, Spec 024) und der dauerhaften Identität der Erweiterung (Herausgeberschlüssel und Name,
+  Spec 017) ab, nicht aus einer Kennung je Installation oder je Gerät. Nur eine Entwicklerversion hat
+  ein Präfix je Gerät, aus ihrer geräteeigenen Kennung (Review 2026-10-06, research R4).
 - Die **Grenzen** für Größe und Laufzeit sind die vorhandenen Grenzwerte der Erweiterung aus Spec 017;
   diese Spec führt keine neuen ein.
 - Das **vault-sdk** schickt beim Hinzufügen heute Zugangsdaten mit (`S3Config`); es wird angepasst,
