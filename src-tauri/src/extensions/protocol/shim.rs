@@ -56,7 +56,9 @@ pub const SHIM: &str = r#"(() => {
     lastTitle = text;
     send({ type: 'title', text });
   };
-  new MutationObserver(reportTitle).observe(document.documentElement, {
+  // The document, not its root element: as an init script (development page) the shim can run
+  // before the parser created `<html>` (WebView2, Android), and `observe(null)` would throw.
+  new MutationObserver(reportTitle).observe(document, {
     subtree: true, childList: true, characterData: true,
   });
 

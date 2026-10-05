@@ -28,6 +28,12 @@ fn the_shim_only_accepts_its_init_from_the_parent_and_never_from_the_top_window(
 }
 
 #[test]
+fn the_title_observer_does_not_need_the_root_element() {
+    assert!(SHIM.contains("new MutationObserver(reportTitle).observe(document, {"));
+    assert!(!SHIM.contains("document.documentElement"));
+}
+
+#[test]
 fn a_development_page_gets_the_same_shim_only_on_a_loopback_http_address() {
     let script = dev_init_script();
     let at = script.find(SHIM).expect("the shim itself, unchanged");
