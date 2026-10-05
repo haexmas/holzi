@@ -30,8 +30,10 @@ pub struct ExtrasOutcome {
 }
 
 pub fn write(tx: &mut CrdtTransaction<'_>, extras: &Extras) -> Result<ExtrasOutcome> {
-    let mut outcome = ExtrasOutcome::default();
-    outcome.tag_colors = write_tag_colors(tx, &extras.tag_colors)?;
+    let mut outcome = ExtrasOutcome {
+        tag_colors: write_tag_colors(tx, &extras.tag_colors)?,
+        ..ExtrasOutcome::default()
+    };
     for passkey in &extras.passkeys {
         let mut input = passkey.clone();
         input.item_id = None;
