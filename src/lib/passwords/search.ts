@@ -1,7 +1,9 @@
 // Password manager search (spec 034-password-manager, FR-007, research R11): filters the headers
 // the window already holds. Exactly four things are searched — title, username, URL and the tag
 // names — never a note, a password or any other field, so the search can never become a way to
-// probe a secret. Pure, so `scripts/check-passwords-search.ts` runs it without vue.
+// probe a secret. The words match fuzzily (Fuse.js) and the hits come best first. Pure, so
+// `scripts/check-passwords-search.ts` runs it without vue.
+import Fuse from 'fuse.js'
 
 /** What the search looks at; an `ItemHeader` satisfies it, and so does nothing that carries more. */
 export type SearchableHeader = {
@@ -77,46 +79,70 @@ function withoutPlaceholders(text: string | null): string | null {
   return text === null ? null : text.replace(PLACEHOLDER, ' ')
 }
 
-/** The folded texts a header is searched in. */
-function haystack(header: SearchableHeader): string[] {
-  return [
-    header.title,
-    withoutPlaceholders(header.username),
-    withoutPlaceholders(header.url),
-    ...header.tags.map((tag) => tag.name),
-  ]
-    .filter(
-      (text): text is string => typeof text === 'string' && text.trim() !== '',
-    )
-    .map(fold)
+/** How far a word may be from the text (Fuse.js: 0 is exact, 1 anything). At 0.3 a word of up to
+ * three letters must match exactly, from four letters on one typo passes, from seven two. */
+const FUZZY_THRESHOLD = 0.3
+
+/** The folded text of one searched field; the tags are a list. */
+function fieldOf(header: SearchableHeader, key: string): string | string[] {
+  switch (key) {
+    case 'title':
+      return fold(header.title ?? '')
+    case 'username':
+      return fold(withoutPlaceholders(header.username) ?? '')
+    case 'url':
+      return fold(withoutPlaceholders(header.url) ?? '')
+    default:
+      return header.tags.map((tag) => fold(tag.name))
+  }
 }
 
-/** True when every word of the query is part of one of the searched texts. A blank query matches
+/** True when every word of the query matches one of the searched texts. A blank query matches
  * everything. */
 export function matchesQuery(header: SearchableHeader, query: string): boolean {
-  const words = terms(query)
-  if (words.length === 0) return true
-  const texts = haystack(header)
-  return words.every((word) => texts.some((text) => text.includes(word)))
+  return filterHeaders([header], { query }).length > 0
 }
 
 /** The headers that match the query and, when given, carry the tag (`tagIds`: any of a group of
- * tags that show as one). */
+ * tags that show as one). Every word of the query has to match, each in any of the four fields;
+ * with a query the hits come best first (ties keep the order of `headers`), without one in the
+ * order of `headers`. */
 export function filterHeaders<T extends SearchableHeader>(
   headers: readonly T[],
   options: { query: string; tagId?: string; tagIds?: readonly string[] },
 ): T[] {
   const words = terms(options.query)
   const wanted = options.tagIds ?? (options.tagId ? [options.tagId] : [])
-  return headers.filter((header) => {
-    if (
-      wanted.length > 0 &&
-      !header.tags.some((tag) => wanted.includes(tag.id))
-    ) {
-      return false
-    }
-    if (words.length === 0) return true
-    const texts = haystack(header)
-    return words.every((word) => texts.some((text) => text.includes(word)))
+  const tagged =
+    wanted.length === 0
+      ? [...headers]
+      : headers.filter((header) =>
+          header.tags.some((tag) => wanted.includes(tag.id)),
+        )
+  if (words.length === 0) return tagged
+  // ponytail: the index is built for every query; at 5,000 entries a word takes 20 to 80 ms.
+  // Upgrade: keep a `Fuse.createIndex` per list of headers and debounce the search field.
+  const fuse = new Fuse(tagged, {
+    keys: ['title', 'username', 'url', 'tags'],
+    getFn: (header, path) =>
+      fieldOf(header, Array.isArray(path) ? (path[0] ?? '') : path),
+    ignoreLocation: true,
+    includeScore: true,
+    threshold: FUZZY_THRESHOLD,
   })
+  // The scores of the words add up; a header missing one word drops out.
+  let scores = new Map<number, number>(tagged.map((_, index) => [index, 0]))
+  for (const word of words) {
+    const next = new Map<number, number>()
+    for (const result of fuse.search(word)) {
+      const before = scores.get(result.refIndex)
+      if (before !== undefined)
+        next.set(result.refIndex, before + (result.score ?? 0))
+    }
+    scores = next
+    if (scores.size === 0) return []
+  }
+  return [...scores]
+    .sort(([left, a], [right, b]) => a - b || left - right)
+    .map(([index]) => tagged[index]!)
 }

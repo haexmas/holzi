@@ -485,6 +485,8 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-007**: Das System MUSS Einträge nach Titel, Benutzername, Adresse und Tag-Namen
   durchsuchen und in einer Liste und einem Baum mit Ordnern darstellen; Geheimnisse und
   Notizen DÜRFEN nicht Gegenstand der Suche sein.
+  *Erweitert 2026-10-06:* Die Suche ist unscharf (Fuse.js): Jedes Wort muss in einem der vier
+  Felder vorkommen, ab vier Buchstaben mit einem Tippfehler; Treffer erscheinen nach Güte.
 - **FR-008**: Das System MUSS Einträge als abgelaufen kennzeichnen, wenn ihr Ablaufdatum
   überschritten ist.
 
