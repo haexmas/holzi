@@ -399,6 +399,86 @@ async fn bitwarden_json_csv_and_lastpass_arrive_and_a_second_run_skips_the_dupli
 }
 
 #[tokio::test]
+async fn a_second_keepass_run_reuses_the_folders_instead_of_doubling_them() {
+    let f = fixture();
+    run(&f, keepass_request(&f, PASSWORD), OnDuplicate::Skip)
+        .await
+        .expect("first");
+    let before = counts(&f.db);
+    let again = run(&f, keepass_request(&f, PASSWORD), OnDuplicate::Skip)
+        .await
+        .expect("again");
+    assert_eq!(
+        again.imported, 2,
+        "only the two entries in the trash come again"
+    );
+    let after = counts(&f.db);
+    assert_eq!(
+        after["haex_passwords_groups"], before["haex_passwords_groups"],
+        "spec 037 FR-017: no folder twice"
+    );
+}
+
+#[tokio::test]
+async fn a_folder_the_vault_has_takes_the_entries_and_survives_a_rollback() {
+    let f = fixture();
+    let work = f
+        .service
+        .create_group(&Caller::User, "Work".into(), None, None, None, None)
+        .await
+        .expect("folder");
+    run(&f, keepass_request(&f, PASSWORD), OnDuplicate::Create)
+        .await
+        .expect("import");
+    assert_eq!(
+        count(
+            &f.db,
+            "SELECT COUNT(*) FROM haex_passwords_groups WHERE name = 'Work'"
+        ),
+        1
+    );
+    assert!(
+        count(
+            &f.db,
+            &format!("SELECT COUNT(*) FROM haex_passwords_group_items WHERE group_id = '{work}'")
+        ) > 0,
+        "the entries of Work went into the folder that was there"
+    );
+
+    let g = fixture();
+    let kept = g
+        .service
+        .create_group(&Caller::User, "Work".into(), None, None, None, None)
+        .await
+        .expect("folder");
+    let cancel = AtomicBool::new(false);
+    let progress = |p: Progress| {
+        if p.phase == Phase::Items && p.done >= 3 {
+            cancel.store(true, Ordering::SeqCst);
+        }
+    };
+    let result = g
+        .service
+        .import_run(
+            &Caller::User,
+            keepass_request(&g, PASSWORD),
+            OnDuplicate::Create,
+            &cancel,
+            &progress,
+        )
+        .await;
+    assert!(result.is_err());
+    assert_eq!(
+        count(
+            &g.db,
+            &format!("SELECT COUNT(*) FROM haex_passwords_groups WHERE id = '{kept}'")
+        ),
+        1,
+        "the rollback keeps the folder the vault had"
+    );
+}
+
+#[tokio::test]
 async fn an_encrypted_bitwarden_export_is_refused_and_writes_nothing() {
     let f = fixture();
     let path = f.dir.path().join("enc.json");

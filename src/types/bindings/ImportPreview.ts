@@ -5,4 +5,4 @@
  * the kinds of [`AttentionKind`] that occur, as their snake_case names; the window gives each a
  * text. Never a value of a secret.
  */
-export type ImportPreview = { entries: number, groups: number, trashedEntries: number, historyStates: number, attachments: number, passkeys: number, duplicates: number, warnings: Array<string>, };
+export type ImportPreview = { entries: number, groups: number, trashedEntries: number, historyStates: number, attachments: number, passkeys: number, duplicates: number, tags: number, presets: number, warnings: Array<string>, };

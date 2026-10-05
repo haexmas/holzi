@@ -110,6 +110,8 @@ impl Reader {
                 icon,
                 is_recycle_bin: is_bin,
                 previous_parent_ref: group.previous_parent().map(|g| g.id().to_string()),
+                color: None,
+                sort_order: None,
             });
         }
         if group.enable_searching.is_some() || group.enable_autotype.is_some() {

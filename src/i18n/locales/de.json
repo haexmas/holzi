@@ -924,7 +924,9 @@
         "unsupported_format": "Das Format wird nicht unterstützt.",
         "encrypted_export": "Der Export ist verschlüsselt und lässt sich ohne sein Kennwort nicht lesen.",
         "cancelled": "Der Import wurde abgebrochen.",
-        "unwritable": "Die Datei ließ sich nicht schreiben."
+        "unwritable": "Die Datei ließ sich nicht schreiben.",
+        "haex_vault_locked": "Das Vault-Passwort passt nicht, oder die Datei ist keine haex-vault-Vault.",
+        "no_passwords": "Diese Vault enthält keine Passwörter."
       },
       "referenceMissing": "Die Quelle eines Verweises ist nicht verfügbar.",
       "referenceCycle": "Ein Verweis bildet einen Kreis oder ist zu tief verschachtelt.",
@@ -1380,12 +1382,14 @@
       "sources": {
         "keepass": "KeePass (kdbx)",
         "bitwarden": "Bitwarden (JSON oder CSV)",
-        "lastpass": "LastPass (CSV)"
+        "lastpass": "LastPass (CSV)",
+        "haexvault": "haex-vault (Vault-Datei)"
       },
       "hints": {
         "keepass": "Datenbank von KeePass oder KeePassXC, mit Passwort und optional einer Schlüsseldatei.",
         "bitwarden": "Unverschlüsselter Export aus dem Tresor (JSON enthält mehr als CSV).",
-        "lastpass": "Der CSV-Export aus dem Tresor."
+        "lastpass": "Der CSV-Export aus dem Tresor.",
+        "haexvault": "Die Vault-Datei (.db) von haex-vault mit ihrem Vault-Passwort. Die Datei wird nur gelesen, nie verändert."
       },
       "noFile": "Noch keine Datei gewählt",
       "chooseFile": "Datei wählen",
@@ -1404,7 +1408,9 @@
         "historyStates": "Verlaufsstände",
         "attachments": "Anhänge",
         "passkeys": "Passkeys",
-        "duplicates": "Einträge, die es schon gibt"
+        "duplicates": "Einträge, die es schon gibt",
+        "tags": "Tags",
+        "presets": "Voreinstellungen des Generators"
       },
       "warnings": "Hinweise",
       "warningKinds": {
@@ -1416,7 +1422,13 @@
         "totp_invalid": "Ein TOTP-Secret ist ungültig und wird unverändert übernommen.",
         "icon_not_mapped": "Ein Symbol der Quelle ließ sich nicht zuordnen.",
         "value_not_storable": "Ein Wert ließ sich nicht speichern.",
-        "source_setting": "Einstellungen der Quelle werden nicht übernommen."
+        "source_setting": "Einstellungen der Quelle werden nicht übernommen.",
+        "haex_vault_close_first": "Schließe haex-vault, bevor du die Datei kopierst; sonst können die letzten Änderungen fehlen.",
+        "haex_pass_tables_ignored": "Die Datei enthält auch Daten der alten Erweiterung haex-pass; die werden nicht übernommen.",
+        "history_unreadable": "Ein Verlaufsstand ließ sich nicht lesen.",
+        "group_reparented": "Ein Ordner verwies auf einen fehlenden Oberordner und kommt nach oben.",
+        "tag_merged": "Tags, die sich nur in der Schreibweise unterscheiden, werden zu einem.",
+        "unknown_source_data": "Die Quelle enthält Angaben, die holzi nicht kennt; sie werden nicht übernommen."
       },
       "onDuplicate": "Wenn es einen Eintrag schon gibt",
       "skip": "Überspringen",
@@ -1462,7 +1474,11 @@
         "totp_invalid": "Das TOTP-Secret ist ungültig und steht unverändert im Eintrag.",
         "icon_not_mapped": "Das Symbol der Quelle ließ sich nicht zuordnen.",
         "value_not_storable": "Ein Wert ließ sich nicht speichern.",
-        "source_setting": "Einstellungen der Quelle (Suche, Auto-Type je Gruppe, Qualitätsprüfung) wurden nicht übernommen."
+        "source_setting": "Einstellungen der Quelle (Suche, Auto-Type je Gruppe, Qualitätsprüfung) wurden nicht übernommen.",
+        "history_unreadable": "Der Verlaufsstand vom {field} ließ sich nicht lesen und fehlt.",
+        "group_reparented": "Ordner „{field}“ verwies auf einen fehlenden Oberordner und liegt jetzt oben.",
+        "tag_merged": "Die Tags „{field}“ unterscheiden sich nur in der Schreibweise und wurden zu einem.",
+        "unknown_source_data": "„{field}“ der Quelle kennt holzi nicht; der Wert wurde nicht übernommen."
       }
     },
     "stale": {

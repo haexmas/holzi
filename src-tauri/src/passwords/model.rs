@@ -186,6 +186,10 @@ pub enum AttentionKind {
     IconNotMapped,
     ValueNotStorable,
     SourceSetting,
+    HistoryUnreadable,
+    GroupReparented,
+    TagMerged,
+    UnknownSourceData,
 }
 
 /// One place where the user has to rework by hand: entry, folder path and what is missing; never a
@@ -233,6 +237,8 @@ pub struct ImportPreview {
     pub attachments: u32,
     pub passkeys: u32,
     pub duplicates: u32,
+    pub tags: u32,
+    pub presets: u32,
     pub warnings: Vec<String>,
 }
 
