@@ -98,6 +98,11 @@ pub struct PermissionState {
     temporary: Mutex<HashMap<Uuid, Vec<HeldDecision>>>,
 }
 
+/// Names one open question remembers it was told under. An extension can name one program in
+/// endless spellings (`/usr/bin//bash`, `/usr/./bin/bash`, ...); further names are not remembered,
+/// so their calls hear no decision and stay waiting until the question is asked again.
+pub const MAX_TOLD: usize = 32;
+
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
@@ -109,7 +114,9 @@ impl PermissionState {
         let mut pending = lock(&self.pending);
         if let Some((id, open)) = pending.iter_mut().find(|(_, p)| p.question == question) {
             open.frames.insert(frame.to_owned());
-            open.told.insert(told.to_owned());
+            if open.told.len() < MAX_TOLD {
+                open.told.insert(told.to_owned());
+            }
             return (id.clone(), false);
         }
         let id = token::mint();
