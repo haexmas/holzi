@@ -1,11 +1,12 @@
-// Run with `pnpm check:wm-state` (runs this file together with check-wm-geometry.ts and
-// check-wm-persistence.ts). Harness for `src/lib/wm/*.ts` (spec 015-workspace-shell) — the
-// `lib/wm` modules deliberately avoid Nuxt auto-imports and use relative `.ts`-suffixed sibling
-// imports (plan research R6) so they load standalone here.
+// Run with `pnpm check:wm-state` (runs this file together with check-wm-focus.ts,
+// check-wm-geometry.ts and check-wm-persistence.ts). Harness for `src/lib/wm/*.ts` (spec
+// 015-workspace-shell) — the `lib/wm` modules deliberately avoid Nuxt auto-imports and use
+// relative `.ts`-suffixed sibling imports (plan research R6) so they load standalone here.
 //
 // Sections: pure reducers (layoutState.ts), tabs (tabs.ts), and multi-instance apps (User Story 7,
 // T051/T052). Geometry and hydration live in check-wm-geometry.ts, the persistence queue in
-// check-wm-persistence.ts (split per plan.md Complexity Tracking, T059).
+// check-wm-persistence.ts (split per plan.md Complexity Tracking, T059), the focus rule of the
+// reducers in check-wm-focus.ts.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
