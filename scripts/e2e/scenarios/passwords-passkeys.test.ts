@@ -1,13 +1,11 @@
 import assert from 'node:assert/strict'
 import { generateKeyPairSync } from 'node:crypto'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { scenario, type ScenarioContext } from '../lib/scenario.ts'
 import { KEY } from '../lib/settings.ts'
 import { createAndUnlock, unwrap, type FlowInstance } from '../lib/flows.ts'
 import {
   contextMenu,
+  importExport,
   openPasswords,
   overview,
   selectTab,
@@ -84,19 +82,7 @@ scenario('passwords-passkeys', { timeoutMs: 240_000 }, async (ctx) => {
   await createAndUnlock(instance, { name: 'e2e-passwords-passkeys' })
   await openPasswords(instance)
 
-  const dir = mkdtempSync(join(tmpdir(), 'e2e-passkeys-'))
-  try {
-    const path = join(dir, 'bitwarden.json')
-    writeFileSync(path, bitwardenExport())
-    unwrap(
-      'passwords_import_run',
-      await instance.invoke('passwords_import_run', {
-        args: { source: 'bitwarden', path, onDuplicate: 'create' },
-      }),
-    )
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
+  await importExport(instance, 'bitwarden', 'bitwarden.json', bitwardenExport())
   const original = (await ctx.waitFor('the imported entry', async () => {
     const entry = (await overview(instance)).headers.find(
       (h) => h.title === 'Beispiel',

@@ -1,6 +1,7 @@
 // Helpers for the password manager scenarios (spec 034, T092): opening the window and reading what the
 // backend holds through its commands, so a scenario checks data, not pixels. Entries are made through
 // `passwords_create_item` where the editor is not what is being tested.
+import { deviceFiles } from './extension-files.ts'
 import { unwrap } from './flows.ts'
 import { resizeAppWindow } from './settings.ts'
 import type { FlowInstance } from './flows.ts'
@@ -66,6 +67,28 @@ export async function createFolder(
       args: parentId ? { name, parentId } : { name },
     }),
   ).groupId
+}
+
+/** Imports an export file of another password manager through the command: the text is written to
+ * a fresh folder of the device, which is removed again once the import has run. */
+export async function importExport(
+  instance: Pick<FlowInstance, 'invoke'>,
+  source: string,
+  fileName: string,
+  text: string,
+): Promise<void> {
+  const files = deviceFiles('e2e-passwords-import-')
+  try {
+    files.write(fileName, text)
+    unwrap(
+      'passwords_import_run',
+      await instance.invoke('passwords_import_run', {
+        args: { source, path: files.path(fileName), onDuplicate: 'create' },
+      }),
+    )
+  } finally {
+    files.remove()
+  }
 }
 
 /** The folder of an entry, or the parent of a folder, as the backend holds it (`null` is the top). */
