@@ -85,6 +85,20 @@ export function tabsOfStoppedExtensions(
   )
 }
 
+/** The first tab of an extension in window order, or `null` without one (a notification click
+ * brings it forward, spec 017 US8). */
+export function tabOfExtension(
+  windows: readonly WmWindow[],
+  extensionId: string,
+): { windowId: string; tabId: string } | null {
+  const appId = extensionAppId(extensionId)
+  for (const window of windows) {
+    const tab = window.tabs.find((t) => t.appId === appId)
+    if (tab) return { windowId: window.id, tabId: tab.id }
+  }
+  return null
+}
+
 /** holzi's own apps followed by the extension apps. */
 export function allApps(
   extensionAppList: readonly AppDefinition[],

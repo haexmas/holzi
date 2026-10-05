@@ -568,6 +568,10 @@ blanke Domain genau oder als Suffix an einer Label-Grenze (`.example.org`; HV `m
 **Begründung**: HV folgt Weiterleitungen ungeprüft und prüft die Methode nie (`check/web.rs:16`); eine eigene
 Schleife kann auch für das Weiterleitungsziel fragen.
 
+**Umgesetzt (T098)**: Die Anfrage an den Nutzer nennt die Methode und den Ursprung `schema://host[:port]/*`, nicht
+die volle Adresse; sonst fragte jede Symboldatei neu. Eine Weiterleitung auf ein Ziel ohne Berechtigung antwortet
+1004 für dieses Ziel, das SDK wiederholt danach die ganze Anfrage (bei POST wird sie also erneut gesendet).
+
 **Alternativen**: `Policy::custom` (synchron, kann nicht fragen); `tauri-plugin-http` (unnötig).
 
 ## R19 — Dateisystem
@@ -620,13 +624,20 @@ als Härtung); lexikalischer Abgleich wie HV.
   (HV `notifications/mod.rs:12-18`). Unter Linux über `notify-rust` (XDG-Aktionen, `wait_for_action`,
   `close`; vermutet), auf macOS und Windows, wo das System es zulässt — Aufgabe mit Machbarkeitsprüfung; wenn
   es nicht geht, kommt der Punkt zur Spec zurück (FR-052). Symbol nur als `data:`-URL oder Datei aus dem Bundle.
-- Schlüssel-Wert-Speicher in der Kerntabelle `extension_kv` nach ADR-0001 (Gerätekennung, gilt nur für das
-  Gerät), Größengrenzen; Aufrufer immer aus der Rahmensitzung. HV hängt die Daten an eine Fenster-Kennung, die
-  bei jedem Öffnen neu ist (`handlers/webStorage.ts:9`).
-- Protokolle: das SDK v3.7.0 hat dafür keinen Befehl; holzi nimmt die Namen von HV
-  (`extension_logging_write`/`_read`) an und speichert in `extension_logs_no_sync` als Ringpuffer je
-  Erweiterung; Anzeige in den Einstellungen. Konsolenausgabe im Entwicklermodus über
-  `window.parent.postMessage` des SDK (R13).
+- **Ergebnis der Machbarkeitsprüfung (T099, 2026-10-04/05)**: Unter Linux (COSMIC, `cosmic-notifications` 1.9,
+  Fähigkeiten `actions`, `persistence`) meldet `notify-rust` 4.18.1 einen Klick auf die Benachrichtigung als `default`
+  und ein Schließen als `Closed`; ohne Klick kommt nichts. `notify-rust` 4.18 meldet Klicks auch unter Windows
+  (WinRT-Aktivierung) und macOS (`NSUserNotificationCenter`, blockiert bis zur Antwort). Betreiber: eine einheitliche
+  Lösung, nicht je Betriebssystem. Deshalb nutzt holzi überall `tauri-plugin-notification` und hört Klicks über dessen
+  `Notification::on_action`; der Fork `haexmas/plugins-workspace` (Zweig `feat/notification-desktop-actions`)
+  ergänzt die Desktop-Seite (Aktionsarten als Knöpfe, `tap` für den Klick auf die Benachrichtigung,
+  `remove_active` unter Linux und den BSDs, Listener-Befehle), Upstream-PR zu tauri-apps/plugins-workspace#2150.
+  Schließen meldet das Plugin auf dem Desktop nicht; holzi begrenzt deshalb die offenen Benachrichtigungen je
+  Erweiterung. Android und iOS melden Wegwischen als Aktion `dismiss`; holzi wertet nur `tap` und die Knöpfe als
+  Klick. Unter Linux (COSMIC, Fork `3f9db5e`) geprüft: Ein Klick auf die Benachrichtigung kommt als `tap`, ein Knopf
+  mit seiner Kennung, beide mit holzis Kennung der Benachrichtigung; das Klicksignal des Servers wurde dafür mit
+  `gdbus emit` gesendet, nachdem der frühere Klick von Hand gezeigt hatte, dass COSMIC es sendet. Windows und macOS
+  sind in der CI des Forks gebaut und geprüft (Clippy), aber nicht angeklickt; T099 bleibt bis dahin offen.
 
 ## R21 — Passwörter, entfernter Speicher, Mail, Shell (L5)
 

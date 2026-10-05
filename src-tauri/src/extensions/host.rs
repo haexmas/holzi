@@ -4,11 +4,12 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use uuid::Uuid;
 
 use super::bridge::frames::FrameRegistry;
+use super::notifications::{NotificationSpec, NotificationState, Respond, ShownNotification};
 use super::permissions::prompts::PermissionState;
 use super::registry::start::Started;
 
@@ -29,6 +30,26 @@ impl Default for HostContext {
     }
 }
 
+/// What holzi does outside its window for extensions (US8): the app sets it once at start; tests
+/// set a recording one. Without it these functions are not available (8001).
+pub trait Desktop: Send + Sync {
+    /// Opens an address in the system's browser.
+    fn open_url(&self, url: &str) -> Result<(), String>;
+
+    /// Shows a system notification; `respond` hears what the user did with it, if the system
+    /// reports it.
+    fn show_notification(
+        &self,
+        _notification: &NotificationSpec,
+        _respond: Respond,
+    ) -> Result<Box<dyn ShownNotification>, String> {
+        Err("notifications are not available".to_owned())
+    }
+
+    /// Brings holzi's window to the front.
+    fn focus_window(&self) {}
+}
+
 #[derive(Default)]
 pub struct ExtensionHost {
     pub frames: FrameRegistry,
@@ -36,6 +57,8 @@ pub struct ExtensionHost {
     pub fs: super::fs::FsState,
     /// Open permission questions and decisions held in memory (US3).
     pub permissions: PermissionState,
+    /// System notifications shown for extensions (US8).
+    pub notifications: NotificationState,
     /// Entry and Content-Security-Policy per bundle started in this process.
     started: Mutex<HashMap<Uuid, Arc<Started>>>,
     /// The bundle each extension last started with on this device, to see an update.
@@ -49,6 +72,7 @@ pub struct ExtensionHost {
     dev_frames: AtomicBool,
     /// The document holzi's window shows was served with the development origins.
     served_dev_frames: AtomicBool,
+    desktop: OnceLock<Arc<dyn Desktop>>,
 }
 
 /// A running SQL call; dropping it frees its place.
@@ -67,6 +91,15 @@ impl Drop for SqlSlot {
 }
 
 impl ExtensionHost {
+    /// Sets what holzi does on the desktop; only the first call counts.
+    pub fn set_desktop(&self, desktop: Arc<dyn Desktop>) {
+        let _ = self.desktop.set(desktop);
+    }
+
+    pub fn desktop(&self) -> Option<Arc<dyn Desktop>> {
+        self.desktop.get().cloned()
+    }
+
     fn started_map(&self) -> MutexGuard<'_, HashMap<Uuid, Arc<Started>>> {
         self.started.lock().unwrap_or_else(PoisonError::into_inner)
     }

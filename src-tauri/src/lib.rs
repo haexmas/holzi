@@ -202,6 +202,8 @@ pub fn run() {
         // timed clearing never pass through the webview. No JS permission is granted for it.
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
+        // Spec 017 US8: system notifications of extensions, with clicks (desktop: forked, Cargo.toml).
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -229,6 +231,12 @@ pub fn run() {
                 }
             })?;
             app.manage(presence);
+            // Spec 017 US8: what holzi does outside its window for extensions (browser, notifications).
+            app.state::<AppState>()
+                .extensions()
+                .set_desktop(std::sync::Arc::new(extensions::desktop::AppDesktop::new(
+                    app.handle().clone(),
+                )));
             // Spec 017, US12: holzi's window is built here, not from `tauri.conf.json`, so its
             // document can frame development servers while developer mode is on (`dev_csp`).
             let window = app
