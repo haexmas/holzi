@@ -2,12 +2,13 @@
 /**
  * The tab Details of an entry in view mode (spec 036, FR-001, FR-005; fields from spec 034 FR-002):
  * username, password (masked until asked), address, expiry, the live TOTP block, the note and the
- * tags. Empty fields are not shown; every field copies (`usePasswordsCopy`), a stored value by its
- * field, so no value passes through here except what the masked value asks for.
+ * tags. Empty fields are not shown, the password neither, and a tab without any says so. Every
+ * field copies (`usePasswordsCopy`), a stored value by its field, so no value passes through here
+ * except what the masked value asks for.
  */
 import type { ItemDetail } from '@bindings/ItemDetail'
 
-defineProps<{
+const props = defineProps<{
   itemId: string
   detail: ItemDetail
 }>()
@@ -19,11 +20,33 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { revealAsync } = usePasswords()
 const { copyField, copyText } = usePasswordsCopy()
+
+const isEmpty = computed(
+  () =>
+    !props.detail.username &&
+    !props.detail.hasPassword &&
+    !props.detail.url &&
+    !props.detail.expiresAt &&
+    props.detail.otpState === 'none' &&
+    !props.detail.note &&
+    props.detail.tags.length === 0,
+)
 </script>
 
 <template>
   <div class="flex flex-col gap-4" data-testid="entry-view-details">
-    <SettingsGroup>
+    <p
+      v-if="isEmpty"
+      class="py-6 text-center text-sm text-muted-foreground"
+      data-testid="passwords-details-empty"
+    >
+      {{ t('passwords.tabs.detailsEmpty') }}
+    </p>
+    <SettingsGroup
+      v-if="
+        detail.username || detail.hasPassword || detail.url || detail.expiresAt
+      "
+    >
       <SettingsRow
         v-if="detail.username"
         :title="t('passwords.fields.username')"
@@ -64,7 +87,10 @@ const { copyField, copyText } = usePasswordsCopy()
           "
         />
       </SettingsRow>
-      <SettingsRow :title="t('passwords.fields.password')">
+      <SettingsRow
+        v-if="detail.hasPassword"
+        :title="t('passwords.fields.password')"
+      >
         <template v-if="detail.references.password.length" #below>
           <PasswordsReferenceValue
             :marks="detail.references.password"
@@ -78,11 +104,10 @@ const { copyField, copyText } = usePasswordsCopy()
           "
           :identity="`${itemId}:password`"
           kind="password"
-          :present="detail.hasPassword"
+          present
           :label="t('passwords.fields.password')"
         />
         <PasswordsCopyButton
-          v-if="detail.hasPassword"
           :label="t('passwords.fields.password')"
           data-testid="passwords-copy-password"
           @copy="

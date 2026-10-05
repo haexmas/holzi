@@ -1516,7 +1516,8 @@
       "label": "Sections of the entry",
       "details": "Details",
       "extra": "Extra",
-      "history": "History"
+      "history": "History",
+      "detailsEmpty": "No details yet. Use the pencil to add a username, a password and more."
     },
     "breadcrumb": {
       "label": "Path",

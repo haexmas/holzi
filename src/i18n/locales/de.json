@@ -1516,7 +1516,8 @@
       "label": "Bereiche des Eintrags",
       "details": "Details",
       "extra": "Extra",
-      "history": "Verlauf"
+      "history": "Verlauf",
+      "detailsEmpty": "Noch keine Angaben. Über den Stift fügst du Benutzername, Passwort und mehr hinzu."
     },
     "breadcrumb": {
       "label": "Pfad",
