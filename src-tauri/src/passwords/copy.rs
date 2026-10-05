@@ -435,7 +435,7 @@ pub fn copy(
         match target.kind {
             TargetKind::Item => {
                 // A deleted entry, or one in the trash, is skipped and counted.
-                let live = matches!(item_state(tx, &target.id)?, Some((_, false)));
+                let live = item_state(tx, &target.id)?.is_some_and(|s| !s.in_trash);
                 if !live {
                     report.skipped_missing += 1;
                     continue;

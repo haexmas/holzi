@@ -2,7 +2,7 @@
 /**
  * One entry in the list (spec 034, FR-001, FR-008, US1): icon, title (or the placeholder text of the
  * window for an entry without one), username, tag chips, a badge when it has expired and markers
- * for a TOTP and for passkeys. It holds a header only, never a secret. Spec 036 adds the context
+ * for a TOTP and for passkeys, and one for an entry that belongs to a holzi function (spec 038, Z14). It holds a header only, never a secret. Spec 036 adds the context
  * menu and the menu button (FR-018), the dimming of a cut entry (FR-013) and the one tab stop of
  * the list (arrow keys move it, FR-016).
  */
@@ -138,6 +138,17 @@ function onDragStart(event: DragEvent) {
         <span class="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
           <ShadcnBadge v-if="expired" variant="destructive">
             {{ t('passwords.expired') }}
+          </ShadcnBadge>
+          <ShadcnBadge
+            v-if="header.owner"
+            variant="secondary"
+            data-testid="passwords-owner-badge"
+          >
+            {{
+              t('passwords.owner', {
+                name: t(`passwords.owners.${header.owner}`),
+              })
+            }}
           </ShadcnBadge>
           <span
             v-if="header.hasTotp"

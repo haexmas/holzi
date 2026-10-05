@@ -25,7 +25,7 @@ impl PasswordsService {
         let (caller, grants) = (caller.clone(), grants.to_vec());
         self.db()
             .write(move |tx| {
-                let Some((tags, in_trash)) = items::item_state(tx, &item_id)? else {
+                let Some(state) = items::item_state(tx, &item_id)? else {
                     // Forbidden without a write grant, otherwise not found (Z3, Z5).
                     authorize_delete(
                         &caller,
@@ -33,21 +33,14 @@ impl PasswordsService {
                         &ItemState {
                             tags: &[],
                             in_trash: false,
+                            owner: None,
                         },
                     )
                     .map_err(HolziError::from)?;
                     return Err(HolziError::PasswordsNotFound.into());
                 };
-                authorize_delete(
-                    &caller,
-                    &grants,
-                    &ItemState {
-                        tags: &tags,
-                        in_trash,
-                    },
-                )
-                .map_err(HolziError::from)?;
-                if in_trash {
+                authorize_delete(&caller, &grants, &state.view()).map_err(HolziError::from)?;
+                if state.in_trash {
                     // Only the user reaches this far (Z13); a delete never removes for good.
                     return Err(HolziError::PasswordsNotFound.into());
                 }

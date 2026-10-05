@@ -169,6 +169,18 @@ async function removeOtpAsync() {
         >
           {{ title ?? t('passwords.untitled') }}
         </h1>
+        <ShadcnBadge
+          v-if="detail?.owner"
+          variant="secondary"
+          class="shrink-0"
+          data-testid="passwords-entry-owner"
+        >
+          {{
+            t('passwords.owner', {
+              name: t(`passwords.owners.${detail.owner}`),
+            })
+          }}
+        </ShadcnBadge>
         <UiButton
           v-if="detail"
           variant="outline"

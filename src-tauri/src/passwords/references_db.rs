@@ -15,7 +15,7 @@ use haex_crdt::rusqlite::params;
 use haex_crdt::CrdtTransaction;
 use zeroize::Zeroizing;
 
-use super::access::{authorize_read, Caller, Grant, ItemState};
+use super::access::{authorize_read, Caller, Grant};
 use super::items::item_state;
 use super::model::{ItemPatch, Patch};
 use super::model_references::{
@@ -83,18 +83,10 @@ pub fn raw_value(q: &mut impl Query, item_id: &str, kind: &RefKind) -> Result<Op
 }
 
 fn visible(q: &mut impl Query, reader: Reader<'_>, item_id: &str) -> Result<bool> {
-    let Some((tags, in_trash)) = item_state(q, item_id)? else {
+    let Some(state) = item_state(q, item_id)? else {
         return Ok(false);
     };
-    Ok(authorize_read(
-        reader.caller,
-        reader.grants,
-        &ItemState {
-            tags: &tags,
-            in_trash,
-        },
-    )
-    .is_ok())
+    Ok(authorize_read(reader.caller, reader.grants, &state.view()).is_ok())
 }
 
 /// Resolves the placeholders of `text`, the value of `field` of `item_id`, for `reader`. The outer

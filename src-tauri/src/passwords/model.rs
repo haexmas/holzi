@@ -55,6 +55,9 @@ pub struct ItemHeader {
     pub attachment_count: u32,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
+    /// The holzi function the entry belongs to (spec 038, rule Z14), `None` for the user's own; the
+    /// window marks such entries.
+    pub owner: Option<String>,
 }
 
 /// Whether the stored TOTP secret can produce a code. A value that arrived through sync or an

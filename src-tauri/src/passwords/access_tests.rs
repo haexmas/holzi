@@ -4,7 +4,8 @@
 
 use super::access::{
     authorize_create, authorize_delete, authorize_list, authorize_read, authorize_unassigned,
-    authorize_update, require_user, Caller, Denied, Grant, GrantAction, ItemState, ListView, Scope,
+    authorize_update, require_user, sees_owned, Caller, Denied, Grant, GrantAction, ItemState,
+    ListView, Scope,
 };
 
 fn names(list: &[&str]) -> Vec<String> {
@@ -23,6 +24,7 @@ fn item<'a>(tags: &'a [String]) -> ItemState<'a> {
     ItemState {
         tags,
         in_trash: false,
+        owner: None,
     }
 }
 
@@ -30,6 +32,15 @@ fn trashed<'a>(tags: &'a [String]) -> ItemState<'a> {
     ItemState {
         tags,
         in_trash: true,
+        owner: None,
+    }
+}
+
+fn owned<'a>(tags: &'a [String], owner: &'a str) -> ItemState<'a> {
+    ItemState {
+        tags,
+        in_trash: false,
+        owner: Some(owner),
     }
 }
 
@@ -455,4 +466,47 @@ fn everything_beyond_the_item_methods_is_for_the_user_only() {
     }
     assert_eq!(require_user(&Caller::BuiltinAgent), Err(Denied::Forbidden));
     assert_eq!(require_user(&Caller::User), Ok(()));
+}
+
+// Z14 (spec 038): an entry that belongs to a holzi function exists only for the user and that
+// function, whatever the grants say.
+#[test]
+fn an_owned_entry_exists_only_for_the_user_and_its_owner() {
+    let tags = names(&["s3"]);
+    let entry = owned(&tags, "storage");
+    let all = [Grant::new(GrantAction::ReadWrite, Scope::All)];
+    let mut strangers = outside_callers();
+    strangers.retain(|c| *c != Caller::Internal { feature: "test" });
+    strangers.push(Caller::Internal { feature: "other" });
+    for caller in &strangers {
+        assert_eq!(
+            authorize_read(caller, &all, &entry),
+            Err(Denied::NotFound),
+            "{caller:?}"
+        );
+        assert_eq!(
+            authorize_update(caller, &all, &entry, None),
+            Err(Denied::NotFound),
+            "{caller:?}"
+        );
+        assert_eq!(
+            authorize_delete(caller, &all, &entry),
+            Err(Denied::NotFound),
+            "{caller:?}"
+        );
+        assert_eq!(
+            authorize_read(caller, &[], &entry),
+            Err(Denied::Forbidden),
+            "without a grant Z3 answers first: {caller:?}"
+        );
+        assert!(!sees_owned(caller, Some("storage")), "{caller:?}");
+        assert!(sees_owned(caller, None), "{caller:?}");
+    }
+    let owner = Caller::Internal { feature: "storage" };
+    assert_eq!(authorize_read(&owner, &all, &entry), Ok(()));
+    assert_eq!(authorize_delete(&owner, &all, &entry), Ok(()));
+    assert_eq!(authorize_read(&Caller::User, &[], &entry), Ok(()));
+    assert!(sees_owned(&Caller::User, Some("storage")));
+    assert!(sees_owned(&owner, Some("storage")));
+    assert!(!sees_owned(&Caller::BuiltinAgent, Some("storage")));
 }
