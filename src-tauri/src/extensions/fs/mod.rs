@@ -311,5 +311,7 @@ pub fn check(
 }
 
 #[cfg(test)]
+mod test_support;
+#[cfg(test)]
 #[path = "fs_tests.rs"]
 mod tests;
