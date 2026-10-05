@@ -149,6 +149,7 @@ pub fn resolve_secret_item(
         let field = Field::Extra(entry.key.clone().unwrap_or_default());
         if let Ok(resolved) = resolve_value(q, reader, &id, field, &raw)? {
             kept.push(SecretKeyValue {
+                id: entry.id,
                 key: entry.key,
                 value: Some(resolved.to_string()),
             });
@@ -183,7 +184,8 @@ pub fn unix_now() -> u64 {
 pub fn secret_item(q: &mut impl Query, item_id: &str) -> Result<Option<SecretItem>> {
     let Some(mut item) = q.query_row(
         "SELECT id, title, username, password, note, url, expires_at, otp_secret, otp_digits, \
-                otp_period, otp_algorithm FROM haex_passwords_item_details WHERE id = ?1",
+                otp_period, otp_algorithm, icon, color, autofill_aliases, created_at, updated_at \
+         FROM haex_passwords_item_details WHERE id = ?1",
         params![item_id],
         |r| {
             Ok(SecretItem {
@@ -202,6 +204,11 @@ pub fn secret_item(q: &mut impl Query, item_id: &str) -> Result<Option<SecretIte
                     .get::<_, Option<i64>>(9)?
                     .and_then(|v| u32::try_from(v).ok()),
                 otp_algorithm: r.get(10)?,
+                icon: r.get(11)?,
+                color: r.get(12)?,
+                autofill_aliases: r.get(13)?,
+                created_at: r.get(14)?,
+                updated_at: r.get(15)?,
                 tags: Vec::new(),
                 key_values: Vec::new(),
             })
@@ -212,12 +219,14 @@ pub fn secret_item(q: &mut impl Query, item_id: &str) -> Result<Option<SecretIte
     };
     item.tags = super::tags::names_of_item(q, item_id)?;
     item.key_values = q.query_map(
-        "SELECT key, value FROM haex_passwords_item_key_values WHERE item_id = ?1 ORDER BY rowid",
+        "SELECT id, key, value FROM haex_passwords_item_key_values WHERE item_id = ?1 \
+         ORDER BY rowid",
         params![item_id],
         |r| {
             Ok(SecretKeyValue {
-                key: r.get(0)?,
-                value: r.get(1)?,
+                id: r.get(0)?,
+                key: r.get(1)?,
+                value: r.get(2)?,
             })
         },
     )?;

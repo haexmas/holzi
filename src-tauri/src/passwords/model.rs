@@ -486,6 +486,7 @@ pub struct TotpCode {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretKeyValue {
+    pub id: String,
     pub key: Option<String>,
     pub value: Option<String>,
 }
@@ -501,14 +502,20 @@ pub struct SecretItem {
     pub password: Option<String>,
     pub note: Option<String>,
     pub url: Option<String>,
+    pub icon: Option<String>,
+    pub color: Option<String>,
     pub expires_at: Option<String>,
     pub otp_secret: Option<String>,
     pub otp_digits: Option<u32>,
     pub otp_period: Option<u32>,
     pub otp_algorithm: Option<String>,
+    /// The stored JSON text of the autofill aliases.
+    pub autofill_aliases: Option<String>,
     /// All tag names of the entry (rule Z12).
     pub tags: Vec<String>,
     pub key_values: Vec<SecretKeyValue>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
 }
 
 impl fmt::Debug for SecretItem {
