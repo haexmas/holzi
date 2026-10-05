@@ -8,7 +8,7 @@ import { join } from 'node:path'
 export function deviceFiles(prefix = 'holzi-ext-files-'): {
   folder: string
   path: (name: string) => string
-  write: (name: string, text: string) => void
+  write: (name: string, content: string | Uint8Array) => void
   read: (name: string) => string
   remove: () => void
 } {
@@ -17,7 +17,7 @@ export function deviceFiles(prefix = 'holzi-ext-files-'): {
   return {
     folder,
     path,
-    write: (name, text) => writeFileSync(path(name), text),
+    write: (name, content) => writeFileSync(path(name), content),
     read: (name) => readFileSync(path(name), 'utf8'),
     remove: () => rmSync(folder, { recursive: true, force: true }),
   }
