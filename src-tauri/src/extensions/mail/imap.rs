@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use async_imap::types::Fetch;
 use futures::TryStreamExt;
-use imap_proto::types::{Address as ImapAddress, BodyStructure};
+use imap_proto::types::{Address as ImapAddress, BodyStructure, NameAttribute};
 use mail_parser::{parsers::MessageStream, HeaderValue};
 
 use super::connect::{imap_login, imap_logout, ImapSession};
@@ -27,6 +27,34 @@ macro_rules! with_session {
         imap_logout($session).await;
         result
     }};
+}
+
+/// The most envelopes one `fetchEnvelopes` returns; a larger range is refused, the extension asks
+/// in pages.
+pub const MAX_ENVELOPES: usize = 1000;
+
+/// A LIST attribute as IMAP writes it (`\Noselect`, `\Sent`, …), which the SDK compares against.
+fn name_attribute(attribute: &NameAttribute<'_>) -> String {
+    match attribute {
+        NameAttribute::NoInferiors => "\\Noinferiors".into(),
+        NameAttribute::NoSelect => "\\Noselect".into(),
+        NameAttribute::Marked => "\\Marked".into(),
+        NameAttribute::Unmarked => "\\Unmarked".into(),
+        NameAttribute::All => "\\All".into(),
+        NameAttribute::Archive => "\\Archive".into(),
+        NameAttribute::Drafts => "\\Drafts".into(),
+        NameAttribute::Flagged => "\\Flagged".into(),
+        NameAttribute::Junk => "\\Junk".into(),
+        NameAttribute::Sent => "\\Sent".into(),
+        NameAttribute::Trash => "\\Trash".into(),
+        NameAttribute::Extension(name) => name.to_string(),
+        other => format!("{other:?}"),
+    }
+}
+
+/// A Message-ID without its angle brackets, as the other answers give it.
+fn bare_id(id: String) -> String {
+    id.trim().trim_matches(['<', '>']).to_owned()
 }
 
 /// Formats UIDs as the comma-separated IMAP set used by commands.
@@ -75,7 +103,7 @@ async fn list_inner(
         .map(|name| MailboxInfo {
             name: name.name().to_owned(),
             delimiter: name.delimiter().map(str::to_owned),
-            flags: name.attributes().iter().map(|a| format!("{a:?}")).collect(),
+            flags: name.attributes().iter().map(name_attribute).collect(),
             exists: None,
             unseen: None,
             uid_validity: None,
@@ -109,6 +137,9 @@ async fn uid_set(
             if exists == 0 || *count == 0 {
                 return Ok(String::new());
             }
+            if *count as usize > MAX_ENVELOPES {
+                return Err(MailError::TooLarge);
+            }
             let start = exists - (*count).min(exists) + 1;
             let uids: HashSet<u32> = session
                 .uid_search(format!("{start}:{exists}"))
@@ -119,10 +150,23 @@ async fn uid_set(
             uid_list(&uids)
         }
         FetchRange::UidRange { start, end } if *start > 0 && start <= end => {
-            format!("{start}:{end}")
+            // The range may be sparse: the messages in it count, not its width.
+            let uids: HashSet<u32> = session
+                .uid_search(format!("UID {start}:{end}"))
+                .await
+                .map_err(imap_err)?;
+            if uids.len() > MAX_ENVELOPES {
+                return Err(MailError::TooLarge);
+            }
+            let mut uids: Vec<u32> = uids.into_iter().collect();
+            uids.sort_unstable();
+            uid_list(&uids)
         }
         FetchRange::UidRange { .. } => {
             return Err(MailError::Invalid("uid range not allowed".into()))
+        }
+        FetchRange::UidList { uids } if uids.len() > MAX_ENVELOPES => {
+            return Err(MailError::TooLarge)
         }
         FetchRange::UidList { uids } => uid_list(uids),
     })
@@ -159,7 +203,9 @@ pub async fn fetch_envelopes(
     })
 }
 
-/// The whole message `uid`, at most `max_bytes` long; its size is asked for first.
+/// The whole message `uid`, at most `max_bytes` long; its size is asked for first, and the body is
+/// fetched only up to one byte past the limit, so a server that reported a wrong size cannot send
+/// more.
 async fn fetch_body(
     session: &mut ImapSession,
     mailbox: &str,
@@ -186,7 +232,10 @@ async fn fetch_body(
     let fetches: Vec<Fetch> = session
         .uid_fetch(
             uid.to_string(),
-            "(UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[])",
+            format!(
+                "(UID FLAGS INTERNALDATE RFC822.SIZE BODY.PEEK[]<0.{}>)",
+                max_bytes.saturating_add(1)
+            ),
         )
         .await
         .map_err(imap_err)?
@@ -287,9 +336,17 @@ pub async fn move_messages(
     let set = uid_list(uids);
     with_session!(config, |session| {
         async {
+            let capabilities = session.capabilities().await.map_err(imap_err)?;
             session.select(source).await.map_err(imap_err)?;
-            if session.uid_mv(&set, destination).await.is_ok() {
-                return Ok(());
+            if capabilities.has_str("MOVE") {
+                return session.uid_mv(&set, destination).await.map_err(imap_err);
+            }
+            // Without UID EXPUNGE (UIDPLUS) the copy could not be undone in the source: the
+            // messages would end up in both mailboxes.
+            if !capabilities.has_str("UIDPLUS") {
+                return Err(MailError::Imap(
+                    "the server can neither MOVE nor UID EXPUNGE".into(),
+                ));
             }
             session
                 .uid_copy(&set, destination)
@@ -394,8 +451,8 @@ fn envelope_of(fetch: &Fetch) -> MessageEnvelope {
         from: addresses(envelope.and_then(|e| e.from.as_ref())),
         to: addresses(envelope.and_then(|e| e.to.as_ref())),
         cc: addresses(envelope.and_then(|e| e.cc.as_ref())),
-        message_id: text(envelope.and_then(|e| e.message_id.as_ref())),
-        in_reply_to: text(envelope.and_then(|e| e.in_reply_to.as_ref())),
+        message_id: text(envelope.and_then(|e| e.message_id.as_ref())).map(bare_id),
+        in_reply_to: text(envelope.and_then(|e| e.in_reply_to.as_ref())).map(bare_id),
         references: parsing::references_header(fetch),
         size: fetch.size,
         has_attachments: fetch.bodystructure().is_some_and(has_attachments),

@@ -7,9 +7,12 @@
 //! asked every `intervalSeconds` instead. Only messages that arrive after the start count. The
 //! credentials come with the start call and stay in memory for as long as the watch runs.
 //! A watch ends when it is stopped, replaced, with its extension's last frame, when the extension
-//! is disabled or removed, and with the process (the vault's end).
+//! is disabled or removed (also on another device), when its `poll` permission goes
+//! ([`end_revoked`]), when the server refuses the login (a wrong password is not tried again and
+//! again until the account is locked), and with the process (the vault's end).
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -18,10 +21,12 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use super::connect::{imap_login, ImapSession};
-use super::{check_mailbox, MailError, ServerConfig};
+use super::{check_mailbox, decision, MailError, ServerConfig};
 use crate::extensions::bridge::dispatch::Emit;
 use crate::extensions::bridge::events::emit_to_frames;
 use crate::extensions::host::ExtensionHost;
+use crate::extensions::permissions::{Action, Decision};
+use crate::vault_gate::VaultDb;
 
 /// The SDK's event for new messages.
 pub const NEW_MESSAGES: &str = "mail:new-messages";
@@ -43,34 +48,71 @@ const WATCH_OPERATION_TIMEOUT: Duration = Duration::from_secs(60);
 
 type Key = (Uuid, String, String);
 
+/// One running watch: what ends it, and the server its permission names.
+struct Watch {
+    id: u64,
+    stop: CancellationToken,
+    host: String,
+    port: u16,
+}
+
 /// The running watches of this process.
 #[derive(Default)]
 pub struct MailWatches {
-    running: Mutex<HashMap<Key, CancellationToken>>,
+    running: Mutex<HashMap<Key, Watch>>,
+    next_id: AtomicU64,
 }
 
 impl MailWatches {
     /// Locks the registry while recovering from a poisoned mutex.
-    fn lock(&self) -> MutexGuard<'_, HashMap<Key, CancellationToken>> {
+    fn lock(&self) -> MutexGuard<'_, HashMap<Key, Watch>> {
         self.running.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Ends the watch of `account`/`mailbox` of `extension_id`; `false` if there was none.
     pub fn stop(&self, extension_id: Uuid, account: &str, mailbox: &str) -> bool {
         let key = (extension_id, account.to_owned(), mailbox.to_owned());
-        self.lock().remove(&key).map(|t| t.cancel()).is_some()
+        self.lock().remove(&key).map(|w| w.stop.cancel()).is_some()
     }
 
     /// Ends every watch of `extension_id`.
     pub fn end_all(&self, extension_id: Uuid) {
-        self.lock().retain(|(ext, _, _), token| {
-            if *ext == extension_id {
-                token.cancel();
+        self.end_where(|ext, _, _| ext == extension_id);
+    }
+
+    /// Ends every watch for which `end(extension, host, port)` holds.
+    fn end_where(&self, end: impl Fn(Uuid, &str, u16) -> bool) {
+        self.lock().retain(|(ext, _, _), watch| {
+            if end(*ext, &watch.host, watch.port) {
+                watch.stop.cancel();
                 false
             } else {
                 true
             }
         });
+    }
+
+    /// Takes the watch `key` out of the registry if it is still the one with `id` (not replaced).
+    fn finish(&self, key: &Key, id: u64) {
+        let mut running = self.lock();
+        if running.get(key).is_some_and(|w| w.id == id) {
+            running.remove(key);
+        }
+    }
+
+    /// Registers a watch of `extension_id` that runs nothing, for tests of when watches end.
+    #[cfg(test)]
+    pub fn insert_for_test(&self, extension_id: Uuid) {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        self.lock().insert(
+            (extension_id, "test".into(), format!("box-{id}")),
+            Watch {
+                id,
+                stop: CancellationToken::new(),
+                host: "imap.example.org".into(),
+                port: 993,
+            },
+        );
     }
 
     /// Counts the watches currently registered for an extension.
@@ -129,6 +171,8 @@ struct Report {
     extension_id: Uuid,
     account: String,
     mailbox: String,
+    /// The watch's entry in the registry.
+    id: u64,
 }
 
 impl Report {
@@ -223,6 +267,16 @@ async fn run(config: ServerConfig, report: Report, interval: Duration, stop: Can
         };
         match outcome {
             Ok(()) => return,
+            Err(MailError::Auth) => {
+                log::warn!("mail watch of an extension: the server refused the login; it ends");
+                let key = (
+                    report.extension_id,
+                    report.account.clone(),
+                    report.mailbox.clone(),
+                );
+                report.host.mail_watches.finish(&key, report.id);
+                return;
+            }
             Err(error) => log::warn!("mail watch of an extension: {error}; trying again"),
         }
         tokio::select! {
@@ -251,6 +305,7 @@ pub fn start(
     let watches = &host.mail_watches;
     let key = (extension_id, account.clone(), mailbox.clone());
     let stop = CancellationToken::new();
+    let id = watches.next_id.fetch_add(1, Ordering::Relaxed);
     {
         let mut running = watches.lock();
         let replacing = running.contains_key(&key);
@@ -263,8 +318,14 @@ pub fn start(
         {
             return Err(MailError::TooLarge);
         }
-        if let Some(old) = running.insert(key, stop.clone()) {
-            old.cancel();
+        let watch = Watch {
+            id,
+            stop: stop.clone(),
+            host: config.host.to_ascii_lowercase(),
+            port: config.port,
+        };
+        if let Some(old) = running.insert(key, watch) {
+            old.stop.cancel();
         }
     }
     let report = Report {
@@ -273,6 +334,7 @@ pub fn start(
         extension_id,
         account,
         mailbox,
+        id,
     };
     let runtime = tokio::runtime::Handle::try_current()
         .map_err(|_| MailError::Invalid("no runtime for the watch".into()))?;
@@ -283,4 +345,30 @@ pub fn start(
         stop,
     ));
     Ok(())
+}
+
+/// Ends every watch whose `poll` permission for its server no longer allows it (FR-020: a revoked
+/// permission applies at once). Called wherever the file watches are checked again
+/// (`fs::end_revoked_watches`); a failed read of the permissions ends nothing.
+pub fn end_revoked(db: &VaultDb, host: &ExtensionHost, device: Uuid) {
+    let servers: Vec<(Uuid, String, u16)> = host
+        .mail_watches
+        .lock()
+        .iter()
+        .map(|((ext, _, _), w)| (*ext, w.host.clone(), w.port))
+        .collect();
+    let revoked: HashSet<(Uuid, String, u16)> = servers
+        .into_iter()
+        .filter(|(ext, server, port)| {
+            matches!(
+                decision(db, host, *ext, device, &Action::Poll, server, *port),
+                Ok(Decision::Deny | Decision::Prompt)
+            )
+        })
+        .collect();
+    if revoked.is_empty() {
+        return;
+    }
+    host.mail_watches
+        .end_where(|ext, server, port| revoked.contains(&(ext, server.to_owned(), port)));
 }

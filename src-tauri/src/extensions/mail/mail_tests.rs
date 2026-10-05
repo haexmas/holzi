@@ -32,6 +32,18 @@ fn mailboxes_envelopes_messages_and_attachments_come_from_the_granted_server() {
         (inbox["exists"].clone(), inbox["unseen"].clone()),
         (json!(2), json!(1))
     );
+    assert_eq!(inbox["flags"], json!(["\\HasNoChildren"]));
+    let archive = boxes
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["name"] == "Archive")
+        .unwrap();
+    assert_eq!(
+        archive["flags"],
+        json!(["\\HasNoChildren", "\\Archive"]),
+        "attributes as IMAP writes them, so the SDK finds the special-use mailboxes"
+    );
 
     let envelopes = s
         .call(
@@ -48,6 +60,11 @@ fn mailboxes_envelopes_messages_and_attachments_come_from_the_granted_server() {
         json!({ "name": "Anna", "email": "anna@example.org" })
     );
     assert_eq!(second["references"], json!(["a@x", "b@x"]));
+    assert_eq!(
+        (second["messageId"].clone(), second["inReplyTo"].clone()),
+        (json!("second@example.org"), json!("parent@example.org")),
+        "without angle brackets, as in fetchMessage"
+    );
     assert_eq!(second["hasAttachments"], true);
     assert_eq!(
         envelopes.iter().find(|e| e["uid"] == 7).unwrap()["hasAttachments"],
@@ -138,7 +155,12 @@ fn flags_moves_and_appends_change_the_server() {
     let state = s.server.lock().unwrap();
     let appended = state.boxes["Archive"].last().unwrap();
     assert_eq!(appended.flags, ["\\Draft"]);
-    assert!(String::from_utf8_lossy(&appended.raw).contains("Subject: draft"));
+    let raw = String::from_utf8_lossy(&appended.raw);
+    assert!(raw.contains("Subject: draft"));
+    assert!(
+        raw.contains("Bcc: hidden@example.org"),
+        "a draft keeps its Bcc recipients"
+    );
 }
 
 #[test]
@@ -150,7 +172,11 @@ fn a_message_is_sent_to_every_recipient_and_built_without_hidden_headers() {
             json!({ "smtp": s.smtp(), "message": outgoing("hello") }),
         )
         .unwrap();
-    assert!(!id.as_str().unwrap().is_empty());
+    let id = id.as_str().unwrap();
+    assert!(
+        id.ends_with("@example.org") && !id.contains(['<', '>']),
+        "a Message-ID in the sender's domain, not with the device's name: {id}"
+    );
     let state = s.server.lock().unwrap();
     let (recipients, data) = state.sent.last().unwrap();
     assert_eq!(recipients, &["ben@example.org", "hidden@example.org"]);

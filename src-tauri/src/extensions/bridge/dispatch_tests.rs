@@ -131,9 +131,10 @@ fn unlisted_methods_are_not_supported_and_later_ones_not_available() {
     ] {
         assert_eq!(code(call(&s.ctx, method, &Value::Null)), 8000, "{method}");
     }
-    for method in ["extension_remote_storage_list"] {
-        assert_eq!(code(call(&s.ctx, method, &Value::Null)), 8001, "{method}");
-    }
+    assert_eq!(
+        code(call(&s.ctx, "extension_remote_storage_list", &Value::Null)),
+        8001
+    );
 }
 
 #[test]

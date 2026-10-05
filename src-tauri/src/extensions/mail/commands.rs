@@ -15,7 +15,7 @@ use crate::extensions::bridge::blocking::block_on;
 use crate::extensions::bridge::dispatch::CallContext;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::permissions::Action;
-use crate::extensions::sql::exec::limits_of;
+use crate::extensions::sql::exec::{limits_of, Limits};
 
 pub const MODULE: &str = module_path!();
 
@@ -51,9 +51,16 @@ fn run<T>(work: impl Future<Output = Result<T, MailError>>) -> Result<T, BridgeE
     .map_err(Into::into)
 }
 
-/// Serializes an operation result into the bridge's JSON response value.
-fn to_json<T: serde::Serialize>(value: T) -> Result<Value, BridgeError> {
-    serde_json::to_value(value)
+/// Serializes an operation result into the bridge's JSON response value, refused (7000) when it
+/// is larger than the extension's response limit: a mailbox list, many envelopes, or a message
+/// whose text and HTML body both come along.
+fn to_json<T: serde::Serialize>(ctx: &CallContext, value: T) -> Result<Value, BridgeError> {
+    let bytes = serde_json::to_vec(&value)
+        .map_err(|_| BridgeError::new(ExtensionErrorCode::Web, "answer not understood"))?;
+    if bytes.len() as u64 > limits(ctx)?.max_response_bytes {
+        return Err(MailError::TooLarge.into());
+    }
+    serde_json::from_slice(&bytes)
         .map_err(|_| BridgeError::new(ExtensionErrorCode::Web, "answer not understood"))
 }
 
@@ -64,14 +71,17 @@ fn imap_server(ctx: &CallContext, params: &Value) -> Result<ServerConfig, Bridge
     Ok(config)
 }
 
+/// The limits of the calling extension.
+fn limits(ctx: &CallContext) -> Result<Limits, BridgeError> {
+    let extension_id = ctx.session.extension_id;
+    ctx.db
+        .read_blocking(move |q| limits_of(q, extension_id))
+        .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))
+}
+
 /// The largest message the extension's answer can hold (attachments travel as base64).
 fn max_bytes(ctx: &CallContext) -> Result<usize, BridgeError> {
-    let extension_id = ctx.session.extension_id;
-    let limits = ctx
-        .db
-        .read_blocking(move |q| limits_of(q, extension_id))
-        .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))?;
-    Ok(usize::try_from(limits.max_response_bytes / 4 * 3).unwrap_or(usize::MAX))
+    Ok(usize::try_from(limits(ctx)?.max_response_bytes / 4 * 3).unwrap_or(usize::MAX))
 }
 
 /// `{imap, reference?, pattern?, includeStatus?}` → `MailboxInfo[]`.
@@ -80,12 +90,15 @@ pub fn list_mailboxes(ctx: &CallContext, params: &Value) -> Result<Value, Bridge
     let reference: Option<String> = optional(params, "reference")?;
     let pattern: Option<String> = optional(params, "pattern")?;
     let status = optional::<bool>(params, "includeStatus")?.unwrap_or(false);
-    to_json(run(imap::list_mailboxes(
-        &config,
-        reference.as_deref(),
-        pattern.as_deref(),
-        status,
-    ))?)
+    to_json(
+        ctx,
+        run(imap::list_mailboxes(
+            &config,
+            reference.as_deref(),
+            pattern.as_deref(),
+            status,
+        ))?,
+    )
 }
 
 /// `{imap, mailbox, range}` → `MessageEnvelope[]`.
@@ -93,7 +106,7 @@ pub fn fetch_envelopes(ctx: &CallContext, params: &Value) -> Result<Value, Bridg
     let config = imap_server(ctx, params)?;
     let mailbox: String = field(params, "mailbox")?;
     let range: FetchRange = field(params, "range")?;
-    to_json(run(imap::fetch_envelopes(&config, &mailbox, &range))?)
+    to_json(ctx, run(imap::fetch_envelopes(&config, &mailbox, &range))?)
 }
 
 /// `{imap, mailbox, uid}` → `MailMessage`.
@@ -102,7 +115,7 @@ pub fn fetch_message(ctx: &CallContext, params: &Value) -> Result<Value, BridgeE
     let mailbox: String = field(params, "mailbox")?;
     let uid: u32 = field(params, "uid")?;
     let max = max_bytes(ctx)?;
-    to_json(run(imap::fetch_message(&config, &mailbox, uid, max))?)
+    to_json(ctx, run(imap::fetch_message(&config, &mailbox, uid, max))?)
 }
 
 /// `{imap, mailbox, uid, partIndex}` → the attachment as base64.

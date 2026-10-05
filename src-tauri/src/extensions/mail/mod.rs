@@ -22,15 +22,18 @@ pub mod watch;
 use std::net::IpAddr;
 
 use serde_json::json;
+use uuid::Uuid;
 
 pub use types::*;
 
 use crate::extensions::bridge::dispatch::CallContext;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
+use crate::extensions::host::ExtensionHost;
 use crate::extensions::permissions::store::candidates;
 use crate::extensions::permissions::{
     evaluate, Action, Decision, PermissionKind, PermissionRequest, RequestTarget,
 };
+use crate::vault_gate::VaultDb;
 
 /// What went wrong talking to a mail server. The texts name no credential and no address of
 /// a message.
@@ -123,6 +126,37 @@ pub fn check_mailbox(name: &str) -> Result<(), MailError> {
     Ok(())
 }
 
+/// What the permissions of `extension_id` on `device` say to `action` on `server:port`, the held
+/// decisions of this process included.
+pub fn decision(
+    db: &VaultDb,
+    host: &ExtensionHost,
+    extension_id: Uuid,
+    device: Uuid,
+    action: &Action,
+    server: &str,
+    port: u16,
+) -> Result<Decision, BridgeError> {
+    let mut grants = db
+        .read_blocking(move |q| {
+            candidates(q, extension_id, PermissionKind::Mail, device).map_err(Into::into)
+        })
+        .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))?;
+    grants.extend(
+        host.permissions
+            .temporary(extension_id, PermissionKind::Mail),
+    );
+    let request = PermissionRequest {
+        kind: PermissionKind::Mail,
+        action: action.clone(),
+        target: RequestTarget::MailServer {
+            host: server.to_ascii_lowercase(),
+            port,
+        },
+    };
+    Ok(evaluate(&grants, &request, device))
+}
+
 /// Allowed, or the 1002/1004 answer for `action` on `host:port` (FR-056).
 pub fn check_permission(
     ctx: &CallContext,
@@ -130,32 +164,21 @@ pub fn check_permission(
     host: &str,
     port: u16,
 ) -> Result<(), BridgeError> {
-    let (extension_id, device) = (ctx.session.extension_id, ctx.device);
-    let mut grants = ctx
-        .db
-        .read_blocking(move |q| {
-            candidates(q, extension_id, PermissionKind::Mail, device).map_err(Into::into)
-        })
-        .map_err(|_| BridgeError::new(ExtensionErrorCode::Database, "database unavailable"))?;
-    grants.extend(
-        ctx.host
-            .permissions
-            .temporary(extension_id, PermissionKind::Mail),
-    );
-    let host = host.to_ascii_lowercase();
-    let request = PermissionRequest {
-        kind: PermissionKind::Mail,
-        action: action.clone(),
-        target: RequestTarget::MailServer {
-            host: host.clone(),
-            port,
-        },
-    };
-    let code = match evaluate(&grants, &request, device) {
+    let decided = decision(
+        &ctx.db,
+        &ctx.host,
+        ctx.session.extension_id,
+        ctx.device,
+        &action,
+        host,
+        port,
+    )?;
+    let code = match decided {
         Decision::Allow => return Ok(()),
         Decision::Deny => ExtensionErrorCode::PermissionDenied,
         Decision::Prompt => ExtensionErrorCode::PermissionPromptRequired,
     };
+    let host = host.to_ascii_lowercase();
     Err(
         BridgeError::new(code, "permission required").with_details(json!({
             "resourceType": "mail",

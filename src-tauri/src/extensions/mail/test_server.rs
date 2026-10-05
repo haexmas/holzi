@@ -184,7 +184,7 @@ fn envelope_fetch(seq: usize, m: &Stored) -> Vec<u8> {
     let flags = m.flags.join(" ");
     format!(
         "* {seq} FETCH (UID {uid} FLAGS ({flags}) INTERNALDATE \"01-Jan-2026 10:00:00 +0000\" RFC822.SIZE {size} \
-         ENVELOPE (NIL {subj} ((\"Anna\" NIL \"anna\" \"example.org\")) NIL NIL ((\"Ben\" NIL \"ben\" \"example.org\")) NIL NIL NIL \"<{subject}@example.org>\") \
+         ENVELOPE (NIL {subj} ((\"Anna\" NIL \"anna\" \"example.org\")) NIL NIL ((\"Ben\" NIL \"ben\" \"example.org\")) NIL NIL \"<parent@example.org>\" \"<{subject}@example.org>\") \
          BODYSTRUCTURE {structure} BODY[HEADER.FIELDS (MESSAGE-ID IN-REPLY-TO REFERENCES)] {{{len}}}\r\n{header})\r\n",
         uid = m.uid,
         size = m.raw.len(),
@@ -258,8 +258,11 @@ async fn imap_session(stream: TcpStream, state: Shared) {
             }
             "LIST" => {
                 for name in state.lock().unwrap().boxes.keys() {
+                    // A special-use mailbox (RFC 6154) carries its role.
+                    let role = if name == "Archive" { " \\Archive" } else { "" };
                     out.extend(
-                        format!("* LIST (\\HasNoChildren) \"/\" {}\r\n", quoted(name)).into_bytes(),
+                        format!("* LIST (\\HasNoChildren{role}) \"/\" {}\r\n", quoted(name))
+                            .into_bytes(),
                     );
                 }
             }

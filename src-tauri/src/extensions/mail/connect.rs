@@ -142,11 +142,15 @@ pub async fn imap_login(config: &ServerConfig) -> Result<ImapSession, MailError>
             async_imap::Client::new(MailStream::Tls(Box::new(tls(&config.host, tcp).await?)))
         }
     };
-    // The login runs unencrypted only towards this device; `check_server` made sure.
+    // The login runs unencrypted only towards this device; `check_server` made sure. Only a NO or
+    // BAD answer is a refused login; a lost connection may work the next time.
     client
         .login(&config.username, &config.password)
         .await
-        .map_err(|_| MailError::Auth)
+        .map_err(|(error, _)| match error {
+            async_imap::error::Error::No(_) | async_imap::error::Error::Bad(_) => MailError::Auth,
+            _ => MailError::Connect,
+        })
 }
 
 /// Best effort: a failed logout changes nothing for the caller.

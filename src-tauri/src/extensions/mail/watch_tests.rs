@@ -7,7 +7,8 @@ use serde_json::{json, Value};
 
 use super::test_server::deliver;
 use super::test_setup::{setup, Setup};
-use super::watch::NEW_MESSAGES;
+use super::watch::{end_revoked, NEW_MESSAGES};
+use crate::extensions::commands::permissions::{set, PermissionSetArgs};
 
 fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
     let started = Instant::now();
@@ -116,4 +117,55 @@ fn a_stopped_watch_reports_nothing_and_a_second_stop_finds_none() {
     );
     s.ctx.host.mail_watches.end_all(s.ctx.session.extension_id);
     assert_eq!(s.ctx.host.mail_watches.count(s.ctx.session.extension_id), 0);
+}
+
+#[test]
+fn a_refused_login_ends_the_watch_instead_of_trying_again() {
+    let s = polling();
+    let mut imap = s.imap();
+    imap["password"] = json!("falsch-123");
+    s.call(
+        "extension_mail_start_watch",
+        json!({ "accountId": "work", "mailboxName": "INBOX", "intervalSeconds": 1, "imap": imap }),
+    )
+    .unwrap();
+    wait_until("the watch to end", || {
+        s.ctx.host.mail_watches.count(s.ctx.session.extension_id) == 0
+    });
+    assert_eq!(s.commands_with("LOGIN"), 1, "the login was tried once");
+}
+
+#[test]
+fn a_revoked_poll_permission_ends_the_watch() {
+    let s = setup();
+    s.grant("poll", "127.0.0.1");
+    s.watch("INBOX").unwrap();
+    wait_until("IDLE", || s.commands_with("IDLE") > 0);
+    end_revoked(&s.ctx.db, &s.ctx.host, s.ctx.device);
+    assert_eq!(
+        s.ctx.host.mail_watches.count(s.ctx.session.extension_id),
+        1,
+        "still allowed"
+    );
+
+    set(
+        &s.ctx.db,
+        s.ctx.device,
+        PermissionSetArgs {
+            extension_id: s.ctx.session.extension_id.to_string(),
+            kind: "mail".into(),
+            action: "poll".into(),
+            target: "127.0.0.1".into(),
+            status: "denied".into(),
+            all_devices: false,
+            replaces: None,
+        },
+        3,
+    )
+    .unwrap();
+    end_revoked(&s.ctx.db, &s.ctx.host, s.ctx.device);
+    assert_eq!(s.ctx.host.mail_watches.count(s.ctx.session.extension_id), 0);
+    deliver(&s.server, "INBOX", "late");
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(s.recorded.heard(NEW_MESSAGES).is_empty());
 }

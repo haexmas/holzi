@@ -106,13 +106,22 @@ fn body(message: &OutgoingMessage) -> Result<MultiPart, MailError> {
     Ok(mixed)
 }
 
-/// The message as `lettre` sends it.
-fn build(message: &OutgoingMessage) -> Result<LettreMessage, MailError> {
+/// A new Message-ID in the sender's domain; the device's host name never leaves it.
+fn new_message_id(from: &Mailbox) -> String {
+    format!("<{}@{}>", uuid::Uuid::new_v4(), from.email.domain())
+}
+
+/// The message as `lettre` sends it; `keep_bcc` for a draft, whose Bcc must survive APPEND.
+fn build(message: &OutgoingMessage, keep_bcc: bool) -> Result<LettreMessage, MailError> {
+    let from = mailbox(&message.from)?;
     let mut builder = LettreMessage::builder()
-        // A new Message-ID with this device's host name; the sender gets it back.
-        .message_id(None)
-        .from(mailbox(&message.from)?)
+        // The sender gets the new Message-ID back.
+        .message_id(Some(new_message_id(&from)))
+        .from(from)
         .subject(single_line(&message.subject)?);
+    if keep_bcc {
+        builder = builder.keep_bcc();
+    }
     for to in &message.to {
         builder = builder.to(mailbox(to)?);
     }
@@ -143,7 +152,7 @@ fn build(message: &OutgoingMessage) -> Result<LettreMessage, MailError> {
 
 /// The RFC 822 bytes of a message, without sending it (a draft for APPEND).
 pub fn build_rfc822(message: &OutgoingMessage) -> Result<Vec<u8>, MailError> {
-    Ok(build(message)?.formatted())
+    Ok(build(message, true)?.formatted())
 }
 
 /// Builds the SMTP transport with the configured security and timeout.
@@ -174,7 +183,7 @@ fn transport(config: &ServerConfig) -> Result<AsyncSmtpTransport<Tokio1Executor>
 
 /// Sends a message; returns its Message-ID without angle brackets.
 pub async fn send(config: &ServerConfig, message: &OutgoingMessage) -> Result<String, MailError> {
-    let built = build(message)?;
+    let built = build(message, false)?;
     let id = built
         .headers()
         .get_raw("Message-ID")
