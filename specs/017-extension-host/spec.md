@@ -704,7 +704,11 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   Installationsdialog „für alle Geräte“; auf anderen Geräten stehen sie sonst auf „fragen“. Eine Berechtigung, die nicht erklärt war, MUSS
   zur Laufzeit erfragt und in der Anfrage als „nicht erklärt“ gekennzeichnet werden.
 - **FR-017**: Bei mehreren passenden Berechtigungen MUSS „verweigert“ vor „erteilt“ und
-  „erteilt“ vor „fragen“ gelten. „Lesen und Schreiben“ deckt „Lesen“.
+  „erteilt“ vor „fragen“ gelten. „Lesen und Schreiben“ deckt „Lesen“. Bei Passwörtern gilt das je
+  Tag: Ein verweigertes Tag nimmt die Freigabe für dasselbe Tag und verbirgt seine Einträge vor
+  einer Freigabe für `*`; ein Eintrag, der zusätzlich ein erteiltes Tag trägt, bleibt über dieses
+  sichtbar (eine Freigabe für `private` zeigt alle Einträge mit `private`, auch wenn sie zusätzlich
+  das verweigerte `calendar` tragen).
 - **FR-018**: Eine Anfrage MUSS Erweiterung, Art, Aktion, Ziel und die Kennzeichnung aus
   FR-016 zeigen und „Erlauben“ und „Verweigern“ mit der Wahl „Merken“ bieten. Gemerkte
   Entscheidungen MÜSSEN Vault-Daten sein und vault-weit gelten, außer bei gerätebezogenen

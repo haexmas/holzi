@@ -58,6 +58,7 @@ async function confirmAsync() {
         v-model:inline="inlineReferences"
         :item-ids="itemIds"
       />
+      <PasswordsPasskeyDeleteNote :item-ids="itemIds" />
       <ShadcnAlertDialogFooter>
         <ShadcnAlertDialogCancel>{{
           t('passwords.cancel')

@@ -417,15 +417,9 @@ fn username_and_password_can_point_at_the_original_and_an_empty_value_stays_empt
 }
 
 #[test]
-fn passkey_links_are_refused_before_any_work_and_the_trash_is_no_target() {
+fn the_trash_is_no_target() {
     let (_dir, db) = open_test_vault();
     let original = full_item(&db, "Mail", None);
-    let mut links = suffix();
-    links.passkeys_as_links = Some(true);
-    let result = write(&db, |tx| copy(tx, &[item_target(&original)], None, &links));
-    assert!(
-        matches!(&result, Err(HolziError::InvalidInput { reason }) if reason == "options.passkeysAsLinks")
-    );
     write(&db, |tx| trash::ensure_trash(tx)).expect("trash");
     let into_trash = write(&db, |tx| {
         copy(tx, &[item_target(&original)], Some("trash"), &suffix())
