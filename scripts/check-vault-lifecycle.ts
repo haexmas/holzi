@@ -169,8 +169,12 @@ function fakeDom() {
   }
 }
 
-function loadIndexPage(dom: ReturnType<typeof fakeDom>) {
+function loadIndexPage(
+  dom: ReturnType<typeof fakeDom>,
+  activeName: string | null = null,
+) {
   let synced = 0
+  const navigations: string[] = []
   const store = {
     instances: [] as unknown[],
     lastError: null as string | null,
@@ -186,12 +190,26 @@ function loadIndexPage(dom: ReturnType<typeof fakeDom>) {
     ['onSelect'],
     {
       useInstancesStore: () => store,
+      useInstance: () => ({
+        activeNameAsync: async () => activeName,
+      }),
+      navigateTo: (path: string) => {
+        navigations.push(path)
+      },
       window: dom.window,
       document: dom.document,
     },
   )
-  return { ...page, syncCount: () => synced }
+  return { ...page, syncCount: () => synced, navigations }
 }
+
+test('pages/index.vue recovers the active vault after a frontend reload', async () => {
+  const page = loadIndexPage(fakeDom(), 'vault-a')
+
+  await page.mount()
+
+  assert.deepEqual(page.navigations, ['/workspace/vault-a'])
+})
 
 test('pages/index.vue re-syncs on window focus and removes the listener on unmount', async () => {
   const dom = fakeDom()

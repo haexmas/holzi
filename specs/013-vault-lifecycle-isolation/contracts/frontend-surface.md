@@ -62,8 +62,16 @@ Keys live under `errors.*` in `src/i18n/locales/de.json` and `en.json`. The unlo
 unlock sheet opens, so a vault created by another app process appears without a restart. The
 in-process `instance-list-changed` listener stays for the local case.
 
+## Frontend reload recovery
+
+When the webview reloads while Rust still holds an active vault, `pages/index.vue` queries the
+app-scoped `active_instance_name` command and navigates back to that vault's workspace. This keeps
+the single-vault-per-process rule intact while preventing a second unlock attempt from being
+misleadingly shown as a blocked vault.
+
 ## What is deliberately not built
 
-- No epoch header, no scoped stores, no per-store reset: a new vault always runs in a new process
-  with a fresh page (spec assumption on relaunch).
+- No epoch header, no scoped stores, no per-store reset: a new vault still runs in a new process;
+  a webview reload in the existing process recovers its active workspace through the app-scoped
+  lifecycle query above.
 - No frontend timer for the grace period: the backend owns all deadlines.

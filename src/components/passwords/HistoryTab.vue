@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
  * The tab Verlauf of an entry (spec 036, US2, FR-007 to FR-009; spec 034 US4, FR-017, FR-018): the
- * states as a timeline next to (or, in a narrow window, above) the chosen state; the newest is
- * chosen first. "Restore" asks for confirmation, makes the chosen state current and keeps the
- * state it replaces. Restoring checks that the entry has not changed meanwhile. Secrets of a state
- * hide again when the state changes and when the tab is left (`active` turns false).
+ * states in a dropdown above the chosen state; the newest is chosen first. "Restore" asks for
+ * confirmation, makes the chosen state current and keeps the state it replaces. Restoring checks
+ * that the entry has not changed meanwhile. Secrets of a state hide again when the state changes
+ * and when the tab is left (`active` turns false).
  */
 import { toast } from 'vue-sonner'
 import type { SnapshotHeader } from '@bindings/SnapshotHeader'
@@ -116,7 +116,7 @@ onMounted(loadAsync)
       >
         {{ t('passwords.history.nothingOlder') }}
       </p>
-      <div class="grid gap-4 @2xl:grid-cols-[15rem_minmax(0,1fr)]">
+      <div class="flex flex-col gap-4">
         <PasswordsHistoryTimeline
           :states="states"
           :selected-id="selected?.id ?? null"

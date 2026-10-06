@@ -69,8 +69,8 @@ use extensions::commands::permissions::{
 };
 use hardware::get_hardware_info;
 use instances::{
-    cleanup_orphans_on_startup, close_instance, create_instance, list_instances, open_instance,
-    paths::get_app_local_data, ProcessPresence,
+    active_instance_name, cleanup_orphans_on_startup, close_instance, create_instance,
+    list_instances, open_instance, paths::get_app_local_data, ProcessPresence,
 };
 use models::commands::{
     check_huggingface_model_updates, delete_installed_model, download_model_from_catalog,
@@ -287,6 +287,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(gate.wrap(tauri::generate_handler![
+            active_instance_name,
             list_instances,
             create_instance,
             open_instance,
