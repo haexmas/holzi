@@ -298,6 +298,9 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
   neu entsperrt.
 - **Gewählte Datei ist keine Tresordatei von holzi oder das Passwort ist falsch**: Die
   Tresorauswahl meldet das verständlich; an der Datei ändert sich nichts.
+- **Die Tresordatei ist eine Kopie eines Tresors, den es auf diesem Gerät schon gibt**: holzi
+  lehnt sie ab und sagt, dass der Tresor schon da ist; zwei Kopien desselben Tresors auf einem
+  Gerät würden sich beim Sync als dasselbe Gerät ausgeben.
 - **In der Tresorauswahl gibt es schon einen Tresor mit demselben Namen**: holzi schlägt einen
   anderen Namen vor; der vorhandene Tresor wird nie überschrieben.
 - **Dateiauswahl abgebrochen**: Der Dialog bleibt unverändert offen, keine Fehlermeldung.
@@ -420,8 +423,8 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
 - **FR-029**: Die Spracheingabe MUSS auf dem Telefon funktionieren; die Mikrofonberechtigung
   MUSS beim ersten Gebrauch angefragt werden, und eine Ablehnung MUSS verständlich erklärt
   werden.
-- **FR-030**: Auf dem Telefon MUSS standardmäßig ein kleineres Spracherkennungsmodell als am
-  Desktop vorgeschlagen werden (Spec 008 FR-011).
+- **FR-030**: Auf dem Telefon MUSS standardmäßig das kleinste Spracherkennungsmodell des
+  Katalogs vorgeschlagen werden (Spec 008 FR-011); größere bleiben wählbar.
 
 #### Bauen und Verteilen
 
@@ -435,7 +438,8 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
   installieren und die vorhandene e2e-Suite des Desktops dort ausführen; schlägt ein Fall fehl,
   MUSS der Lauf rot werden. Dieser Lauf MUSS ein Pflicht-Check vor dem Merge sein.
 - **FR-033b**: Ein e2e-Fall DARF auf Android nur ausgenommen werden, wenn seine Funktion es auf
-  Android nicht gibt (FR-016); jede Ausnahme MUSS mit Begründung an einer Stelle aufgeführt
+  Android nicht gibt (FR-016) oder sein Ablauf dort anders festgelegt ist (FR-006: Schließen
+  beendet die App); jede Ausnahme MUSS mit Begründung an einer Stelle aufgeführt
   sein. Für jede Ausnahme MUSS es einen Android-Fall geben, der das „nicht verfügbar“ prüft.
 - **FR-033c**: Neue e2e-Fälle MÜSSEN ab dieser Spec auf Desktop und Android laufen, außer sie
   fallen unter FR-033b.
