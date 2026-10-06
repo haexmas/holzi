@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
  * The sidebar of the password manager (spec 034, US2, FR-009, FR-011): all entries, the folder
- * tree with expand and collapse, the trash and the actions for folders and tags (the tag filter
- * sits beside the search, `TagFilter.vue`). Folders reorder by drag and drop and by the menu actions "up" and "down" (also with
- * keyboard and touch); entries dragged from the list move into a folder. Only ids travel.
+ * tree with expand and collapse, the trash and the actions for folders (the tag filter sits
+ * beside the search, `TagFilter.vue`; generator, import and tags are in the menu of the toolbar).
+ * Folders reorder by drag and drop and by the menu actions "up" and "down" (also with keyboard
+ * and touch); entries dragged from the list move into a folder. Only ids travel.
  */
 import { toast } from 'vue-sonner'
 import type { GroupRow } from '@bindings/GroupRow'
@@ -37,7 +38,6 @@ const expanded = ref(new Set<string>())
 const folderDialog = ref(false)
 const editing = ref<GroupRow | null>(null)
 const parentForNew = ref<string | null>(null)
-const tagManager = ref(false)
 const rootDropping = ref(false)
 const deleteOpen = ref(false)
 const deleteTargets = ref<Target[]>([])
@@ -263,7 +263,10 @@ async function onRootDrop(event: DragEvent) {
           data-testid="passwords-trash"
           @click="go('/trash')"
         >
-          <Icon name="lucide:trash-2" class="size-4 shrink-0" />
+          <Icon
+            name="lucide:trash-2"
+            class="size-4 shrink-0 text-destructive"
+          />
           <span class="min-w-0 flex-1 truncate">{{
             t('passwords.trash.title')
           }}</span>
@@ -274,39 +277,6 @@ async function onRootDrop(event: DragEvent) {
           >
         </button>
       </PasswordsEntryMenu>
-      <button
-        type="button"
-        class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
-        data-testid="passwords-open-generator"
-        @click="go('/generator')"
-      >
-        <Icon name="lucide:dices" class="size-4 shrink-0" />
-        <span class="min-w-0 flex-1 truncate">{{
-          t('passwords.generator.title')
-        }}</span>
-      </button>
-      <button
-        type="button"
-        class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
-        data-testid="passwords-open-import"
-        @click="go('/import')"
-      >
-        <Icon name="lucide:file-down" class="size-4 shrink-0" />
-        <span class="min-w-0 flex-1 truncate">{{
-          t('passwords.import.open')
-        }}</span>
-      </button>
-      <button
-        type="button"
-        class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
-        data-testid="passwords-manage-tags"
-        @click="tagManager = true"
-      >
-        <Icon name="lucide:tags" class="size-4 shrink-0" />
-        <span class="min-w-0 flex-1 truncate">{{
-          t('passwords.tags.manage')
-        }}</span>
-      </button>
     </div>
 
     <PasswordsFolderDialog
@@ -314,7 +284,6 @@ async function onRootDrop(event: DragEvent) {
       :group="editing"
       :parent-id="parentForNew"
     />
-    <PasswordsTagManager v-model:open="tagManager" />
     <PasswordsDeleteDialog
       v-model:open="deleteOpen"
       :targets="deleteTargets"

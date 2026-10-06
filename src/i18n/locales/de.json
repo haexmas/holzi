@@ -1229,6 +1229,7 @@
     "owners": {
       "storage": "Speicher"
     },
+    "menu": "Menü",
     "new": "Neu",
     "newMenu": {
       "entry": "Schlüssel",
@@ -1301,6 +1302,9 @@
       "otpPlaceholder": "JBSWY3DPEHPK3PXP",
       "otpSet": "Ein TOTP-Secret ist gespeichert.",
       "otpWillBeRemoved": "Das TOTP-Secret wird beim Speichern entfernt.",
+      "otpDigits": "Stellen",
+      "otpPeriod": "Periode (s)",
+      "otpAlgorithm": "Algorithmus",
       "otpErrors": {
         "otpSecret": "Das ist kein gültiges TOTP-Secret (Base32) und keine gültige otpauth-Adresse.",
         "otpDigits": "Die Ziffernzahl muss zwischen 6 und 10 liegen.",
@@ -1328,7 +1332,6 @@
       "reason": "Ein Eintrag im Passwortmanager hat ungespeicherte Änderungen."
     },
     "settings": {
-      "open": "Einstellungen",
       "title": "Einstellungen des Passwortmanagers",
       "clipboard": {
         "title": "Zwischenablage leeren nach",
