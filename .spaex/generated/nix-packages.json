@@ -12,6 +12,7 @@
   "gdk-pixbuf",
   "glib.out",
   "gtk3",
+  "jdk17",
   "libayatana-appindicator",
   "librsvg",
   "libsoup_3",

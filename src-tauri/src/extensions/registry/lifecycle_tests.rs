@@ -12,7 +12,7 @@ use haex_crdt::rusqlite::params;
 use super::test_support::*;
 use super::*;
 use crate::extensions::permissions::store::{self as permission_store, NewPermission};
-use crate::extensions::permissions::PermissionKind;
+use crate::extensions::permissions::{PermissionKind, PermissionStatus, VAULT_WIDE};
 use crate::extensions::registry::remove::remove;
 use crate::storage::query;
 
@@ -140,6 +140,45 @@ fn a_shell_permission_from_a_does_not_hold_on_b_a_file_permission_does() {
     assert_eq!(on(&b, PermissionKind::Shell), 0, "the shell stays on A");
     assert_eq!(on(&a, PermissionKind::Filesystem), 1);
     assert_eq!(on(&b, PermissionKind::Filesystem), 1, "files hold on B too");
+}
+
+#[test]
+fn an_old_shell_allow_for_every_device_counts_nowhere_an_old_deny_still_holds() {
+    let (a, b) = (Node::new(), Node::new());
+    let ext = a.install(&bundle("1.0.0", &[INIT]));
+    // Rows as holzi wrote them before the clarification of 2026-10-06: the shell vault-wide.
+    a.vault
+        .write_blocking(move |tx| {
+            for (target, status) in [("/usr/bin/git", "granted"), ("/usr/bin/rm", "denied")] {
+                permission_store::put(
+                    tx,
+                    ext,
+                    &NewPermission {
+                        kind: PermissionKind::Shell.as_str(),
+                        action: "execute",
+                        target,
+                        status,
+                        declared: false,
+                        vault_device_uuid: VAULT_WIDE,
+                    },
+                    1,
+                )?;
+            }
+            Ok(())
+        })
+        .expect("old rows");
+    b.pull(&a);
+    for node in [&a, &b] {
+        let me = node.me;
+        let held = node
+            .vault
+            .read_blocking(move |q| {
+                permission_store::candidates(q, ext, PermissionKind::Shell, me).map_err(Into::into)
+            })
+            .expect("candidates");
+        assert_eq!(held.len(), 1, "only the deny holds");
+        assert_eq!(held[0].status, PermissionStatus::Denied);
+    }
 }
 
 #[test]
