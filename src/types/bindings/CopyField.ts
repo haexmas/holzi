@@ -3,4 +3,4 @@
 /**
  * Which value `passwords_copy_field` puts on the clipboard.
  */
-export type CopyField = { "kind": "username" } | { "kind": "password" } | { "kind": "totp" } | { "kind": "keyValue", id: string, };
+export type CopyField = { "kind": "username" } | { "kind": "password" } | { "kind": "totp" } | { "kind": "keyValue", id: string, } | { "kind": "url" } | { "kind": "note" };

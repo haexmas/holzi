@@ -18,6 +18,7 @@ use holzi_lib::identity::{
 use holzi_lib::passwords::access::{Caller, Grant, GrantAction, Scope};
 use holzi_lib::passwords::model::{
     CopyField, ItemInput, ItemPatch, KeyValueInput, Patch, SecretField, Target, TargetKind,
+    TextField,
 };
 use holzi_lib::passwords::model_references::{RefMarkKind, RefStatus};
 use holzi_lib::passwords::service::{Headers, PasswordsService};
@@ -140,6 +141,60 @@ fn outside(tags: &[&str]) -> (Caller, Vec<Grant>) {
             Scope::tags(tags.iter().copied()),
         )],
     )
+}
+
+#[tokio::test]
+async fn a_text_copied_from_the_editor_or_a_history_state_resolves_its_placeholders() {
+    let f = fixture();
+    let source = f.create(source_input("src")).await;
+    let password = f.token(&source, RefMarkKind::Password, None).await;
+    let pin = f.token(&source, RefMarkKind::Extra, Some("PIN")).await;
+    let resolve = |item_id: Option<String>, field: TextField, text: String| {
+        f.service
+            .resolve_text(&Caller::User, item_id, field, text.into())
+    };
+    // A new entry has no id yet; a placeholder to another entry still resolves.
+    let copied = resolve(None, TextField::Password, format!("{password}-x"))
+        .await
+        .expect("resolve");
+    assert_eq!(copied.as_str(), format!("{MARKER}-password-x"));
+    let copied = resolve(
+        Some(source.clone()),
+        TextField::KeyValue {
+            key: "Kopie".to_string(),
+        },
+        pin,
+    )
+    .await
+    .expect("resolve");
+    assert_eq!(copied.as_str(), format!("{MARKER}-pin"));
+    // Text without a placeholder stays as it is.
+    let copied = resolve(None, TextField::Note, "plain {$ text".to_string())
+        .await
+        .expect("plain");
+    assert_eq!(copied.as_str(), "plain {$ text");
+    // A placeholder that does not resolve is an error, never the text (FR-045).
+    let missing = "00000000-0000-4000-8000-0000000000fe";
+    assert!(resolve(
+        None,
+        TextField::Username,
+        format!("{{${missing}:password}}")
+    )
+    .await
+    .is_err());
+    // Only the user copies.
+    assert!(f
+        .service
+        .resolve_text(
+            &Caller::Extension {
+                id: "ext".to_string()
+            },
+            None,
+            TextField::Note,
+            "x".to_string().into(),
+        )
+        .await
+        .is_err());
 }
 
 #[tokio::test]

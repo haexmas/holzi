@@ -1,5 +1,5 @@
-//! `extension_frame_open`, `extension_frame_close` and `extension_bridge_call`
-//! (contracts/tauri-commands.md §Rahmen).
+//! `extension_frame_open`, `extension_frame_close`, `extension_frame_reloaded` and
+//! `extension_bridge_call` (contracts/tauri-commands.md §Rahmen).
 
 use std::sync::Arc;
 
@@ -122,6 +122,14 @@ pub async fn extension_frame_close(
             serde_json::json!({ "requestId": request_id }),
         );
     }
+    Ok(())
+}
+
+/// A new page loaded in a frame and set up a new SDK channel: the shell output its old page had
+/// not acknowledged is lost, so its shells no longer wait for it until it acknowledges again.
+#[tauri::command]
+pub async fn extension_frame_reloaded(state: State<'_, AppState>, frame: String) -> Result<()> {
+    state.extensions().shells.frame_reloaded(&frame);
     Ok(())
 }
 

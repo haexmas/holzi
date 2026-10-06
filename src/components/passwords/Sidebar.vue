@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * The sidebar of the password manager (spec 034, US2, FR-009, FR-011): all entries, the folder
- * tree with expand and collapse, the tags with their counts, the trash and the actions for folders
- * and tags. Folders reorder by drag and drop and by the menu actions "up" and "down" (also with
+ * tree with expand and collapse, the trash and the actions for folders and tags (the tag filter
+ * sits beside the search, `TagFilter.vue`). Folders reorder by drag and drop and by the menu actions "up" and "down" (also with
  * keyboard and touch); entries dragged from the list move into a folder. Only ids travel.
  */
 import { toast } from 'vue-sonner'
@@ -251,37 +251,6 @@ async function onRootDrop(event: DragEvent) {
       />
     </ul>
 
-    <section v-if="store.displayTags.length" class="flex flex-col gap-1">
-      <h2 class="px-3 text-xs font-semibold text-muted-foreground uppercase">
-        {{ t('passwords.fields.tags') }}
-      </h2>
-      <ul class="flex flex-col gap-0.5">
-        <li v-for="tag in store.displayTags" :key="tag.id">
-          <button
-            type="button"
-            class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
-            :class="
-              activeTag !== null && tag.ids.includes(activeTag)
-                ? 'bg-foreground/10 font-medium'
-                : ''
-            "
-            :data-testid="`passwords-tag-filter-${tag.id}`"
-            @click="go(`/?tag=${tag.id}`)"
-          >
-            <Icon
-              name="lucide:tag"
-              class="size-4 shrink-0"
-              :style="tag.color ? { color: tag.color } : undefined"
-            />
-            <span class="min-w-0 flex-1 truncate">{{ tag.name }}</span>
-            <span class="text-xs text-muted-foreground">{{
-              tag.itemCount
-            }}</span>
-          </button>
-        </li>
-      </ul>
-    </section>
-
     <div class="mt-auto flex flex-col gap-1">
       <PasswordsEntryMenu
         :entries="trashMenu"
@@ -305,46 +274,39 @@ async function onRootDrop(event: DragEvent) {
           >
         </button>
       </PasswordsEntryMenu>
-      <UiButton
-        variant="ghost"
-        size="sm"
-        class="justify-start"
+      <button
+        type="button"
+        class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
         data-testid="passwords-open-generator"
         @click="go('/generator')"
       >
-        <Icon name="lucide:dices" class="size-4" />
-        {{ t('passwords.generator.title') }}
-      </UiButton>
-      <UiButton
-        variant="ghost"
-        size="sm"
-        class="justify-start"
+        <Icon name="lucide:dices" class="size-4 shrink-0" />
+        <span class="min-w-0 flex-1 truncate">{{
+          t('passwords.generator.title')
+        }}</span>
+      </button>
+      <button
+        type="button"
+        class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
         data-testid="passwords-open-import"
         @click="go('/import')"
       >
-        <Icon name="lucide:file-down" class="size-4" />
-        {{ t('passwords.import.open') }}
-      </UiButton>
-      <UiButton
-        variant="outline"
-        size="sm"
-        class="justify-start"
-        data-testid="passwords-new-folder"
-        @click="newFolder(null)"
-      >
-        <Icon name="lucide:folder-plus" class="size-4" />
-        {{ t('passwords.folders.new') }}
-      </UiButton>
-      <UiButton
-        variant="ghost"
-        size="sm"
-        class="justify-start"
+        <Icon name="lucide:file-down" class="size-4 shrink-0" />
+        <span class="min-w-0 flex-1 truncate">{{
+          t('passwords.import.open')
+        }}</span>
+      </button>
+      <button
+        type="button"
+        class="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-foreground/5"
         data-testid="passwords-manage-tags"
         @click="tagManager = true"
       >
-        <Icon name="lucide:tags" class="size-4" />
-        {{ t('passwords.tags.manage') }}
-      </UiButton>
+        <Icon name="lucide:tags" class="size-4 shrink-0" />
+        <span class="min-w-0 flex-1 truncate">{{
+          t('passwords.tags.manage')
+        }}</span>
+      </button>
     </div>
 
     <PasswordsFolderDialog

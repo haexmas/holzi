@@ -27,6 +27,8 @@ const { t } = useI18n()
 const fieldLabels = useFieldLabels()
 const { errString } = useErrorString()
 const { presetListAsync, presetSaveAsync, presetDeleteAsync } = usePasswords()
+// Through Rust like every other copy, so the clipboard is cleared after the vault's delay.
+const { copyText } = usePasswordsCopy()
 
 /** Without a preset: length 20 and all four classes. */
 const DEFAULTS: GeneratorConfig = {
@@ -147,8 +149,7 @@ async function removeAsync() {
 
 function copy() {
   if ('value' in output.value && output.value.value) {
-    void navigator.clipboard.writeText(output.value.value)
-    toast.success(t('passwords.generator.copied'))
+    void copyText(output.value.value, t('passwords.fields.password'))
   }
 }
 

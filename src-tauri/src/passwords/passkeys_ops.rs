@@ -95,17 +95,8 @@ fn readable(
         return Ok(*known);
     }
     let ok = match item_state(q, item_id)? {
-        Some((tags, in_trash)) => {
-            !in_trash
-                && authorize_read(
-                    reader.caller,
-                    reader.grants,
-                    &ItemState {
-                        tags: &tags,
-                        in_trash,
-                    },
-                )
-                .is_ok()
+        Some(state) => {
+            !state.in_trash && authorize_read(reader.caller, reader.grants, &state.view()).is_ok()
         }
         None => false,
     };
@@ -269,16 +260,8 @@ pub fn create(
 ) -> Result<PasskeyCreated> {
     let item_id = required("itemId", request.item_id.as_deref().unwrap_or(""))?.to_owned();
     match item_state(tx, &item_id)? {
-        Some((tags, in_trash)) => {
-            authorize_update(
-                reader.caller,
-                reader.grants,
-                &ItemState {
-                    tags: &tags,
-                    in_trash,
-                },
-                None,
-            )?;
+        Some(state) => {
+            authorize_update(reader.caller, reader.grants, &state.view(), None)?;
         }
         None => {
             // Forbidden without a write grant, otherwise indistinguishable from outside the scope.
@@ -288,6 +271,7 @@ pub fn create(
                 &ItemState {
                     tags: &[],
                     in_trash: false,
+                    owner: None,
                 },
                 None,
             )?;

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
  * The tab Extra of an entry in view mode (spec 036, FR-001, FR-005): the custom fields, the
- * attachments and the passkeys. The custom values stay masked until asked; their rows carry
- * `data-no-swipe` so a swipe that starts on a value does not change the tab (FR-003).
+ * attachments and the passkeys. The custom values show as stored, unmasked (amends spec 034
+ * FR-005); a value with references shows its marks and a masked resolved value, like the user
+ * name. Only the value itself carries `data-no-swipe`, so it can be selected without changing the
+ * tab (FR-003).
  */
-import type { CopyField } from '@bindings/CopyField'
 import type { ItemDetail } from '@bindings/ItemDetail'
 
 const emit = defineEmits<{
-  copy: [field: CopyField, label: string]
   changed: []
 }>()
 
@@ -19,6 +19,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const { revealAsync } = usePasswords()
+const { copyField } = usePasswordsCopy()
 
 /** The marks of a custom field that holds references (spec 036). */
 function marksOf(id: string) {
@@ -39,16 +40,16 @@ function marksOf(id: string) {
         v-for="field in detail.keyValues"
         :key="field.id"
         :title="field.key ?? ''"
-        data-no-swipe
       >
         <template v-if="marksOf(field.id).length" #below>
           <PasswordsReferenceValue
             :marks="marksOf(field.id)"
-            :text="null"
+            :text="field.value"
             kind="keyValue"
           />
         </template>
         <PasswordsMaskedValue
+          v-if="marksOf(field.id).length"
           :fetch="
             async () =>
               (
@@ -58,22 +59,30 @@ function marksOf(id: string) {
                 })
               ).value
           "
-          :identity="`${itemId}:${field.id}`"
+          :identity="`${itemId}:${field.id}:${field.value}`"
           kind="keyValue"
-          :present="field.hasValue"
+          present
           :label="field.key ?? ''"
         />
-        <UiButton
-          v-if="field.hasValue"
-          variant="ghost"
-          size="icon"
-          :aria-label="t('passwords.copy', { field: field.key ?? '' })"
-          @click="
-            emit('copy', { kind: 'keyValue', id: field.id }, field.key ?? '')
-          "
+        <span
+          v-else
+          class="min-w-0 truncate font-mono text-sm select-text"
+          :class="field.hasValue ? '' : 'text-muted-foreground'"
+          data-no-swipe
+          data-testid="passwords-value-keyValue"
+          >{{ field.hasValue ? field.value : t('passwords.noValue') }}</span
         >
-          <Icon name="lucide:copy" class="size-4" />
-        </UiButton>
+        <PasswordsCopyButton
+          v-if="field.hasValue"
+          :label="field.key ?? ''"
+          @copy="
+            copyField(
+              itemId,
+              { kind: 'keyValue', id: field.id },
+              field.key ?? '',
+            )
+          "
+        />
       </SettingsRow>
     </SettingsGroup>
 

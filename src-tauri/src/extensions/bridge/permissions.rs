@@ -5,7 +5,7 @@
 use serde_json::{json, Value};
 
 use super::dispatch::CallContext;
-use crate::extensions::error::{BridgeError, ExtensionErrorCode};
+use crate::extensions::error::{Asks, BridgeError, ExtensionErrorCode};
 use crate::extensions::ids::ExtensionTable;
 use crate::extensions::permissions::prompts::{PermissionRequestEvent, Question};
 use crate::extensions::permissions::store::rows_of;
@@ -19,16 +19,22 @@ pub const PERMISSION_REQUEST: &str = "extension-permission-request";
 /// Event to holzi's window: a question nobody waits for any more.
 pub const PERMISSION_REQUEST_CANCELLED: &str = "extension-permission-request-cancelled";
 
-/// Puts the question of a 1004 answer before the user, once per identical open question.
+/// Puts the question of a 1004 answer before the user, once per identical open question. It names
+/// `details.target` unless the answer [`Asks`] about something else.
 pub fn ask(ctx: &CallContext, error: &BridgeError) {
     let Some(details) = &error.details else {
         return;
     };
     let text = |key: &str| details.get(key).and_then(Value::as_str).map(str::to_owned);
-    let (Some(kind), Some(action), Some(target)) =
+    let (Some(kind), Some(action), Some(told)) =
         (text("resourceType"), text("action"), text("target"))
     else {
         return;
+    };
+    let target = match error.asks.as_deref() {
+        None => told.clone(),
+        Some(Asks::Target(target)) => target.clone(),
+        Some(Asks::Nothing) => return,
     };
     let Some(kind) = PermissionKind::parse(&kind) else {
         return;
@@ -40,7 +46,10 @@ pub fn ask(ctx: &CallContext, error: &BridgeError) {
         action: action.clone(),
         target: target.clone(),
     };
-    let (request_id, new) = ctx.host.permissions.ask(question, &ctx.session.frame);
+    let (request_id, new) = ctx
+        .host
+        .permissions
+        .ask(question, &ctx.session.frame, &told);
     if !new {
         return;
     }

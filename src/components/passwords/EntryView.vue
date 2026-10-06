@@ -7,8 +7,6 @@
  * tab is part of the place (`?tab=`), so back, forward and a restored session find it again.
  */
 import { DEFAULT_ENTRY_ICON } from '~/lib/passwords/icons'
-import { toast } from 'vue-sonner'
-import type { CopyField } from '@bindings/CopyField'
 import type { ItemDetail } from '@bindings/ItemDetail'
 import { displayTitle, isExpired, localDay } from '~/lib/passwords/format'
 import { entryFreshness, type EntryFreshness } from '~/lib/passwords/remote'
@@ -22,7 +20,7 @@ const { t } = useI18n()
 const { errString } = useErrorString()
 const router = useTabRouter()
 const store = usePasswordsStore()
-const { getItemAsync, copyFieldAsync, updateItemAsync } = usePasswords()
+const { getItemAsync, updateItemAsync } = usePasswords()
 
 const TABS: readonly EntryTab[] = ['details', 'extra', 'history']
 const activeTab = computed<EntryTab>({
@@ -94,22 +92,6 @@ const expired = computed(() =>
   isExpired(detail.value?.expiresAt, localDay(new Date())),
 )
 
-async function copyAsync(field: CopyField, label: string) {
-  try {
-    const result = await copyFieldAsync(props.itemId, field)
-    toast.success(
-      result.clearsInSeconds === null
-        ? t('passwords.copiedKept', { field: label })
-        : t('passwords.copied', {
-            field: label,
-            seconds: result.clearsInSeconds,
-          }),
-    )
-  } catch (cause) {
-    toast.error(errString(cause))
-  }
-}
-
 /** A restored state is the entry now: show it on Details. */
 async function onRestored() {
   activeTab.value = 'details'
@@ -169,15 +151,29 @@ async function removeOtpAsync() {
         >
           {{ title ?? t('passwords.untitled') }}
         </h1>
+        <ShadcnBadge
+          v-if="detail?.owner"
+          variant="secondary"
+          class="shrink-0"
+          data-testid="passwords-entry-owner"
+        >
+          {{
+            t('passwords.owner', {
+              name: t(`passwords.owners.${detail.owner}`),
+            })
+          }}
+        </ShadcnBadge>
         <UiButton
           v-if="detail"
-          variant="outline"
+          variant="ghost"
+          size="icon"
           class="ml-auto shrink-0"
+          :aria-label="t('passwords.edit')"
+          :tooltip="t('passwords.edit')"
           data-testid="passwords-edit"
           @click="edit"
         >
           <Icon name="lucide:pencil" class="size-4" />
-          {{ t('passwords.edit') }}
         </UiButton>
         <UiButton
           v-if="detail"
@@ -251,7 +247,6 @@ async function removeOtpAsync() {
             <PasswordsViewDetails
               :item-id="itemId"
               :detail="detail"
-              @copy="copyAsync"
               @edit="edit"
               @remove-otp="removeOtpAsync"
             />
@@ -260,7 +255,6 @@ async function removeOtpAsync() {
             <PasswordsViewExtra
               :item-id="itemId"
               :detail="detail"
-              @copy="copyAsync"
               @changed="loadAsync"
             />
           </template>

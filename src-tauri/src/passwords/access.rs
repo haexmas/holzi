@@ -166,11 +166,13 @@ impl Grant {
     }
 }
 
-/// What the rules need to know about a stored entry: its tag names and whether it is in the trash.
+/// What the rules need to know about a stored entry: its tag names, whether it is in the trash and
+/// which holzi function it belongs to (`None`: the user's own, Z14).
 #[derive(Debug, Clone, Copy)]
 pub struct ItemState<'a> {
     pub tags: &'a [String],
     pub in_trash: bool,
+    pub owner: Option<&'a str>,
 }
 
 /// Why a request is refused.
@@ -254,9 +256,22 @@ pub fn authorize_list(caller: &Caller, grants: &[Grant]) -> Result<ListView, Den
     reach(caller, grants, GrantAction::Read).map(|reach| ListView::Items(reach.scope))
 }
 
-/// An entry is visible to the caller when it is in the scope and, outside the user, not in the
-/// trash (Z5, Z13).
-fn visible(reach: &Reach, state: &ItemState<'_>) -> Result<(), Denied> {
+/// Z14 (spec 038): an entry that belongs to a holzi function exists only for the user and for that
+/// function; no grant, not even one for all entries, reaches it.
+pub fn sees_owned(caller: &Caller, owner: Option<&str>) -> bool {
+    match (owner, caller) {
+        (None, _) | (Some(_), Caller::User) => true,
+        (Some(owner), Caller::Internal { feature }) => *feature == owner,
+        (Some(_), _) => false,
+    }
+}
+
+/// An entry is visible to the caller when the caller may see its owner (Z14), it is in the scope
+/// and, outside the user, not in the trash (Z5, Z13).
+fn visible(caller: &Caller, reach: &Reach, state: &ItemState<'_>) -> Result<(), Denied> {
+    if !sees_owned(caller, state.owner) {
+        return Err(Denied::NotFound);
+    }
     if state.in_trash && !reach.sees_trash {
         return Err(Denied::NotFound);
     }
@@ -272,7 +287,7 @@ pub fn authorize_read(
     grants: &[Grant],
     state: &ItemState<'_>,
 ) -> Result<(), Denied> {
-    visible(&reach(caller, grants, GrantAction::Read)?, state)
+    visible(caller, &reach(caller, grants, GrantAction::Read)?, state)
 }
 
 /// `create_item` (Z6): with a tag scope the submitted tags must all lie in it and there must be at
@@ -302,7 +317,7 @@ pub fn authorize_update(
     submitted: Option<&[String]>,
 ) -> Result<Vec<String>, Denied> {
     let reach = reach(caller, grants, GrantAction::ReadWrite)?;
-    visible(&reach, state)?;
+    visible(caller, &reach, state)?;
     let Some(submitted) = submitted else {
         return Ok(state.tags.to_vec());
     };
@@ -342,7 +357,11 @@ pub fn authorize_delete(
     grants: &[Grant],
     state: &ItemState<'_>,
 ) -> Result<(), Denied> {
-    visible(&reach(caller, grants, GrantAction::ReadWrite)?, state)
+    visible(
+        caller,
+        &reach(caller, grants, GrantAction::ReadWrite)?,
+        state,
+    )
 }
 
 /// A record without an entry (a passkey with no `item_id`) belongs to no tag scope; only a grant

@@ -21,11 +21,7 @@ const { t } = useI18n()
   <div class="flex flex-col gap-5" data-testid="entry-editor-extra">
     <SettingsGroup :label="t('passwords.fields.custom')">
       <li class="px-4 py-3" data-no-swipe>
-        <PasswordsKeyValues
-          v-model="draft.keyValues"
-          :item-id="itemId"
-          :references="detail?.references.keyValues ?? []"
-        />
+        <PasswordsKeyValues v-model="draft.keyValues" :item-id="itemId" />
       </li>
     </SettingsGroup>
 

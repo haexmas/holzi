@@ -478,7 +478,13 @@ pub(super) fn own_columns(db: &Database, table: &str) -> Vec<String> {
 fn assert_passwords_schema(db: &Database) {
     for (table, columns) in PASSWORDS_TABLES {
         assert!(table_exists(db, table), "{table} must exist after 0022");
-        assert_eq!(own_columns(db, table), columns, "columns of {table}");
+        // Later migrations append columns (0027 `owner`), so 0022's columns are the leading ones.
+        let own = own_columns(db, table);
+        assert_eq!(
+            &own[..columns.len().min(own.len())],
+            columns,
+            "columns of {table}"
+        );
     }
     let declared_type = db
         .with_connection(|conn| {

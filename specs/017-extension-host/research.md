@@ -25,7 +25,7 @@ eine Prüfaufgabe in tasks.md.
 | **L2**    | Mehrere Geräte: Bundles als Vault-Daten, geparkte Sync-Gruppen, Lebenszyklus je Gerät                                                                 | US4                 | L1, 024 im Einsatz                      |
 | **L3**    | Meldungen, Kontext, Schlüssel-Wert-Speicher, Protokolle, Tabellen anderer Erweiterungen, Update/Deaktivieren/Entfernen, Entwicklermodus               | US5, US6, US7, US12 | L1 (L2 für die Wirkung auf alle Geräte) |
 | **L4**    | Netzwerk, Benachrichtigungen, Dateisystem                                                                                                             | US8, US9            | L1                                      |
-| **L5**    | Passwörter (034 ist gemerged, PR #222), entfernter Speicher (nach 029), Mail, Shell                                                                   | US10, US11          | L1, 029                                 |
+| **L5**    | Passwörter (034 ist gemerged, PR #222), entfernter Speicher (nach 038), Mail, Shell                                                                   | US10, US11          | L1, 038                                 |
 
 Jede Lieferung bringt ihre Fälle der Umgehungssammlung (SC-002) mit und gilt erst mit ihnen als fertig.
 
@@ -653,11 +653,14 @@ als Härtung); lexikalischer Abgleich wie HV.
 scope}` aus `passwords/access.rs`), Berechtigungen der Art `passwords` → `Grant`. `list` →
   `list_headers`, `read` → `read_secret_item`, `create`/`update` → `create_item`/`update_item` (volle Eingabe
   des SDK wird zu einem Teil-Update), `delete` → Papierkorb. 034 ist seit PR #222 auf `main`; der Adapter braucht keinen Platzhalter mehr.
-- **Entfernter Speicher**: Trait `RemoteStore`; Erweiterungen sehen nur Speicherverbindungen, die der Nutzer
-  für Erweiterungen freigibt, mit einem Schlüsselpräfix je Erweiterung (029 FR-027 erlaubt in Space-Buckets nur
-  inhaltsadressierte Objekte, also nie beliebige Schlüssel dort). Berechtigung je Verbindung; Anlegen, Ändern,
-  Prüfen und Entfernen immer über einen Dialog von holzi, Zugangsdaten in den Passwortmanager. S3-Client wählt
-  der Plan von 029. Bis dahin „nicht verfügbar“.
+- **Entfernter Speicher**: Trait `RemoteStore`; Erweiterungen sehen nur Speicher, die der Nutzer für sie
+  freigibt, mit einem Schlüsselpräfix je Erweiterung (029 FR-027 erlaubt in Space-Buckets nur
+  inhaltsadressierte Objekte, also nie beliebige Schlüssel dort). Anlegen, Ändern, Prüfen und Entfernen immer
+  über einen Dialog von holzi. Umgesetzt durch Spec 038 (Speicherverbindungen ohne Spaces): S3-Client
+  `rusty-s3` über reqwest, eine Berechtigung `remoteStorage` je Speicher (`backendId`, ein Bucket) oder für
+  `*`, Präfix `holzi-ext/<vault_id>/<extension_id>/` (Entwicklerversionen getrennt), Zugangsdaten gibt nur
+  der Nutzer in holzi ein, sie liegen im Passwortmanager (Eintrag mit Eigentümer, Regel Z14 in 034) und
+  erreichen keine Erweiterung (Review 2026-10-06: nicht mehr „je Verbindung“). Bis dahin „nicht verfügbar“.
 - **Mail**: `async-imap` (tokio, `tokio-rustls`), `lettre` (rustls/ring), `mail-parser` (alle neu, reines
   Rust). Befehle wie im SDK; Berechtigung je Host **und** Port. Das Beobachten liest Zugangsdaten nur über 034
   mit der Erweiterung als Aufrufer (HV liest sie am Passwortmanager vorbei, `mail/poll.rs:164-208`). Beobachten

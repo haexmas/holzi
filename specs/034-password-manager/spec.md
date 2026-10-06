@@ -478,10 +478,19 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-005**: Passwörter, TOTP-Secrets, eigene Felder und Passkey-Schlüssel MÜSSEN
   standardmäßig verdeckt sein; Aufdecken MUSS eine bewusste Handlung des Nutzers sein (Halten
   mit der Maus, Tippen auf Mobilgeräten) und MUSS beim Verlassen des Eintrags enden.
+  _Geändert 2026-10-05:_ Die Werte eigener Felder zeigt die Ansicht unverdeckt; im Editor
+  stehen Passwort und eigene Felder als gespeicherte Werte (Platzhalter unaufgelöst) in
+  normalen Eingabefeldern, ohne „Ersetzen“. Aufgelöste Platzhalter bleiben verdeckt. Der
+  Verlauf zeigt eigene Felder weiter verdeckt (Review 2026-10-06: bewusst, ein alter Stand
+  wird nur auf Wunsch aufgedeckt).
 - **FR-006**: Das System MUSS Benutzername, Passwort und TOTP-Code in die Zwischenablage
   kopieren können und sie nach einer einstellbaren Zeit leeren (Standard 30 Sekunden), sofern
   sie noch den kopierten Wert enthält; die Einstellung speichert bei Auswahl, ohne Knopf zum
   Übernehmen.
+  _Erweitert 2026-10-05:_ Jedes Feld hat einen Kopierknopf, in Ansicht, Editor und Verlauf;
+  jede Kopie läuft durch Rust und wird gleich geleert, auch die des Generators. Platzhalter
+  löst die Kopie auf (036 FR-045), auch aus Editor und Verlauf. Kopiert wird der TOTP-Code;
+  das TOTP-Secret nur aus Editor und Verlauf, unter seinem eigenen Namen „TOTP-Secret“.
 - **FR-007**: Das System MUSS Einträge nach Titel, Benutzername, Adresse und Tag-Namen
   durchsuchen und in einer Liste und einem Baum mit Ordnern darstellen; Geheimnisse und
   Notizen DÜRFEN nicht Gegenstand der Suche sein.
@@ -494,6 +503,10 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   Reihenfolge erlauben; ein Eintrag liegt in höchstens einem Ordner, ohne Ordner liegt er an
   der Wurzel. Der Nutzer MUSS die Reihenfolge der Ordner einer Ebene ändern können, auch ohne
   Maus (Aktionen „nach oben“ und „nach unten“); ohne eigene Reihenfolge gilt die alphabetische.
+  _Geändert 2026-10-06 (PR #287):_ Einen Ordner legt der Knopf „Neu“ der Werkzeugleiste an
+  (Auswahl „Schlüssel“ oder „Ordner“), im gerade offenen Ordner, sonst an der Wurzel; die
+  Seitenleiste hat keinen eigenen Knopf dafür mehr. Unterordner gehen weiter über das Menü
+  eines Ordners.
 - **FR-010**: Das System MUSS verhindern, dass ein Ordner in sich selbst oder einen seiner
   Unterordner verschoben wird.
 - **FR-011**: Das System MUSS Tags (Name eindeutig, Farbe) verwalten und Einträgen beliebig
@@ -501,6 +514,9 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   ist eindeutig ohne Rücksicht auf Groß-/Kleinschreibung und auf die Schreibweise von Umlauten
   (zusammengesetzt oder zerlegt): „Work“ und „work“ sind derselbe Tag, die Schreibweise des
   ersten Anlegers bleibt sichtbar.
+  _Geändert 2026-10-06 (PR #287):_ Nach einem Tag filtert ein Auswahlmenü neben der Suche
+  (Tags mit Farbe und Anzahl, „Alle Tags“ hebt den Filter auf); die Seitenleiste listet die
+  Tags nicht mehr, „Tags verwalten“ bleibt dort.
 - **FR-012**: Das System MUSS Mehrfachauswahl für Verschieben, Taggen und Löschen
   unterstützen und vor einer Massenaktion die Zahl der betroffenen Einträge nennen.
 

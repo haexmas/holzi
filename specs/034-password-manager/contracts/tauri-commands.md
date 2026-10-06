@@ -10,9 +10,9 @@ Command ist dort standardmäßig gesperrt, sobald die Vault schließt. Der Aufru
 Command der Eingang selbst ([access.md](./access.md)), nie ein Argument.
 
 **Geheimnisse** sind: Passwort, TOTP-Secret, Passkey-Schlüssel, Werte eigener Felder. Kein
-Command außer `passwords_reveal` und `passwords_history_reveal` gibt ein Geheimnis an den
-Webview; `passwords_copy_field` und `passwords_totp_code` geben nur Wirkung beziehungsweise
-Code zurück.
+Command außer `passwords_reveal`, `passwords_history_reveal` und `passwords_get_item` (nur die
+Werte eigener Felder, FR-005) gibt ein Geheimnis an den Webview; `passwords_copy_field`,
+`passwords_history_copy` und `passwords_totp_code` geben nur Wirkung beziehungsweise Code zurück.
 
 ## Lesen
 
@@ -32,20 +32,26 @@ die berechtigungsgefilterte `list_headers`-Methode für Aufrufer von außen.
 
 ```text
 args:   { itemId }
-result: ItemDetail            // ohne Geheimnisse; hasPassword, hasOtpSecret, keyValues[].hasValue
+result: ItemDetail            // ohne Geheimnisse; hasPassword, hasOtpSecret, keyValues[].hasValue;
+                              // keyValues[].value gespeichert, Platzhalter unaufgelöst (FR-005)
 errors: NotFound
 ```
 
 ### `passwords_reveal`
 
 ```text
-args:   { itemId, field: { kind: 'password' | 'otpSecret' } | { kind: 'keyValue', id } }
+args:   { itemId, field: { kind: 'password' | 'otpSecret' | 'username' | 'url' | 'note'
+                                | 'storedPassword' } | { kind: 'keyValue', id } }
 result: { value: string }
 errors: NotFound
 ```
 
+`storedPassword` liefert das Passwort wie gespeichert, mit unaufgelösten Platzhaltern, für das
+Eingabefeld des Editors; alle anderen lösen Platzhalter auf.
+
 Wird nur auf bewusste Handlung des Nutzers aufgerufen; der Wert wird nicht gespeichert, nicht
-in Ereignisse oder Protokolle geschrieben.
+in Ereignisse oder Protokolle geschrieben. Ausnahme: `storedPassword` holt der Editor beim
+Öffnen, weil er das Passwort als normales Eingabefeld zeigt (Änderung 2026-10-05, PR #287).
 
 ### `passwords_totp_code`
 
@@ -63,12 +69,27 @@ Sync) liefert `InvalidInput`; die Oberfläche zeigt dann eine Meldung mit „Ers
 ### `passwords_copy_field`
 
 ```text
-args:   { itemId, field: 'username' | 'password' | 'totp' | { kind: 'keyValue', id } }
+args:   { itemId, field: 'username' | 'password' | 'totp' | 'url' | 'note' | { kind: 'keyValue', id } }
 result: { clearsInSeconds: number | null }
 errors: NotFound, InvalidInput
 ```
 
 Schreibt in Rust in die Zwischenablage und plant das Löschen (R9). `null` bei „Aus“.
+
+### `passwords_copy_text`
+
+```text
+args:   { text, itemId?, field?: { kind: 'username' | 'password' | 'url' | 'note' }
+                               | { kind: 'keyValue', key } }
+result: { clearsInSeconds: number | null }
+errors: Reference { reason }, Forbidden
+```
+
+Kopiert einen Text, den das Fenster schon hält (ein Wert im Editor, ein offenes Feld eines
+Verlaufsstands), mit demselben Leeren wie jede andere Kopie. Mit `field` löst Rust die
+Platzhalter vorher auf, wie in diesem Feld des Eintrags `itemId` (keiner bei einem neuen
+Eintrag); ein Platzhalter, der nicht auflöst, ist der Fehler und wird nie als Text kopiert
+(036 FR-045). Ohne `field` (Titel, Datum, Tags) wird der Text kopiert, wie er ist.
 
 ## Schreiben: Einträge
 
@@ -217,6 +238,7 @@ errors: NotFound, InvalidInput { reason: 'not_previewable' }       // nur png, j
 passwords_history_list     args: { itemId }                result: SnapshotHeader[]  (neueste zuerst)
 passwords_history_get      args: { snapshotId }            result: SnapshotView      (wie ItemDetail, ohne Geheimnisse)
 passwords_history_reveal   args: { snapshotId, field }     result: { value }
+passwords_history_copy     args: { snapshotId, field }     result: { clearsInSeconds }  (Wert bleibt in Rust)
 passwords_history_restore  args: { itemId, snapshotId, expectedUpdatedAt }
                            result: { updatedAt, skippedAttachments: string[] }
                            errors: NotFound, Conflict

@@ -1,6 +1,6 @@
 // Part of `pnpm check:passwords` (spec 034-password-manager, US1, research R7): the draft of the
-// entry editor (src/lib/passwords/draft.ts). An update sends only what changed, and a secret that
-// was not touched never appears in it.
+// entry editor (src/lib/passwords/draft.ts). An update sends only what changed; the stored password
+// and custom values are in the form as they are and leave the update when untouched.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
@@ -24,20 +24,20 @@ const DETAIL: DetailLike = {
   expiresAt: '2030-01-31',
   note: 'a note',
   keyValues: [
-    { id: 'k1', key: 'PIN', hasValue: true },
-    { id: 'k2', key: 'Empty', hasValue: false },
+    { id: 'k1', key: 'PIN', value: '{$REF:password@abc}-1' },
+    { id: 'k2', key: 'Empty', value: null },
   ],
 }
 
 test('an untouched draft makes an empty patch and is not dirty', () => {
-  const initial = draftFromDetail(DETAIL)
+  const initial = draftFromDetail(DETAIL, '')
   const draft = cloneDraft(initial)
   assert.deepEqual(toPatch(initial, draft), {})
   assert.equal(isDirty(initial, draft), false)
 })
 
 test('only the changed fields are in the patch', () => {
-  const initial = draftFromDetail(DETAIL)
+  const initial = draftFromDetail(DETAIL, '')
   const draft = cloneDraft(initial)
   draft.title = 'Work mail'
   draft.note = ''
@@ -45,14 +45,15 @@ test('only the changed fields are in the patch', () => {
   assert.equal(isDirty(initial, draft), true)
 })
 
-test('the password is in the patch only when it was replaced', () => {
-  const initial = draftFromDetail(DETAIL)
+test('the stored password is in the form and in the patch only when it changed', () => {
+  const initial = draftFromDetail(DETAIL, 'stored-secret')
+  assert.equal(initial.password, 'stored-secret')
   assert.equal('password' in toPatch(initial, cloneDraft(initial)), false)
   const replaced = cloneDraft(initial)
-  replaced.password = { mode: 'set', value: 'new-secret' }
+  replaced.password = 'new-secret'
   assert.equal(toPatch(initial, replaced).password, 'new-secret')
   const emptied = cloneDraft(initial)
-  emptied.password = { mode: 'set', value: '' }
+  emptied.password = ''
   assert.equal(
     toPatch(initial, emptied).password,
     '',
@@ -61,7 +62,7 @@ test('the password is in the patch only when it was replaced', () => {
 })
 
 test('removing a date, an icon or a color clears it', () => {
-  const initial = draftFromDetail(DETAIL)
+  const initial = draftFromDetail(DETAIL, '')
   const draft = cloneDraft(initial)
   draft.expiresAt = ''
   draft.icon = null
@@ -74,7 +75,7 @@ test('removing a date, an icon or a color clears it', () => {
 })
 
 test('the TOTP is replaced, cleared or left alone', () => {
-  const initial = draftFromDetail(DETAIL)
+  const initial = draftFromDetail(DETAIL, '')
   const replace = cloneDraft(initial)
   replace.otp = {
     mode: 'set',
@@ -93,7 +94,7 @@ test('the TOTP is replaced, cleared or left alone', () => {
 })
 
 test('tags compare as a set, not by order', () => {
-  const initial = draftFromDetail(DETAIL)
+  const initial = draftFromDetail(DETAIL, '')
   const reordered = cloneDraft(initial)
   reordered.tags = ['Bank', 'Work']
   assert.equal('tags' in toPatch(initial, reordered), false)
@@ -102,20 +103,16 @@ test('tags compare as a set, not by order', () => {
   assert.deepEqual(toPatch(initial, added).tags, ['Work', 'Bank', 'New'])
 })
 
-test('an untouched custom field keeps its stored value, a new one carries its own', () => {
-  const initial = draftFromDetail(DETAIL)
+test('custom fields carry their stored values with placeholders unresolved', () => {
+  const initial = draftFromDetail(DETAIL, '')
+  assert.equal(initial.keyValues[0]!.value, '{$REF:password@abc}-1')
   const draft = cloneDraft(initial)
   draft.keyValues[0]!.key = 'PIN code'
-  draft.keyValues.push({
-    id: null,
-    key: 'Recovery',
-    value: 'r-1',
-    hasStoredValue: false,
-  })
+  draft.keyValues.push({ id: null, key: 'Recovery', value: 'r-1' })
   const patch = toPatch(initial, draft)
   assert.deepEqual(patch.keyValues, [
-    { id: 'k1', key: 'PIN code', value: undefined },
-    { id: 'k2', key: 'Empty', value: undefined },
+    { id: 'k1', key: 'PIN code', value: '{$REF:password@abc}-1' },
+    { id: 'k2', key: 'Empty', value: '' },
     { id: undefined, key: 'Recovery', value: 'r-1' },
   ])
   const changed = cloneDraft(initial)
@@ -126,11 +123,11 @@ test('an untouched custom field keeps its stored value, a new one carries its ow
 test('a create input leaves out empty texts and fields without a key', () => {
   const draft = emptyDraft()
   draft.title = 'Shop'
-  draft.password = { mode: 'set', value: 'pw' }
+  draft.password = 'pw'
   draft.tags = ['Home']
   draft.keyValues = [
-    { id: null, key: 'PIN', value: '1234', hasStoredValue: false },
-    { id: null, key: '  ', value: 'dropped', hasStoredValue: false },
+    { id: null, key: 'PIN', value: '1234' },
+    { id: null, key: '  ', value: 'dropped' },
   ]
   const input = toInput(draft)
   assert.equal(input.title, 'Shop')
