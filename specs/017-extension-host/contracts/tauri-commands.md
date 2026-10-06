@@ -22,9 +22,9 @@ laufen über `VaultDb` und sind nach dem Schließen der Vault gesperrt (ADR-0003
 | Command                        | Eingabe                                                                    | Ausgabe                                                                    |
 | ------------------------------ | -------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `extension_permissions_list`   | `{extensionId}`                                                            | `PermissionView[]` (gemerkt mit Geltungsbereich und Gerätename, vorläufig) |
-| `extension_permission_set`     | `{extensionId, kind, action, target, status, scope}`                       | –                                                                          |
+| `extension_permission_set`     | `{extensionId, kind, action, target, status, replaces?}`                   | –                                                                          |
 | `extension_permission_remove`  | `{permissionId}` oder `{temporaryKey}`                                     | –                                                                          |
-| `extension_permission_resolve` | `{requestId, decision: allow \| deny, remember, allDevices}`               | –                                                                          |
+| `extension_permission_resolve` | `{requestId, decision: allow \| deny, remember}`                           | –                                                                          |
 | `extension_permission_cancel`  | `{requestId}` (Dialog geschlossen; die nächste gleiche Frage kommt wieder) | –                                                                          |
 
 Ereignis `extension-permission-request` (siehe [permissions.md](./permissions.md)).

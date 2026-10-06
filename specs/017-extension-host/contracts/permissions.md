@@ -5,16 +5,16 @@ Begründung: [research.md](../research.md) R15, R18–R21. Modul `src-tauri/src/
 
 ## Arten, Aktionen, Ziele
 
-| Art (`kind`)    | Aktionen                   | Ziel                                                                                                         | Abgleich                                                                    | Geltungsbereich gemerkt              |
-| --------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------ |
-| `database`      | `read`, `readWrite`        | Präfix einer Erweiterung (`<pk>__<name>__*`) oder eine ihrer Tabellen                                        | exakt zerlegt (sql-policy)                                                  | vault-weit                           |
-| `filesystem`    | `read`, `readWrite`        | Pfad (Ordner mit Unterordnern) oder Datei                                                                    | Präfix aus ganzen Pfadteilen (`Path::starts_with`) auf dem aufgelösten Pfad | **Gerät**, wählbar „für alle Geräte“ |
-| `web`           | HTTP-Methode oder `*`      | `*`, `schema://host/pfad*`, `*.domain`, Domain                                                               | wie HV `manager/url.rs`, jede Weiterleitung neu                             | vault-weit                           |
-| `notifications` | `show`                     | `*`                                                                                                          | –                                                                           | vault-weit                           |
-| `passwords`     | `read`, `readWrite`        | Tag oder `*`                                                                                                 | über 034 (`Grant`, `Scope`)                                                 | vault-weit                           |
-| `remoteStorage` | `read`, `readWrite`, `add` | Kennung des Speichers (Spec 038) oder `*`; bei `add` der Host eines Endpunkts (`host:port`, `host`) oder `*` | exakt; bei `add` wie `mail`                                                 | vault-weit                           |
-| `mail`          | `fetch`, `send`, `poll`    | `*`, `host:port` oder `host` (alle Ports)                                                                    | Host ohne Rücksicht auf Groß-/Kleinschreibung                               | vault-weit                           |
-| `shell`         | `execute`                  | Programm (kanonischer Pfad) oder `*`                                                                         | exakt nach Auflösung                                                        | **Gerät**, wählbar „für alle Geräte“ |
+| Art (`kind`)    | Aktionen                   | Ziel                                                                                                         | Abgleich                                                                    | Geltungsbereich gemerkt |
+| --------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ----------------------- |
+| `database`      | `read`, `readWrite`        | Präfix einer Erweiterung (`<pk>__<name>__*`) oder eine ihrer Tabellen                                        | exakt zerlegt (sql-policy)                                                  | vault-weit              |
+| `filesystem`    | `read`, `readWrite`        | Pfad (Ordner mit Unterordnern) oder Datei                                                                    | Präfix aus ganzen Pfadteilen (`Path::starts_with`) auf dem aufgelösten Pfad | vault-weit              |
+| `web`           | HTTP-Methode oder `*`      | `*`, `schema://host/pfad*`, `*.domain`, Domain                                                               | wie HV `manager/url.rs`, jede Weiterleitung neu                             | vault-weit              |
+| `notifications` | `show`                     | `*`                                                                                                          | –                                                                           | vault-weit              |
+| `passwords`     | `read`, `readWrite`        | Tag oder `*`                                                                                                 | über 034 (`Grant`, `Scope`)                                                 | vault-weit              |
+| `remoteStorage` | `read`, `readWrite`, `add` | Kennung des Speichers (Spec 038) oder `*`; bei `add` der Host eines Endpunkts (`host:port`, `host`) oder `*` | exakt; bei `add` wie `mail`                                                 | vault-weit              |
+| `mail`          | `fetch`, `send`, `poll`    | `*`, `host:port` oder `host` (alle Ports)                                                                    | Host ohne Rücksicht auf Groß-/Kleinschreibung                               | vault-weit              |
+| `shell`         | `execute`                  | Programm (kanonischer Pfad) oder `*`                                                                         | exakt nach Auflösung                                                        | **Gerät**, ohne Wahl    |
 
 - `readWrite` deckt `read`, nicht `add` (Spec 038 FR-009b: einen Endpunkt vorschlagen).
 - Manifest-Schreibweisen werden vereinheitlicht: `readWrite`/`read_write`, `http`/`web`,
@@ -68,5 +68,7 @@ Feste Regeln vor der Auswertung (keine Berechtigung ändert sie): Kerntabellen (
 ## Einstellungen (Kategorie „Erweiterungen“)
 
 Je Erweiterung: Berechtigungen mit Zustand, Geltungsbereich (vault-weit oder Gerät mit Namen), „erklärt“ oder
-„nicht erklärt“; Ändern von Zustand und Geltungsbereich, Widerrufen. Vorläufige Berechtigungen dieses Geräts
-mit „Entfernen“. Jede Änderung gilt sofort; der Cache in Rust wird verworfen.
+„nicht erklärt“; Ändern des Zustands, Widerrufen. Den Geltungsbereich wählt niemand: Eine Zeile, deren Bereich zu
+ihrer Art passt, behält ihn (eine Shell-Zeile eines anderen Geräts bleibt dort); eine ältere Zeile, deren Bereich
+nicht passt, ersetzt `extension_permission_set` über `replaces` durch eine im Bereich der Art. Vorläufige
+Berechtigungen dieses Geräts mit „Entfernen“. Jede Änderung gilt sofort; der Cache in Rust wird verworfen.
