@@ -66,6 +66,9 @@ function captureTarget(event: PointerEvent): PointerCaptureTarget | null {
   return target as PointerCaptureTarget
 }
 
+// The button captures a mouse hold, so a reveal that reflows the row does not count as leaving it.
+// The hold ends on release, on cancel and whenever the capture is lost without a release (e.g. the
+// window loses the pointer), so a value never stays shown without a held button.
 function onPointerDown(event: PointerEvent) {
   if (event.pointerType === 'touch') return
   captureTarget(event)?.setPointerCapture(event.pointerId)
@@ -123,6 +126,7 @@ onBeforeUnmount(hide)
       @pointerup="onPointerEnd"
       @pointerleave="onPointerEnd"
       @pointercancel="onPointerEnd"
+      @lostpointercapture="onPointerEnd"
       @click="onClick"
     >
       <Icon

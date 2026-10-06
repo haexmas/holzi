@@ -8,7 +8,7 @@ const entryView = readFileSync('src/components/passwords/EntryView.vue', 'utf8')
 
 test('EntryView wires its delete state to the trash confirmation dialog', () => {
   assert.match(entryView, /<PasswordsDeleteDialog\b/)
-  assert.match(entryView, /:open="deleteOpen"/)
+  assert.match(entryView, /v-model:open="deleteOpen"/)
   assert.match(entryView, /:targets="\[\{ kind: 'item', id: itemId \}\]"/)
   assert.match(entryView, /@done="leaveDeleted"/)
 })
