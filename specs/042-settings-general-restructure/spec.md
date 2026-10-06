@@ -115,7 +115,7 @@ Als Nutzer lege ich ein Bild als Hintergrund für meine Workspaces fest oder ent
 - **FR-016**: The user MUST be able to choose an image file as workspace background and remove it again; "Entfernen" MUST only be offered while a background is set.
 - **FR-017**: A set background MUST show behind every workspace; without one, the current default background MUST show.
 - **FR-018**: The background MUST be stored in the vault and synchronized to its devices, reduced to at most 2560 px on its long edge.
-- **FR-019**: Language and background MUST be settable by an agent like every other vault setting.
+- **FR-019**: An agent MUST be able to set the language and remove the background; to set a background it MUST be able to open "Erscheinungsbild" for the user, who then chooses the image (research R8).
 
 ### Key Entities
 
