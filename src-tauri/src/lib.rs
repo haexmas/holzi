@@ -55,7 +55,7 @@ use extensions::commands::dev::{
 };
 use extensions::commands::frames::{
     extension_bridge_call, extension_dialog_resolve, extension_frame_close, extension_frame_open,
-    extension_host_context_set,
+    extension_frame_reloaded, extension_host_context_set,
 };
 use extensions::commands::install::{extension_install, extension_install_preview};
 use extensions::commands::manage::{
@@ -412,6 +412,7 @@ pub fn run() {
             extension_icon,
             extension_frame_open,
             extension_frame_close,
+            extension_frame_reloaded,
             extension_bridge_call,
             extension_host_context_set,
             extension_dialog_resolve,

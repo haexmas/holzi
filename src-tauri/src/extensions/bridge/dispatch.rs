@@ -339,6 +339,11 @@ pub static METHODS: &[Method] = &[
         module: shell::MODULE,
     },
     Method {
+        name: "extension_shell_ack",
+        handler: shell::ack,
+        module: shell::MODULE,
+    },
+    Method {
         name: "extension_shell_resize",
         handler: shell::resize,
         module: shell::MODULE,
@@ -355,7 +360,7 @@ const LATER: &[&str] = &["extension_remote_storage_"];
 
 /// Whether the caller may run host functions: an installed, enabled extension, or a development
 /// version while developer mode is on for this device (US12).
-fn is_enabled(ctx: &CallContext) -> Result<bool, BridgeError> {
+pub(crate) fn is_enabled(ctx: &CallContext) -> Result<bool, BridgeError> {
     let id = ctx.session.extension_id;
     let device = ctx.device;
     let dev = ctx.session.source == FrameSource::DevServer;
