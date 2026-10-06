@@ -99,40 +99,47 @@ fn concurrent_installs_of_two_versions_end_on_the_higher_one_everywhere() {
 }
 
 #[test]
-fn a_device_scoped_permission_from_a_does_not_hold_on_b() {
+fn a_shell_permission_from_a_does_not_hold_on_b_a_file_permission_does() {
     let (a, b) = (Node::new(), Node::new());
     let ext = a.install(&bundle("1.0.0", &[INIT]));
+    let me = a.me;
     a.vault
         .write_blocking(move |tx| {
-            permission_store::put(
-                tx,
-                ext,
-                &NewPermission {
-                    kind: "shell",
-                    action: "execute",
-                    target: "/usr/bin/git",
-                    status: "granted",
-                    declared: false,
-                    vault_device_uuid: a.me,
-                },
-                1,
-            )
-            .map(drop)
-            .map_err(Into::into)
+            for (kind, action, target) in [
+                (PermissionKind::Shell, "execute", "/usr/bin/git"),
+                (PermissionKind::Filesystem, "read", "/tmp/notes"),
+            ] {
+                permission_store::put(
+                    tx,
+                    ext,
+                    &NewPermission {
+                        kind: kind.as_str(),
+                        action,
+                        target,
+                        status: "granted",
+                        declared: false,
+                        vault_device_uuid: kind.scope_on(me),
+                    },
+                    1,
+                )?;
+            }
+            Ok(())
         })
         .expect("grant");
     b.pull(&a);
-    let on = |node: &Node| {
+    let on = |node: &Node, kind: PermissionKind| {
         let me = node.me;
         node.vault
             .read_blocking(move |q| {
-                permission_store::candidates(q, ext, PermissionKind::Shell, me).map_err(Into::into)
+                permission_store::candidates(q, ext, kind, me).map_err(Into::into)
             })
             .expect("candidates")
             .len()
     };
-    assert_eq!(on(&a), 1);
-    assert_eq!(on(&b), 0);
+    assert_eq!(on(&a, PermissionKind::Shell), 1);
+    assert_eq!(on(&b, PermissionKind::Shell), 0, "the shell stays on A");
+    assert_eq!(on(&a, PermissionKind::Filesystem), 1);
+    assert_eq!(on(&b, PermissionKind::Filesystem), 1, "files hold on B too");
 }
 
 #[test]

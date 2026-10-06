@@ -224,6 +224,90 @@ fn a_setting_never_replaces_a_row_of_another_extension() {
 }
 
 #[test]
+fn a_setting_keeps_a_fitting_scope_and_moves_an_old_one_to_the_scope_of_its_kind() {
+    let s = setup();
+    let ext = s.ctx.session.extension_id;
+    let other_device = Uuid::new_v4();
+    s.ctx
+        .db
+        .write_blocking(move |tx| {
+            tx.execute(
+                "INSERT INTO known_devices (installation_uuid, vault_device_uuid, alias, first_seen) \
+                 VALUES (?1, ?2, 'phone', 1)",
+                haex_crdt::rusqlite::params![Uuid::new_v4().to_string(), other_device.to_string()],
+            )
+            .map(drop)
+        })
+        .unwrap();
+    let me = s.ctx.device;
+    let put = |kind: &'static str, action: &'static str, target: &'static str, scope: Uuid| {
+        s.ctx
+            .db
+            .write_blocking(move |tx| {
+                permission_store::put(
+                    tx,
+                    ext,
+                    &NewPermission {
+                        kind,
+                        action,
+                        target,
+                        status: "granted",
+                        declared: false,
+                        vault_device_uuid: scope,
+                    },
+                    1,
+                )
+                .map_err(Into::into)
+            })
+            .unwrap()
+    };
+    let change = |kind: &str, action: &str, target: &str, row: Uuid| {
+        set(
+            &s.ctx.db,
+            me,
+            PermissionSetArgs {
+                extension_id: ext.to_string(),
+                kind: kind.into(),
+                action: action.into(),
+                target: target.into(),
+                status: "denied".into(),
+                replaces: Some(row.to_string()),
+            },
+            2,
+        )
+        .unwrap();
+    };
+    let shell_elsewhere = put("shell", "execute", "/usr/bin/git", other_device);
+    let old_shell = put("shell", "execute", "/usr/bin/make", VAULT_WIDE);
+    let old_file = put("filesystem", "read", "/home/a/docs", me);
+    change("shell", "execute", "/usr/bin/git", shell_elsewhere);
+    change("shell", "execute", "/usr/bin/make", old_shell);
+    change("filesystem", "read", "/home/a/docs", old_file);
+
+    let mut rows: Vec<(String, Uuid, String)> = s
+        .ctx
+        .db
+        .read_blocking(move |q| {
+            permission_store::rows_of(q, ext).map_err(|e| haex_crdt::Error::consumer(e.to_string()))
+        })
+        .unwrap()
+        .into_iter()
+        .filter(|r| !r.declared)
+        .map(|r| (r.target, r.vault_device_uuid, r.status))
+        .collect();
+    rows.sort();
+    assert_eq!(
+        rows,
+        vec![
+            ("/home/a/docs".into(), VAULT_WIDE, "denied".into()),
+            ("/usr/bin/git".into(), other_device, "denied".into()),
+            ("/usr/bin/make".into(), me, "denied".into()),
+        ],
+        "a shell row of another device stays there; older rows take the scope of their kind"
+    );
+}
+
+#[test]
 fn a_decision_without_remember_is_held_and_a_denial_answers_1002() {
     let s = setup();
     read_foreign(&s);

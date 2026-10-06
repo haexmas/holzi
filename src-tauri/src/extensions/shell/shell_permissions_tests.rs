@@ -11,6 +11,7 @@ use crate::extensions::bridge::dispatch::{call, CallContext};
 use crate::extensions::commands::permissions::{resolve, PermissionResolveArgs};
 use crate::extensions::error::{Asks, BridgeError};
 use crate::extensions::permissions::prompts::PermissionDecision;
+use crate::extensions::permissions::store as permission_store;
 use crate::extensions::registry::remove::set_enabled;
 use crate::extensions::shell::{create, resolve_program};
 
@@ -73,6 +74,21 @@ fn without_a_permission_holzi_asks_about_the_canonical_program_by_the_name_given
         2,
     )
     .unwrap();
+    let ext = s.notes.session.extension_id;
+    let rows = s
+        .vault
+        .read_blocking(move |q| {
+            permission_store::rows_of(q, ext).map_err(|e| haex_crdt::Error::consumer(e.to_string()))
+        })
+        .unwrap();
+    let remembered = rows
+        .iter()
+        .find(|r| r.kind == "shell" && r.target == canonical.to_string_lossy())
+        .unwrap();
+    assert_eq!(
+        remembered.vault_device_uuid, s.notes.device,
+        "a remembered shell answer holds on this device only"
+    );
     // The SDK waits for the target its 1004 named.
     assert_eq!(
         resolved_targets(&s),

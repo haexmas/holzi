@@ -66,6 +66,12 @@ impl PermissionKind {
             VAULT_WIDE
         }
     }
+
+    /// Whether a remembered permission of this kind may have the scope `vault_device_uuid`: a
+    /// device for a device-scoped kind, vault-wide for every other.
+    pub fn fits(self, vault_device_uuid: Uuid) -> bool {
+        self.is_device_scoped() == (vault_device_uuid != VAULT_WIDE)
+    }
 }
 
 /// What the extension wants to do.

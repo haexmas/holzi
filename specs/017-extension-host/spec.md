@@ -733,8 +733,10 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   Anfrage MUSS sagen, wo die gemerkte Entscheidung gelten wird. Nicht gemerkte gelten nur auf
   diesem Gerät bis zum Schließen der Vault. Die Einstellungs-App MUSS bei jeder Berechtigung
   zeigen, ob sie vault-weit oder geräteeigen ist und für welches Gerät. Ändert der Nutzer dort
-  den Zustand einer Zeile, deren Geltungsbereich nicht zu ihrer Art passt (aus der Zeit vor der
-  Klärung vom 2026-10-06), MUSS holzi sie durch eine Zeile im Geltungsbereich der Art ersetzen.
+  den Zustand einer Zeile, MUSS sie ihren Geltungsbereich behalten, wenn er zu ihrer Art passt
+  (eine Shell-Berechtigung eines anderen Geräts bleibt auf diesem Gerät); passt er nicht (aus der
+  Zeit vor der Klärung vom 2026-10-06), MUSS holzi sie durch eine Zeile im Geltungsbereich der Art
+  ersetzen.
 - **FR-019**: Anfragen MÜSSEN in einer Warteschlange nacheinander erscheinen, gleiche
   Anfragen zusammengefasst. Die Erweiterung MUSS die Entscheidung erfahren, damit das
   vault-sdk die Anfrage wiederholen oder aufgeben kann. Eine Anfrage, auf die niemand mehr

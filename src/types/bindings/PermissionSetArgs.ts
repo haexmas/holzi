@@ -6,6 +6,8 @@ export type PermissionSetArgs = { extensionId: string, kind: string, action: str
  */
 status: string,
 /**
- * The row this setting replaces, if any: a row of a scope the kind no longer has.
+ * The row whose state this setting changes, if any. It keeps its scope when the scope fits
+ * its kind (a shell row of another device stays on that device); a row from before
+ * Clarifications 2026-10-06 whose scope no longer fits is replaced by one in the kind's scope.
  */
 replaces: string | null, };

@@ -129,7 +129,9 @@ pub struct PermissionSetArgs {
     pub target: String,
     /// `granted`, `denied` or `ask`.
     pub status: String,
-    /// The row this setting replaces, if any: a row of a scope the kind no longer has.
+    /// The row whose state this setting changes, if any. It keeps its scope when the scope fits
+    /// its kind (a shell row of another device stays on that device); a row from before
+    /// Clarifications 2026-10-06 whose scope no longer fits is replaced by one in the kind's scope.
     #[serde(default)]
     pub replaces: Option<String>,
 }
@@ -138,13 +140,27 @@ pub struct PermissionSetArgs {
 pub fn set(db: &VaultDb, device: Uuid, args: PermissionSetArgs, now_ms: i64) -> Result<()> {
     let extension_id = parse_id(&args.extension_id)?;
     let kind = PermissionKind::parse(&args.kind).ok_or_else(|| invalid("unknown kind"))?;
-    let scope = kind.scope_on(device);
-    if Permission::from_row(&args.kind, &args.action, &args.target, &args.status, scope).is_none() {
+    let own_scope = kind.scope_on(device);
+    if Permission::from_row(
+        &args.kind,
+        &args.action,
+        &args.target,
+        &args.status,
+        own_scope,
+    )
+    .is_none()
+    {
         return Err(invalid("permission not understood"));
     }
     let replaces = args.replaces.as_deref().map(parse_id).transpose()?;
     db.write_blocking(move |tx| {
         let rows = permission_store::rows_of(tx, extension_id)?;
+        let scope = replaces
+            .and_then(|old| rows.iter().find(|r| r.id == old))
+            .filter(|r| r.is_about(&args.kind, &args.action, &args.target))
+            .map(|r| r.vault_device_uuid)
+            .filter(|&scope| kind.fits(scope))
+            .unwrap_or(own_scope);
         let declared = rows
             .iter()
             .any(|r| r.declared && r.is_about(&args.kind, &args.action, &args.target));
