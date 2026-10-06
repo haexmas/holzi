@@ -45,13 +45,6 @@ async function confirm() {
   await confirmAsync(credentials).catch(() => {})
 }
 
-/** Enter in a field confirms (no native form: see `ConnectionForm.vue`). */
-function onEnter(event: KeyboardEvent) {
-  if ((event.target as HTMLElement | null)?.tagName !== 'INPUT') return
-  event.preventDefault()
-  void confirm()
-}
-
 function onUpdateOpen(open: boolean) {
   if (!open) cancel()
 }
@@ -65,10 +58,11 @@ function onUpdateOpen(open: boolean) {
     @update:open="onUpdateOpen"
   >
     <template #content>
-      <div
+      <form
+        id="storage-credentials-form"
         class="space-y-3"
         data-testid="storage-credentials-modal"
-        @keydown.enter="onEnter"
+        @submit.prevent="confirm"
       >
         <p class="text-sm">
           {{
@@ -114,7 +108,7 @@ function onUpdateOpen(open: boolean) {
         <p v-if="failure" class="text-sm text-destructive" role="alert">
           {{ failure }}
         </p>
-      </div>
+      </form>
     </template>
     <template #footer>
       <div class="flex justify-end gap-2">
@@ -128,10 +122,10 @@ function onUpdateOpen(open: boolean) {
           {{ t('extensions.dialog.cancel') }}
         </UiButton>
         <UiButton
-          type="button"
+          type="submit"
+          form="storage-credentials-form"
           size="sm"
           data-testid="storage-credentials-confirm"
-          @click="confirm"
         >
           {{ t('extensions.storageCredentials.confirm') }}
         </UiButton>

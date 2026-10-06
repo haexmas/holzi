@@ -157,15 +157,6 @@ async function saveAsync() {
     busy.value = false
   }
 }
-
-/** Enter in a field saves. No native form: haex-ui's eye button of a password field has no
- * `type="button"`, so it would be the form's default button and catch the Enter. */
-function onEnter(event: KeyboardEvent) {
-  if (event.isComposing || event.keyCode === 229) return
-  if ((event.target as HTMLElement | null)?.tagName !== 'INPUT') return
-  event.preventDefault()
-  void saveAsync()
-}
 </script>
 
 <template>
@@ -174,7 +165,7 @@ function onEnter(event: KeyboardEvent) {
       {{ t('settings.storage.notFound') }}
     </p>
 
-    <div v-else class="flex flex-col gap-3" @keydown.enter="onEnter">
+    <form v-else class="flex flex-col gap-3" @submit.prevent="saveAsync">
       <SettingsGroup :label="t('settings.storage.groups.connection')">
         <SettingsRow
           :title="t('settings.storage.fields.providerKind')"
@@ -341,12 +332,7 @@ function onEnter(event: KeyboardEvent) {
         {{ failure }}
       </p>
       <div class="flex flex-wrap gap-2">
-        <UiButton
-          type="button"
-          :loading="busy"
-          data-testid="storage-save"
-          @click="saveAsync"
-        >
+        <UiButton type="submit" :loading="busy" data-testid="storage-save">
           {{
             busy ? t('settings.storage.testing') : t('settings.storage.save')
           }}
@@ -362,6 +348,6 @@ function onEnter(event: KeyboardEvent) {
           {{ t('settings.storage.remove') }}
         </UiButton>
       </div>
-    </div>
+    </form>
   </section>
 </template>

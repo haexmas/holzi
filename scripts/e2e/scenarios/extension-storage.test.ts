@@ -11,6 +11,7 @@ import {
   type InstalledExtension,
 } from '../lib/extensions.ts'
 import { listKeys, startRustfs } from '../lib/rustfs.ts'
+import { KEY } from '../lib/settings.ts'
 import type { Page } from '../lib/page.ts'
 
 const USERS_BUCKET = 'holzi-ext-e2e'
@@ -211,7 +212,8 @@ scenario(
     await page.waitForDisplayed('storage-credentials-modal', 10_000)
     await page.type('storage-credentials-access-key', rustfs.accessKeyId)
     await page.type('storage-credentials-secret', rustfs.secretAccessKey)
-    await page.click('storage-credentials-confirm')
+    // Enter in a field confirms, as the button does.
+    await page.type('storage-credentials-secret', KEY.enter)
     const updated = await answer(page, probe)
     assert.equal(updated.error, undefined, JSON.stringify(updated))
     assert.ok(
