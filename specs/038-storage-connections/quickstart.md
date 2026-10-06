@@ -56,7 +56,9 @@ Mit einer Test-Erweiterung (Fixture aus `tests/fixtures/extension_e2e`, um `remo
 1. `backends.add` ohne Zugangsdaten mit `sameProviderAs` (ein Speicher, in den Einstellungen angelegt wie in §4
    Schritt 1, für den die Erweiterung Lesen hat) und einem zweiten Bucket → Dialog von holzi über dem Tab (ohne Felder für Zugangsdaten)
    bestätigen → Kennung zurück, die Erweiterung hat „Lesen und Schreiben“. `backends.add` mit eigenem
-   Endpunkt `http://127.0.0.1:9000` → 3001 ohne Dialog (R8: lokale Endpunkte nur vom Nutzer). Das Fenster
+   Endpunkt `http://127.0.0.1:9000` → Rückfrage nach `remoteStorage`/`add` für `127.0.0.1:9000`; erteilen →
+   Dialog zeigt den Endpunkt als lokal und unverschlüsselt → bestätigen, Zugangsdaten im Fenster über der
+   ganzen App → Kennung zurück (FR-009b). Das Fenster
    für Zugangsdaten über der ganzen App: `backends.update`, im Dialog „neue Zugangsdaten“ wählen und
    bestätigen → Fenster über Tableiste und Werkzeugleiste, Zugangsdaten dort eingeben → Test bestanden.
 2. `upload("a/b.txt")`, `list()`, `download("a/b.txt")`, `delete("a/b.txt")` → gelingt; im Bucket liegt das

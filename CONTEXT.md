@@ -195,6 +195,36 @@ _Avoid_: confusing the **Bereich** of a Freigabe with the
 **Berechtigungsbereich** (`scope`) of an action (spec 020); they are different
 things that happen to share the English word.
 
+**Ablage / Kopier-Dialog** (spec 036):
+The **Ablage** is the password manager's own list of entries and folders that
+were cut or copied, waiting to be pasted: ids only, shared by all its windows,
+emptied when the last one closes or the vault changes. It is not the system
+clipboard; nothing of an entry reaches another program that way (copying a
+user name or password to the system clipboard is a separate action). Pasting
+a copy opens the **Kopier-Dialog**: title or suffix, "Verlauf übernehmen",
+user name or password as a Verweis on the original, "Passkeys per Verweis".
+_Avoid_: "Zwischenablage" for the Ablage.
+
+**Verweis (Platzhalter) / Passkey-Verbindung** (spec 036):
+A **Verweis** is a placeholder in a value — `{$<id>:username}`,
+`{$<id>:password}` or `{$<id>:extra:<key>}` — that stands for that value of
+another entry. It is stored as written and resolved only in Rust when the
+value is read, up to 12 steps; a cycle is refused on save, and an unresolved
+Verweis is an error, never an empty text. A Verweis grants no access: a
+caller without the source in its Bereich gets nothing. A **Passkey-Verbindung**
+shows a passkey of one entry at another entry without copying its key; it
+goes with the passkey or either entry.
+_Avoid_: "Link" for a Verweis in the UI (it reads "Verweis auf <Quelle>"),
+"Kopie" for a Passkey-Verbindung.
+
+**Tab Details / Extra / Verlauf** (spec 036):
+The three tabs of an entry in the password manager: **Details** (title, user
+name, password, address, TOTP, note), **Extra** (custom fields, attachments,
+passkeys) and **Verlauf** (the timeline of its Verlaufsstände). The tab is
+part of the **Ort**, so a Tab-Historie and a restored Sitzung come back to it.
+_Avoid_: "Tab" for these alone when the window manager's tabs could be meant;
+say "Tab des Eintrags".
+
 **Einstellungskategorie (settings category) / Unteransicht** (spec 023):
 A group in the settings' sidebar — Allgemein, Darstellung, Modelle, Agenten,
 Föderation (`SETTINGS_CATEGORIES` in `src/lib/settings/registry.ts`). A

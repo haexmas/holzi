@@ -140,6 +140,8 @@ Zeitpunkt vergleichen. Das Ergebnis ist der Kern des Passwortmanagers.
    **Then** wird die Zwischenablage geleert, sofern sie noch dasselbe Passwort enthält.
 5. **Given** mehrere Einträge, **When** der Nutzer in der Suche einen Teil von Titel,
    Benutzername oder Adresse eingibt, **Then** bleiben genau die passenden Einträge übrig.
+   _Geändert 2026-10-06 (PR #290):_ auch mit einem Tippfehler, die besten Treffer zuerst
+   (FR-007).
 6. **Given** ein Eintrag, **When** der Nutzer ein eigenes Feld hinzufügt, ändert oder löscht,
    **Then** bleibt das nach dem Speichern erhalten und gehört zu diesem Eintrag.
 7. **Given** ein Eintrag mit Ablaufdatum in der Vergangenheit, **When** die Liste angezeigt
@@ -494,6 +496,8 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
 - **FR-007**: Das System MUSS Einträge nach Titel, Benutzername, Adresse und Tag-Namen
   durchsuchen und in einer Liste und einem Baum mit Ordnern darstellen; Geheimnisse und
   Notizen DÜRFEN nicht Gegenstand der Suche sein.
+  _Erweitert 2026-10-06:_ Die Suche ist unscharf (Fuse.js): Jedes Wort muss in einem der vier
+  Felder vorkommen, ab vier Buchstaben mit einem Tippfehler; Treffer erscheinen nach Güte.
 - **FR-008**: Das System MUSS Einträge als abgelaufen kennzeichnen, wenn ihr Ablaufdatum
   überschritten ist.
 
