@@ -417,6 +417,15 @@ Suchtext ist kein Geheimnis. 5.000 Einträge je rund 300 Byte sind 1,5 MB.
 Vorteil fehlt bei dieser Größe), _`fuse.js`_ (vorhanden, aber Unschärfe passt nicht zu
 einem Namensfilter; `fold` genügt und ist testbar).
 
+_Geändert 2026-10-06 (PR #290, FR-007):_ Auf Wunsch des Betreibers sucht `filterHeaders` doch
+unscharf mit `fuse.js` (schon Abhängigkeit, auch für die Modellsuche): dieselben vier Felder,
+gefaltet mit `fold`, Platzhalter weiter ausgeblendet; jedes Wort muss in einem Feld treffen
+(UND), `threshold: 0.3` und `ignoreLocation` (bis drei Buchstaben genau, ab vier ein
+Tippfehler, ab sieben zwei). Mit Suchtext kommen die Treffer nach summierter Güte, Gleichstand
+in Titelreihenfolge; ohne bleibt die Titelreihenfolge. Grenze (`ponytail`): der Index wird je
+Anfrage gebaut, bei 5.000 Einträgen 20 bis 80 ms; nächster Schritt `Fuse.createIndex` je
+Kopfdatenliste und eine entprellte Suche.
+
 ## R12 — Import in Rust: alles übernehmen, in Schritten, mit Bericht und Rückgängigmachen
 
 **Befund**: haex-vault importiert in der Oberfläche, schreibt Zeile für Zeile ohne

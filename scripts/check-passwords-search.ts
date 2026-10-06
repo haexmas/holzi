@@ -171,3 +171,24 @@ test('the list sorts by folded title, untitled entries last, ties by id', () => 
     ['d', 'f', 'a', 'b', 'c', 'e'],
   )
 })
+
+test('a word with a typo still finds the entry, a short word must match exactly', () => {
+  assert.ok(matchesQuery(MAIL, 'acount'), 'a missing letter')
+  assert.ok(matchesQuery(BANK, 'finanzn'), 'a missing letter in a tag')
+  assert.ok(matchesQuery(MAIL, 'arbeiz'), 'a wrong letter')
+  assert.ok(
+    !matchesQuery(MAIL, 'bob'),
+    'three letters match exactly or not at all',
+  )
+  assert.ok(!matchesQuery(MAIL, 'konto'))
+})
+
+test('with a query the best hits come first, ties keep the given order', () => {
+  const close = header({ id: 'close', title: 'Paypal' })
+  const typo = header({ id: 'typo', title: 'Paypol' })
+  const other = header({ id: 'other', title: 'Paypal' })
+  assert.deepEqual(
+    filterHeaders([typo, close, other], { query: 'paypal' }).map((h) => h.id),
+    ['close', 'other', 'typo'],
+  )
+})
