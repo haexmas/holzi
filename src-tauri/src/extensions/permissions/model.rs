@@ -72,6 +72,8 @@ pub enum Action {
     Send,
     Poll,
     Execute,
+    /// Propose a new storage endpoint on a host (spec 038 FR-009b); `readWrite` does not cover it.
+    Add,
 }
 
 impl Action {
@@ -92,6 +94,7 @@ impl Action {
             (K::Mail, "send") => Some(Self::Send),
             (K::Mail, "poll") => Some(Self::Poll),
             (K::Shell, "execute") => Some(Self::Execute),
+            (K::RemoteStorage, "add") => Some(Self::Add),
             _ => None,
         }
     }
@@ -108,6 +111,7 @@ impl Action {
             Self::Send => "send".to_owned(),
             Self::Poll => "poll".to_owned(),
             Self::Execute => "execute".to_owned(),
+            Self::Add => "add".to_owned(),
         }
     }
 

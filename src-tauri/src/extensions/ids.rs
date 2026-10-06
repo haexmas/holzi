@@ -31,6 +31,9 @@ pub const NS_LIM: Uuid = Uuid::from_u128(0x4301fbb4_1b61_4014_a904_401b47498c48)
 pub const NS_DEVST: Uuid = Uuid::from_u128(0x2577efb5_6122_41eb_bf81_8827fd63a8b7);
 /// Namespace of `dev_extensions_no_sync.id`. Never change.
 pub const NS_DEV: Uuid = Uuid::from_u128(0x91a7ced9_243f_4af6_906e_bd047acc5b5d);
+/// Namespace of the vault id in an extension's area of a remote storage (spec 038, research R4).
+/// Never change, or an extension would lose its objects.
+pub const NS_VAULT: Uuid = Uuid::from_u128(0x552cfb7a_e8a0_431b_8536_00df6bc14b33);
 
 /// The separator between the parts of an extension table name.
 pub const TABLE_SEPARATOR: &str = "__";
@@ -231,6 +234,12 @@ pub fn dev_extension_id(
         )
         .as_bytes(),
     )
+}
+
+/// The vault in an extension's area of a remote storage: `UUIDv5(NS_VAULT, hex(vault pubkey))`
+/// (spec 038, research R4). Derived, so the bucket does not show the vault's key.
+pub fn storage_vault_id(vault_pubkey: &[u8; 32]) -> Uuid {
+    Uuid::new_v5(&NS_VAULT, crate::sync::keys::hex(vault_pubkey).as_bytes())
 }
 
 #[cfg(test)]

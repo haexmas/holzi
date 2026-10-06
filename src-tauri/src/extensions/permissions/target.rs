@@ -33,7 +33,8 @@ pub enum Target {
     Program(PathBuf),
     /// A tag of the password manager, compared in its folded form.
     Tag(String),
-    /// A remote storage connection.
+    /// A remote storage, by its id; for the action `add` the host of an endpoint
+    /// (`host:port`, `host`), matched like a mail server (spec 038 FR-009b).
     StorageId(String),
 }
 
@@ -75,6 +76,11 @@ pub enum RequestTarget {
     Program(PathBuf),
     Tag(String),
     StorageId(String),
+    /// The host of a storage endpoint an extension proposes (spec 038 FR-009b).
+    Endpoint {
+        host: String,
+        port: u16,
+    },
 }
 
 /// A parsed http(s) request URL.
@@ -158,6 +164,14 @@ impl Target {
             (Self::Program(program), RequestTarget::Program(asked)) => program == asked,
             (Self::Tag(tag), RequestTarget::Tag(asked)) => *tag == fold(asked),
             (Self::StorageId(id), RequestTarget::StorageId(asked)) => id == asked,
+            (Self::StorageId(host), RequestTarget::Endpoint { host: asked, port }) => {
+                parse_mail_server(host).is_some_and(|server| {
+                    server.matches(&RequestTarget::MailServer {
+                        host: asked.clone(),
+                        port: *port,
+                    })
+                })
+            }
             _ => false,
         }
     }

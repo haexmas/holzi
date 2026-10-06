@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::extensions::ids::ExtensionTable;
+use crate::extensions::permissions::Action;
 
 const PK: &str = "abababababababababababababababababababababababababababababababab";
 const OTHER: &str = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
@@ -244,4 +245,34 @@ fn tags_storage_ids_and_notifications() {
         &RequestTarget::Any
     ));
     assert!(Target::parse(PermissionKind::Notifications, "x").is_none());
+}
+
+#[test]
+fn the_host_of_a_proposed_storage_endpoint_matches_like_a_mail_server() {
+    let endpoint = RequestTarget::Endpoint {
+        host: "NAS.local".to_string(),
+        port: 9000,
+    };
+    for target in ["nas.local:9000", "nas.local", "*"] {
+        assert!(matches(PermissionKind::RemoteStorage, target, &endpoint), "{target}");
+    }
+    for target in ["nas.local:9001", "other.local", "evilnas.local"] {
+        assert!(!matches(PermissionKind::RemoteStorage, target, &endpoint), "{target}");
+    }
+    assert!(
+        !matches(
+            PermissionKind::RemoteStorage,
+            "nas.local",
+            &RequestTarget::StorageId("conn-1".to_string())
+        ),
+        "a host is not a storage"
+    );
+}
+
+#[test]
+fn add_is_an_action_of_remote_storage_that_read_write_does_not_cover() {
+    let add = Action::parse(PermissionKind::RemoteStorage, "add").expect("add");
+    assert_eq!(add.as_string(), "add");
+    assert!(!Action::ReadWrite.covers(&add));
+    assert!(Action::parse(PermissionKind::Passwords, "add").is_none());
 }
