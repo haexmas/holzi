@@ -1,15 +1,18 @@
-//! Which endpoints holzi talks to (spec 038 FR-017, research R8).
+//! Which endpoints holzi talks to (spec 038 FR-017, FR-009b, research R8).
 //!
 //! [`check_endpoint`] looks at the address as typed: only `http` and `https`, no user name or
-//! password in it, and for an endpoint an extension proposed neither `http`, nor `localhost`, nor
-//! an IP address it may not reach. [`pin`] runs before every call: it resolves the host once,
-//! checks every address, and hands back the addresses the request must go to, so a name that
-//! points elsewhere a moment later (DNS rebinding) reaches nothing new.
+//! password in it, and no IP address that is never reached. [`scope_of`] fixes the scope of an
+//! endpoint when it is set ([`EndpointScope`]): `local` when its host resolves to loopback or
+//! private addresses only, `public` when it resolves to public addresses only. [`pin`] runs before
+//! every call: it resolves the host once, checks that every address lies in the stored scope, and
+//! hands back the addresses the request must go to, so a name that points elsewhere a moment later
+//! (DNS rebinding) reaches nothing new.
 //!
 //! - Never: link-local (`169.254.0.0/16` with the metadata service of a cloud, `fe80::/10`),
 //!   unspecified, multicast and broadcast addresses, also as IPv4-mapped IPv6.
-//! - Only for an endpoint the user typed: loopback and private addresses (RFC 1918, RFC 4193).
-//! - `http` only when every address is one of those, so only for the user's own endpoints.
+//! - Loopback and private addresses (RFC 1918, RFC 4193) only for scope `local`, public addresses
+//!   only for scope `public`; a host with both is refused.
+//! - `http` only for scope `local`.
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -18,9 +21,9 @@ use async_trait::async_trait;
 use reqwest::Url;
 use url::Host;
 
-use super::{EndpointOrigin, Location, ProviderKind};
+use super::{EndpointScope, Location, ProviderKind};
 
-/// Why an endpoint is refused; neither variant carries the address.
+/// Why an endpoint is refused; no variant carries the address.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum AddressError {
     /// Not an `http`/`https` address with a host, or it carries a user name, a password, a query
@@ -30,6 +33,9 @@ pub enum AddressError {
     /// The address is one holzi does not reach for this endpoint.
     #[error("endpoint not allowed")]
     NotAllowed,
+    /// The host name did not resolve to any address.
+    #[error("endpoint not resolved")]
+    Unresolved,
 }
 
 /// What an address is, for the rules above.
@@ -40,15 +46,25 @@ pub enum Class {
     Public,
 }
 
-/// The class of `ip`; an IPv4-mapped IPv6 address counts as its IPv4 address.
+/// The class of `ip`; an IPv4-mapped or NAT64 IPv6 address counts as its IPv4 address.
 pub fn classify(ip: IpAddr) -> Class {
     match ip {
         IpAddr::V4(v4) => classify_v4(v4),
-        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped().or_else(|| nat64(v6)) {
             Some(v4) => classify_v4(v4),
             None => classify_v6(v6),
         },
     }
+}
+
+/// The IPv4 address behind the well-known NAT64 prefix `64:ff9b::/96` (RFC 6052), which a NAT64
+/// gateway forwards to that IPv4 address.
+fn nat64(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    let s = ip.segments();
+    (s[..6] == [0x64, 0xff9b, 0, 0, 0, 0]).then(|| {
+        let [.., a, b, c, d] = ip.octets();
+        Ipv4Addr::new(a, b, c, d)
+    })
 }
 
 /// Classifies IPv4 addresses as forbidden, local or public for endpoint validation.
@@ -67,7 +83,7 @@ fn classify_v4(ip: Ipv4Addr) -> Class {
     }
 }
 
-/// Classifies an IPv6 address after the caller has handled IPv4-mapped addresses.
+/// Classifies an IPv6 address after the caller has handled IPv4-mapped and NAT64 addresses.
 fn classify_v6(ip: Ipv6Addr) -> Class {
     let first = ip.segments()[0];
     if ip.is_unspecified() || ip.is_multicast() || first & 0xffc0 == 0xfe80 {
@@ -79,30 +95,28 @@ fn classify_v6(ip: Ipv6Addr) -> Class {
     }
 }
 
-/// Whether holzi may connect to `ip` for an endpoint of `origin` over `https` or `http`.
-pub fn allowed(ip: IpAddr, origin: EndpointOrigin, https: bool) -> bool {
-    match classify(ip) {
-        Class::Forbidden => false,
-        Class::Local => origin == EndpointOrigin::User,
-        Class::Public => https,
+/// Whether `ip` lies in `scope`; a forbidden address lies in none.
+pub fn in_scope(ip: IpAddr, scope: EndpointScope) -> bool {
+    matches!(
+        (classify(ip), scope),
+        (Class::Local, EndpointScope::Local) | (Class::Public, EndpointScope::Public)
+    )
+}
+
+fn is_https(url: &Url) -> Result<bool, AddressError> {
+    match url.scheme() {
+        "https" => Ok(true),
+        "http" => Ok(false),
+        _ => Err(AddressError::Invalid),
     }
 }
 
-/// Recognizes localhost and its subdomains regardless of case or a trailing dot.
-fn is_localhost(name: &str) -> bool {
-    let name = name.trim_end_matches('.').to_ascii_lowercase();
-    name == "localhost" || name.ends_with(".localhost")
-}
-
-/// Checks an endpoint as typed (see the module). For a host name the addresses are checked by
-/// [`pin`] before every call.
-pub fn check_endpoint(endpoint: &str, origin: EndpointOrigin) -> Result<Url, AddressError> {
+/// Checks an endpoint as typed (see the module). An IP address is refused here when it is never
+/// reached or when `http` would go to a public one; a host name's addresses are checked by
+/// [`scope_of`] and [`pin`].
+pub fn check_endpoint(endpoint: &str) -> Result<Url, AddressError> {
     let url = Url::parse(endpoint.trim()).map_err(|_| AddressError::Invalid)?;
-    let https = match url.scheme() {
-        "https" => true,
-        "http" => false,
-        _ => return Err(AddressError::Invalid),
-    };
+    let https = is_https(&url)?;
     if !url.username().is_empty()
         || url.password().is_some()
         || url.query().is_some()
@@ -110,24 +124,16 @@ pub fn check_endpoint(endpoint: &str, origin: EndpointOrigin) -> Result<Url, Add
     {
         return Err(AddressError::Invalid);
     }
-    let from_extension = origin == EndpointOrigin::Extension;
-    if from_extension && !https {
-        return Err(AddressError::NotAllowed);
+    let ip = match url.host().ok_or(AddressError::Invalid)? {
+        Host::Domain(_) => return Ok(url),
+        Host::Ipv4(ip) => IpAddr::V4(ip),
+        Host::Ipv6(ip) => IpAddr::V6(ip),
+    };
+    match classify(ip) {
+        Class::Forbidden => Err(AddressError::NotAllowed),
+        Class::Public if !https => Err(AddressError::NotAllowed),
+        Class::Local | Class::Public => Ok(url),
     }
-    match url.host().ok_or(AddressError::Invalid)? {
-        Host::Domain(name) if from_extension && is_localhost(name) => {
-            return Err(AddressError::NotAllowed)
-        }
-        Host::Domain(_) => {}
-        Host::Ipv4(ip) if !allowed(IpAddr::V4(ip), origin, https) => {
-            return Err(AddressError::NotAllowed)
-        }
-        Host::Ipv6(ip) if !allowed(IpAddr::V6(ip), origin, https) => {
-            return Err(AddressError::NotAllowed)
-        }
-        Host::Ipv4(_) | Host::Ipv6(_) => {}
-    }
-    Ok(url)
 }
 
 /// The address a connection talks to: its endpoint, or for AWS without one the regional one.
@@ -144,7 +150,7 @@ pub fn endpoint_url(location: &Location) -> Result<Url, AddressError> {
         return Url::parse(&format!("https://s3.{region}.amazonaws.com"))
             .map_err(|_| AddressError::Invalid);
     }
-    check_endpoint(&location.endpoint, location.endpoint_origin)
+    check_endpoint(&location.endpoint)
 }
 
 /// Whether the endpoint sends without encryption; the settings and the dialog mark it.
@@ -181,34 +187,57 @@ pub struct Pinned {
     pub addrs: Vec<SocketAddr>,
 }
 
-/// Resolves the host of `url` once and checks every address (see the module). One address that is
-/// not allowed refuses the whole request.
-pub async fn pin(
+/// The host of `url` (`None` for an IP address), its port and its addresses, looked up once.
+async fn addresses(
     url: &Url,
-    origin: EndpointOrigin,
     resolver: &dyn Resolver,
-) -> Result<Pinned, AddressError> {
-    let https = match url.scheme() {
-        "https" => true,
-        "http" => false,
-        _ => return Err(AddressError::Invalid),
-    };
+) -> Result<(Option<String>, u16, Vec<IpAddr>), AddressError> {
     let port = url.port_or_known_default().ok_or(AddressError::Invalid)?;
     let (host, ips) = match url.host().ok_or(AddressError::Invalid)? {
         Host::Ipv4(ip) => (None, vec![IpAddr::V4(ip)]),
         Host::Ipv6(ip) => (None, vec![IpAddr::V6(ip)]),
         Host::Domain(name) => {
-            if origin == EndpointOrigin::Extension && is_localhost(name) {
-                return Err(AddressError::NotAllowed);
-            }
             let ips = resolver
                 .lookup(name, port)
                 .await
-                .map_err(|_| AddressError::NotAllowed)?;
+                .map_err(|_| AddressError::Unresolved)?;
             (Some(name.to_owned()), ips)
         }
     };
-    if ips.is_empty() || !ips.iter().all(|ip| allowed(*ip, origin, https)) {
+    if ips.is_empty() {
+        return Err(AddressError::Unresolved);
+    }
+    Ok((host, port, ips))
+}
+
+/// The scope of the endpoint `url` when it is set (see the module): `local` when every address is
+/// loopback or private, `public` when every address is public. A forbidden address, a mix of both
+/// and `http` to a public host are refused.
+pub async fn scope_of(url: &Url, resolver: &dyn Resolver) -> Result<EndpointScope, AddressError> {
+    let https = is_https(url)?;
+    let (_, _, ips) = addresses(url, resolver).await?;
+    let scope = if ips.iter().all(|ip| classify(*ip) == Class::Local) {
+        EndpointScope::Local
+    } else if https && ips.iter().all(|ip| classify(*ip) == Class::Public) {
+        EndpointScope::Public
+    } else {
+        return Err(AddressError::NotAllowed);
+    };
+    Ok(scope)
+}
+
+/// Resolves the host of `url` once and checks that every address lies in `scope` (see the
+/// module). One address outside it refuses the whole request.
+pub async fn pin(
+    url: &Url,
+    scope: EndpointScope,
+    resolver: &dyn Resolver,
+) -> Result<Pinned, AddressError> {
+    if !is_https(url)? && scope != EndpointScope::Local {
+        return Err(AddressError::NotAllowed);
+    }
+    let (host, port, ips) = addresses(url, resolver).await?;
+    if !ips.iter().all(|ip| in_scope(*ip, scope)) {
         return Err(AddressError::NotAllowed);
     }
     Ok(Pinned {

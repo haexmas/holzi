@@ -4,7 +4,8 @@
  * to the connection form, below it its storages with bucket, last test on this device and the
  * extensions that may use it, and a row to add a storage. A connection whose credentials are not
  * here says so: "wird synchronisiert" while they are on their way from another device, "neue
- * Zugangsdaten nötig" after the user deleted them (data-model.md). Follows changes from every
+ * Zugangsdaten nötig" after the user deleted them (data-model.md). A local endpoint (research R8)
+ * and an unencrypted one are marked. Follows changes from every
  * writer and device (`useStorageOverview`).
  */
 import type { ConnectionView } from '@bindings/ConnectionView'
@@ -92,6 +93,14 @@ function storageDescription(storage: StorageView): string {
           :data-testid="`storage-credentials-${connection.credentials}`"
         >
           {{ t(`settings.storage.credentialsState.${connection.credentials}`) }}
+        </span>
+        <span
+          v-if="connection.endpointScope === 'local'"
+          class="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+          :title="t('settings.storage.localHint')"
+          data-testid="storage-local"
+        >
+          {{ t('settings.storage.local') }}
         </span>
         <span
           v-if="connection.insecure"

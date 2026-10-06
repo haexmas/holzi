@@ -8,19 +8,20 @@
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use reqwest::Url;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
-use super::address::{self, check_endpoint};
+use super::address::{self, AddressError, Resolver};
 use super::model::{
     ConnectionInput, ConnectionView, CredentialsInput, LastTest, RemovalPreview, RemovalTarget,
     StorageInput, StorageOverview, StorageView, TestResult,
 };
 use super::probe::probe;
 use super::{
-    credentials, store, Access, ConnectionRow, Credentials, CredentialsState, EndpointOrigin,
+    credentials, store, Access, ConnectionRow, Credentials, CredentialsState, EndpointScope,
     Location, RemoteStore, StorageRow, TestOutcome,
 };
 use crate::error::{HolziError, Result};
@@ -28,11 +29,15 @@ use crate::passwords::clock;
 use crate::passwords::service::PasswordsService;
 use crate::vault_gate::VaultDb;
 
+/// How long holzi waits for the addresses of an endpoint when it is set.
+const RESOLVE_TIME: Duration = Duration::from_secs(10);
+
 /// Storage connections over the open vault and a provider.
 pub struct StorageService {
     db: VaultDb,
     passwords: PasswordsService,
     store: Arc<dyn RemoteStore>,
+    resolver: Arc<dyn Resolver>,
 }
 
 /// Builds a validation error identifying the rejected input field.
@@ -52,7 +57,7 @@ fn view(row: &ConnectionRow, credentials: super::CredentialsState) -> Connection
         region: row.region.clone(),
         addressing: row.addressing,
         insecure: Url::parse(&row.endpoint).is_ok_and(|url| address::is_insecure(&url)),
-        endpoint_origin: row.endpoint_origin,
+        endpoint_scope: row.endpoint_scope,
         credentials,
     }
 }
@@ -74,6 +79,14 @@ fn credentials_of(input: CredentialsInput) -> Result<Credentials> {
     })
 }
 
+/// A test that did not get as far as the provider: its address is not known.
+fn unreachable() -> HolziError {
+    HolziError::StorageTestFailed {
+        outcome: TestOutcome::Unreachable,
+        leftover_key: None,
+    }
+}
+
 /// Accepts a passed probe or returns its failure outcome and possible leftover object key.
 fn failed(result: super::probe::ProbeResult) -> Result<()> {
     match result.outcome {
@@ -86,12 +99,32 @@ fn failed(result: super::probe::ProbeResult) -> Result<()> {
 }
 
 impl StorageService {
-    /// Creates a storage service over the supplied vault, password service and remote provider.
-    pub fn new(db: VaultDb, passwords: PasswordsService, store: Arc<dyn RemoteStore>) -> Self {
+    /// Creates a storage service over the supplied vault, password service, remote provider and
+    /// resolver.
+    pub fn new(
+        db: VaultDb,
+        passwords: PasswordsService,
+        store: Arc<dyn RemoteStore>,
+        resolver: Arc<dyn Resolver>,
+    ) -> Self {
         Self {
             db,
             passwords,
             store,
+            resolver,
+        }
+    }
+
+    /// The scope of the endpoint `url` as it is set now (research R8): an address holzi never
+    /// reaches, a mix of local and public ones or `http` to a public host is an invalid endpoint, a
+    /// name without addresses an unreachable one.
+    async fn scope_of(&self, url: &Url) -> Result<EndpointScope> {
+        match tokio::time::timeout(RESOLVE_TIME, address::scope_of(url, self.resolver.as_ref()))
+            .await
+        {
+            Ok(Ok(scope)) => Ok(scope),
+            Ok(Err(AddressError::Unresolved)) | Err(_) => Err(unreachable()),
+            Ok(Err(AddressError::Invalid | AddressError::NotAllowed)) => Err(invalid("endpoint")),
         }
     }
 
@@ -158,8 +191,8 @@ impl StorageService {
         })
     }
 
-    /// Saves a connection of the user (see the module). Its endpoint counts as typed by the user
-    /// (research R8).
+    /// Saves a connection of the user (see the module). A new or changed endpoint gets its scope
+    /// anew (research R8); the user may set a local one.
     pub async fn save_connection(&self, input: ConnectionInput) -> Result<ConnectionView> {
         let endpoint = input.endpoint.as_deref().unwrap_or("").trim().to_owned();
         let existing = match &input.id {
@@ -175,7 +208,9 @@ impl StorageService {
             provider_name: input.provider_name.trim().to_owned(),
             provider_kind: input.provider_kind,
             endpoint,
-            endpoint_origin: EndpointOrigin::User,
+            endpoint_scope: existing
+                .as_ref()
+                .map_or(EndpointScope::Public, |e| e.endpoint_scope),
             region: input.region.trim().to_owned(),
             addressing: input.addressing,
             credentials_item_id: existing
@@ -189,11 +224,8 @@ impl StorageService {
             updated_at: now,
         };
         store::check_connection(&row)?;
-        let location = Location::of(&row, &input.bucket_for_test);
-        address::endpoint_url(&location).map_err(|_| invalid("endpoint"))?;
-        if !row.endpoint.is_empty() {
-            check_endpoint(&row.endpoint, EndpointOrigin::User).map_err(|_| invalid("endpoint"))?;
-        }
+        let url = address::endpoint_url(&Location::of(&row, &input.bucket_for_test))
+            .map_err(|_| invalid("endpoint"))?;
 
         let new_credentials = input.credentials.map(credentials_of).transpose()?;
         let moved = existing.as_ref().is_none_or(|e| {
@@ -207,12 +239,15 @@ impl StorageService {
             }
             (None, Some(_)) => None,
         };
+        if test_with.is_some() && !store::bucket_ok(&input.bucket_for_test) {
+            return Err(invalid("bucket"));
+        }
+        if moved {
+            row.endpoint_scope = self.scope_of(&url).await?;
+        }
         if let Some(credentials) = test_with {
-            if !store::bucket_ok(&input.bucket_for_test) {
-                return Err(invalid("bucket"));
-            }
             let access = Access {
-                location,
+                location: Location::of(&row, &input.bucket_for_test),
                 credentials,
             };
             let result = probe(self.store.as_ref(), &access).await;

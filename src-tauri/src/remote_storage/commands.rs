@@ -6,6 +6,7 @@ use std::sync::{Arc, OnceLock};
 
 use tauri::State;
 
+use super::address::SystemResolver;
 use super::model::{
     ConnectionInput, ConnectionView, RemovalPreview, RemovalTarget, StorageInput, StorageOverview,
     StorageView, TestResult,
@@ -28,7 +29,12 @@ pub fn s3_store() -> Arc<dyn RemoteStore> {
 pub(crate) fn service(state: &State<'_, AppState>) -> Result<StorageService> {
     let db = active_database(state)?;
     let passwords = PasswordsService::with_usage(db.clone(), state.usage());
-    Ok(StorageService::new(db, passwords, s3_store()))
+    Ok(StorageService::new(
+        db,
+        passwords,
+        s3_store(),
+        Arc::new(SystemResolver),
+    ))
 }
 
 /// Lists connections and storages with credential availability and local test results.

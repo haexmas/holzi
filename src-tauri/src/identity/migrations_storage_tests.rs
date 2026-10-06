@@ -22,7 +22,7 @@ const COLUMNS: [(&str, &[&str]); 3] = [
             "provider_name",
             "provider_kind",
             "endpoint",
-            "endpoint_origin",
+            "endpoint_scope",
             "region",
             "addressing",
             "credentials_item_id",

@@ -6,7 +6,7 @@
 
 use super::store::{self, bucket_ok};
 use super::test_support::{grant_storage, vault};
-use super::{Addressing, ConnectionRow, EndpointOrigin, ProviderKind, StorageRow, TestOutcome};
+use super::{Addressing, ConnectionRow, EndpointScope, ProviderKind, StorageRow, TestOutcome};
 use crate::error::HolziError;
 use crate::vault_gate::VaultDb;
 
@@ -16,7 +16,7 @@ fn connection(id: &str, item: &str) -> ConnectionRow {
         provider_name: "RustFS".to_owned(),
         provider_kind: ProviderKind::Rustfs,
         endpoint: "http://127.0.0.1:9000".to_owned(),
-        endpoint_origin: EndpointOrigin::User,
+        endpoint_scope: EndpointScope::Local,
         region: "us-east-1".to_owned(),
         addressing: Addressing::Path,
         credentials_item_id: item.to_owned(),

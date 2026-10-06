@@ -1,5 +1,6 @@
-//! The endpoint rules of research R8: a table of typed endpoints for both origins, and pinning with
-//! an injected resolver (a name that resolves to a local address, DNS rebinding, a mixed answer).
+//! The endpoint rules of research R8: a table of typed endpoints, the scope fixed when an endpoint
+//! is set, and pinning against that scope with an injected resolver (a public name that now
+//! resolves to a local address, DNS rebinding, a mixed answer).
 
 use std::io;
 use std::net::IpAddr;
@@ -9,121 +10,60 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use reqwest::Url;
 
-use super::address::{check_endpoint, endpoint_url, is_insecure, pin, AddressError, Resolver};
-use super::{Addressing, EndpointOrigin, Location, ProviderKind};
+use super::address::{
+    check_endpoint, endpoint_url, is_insecure, pin, scope_of, AddressError, Resolver,
+};
+use super::{Addressing, EndpointScope, Location, ProviderKind};
 
-use EndpointOrigin::{Extension, User};
+use EndpointScope::{Local, Public};
 
 #[test]
-fn typed_endpoints_follow_the_rules_for_their_origin() {
-    let ok = |e: &str, o| check_endpoint(e, o).map(|_| ());
-    let cases: &[(&str, EndpointOrigin, Result<(), AddressError>)] = &[
-        ("https://s3.example.com", Extension, Ok(())),
-        ("https://s3.example.com", User, Ok(())),
-        (
-            "http://203.0.113.7:9000",
-            User,
-            Err(AddressError::NotAllowed),
-        ),
-        ("http://192.168.1.5:9000", User, Ok(())),
-        (
-            "http://192.168.1.5:9000",
-            Extension,
-            Err(AddressError::NotAllowed),
-        ),
-        (
-            "https://192.168.1.5:9000",
-            Extension,
-            Err(AddressError::NotAllowed),
-        ),
-        ("http://127.0.0.1:9000", User, Ok(())),
-        ("http://localhost:9000", User, Ok(())),
-        (
-            "https://localhost:9000",
-            Extension,
-            Err(AddressError::NotAllowed),
-        ),
-        (
-            "https://minio.localhost",
-            Extension,
-            Err(AddressError::NotAllowed),
-        ),
-        (
-            "http://s3.example.com",
-            Extension,
-            Err(AddressError::NotAllowed),
-        ),
-        (
-            "http://169.254.169.254",
-            User,
-            Err(AddressError::NotAllowed),
-        ),
-        (
-            "http://169.254.169.254",
-            Extension,
-            Err(AddressError::NotAllowed),
-        ),
-        ("https://[fe80::1]", User, Err(AddressError::NotAllowed)),
-        (
-            "https://[fe80::1]",
-            Extension,
-            Err(AddressError::NotAllowed),
-        ),
+fn typed_endpoints_follow_the_rules() {
+    let ok = |e: &str| check_endpoint(e).map(|_| ());
+    let cases: &[(&str, Result<(), AddressError>)] = &[
+        ("https://s3.example.com", Ok(())),
+        ("http://s3.example.com", Ok(())),
+        ("http://203.0.113.7:9000", Err(AddressError::NotAllowed)),
+        ("https://203.0.113.7:9000", Ok(())),
+        ("http://192.168.1.5:9000", Ok(())),
+        ("https://192.168.1.5:9000", Ok(())),
+        ("http://127.0.0.1:9000", Ok(())),
+        ("http://localhost:9000", Ok(())),
+        ("http://169.254.169.254", Err(AddressError::NotAllowed)),
+        ("https://[fe80::1]", Err(AddressError::NotAllowed)),
         (
             "https://[::ffff:169.254.169.254]",
-            User,
             Err(AddressError::NotAllowed),
         ),
         (
-            "https://[::ffff:169.254.169.254]",
-            Extension,
+            "https://[64:ff9b::a9fe:a9fe]",
             Err(AddressError::NotAllowed),
         ),
-        (
-            "https://[::ffff:10.0.0.1]",
-            Extension,
-            Err(AddressError::NotAllowed),
-        ),
-        ("http://[fd00::5]:9000", User, Ok(())),
-        ("https://0.0.0.0", User, Err(AddressError::NotAllowed)),
-        ("https://224.0.0.1", User, Err(AddressError::NotAllowed)),
-        (
-            "https://255.255.255.255",
-            User,
-            Err(AddressError::NotAllowed),
-        ),
-        ("ftp://s3.example.com", User, Err(AddressError::Invalid)),
+        ("http://[::ffff:10.0.0.1]:9000", Ok(())),
+        ("http://[fd00::5]:9000", Ok(())),
+        ("https://0.0.0.0", Err(AddressError::NotAllowed)),
+        ("https://[::]", Err(AddressError::NotAllowed)),
+        ("https://224.0.0.1", Err(AddressError::NotAllowed)),
+        ("https://255.255.255.255", Err(AddressError::NotAllowed)),
+        ("ftp://s3.example.com", Err(AddressError::Invalid)),
         (
             "https://key:secret@s3.example.com",
-            User,
             Err(AddressError::Invalid),
         ),
-        (
-            "https://key@s3.example.com",
-            Extension,
-            Err(AddressError::Invalid),
-        ),
-        (
-            "https://s3.example.com?x=1",
-            User,
-            Err(AddressError::Invalid),
-        ),
-        ("not an address", User, Err(AddressError::Invalid)),
+        ("https://key@s3.example.com", Err(AddressError::Invalid)),
+        ("https://s3.example.com?x=1", Err(AddressError::Invalid)),
+        ("not an address", Err(AddressError::Invalid)),
     ];
-    for (endpoint, origin, expected) in cases {
-        assert_eq!(
-            &ok(endpoint, *origin),
-            expected,
-            "{endpoint} for {origin:?}"
-        );
+    for (endpoint, expected) in cases {
+        assert_eq!(&ok(endpoint), expected, "{endpoint}");
     }
 }
 
 #[test]
-fn an_http_endpoint_of_the_user_is_marked_insecure() {
-    let url = check_endpoint("http://192.168.1.5:9000", User).expect("allowed");
+fn an_http_endpoint_is_marked_insecure() {
+    let url = check_endpoint("http://192.168.1.5:9000").expect("allowed");
     assert!(is_insecure(&url));
-    let url = check_endpoint("https://s3.example.com", User).expect("allowed");
+    let url = check_endpoint("https://s3.example.com").expect("allowed");
     assert!(!is_insecure(&url));
 }
 
@@ -131,7 +71,7 @@ fn aws(region: &str) -> Location {
     Location {
         provider_kind: ProviderKind::Aws,
         endpoint: String::new(),
-        endpoint_origin: User,
+        endpoint_scope: Public,
         region: region.to_owned(),
         addressing: Addressing::Virtual,
         bucket: "b".to_owned(),
@@ -189,22 +129,89 @@ fn url(text: &str) -> Url {
 }
 
 #[tokio::test]
-async fn a_name_that_resolves_to_a_local_address_is_refused_for_an_extension() {
+async fn the_scope_of_an_endpoint_follows_its_addresses() {
+    let cases: &[(&str, &[&str], Result<EndpointScope, AddressError>)] = &[
+        ("https://s3.example.com", &["203.0.113.7"], Ok(Public)),
+        (
+            "https://s3.example.com",
+            &["203.0.113.7", "2001:db8::7"],
+            Ok(Public),
+        ),
+        (
+            "http://s3.example.com",
+            &["203.0.113.7"],
+            Err(AddressError::NotAllowed),
+        ),
+        ("http://rustfs.lan:9000", &["192.168.1.5"], Ok(Local)),
+        ("https://rustfs.lan", &["10.0.0.5", "fd00::5"], Ok(Local)),
+        ("http://localhost:9000", &["127.0.0.1", "::1"], Ok(Local)),
+        (
+            "https://s3.example.com",
+            &["203.0.113.7", "192.168.1.5"],
+            Err(AddressError::NotAllowed),
+        ),
+        (
+            "https://s3.example.com",
+            &["203.0.113.7", "169.254.169.254"],
+            Err(AddressError::NotAllowed),
+        ),
+        (
+            "http://rustfs.lan",
+            &["::ffff:169.254.169.254"],
+            Err(AddressError::NotAllowed),
+        ),
+        (
+            "https://nowhere.example.com",
+            &[],
+            Err(AddressError::Unresolved),
+        ),
+    ];
+    for (endpoint, answer, expected) in cases {
+        let resolver = Answers::new(&[answer]);
+        assert_eq!(
+            &scope_of(&url(endpoint), &resolver).await,
+            expected,
+            "{endpoint} at {answer:?}"
+        );
+    }
+    let resolver = Answers::new(&[]);
+    assert_eq!(
+        scope_of(&url("http://192.168.1.5:9000"), &resolver).await,
+        Ok(Local),
+        "an IP address needs no lookup"
+    );
+    assert_eq!(resolver.lookups.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_public_endpoint_that_now_resolves_to_a_local_address_is_refused() {
     let resolver = Answers::new(&[&["127.0.0.1"], &["127.0.0.1"]]);
     let target = url("https://storage.example.com");
     assert_eq!(
-        pin(&target, Extension, &resolver).await,
-        Err(AddressError::NotAllowed)
+        pin(&target, Public, &resolver).await,
+        Err(AddressError::NotAllowed),
+        "DNS rebinding after the endpoint was set"
     );
-    let pinned = pin(&target, User, &resolver).await.expect("the user's own");
+    let pinned = pin(&target, Local, &resolver)
+        .await
+        .expect("a local endpoint");
     assert_eq!(pinned.host.as_deref(), Some("storage.example.com"));
     assert_eq!(pinned.addrs, vec!["127.0.0.1:443".parse().expect("addr")]);
 }
 
 #[tokio::test]
+async fn a_local_endpoint_that_now_resolves_to_a_public_address_is_refused() {
+    let resolver = Answers::new(&[&["203.0.113.7"]]);
+    assert_eq!(
+        pin(&url("http://rustfs.lan:9000"), Local, &resolver).await,
+        Err(AddressError::NotAllowed)
+    );
+}
+
+#[tokio::test]
 async fn the_request_goes_to_the_address_checked_once_not_to_a_later_answer() {
     let resolver = Answers::new(&[&["203.0.113.7"], &["169.254.169.254"]]);
-    let pinned = pin(&url("https://s3.example.com:9000"), Extension, &resolver)
+    let pinned = pin(&url("https://s3.example.com:9000"), Public, &resolver)
         .await
         .expect("a public address");
     assert_eq!(
@@ -220,41 +227,51 @@ async fn the_request_goes_to_the_address_checked_once_not_to_a_later_answer() {
 
 #[tokio::test]
 async fn one_disallowed_address_in_an_answer_refuses_the_request() {
-    let resolver = Answers::new(&[&["203.0.113.7", "169.254.169.254"]]);
-    assert_eq!(
-        pin(&url("https://s3.example.com"), User, &resolver).await,
-        Err(AddressError::NotAllowed)
-    );
+    for scope in [Public, Local] {
+        let resolver = Answers::new(&[&["203.0.113.7", "192.168.1.5", "169.254.169.254"]]);
+        assert_eq!(
+            pin(&url("https://s3.example.com"), scope, &resolver).await,
+            Err(AddressError::NotAllowed),
+            "{scope:?}"
+        );
+    }
 }
 
 #[tokio::test]
-async fn http_to_a_public_address_is_refused_also_for_the_user() {
+async fn http_needs_a_local_scope() {
     let resolver = Answers::new(&[&["203.0.113.7"]]);
     assert_eq!(
-        pin(&url("http://s3.example.com"), User, &resolver).await,
+        pin(&url("http://s3.example.com"), Public, &resolver).await,
         Err(AddressError::NotAllowed)
+    );
+    assert_eq!(
+        resolver.lookups.load(Ordering::SeqCst),
+        0,
+        "refused before the lookup"
     );
 }
 
 #[tokio::test]
 async fn an_ip_address_is_checked_without_a_lookup() {
     let resolver = Answers::new(&[]);
-    let pinned = pin(&url("http://192.168.1.5:9000"), User, &resolver)
+    let pinned = pin(&url("http://192.168.1.5:9000"), Local, &resolver)
         .await
-        .expect("the user's own");
+        .expect("a local endpoint");
     assert_eq!(pinned.host, None);
     assert_eq!(resolver.lookups.load(Ordering::SeqCst), 0);
-    assert_eq!(
-        pin(&url("https://[::ffff:169.254.169.254]"), User, &resolver).await,
-        Err(AddressError::NotAllowed)
-    );
+    for scope in [Public, Local] {
+        assert_eq!(
+            pin(&url("https://[::ffff:169.254.169.254]"), scope, &resolver).await,
+            Err(AddressError::NotAllowed)
+        );
+    }
 }
 
 #[tokio::test]
 async fn a_name_that_does_not_resolve_is_refused() {
     let resolver = Answers::new(&[&[]]);
     assert_eq!(
-        pin(&url("https://nowhere.example.com"), User, &resolver).await,
-        Err(AddressError::NotAllowed)
+        pin(&url("https://nowhere.example.com"), Public, &resolver).await,
+        Err(AddressError::Unresolved)
     );
 }

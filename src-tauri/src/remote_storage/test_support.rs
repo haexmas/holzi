@@ -2,14 +2,17 @@
 //! per operation, and a record of the calls.
 
 use std::collections::{BTreeMap, HashMap};
+use std::io;
+use std::net::IpAddr;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
 use tokio::time::Instant;
 use zeroize::Zeroizing;
 
+use super::address::Resolver;
 use super::{
-    Access, Addressing, Credentials, EndpointOrigin, Location, ObjectInfo, ProviderKind,
+    Access, Addressing, Credentials, EndpointScope, Location, ObjectInfo, ProviderKind,
     RemoteStore, StorageError,
 };
 
@@ -146,6 +149,31 @@ impl RemoteStore for FakeStore {
     }
 }
 
+/// Answers names from a fixed table; an unknown name has no address.
+pub struct Table(HashMap<String, Vec<IpAddr>>);
+
+/// A resolver that answers `entries` (name, addresses).
+pub fn resolver(entries: &[(&str, &[&str])]) -> std::sync::Arc<Table> {
+    std::sync::Arc::new(Table(
+        entries
+            .iter()
+            .map(|(name, ips)| {
+                (
+                    (*name).to_owned(),
+                    ips.iter().map(|ip| ip.parse().expect("ip")).collect(),
+                )
+            })
+            .collect(),
+    ))
+}
+
+#[async_trait]
+impl Resolver for Table {
+    async fn lookup(&self, host: &str, _port: u16) -> io::Result<Vec<IpAddr>> {
+        Ok(self.0.get(host).cloned().unwrap_or_default())
+    }
+}
+
 /// Placeholder credentials; never a real key.
 pub fn credentials() -> Credentials {
     Credentials {
@@ -161,7 +189,7 @@ pub fn access(bucket: &str) -> Access {
         location: Location {
             provider_kind: ProviderKind::Rustfs,
             endpoint: "http://127.0.0.1:9000".to_owned(),
-            endpoint_origin: EndpointOrigin::User,
+            endpoint_scope: EndpointScope::Local,
             region: "us-east-1".to_owned(),
             addressing: Addressing::Path,
             bucket: bucket.to_owned(),

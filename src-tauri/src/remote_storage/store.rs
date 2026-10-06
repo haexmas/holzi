@@ -10,13 +10,13 @@ use std::collections::HashMap;
 use haex_crdt::rusqlite::{params, Row};
 use haex_crdt::CrdtTransaction;
 
-use super::{Addressing, ConnectionRow, EndpointOrigin, ProviderKind, StorageRow, TestOutcome};
+use super::{Addressing, ConnectionRow, EndpointScope, ProviderKind, StorageRow, TestOutcome};
 use crate::error::{HolziError, Result};
 use crate::extensions::permissions::store::TABLES as PERMISSION_TABLES;
 use crate::extensions::permissions::PermissionKind;
 use crate::storage::query::Query;
 
-const CONNECTION_COLUMNS: &str = "id, provider_name, provider_kind, endpoint, endpoint_origin, \
+const CONNECTION_COLUMNS: &str = "id, provider_name, provider_kind, endpoint, endpoint_scope, \
      region, addressing, credentials_item_id, created_at, updated_at";
 
 const STORAGE_COLUMNS: &str = "id, connection_id, name, bucket, created_at, updated_at";
@@ -44,8 +44,7 @@ fn connection_of(r: &Row<'_>) -> haex_crdt::rusqlite::Result<ConnectionRow> {
         provider_name: r.get(1)?,
         provider_kind: ProviderKind::parse(&r.get::<_, String>(2)?).ok_or_else(|| unknown(2))?,
         endpoint: r.get(3)?,
-        endpoint_origin: EndpointOrigin::parse(&r.get::<_, String>(4)?)
-            .ok_or_else(|| unknown(4))?,
+        endpoint_scope: EndpointScope::parse(&r.get::<_, String>(4)?).ok_or_else(|| unknown(4))?,
         region: r.get(5)?,
         addressing: Addressing::parse(&r.get::<_, String>(6)?).ok_or_else(|| unknown(6))?,
         credentials_item_id: r.get(7)?,
@@ -171,7 +170,7 @@ pub fn put_connection(tx: &mut CrdtTransaction<'_>, row: &ConnectionRow) -> Resu
         row.provider_name.trim(),
         row.provider_kind.as_str(),
         row.endpoint.trim(),
-        row.endpoint_origin.as_str(),
+        row.endpoint_scope.as_str(),
         row.region.trim(),
         row.addressing.as_str(),
         row.credentials_item_id,
@@ -181,7 +180,7 @@ pub fn put_connection(tx: &mut CrdtTransaction<'_>, row: &ConnectionRow) -> Resu
     if exists {
         tx.execute(
             "UPDATE haex_storage_connections SET provider_name = ?2, provider_kind = ?3, \
-             endpoint = ?4, endpoint_origin = ?5, region = ?6, addressing = ?7, \
+             endpoint = ?4, endpoint_scope = ?5, region = ?6, addressing = ?7, \
              credentials_item_id = ?8, updated_at = ?10 WHERE id = ?1",
             values,
         )?;

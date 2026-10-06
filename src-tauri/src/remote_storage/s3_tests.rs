@@ -17,18 +17,18 @@ use zeroize::Zeroizing;
 use super::address::Resolver;
 use super::s3::{classify, S3Store};
 use super::{
-    Access, Addressing, Credentials, EndpointOrigin, Location, ProviderKind, RemoteStore,
+    Access, Addressing, Credentials, EndpointScope, Location, ProviderKind, RemoteStore,
     StorageError,
 };
 
 const BUCKET: &str = "holzi-test";
 
-fn access(endpoint: &str, addressing: Addressing, origin: EndpointOrigin) -> Access {
+fn access(endpoint: &str, addressing: Addressing, scope: EndpointScope) -> Access {
     Access {
         location: Location {
             provider_kind: ProviderKind::Rustfs,
             endpoint: endpoint.to_owned(),
-            endpoint_origin: origin,
+            endpoint_scope: scope,
             region: "us-east-1".to_owned(),
             addressing,
             bucket: BUCKET.to_owned(),
@@ -42,7 +42,7 @@ fn access(endpoint: &str, addressing: Addressing, origin: EndpointOrigin) -> Acc
 }
 
 fn user(server: &MockServer) -> Access {
-    access(&server.uri(), Addressing::Path, EndpointOrigin::User)
+    access(&server.uri(), Addressing::Path, EndpointScope::Local)
 }
 
 /// Resolves every name to 127.0.0.1 and remembers the names.
@@ -293,7 +293,7 @@ async fn a_host_name_is_reached_at_its_checked_address() {
     let virtual_hosted = access(
         &format!("http://s3.storage.test:{port}"),
         Addressing::Virtual,
-        EndpointOrigin::User,
+        EndpointScope::Local,
     );
     let body = store
         .get(&virtual_hosted, "k", 100, soon())
@@ -312,14 +312,42 @@ async fn a_host_name_is_reached_at_its_checked_address() {
         "the signed host name stays in the request"
     );
 
-    let proposed = access(
+    let public = access(
         &format!("https://s3.storage.test:{port}"),
         Addressing::Path,
-        EndpointOrigin::Extension,
+        EndpointScope::Public,
     );
     assert_eq!(
-        store.get(&proposed, "k", 100, soon()).await,
+        store.get(&public, "k", 100, soon()).await,
         Err(StorageError::Network),
-        "a name resolving to a local address is refused for an extension's endpoint"
+        "a public endpoint whose name now resolves to a local address is refused (DNS rebinding)"
     );
+}
+
+/// Never answers.
+struct Silent;
+
+#[async_trait]
+impl Resolver for Silent {
+    async fn lookup(&self, _host: &str, _port: u16) -> io::Result<Vec<IpAddr>> {
+        std::future::pending().await
+    }
+}
+
+#[tokio::test]
+async fn a_lookup_that_does_not_answer_ends_at_the_deadline() {
+    let store = S3Store::new(Arc::new(Silent));
+    let named = access(
+        "http://rustfs.storage.test:9000",
+        Addressing::Path,
+        EndpointScope::Local,
+    );
+    let deadline = Instant::now() + Duration::from_millis(200);
+    let result = tokio::time::timeout(
+        Duration::from_secs(5),
+        store.get(&named, "k", 100, deadline),
+    )
+    .await
+    .expect("the call ends at its deadline, not later");
+    assert_eq!(result, Err(StorageError::TimedOut));
 }

@@ -8,7 +8,7 @@ use zeroize::Zeroizing;
 
 use super::credentials::{self, StorageUsage, FEATURE};
 use super::test_support::{credentials as placeholder, vault};
-use super::{store, Addressing, ConnectionRow, CredentialsState, EndpointOrigin, ProviderKind};
+use super::{store, Addressing, ConnectionRow, CredentialsState, EndpointScope, ProviderKind};
 use crate::error::HolziError;
 use crate::passwords::access::Caller;
 use crate::passwords::model::{Target, TargetKind};
@@ -118,7 +118,7 @@ async fn deleting_the_credentials_of_a_connection_warns_in_the_password_manager(
         provider_name: "RustFS".to_owned(),
         provider_kind: ProviderKind::Rustfs,
         endpoint: "http://127.0.0.1:9000".to_owned(),
-        endpoint_origin: EndpointOrigin::User,
+        endpoint_scope: EndpointScope::Local,
         region: "us-east-1".to_owned(),
         addressing: Addressing::Path,
         credentials_item_id: id.clone(),

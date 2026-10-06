@@ -11,10 +11,8 @@ use zeroize::Zeroizing;
 
 use super::model::{ConnectionInput, CredentialsInput, RemovalTarget, StorageInput};
 use super::service::StorageService;
-use super::test_support::{grant_storage, vault, FakeStore, Op};
-use super::{
-    Addressing, CredentialsState, EndpointOrigin, ProviderKind, StorageError, TestOutcome,
-};
+use super::test_support::{grant_storage, resolver, vault, FakeStore, Op};
+use super::{Addressing, CredentialsState, EndpointScope, ProviderKind, StorageError, TestOutcome};
 use crate::error::HolziError;
 use crate::passwords::service::PasswordsService;
 use crate::storage::query::Query;
@@ -32,7 +30,18 @@ struct Setup {
 fn setup() -> Setup {
     let (dir, db) = vault();
     let fake = Arc::new(FakeStore::new());
-    let service = StorageService::new(db.clone(), PasswordsService::new(db.clone()), fake.clone());
+    let names = resolver(&[
+        ("s3.example.com", &["203.0.113.7", "2001:db8::7"]),
+        ("rustfs.lan", &["192.168.1.5"]),
+        ("mixed.example.com", &["203.0.113.7", "192.168.1.5"]),
+        ("metadata.example.com", &["169.254.169.254"]),
+    ]);
+    let service = StorageService::new(
+        db.clone(),
+        PasswordsService::new(db.clone()),
+        fake.clone(),
+        names,
+    );
     Setup {
         _dir: dir,
         db,
@@ -84,7 +93,7 @@ async fn a_new_connection_is_saved_after_a_passed_test_with_its_credentials_owne
         .save_connection(input(None, Some(typed())))
         .await
         .expect("save");
-    assert_eq!(view.endpoint_origin, EndpointOrigin::User);
+    assert_eq!(view.endpoint_scope, EndpointScope::Local);
     assert_eq!(view.credentials, CredentialsState::Present);
     assert!(view.insecure, "http is marked");
     assert_eq!(ops(&s.fake), 4, "tested before saving");
@@ -140,6 +149,9 @@ async fn a_new_connection_needs_credentials_and_an_allowed_endpoint() {
         "http://203.0.113.7:9000",
         "http://169.254.169.254",
         "ftp://x.example",
+        "http://s3.example.com",
+        "https://mixed.example.com",
+        "https://metadata.example.com",
     ] {
         let mut bad = input(None, Some(typed()));
         bad.endpoint = Some(endpoint.to_owned());
@@ -372,4 +384,103 @@ async fn a_test_without_synced_credentials_is_not_recorded_as_access_denied() {
         Some(TestOutcome::Passed),
         "syncing credentials must not look refused"
     );
+}
+
+#[tokio::test]
+async fn the_scope_of_an_endpoint_is_fixed_when_it_is_set() {
+    let s = setup();
+    let mut public = input(None, Some(typed()));
+    public.endpoint = Some("https://s3.example.com".to_owned());
+    let view = s.service.save_connection(public).await.expect("public");
+    assert_eq!(view.endpoint_scope, EndpointScope::Public);
+    assert!(!view.insecure);
+
+    let mut moved = input(Some(view.id.clone()), None);
+    moved.endpoint = Some("http://rustfs.lan:9000".to_owned());
+    let view = s.service.save_connection(moved).await.expect("local");
+    assert_eq!(
+        view.endpoint_scope,
+        EndpointScope::Local,
+        "a changed endpoint gets its scope anew"
+    );
+    assert!(view.insecure);
+
+    let mut renamed = input(Some(view.id.clone()), None);
+    renamed.endpoint = Some("http://rustfs.lan:9000".to_owned());
+    renamed.provider_name = "Heim".to_owned();
+    let view = s.service.save_connection(renamed).await.expect("renamed");
+    assert_eq!(view.endpoint_scope, EndpointScope::Local, "kept");
+    let storage = s
+        .service
+        .save_storage(StorageInput {
+            id: None,
+            connection_id: view.id.clone(),
+            name: "Fotos".to_owned(),
+            bucket: "holzi-test".to_owned(),
+        })
+        .await
+        .expect("storage");
+    assert_eq!(
+        s.service
+            .access_of(&storage.id)
+            .await
+            .expect("access")
+            .location
+            .endpoint_scope,
+        EndpointScope::Local,
+        "every call checks against the stored scope"
+    );
+}
+
+#[tokio::test]
+async fn an_endpoint_without_addresses_fails_its_test_and_saves_nothing() {
+    let s = setup();
+    let mut nowhere = input(None, Some(typed()));
+    nowhere.endpoint = Some("https://nowhere.example.com".to_owned());
+    assert!(matches!(
+        s.service.save_connection(nowhere).await,
+        Err(HolziError::StorageTestFailed {
+            outcome: TestOutcome::Unreachable,
+            leftover_key: None
+        })
+    ));
+    assert_eq!(ops(&s.fake), 0);
+    assert_eq!(
+        count(&s.db, "SELECT COUNT(*) FROM haex_storage_connections"),
+        0
+    );
+    assert_eq!(entries(&s.db), 0);
+}
+
+#[tokio::test]
+async fn a_changed_storage_is_tested_on_the_connection_it_belongs_to() {
+    let s = setup();
+    let connection = s
+        .service
+        .save_connection(input(None, Some(typed())))
+        .await
+        .expect("save");
+    let storage = s
+        .service
+        .save_storage(StorageInput {
+            id: None,
+            connection_id: connection.id.clone(),
+            name: "Fotos".to_owned(),
+            bucket: "holzi-test".to_owned(),
+        })
+        .await
+        .expect("storage");
+    let before = ops(&s.fake);
+    let changed = s
+        .service
+        .save_storage(StorageInput {
+            id: Some(storage.id.clone()),
+            connection_id: "another-connection".to_owned(),
+            name: "Fotos".to_owned(),
+            bucket: "holzi-other".to_owned(),
+        })
+        .await
+        .expect("tested on the storage's own connection");
+    assert_eq!(changed.connection_id, connection.id, "the connection stays");
+    assert_eq!(ops(&s.fake), before + 4, "the new bucket is tested");
 }

@@ -15,7 +15,7 @@ pub const STORAGE_0028: &str = r#"CREATE TABLE haex_storage_connections (
   provider_name TEXT NOT NULL,
   provider_kind TEXT NOT NULL,
   endpoint TEXT NOT NULL,
-  endpoint_origin TEXT NOT NULL,
+  endpoint_scope TEXT NOT NULL,
   region TEXT NOT NULL,
   addressing TEXT NOT NULL,
   credentials_item_id TEXT NOT NULL,

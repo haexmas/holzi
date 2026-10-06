@@ -768,6 +768,8 @@
       "addStorage": "Speicher hinzufügen",
       "insecure": "Unverschlüsselt",
       "insecureHint": "Daten gehen unverschlüsselt (http) über das Netz. Das ist nur im eigenen Netz erlaubt.",
+      "local": "Lokal",
+      "localHint": "Der Endpunkt liegt im eigenen Netz oder auf diesem Gerät.",
       "credentialsState": {
         "syncing": "Zugangsdaten werden synchronisiert",
         "missing": "Neue Zugangsdaten nötig"
@@ -786,7 +788,7 @@
       "invalid": {
         "providerName": "Der Name braucht 1 bis 80 Zeichen.",
         "region": "Die Region braucht 1 bis 64 Zeichen.",
-        "endpoint": "Dieser Endpunkt ist nicht erlaubt: https geht immer, http nur zu Adressen im eigenen Netz.",
+        "endpoint": "Dieser Endpunkt ist nicht erlaubt: http geht nur zu Adressen im eigenen Netz, Adressen wie 169.254.x.x erreicht holzi nie, und ein Name darf nicht zugleich auf eigene und öffentliche Adressen zeigen.",
         "credentials": "Zugangsschlüssel und Geheimnis sind nötig.",
         "name": "Der Name braucht 1 bis 80 Zeichen.",
         "bucket": "Bucket-Namen haben 3 bis 63 Zeichen: Kleinbuchstaben, Ziffern, Punkt und Bindestrich."

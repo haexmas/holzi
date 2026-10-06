@@ -58,13 +58,16 @@ pub enum Addressing {
     Virtual,
 }
 
-/// Who typed the endpoint (research R8): local addresses are only reached for the user's own.
+/// The addresses an endpoint may reach (research R8, FR-009b), fixed when the endpoint is set:
+/// `local` when its host resolves to loopback or private addresses, else `public`. Every call
+/// checks each resolved address against it, so a public name that later points into the local
+/// network (DNS rebinding) reaches nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(rename_all = "camelCase")]
-pub enum EndpointOrigin {
-    User,
-    Extension,
+pub enum EndpointScope {
+    Public,
+    Local,
 }
 
 /// The result of a connection test (research R9), stored per device in `storage_tests_no_sync`.
@@ -108,7 +111,7 @@ macro_rules! text_enum {
 
 text_enum!(ProviderKind { Aws = "aws", Rustfs = "rustfs", Other = "other" });
 text_enum!(Addressing { Path = "path", Virtual = "virtual" });
-text_enum!(EndpointOrigin { User = "user", Extension = "extension" });
+text_enum!(EndpointScope { Public = "public", Local = "local" });
 text_enum!(TestOutcome {
     Passed = "passed",
     AccessDenied = "accessDenied",
@@ -125,7 +128,7 @@ pub struct ConnectionRow {
     pub provider_kind: ProviderKind,
     /// Empty for `aws`: the address follows from the region.
     pub endpoint: String,
-    pub endpoint_origin: EndpointOrigin,
+    pub endpoint_scope: EndpointScope,
     pub region: String,
     pub addressing: Addressing,
     pub credentials_item_id: String,
@@ -171,7 +174,7 @@ impl fmt::Debug for Credentials {
 pub struct Location {
     pub provider_kind: ProviderKind,
     pub endpoint: String,
-    pub endpoint_origin: EndpointOrigin,
+    pub endpoint_scope: EndpointScope,
     pub region: String,
     pub addressing: Addressing,
     pub bucket: String,
@@ -183,7 +186,7 @@ impl Location {
         Self {
             provider_kind: connection.provider_kind,
             endpoint: connection.endpoint.clone(),
-            endpoint_origin: connection.endpoint_origin,
+            endpoint_scope: connection.endpoint_scope,
             region: connection.region.clone(),
             addressing: connection.addressing,
             bucket: bucket.to_owned(),

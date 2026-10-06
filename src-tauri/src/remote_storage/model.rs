@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use zeroize::Zeroizing;
 
-use super::{Addressing, CredentialsState, EndpointOrigin, ProviderKind, TestOutcome};
+use super::{Addressing, CredentialsState, EndpointScope, ProviderKind, TestOutcome};
 
 /// Credentials as typed by the user; `Debug` shows only the access key id.
 #[derive(Clone, Deserialize, TS)]
@@ -81,7 +81,8 @@ pub struct ConnectionView {
     pub addressing: Addressing,
     /// The endpoint sends without encryption (`http`).
     pub insecure: bool,
-    pub endpoint_origin: EndpointOrigin,
+    /// Whether the endpoint lies in the local network or on this device (research R8).
+    pub endpoint_scope: EndpointScope,
     pub credentials: CredentialsState,
 }
 

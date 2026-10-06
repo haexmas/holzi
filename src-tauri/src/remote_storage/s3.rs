@@ -1,9 +1,10 @@
 //! S3 over `rusty-s3` and `reqwest` (spec 038, research R1, R7, R8).
 //!
 //! `rusty-s3` signs presigned addresses (SigV4) and reads the XML of a listing; `reqwest` with
-//! rustls sends them. Each call resolves and checks the host first ([`address::pin`]) and builds a
-//! client that connects to exactly the checked addresses, with no proxy and no redirects (an S3
-//! provider answers with an error, not a redirect, so a redirect is [`StorageError::Network`]).
+//! rustls sends them. Each call resolves and checks the host first ([`address::pin`], within the
+//! call's deadline) and builds a client that connects to exactly the checked addresses, with no
+//! proxy and no redirects (an S3 provider answers with an error, not a redirect, so a redirect is
+//! [`StorageError::Network`]).
 //! Answers are read in chunks up to their limit and within the one deadline of the call, as in
 //! `extensions/web.rs`. Errors name what went wrong, never the endpoint, a header or the provider's
 //! text; the log gets the status and the provider's error code.
@@ -19,7 +20,7 @@ use tokio::time::Instant;
 
 use super::address::{self, Resolver, SystemResolver};
 use super::{
-    Access, Addressing, Credentials, EndpointOrigin, ObjectInfo, RemoteStore, StorageError,
+    Access, Addressing, Credentials, EndpointScope, ObjectInfo, RemoteStore, StorageError,
 };
 
 /// How long a signed address stays valid; longer than any deadline of a call.
@@ -54,9 +55,9 @@ impl S3Store {
     async fn client_for(
         &self,
         url: &Url,
-        origin: EndpointOrigin,
+        scope: EndpointScope,
     ) -> Result<reqwest::Client, StorageError> {
-        let pinned = address::pin(url, origin, self.resolver.as_ref())
+        let pinned = address::pin(url, scope, self.resolver.as_ref())
             .await
             .map_err(|error| {
                 log::warn!("remote storage: endpoint refused: {error}");
@@ -83,7 +84,7 @@ impl S3Store {
     ) -> Result<reqwest::Response, StorageError> {
         let client = tokio::time::timeout_at(
             deadline,
-            self.client_for(&url, access.location.endpoint_origin),
+            self.client_for(&url, access.location.endpoint_scope),
         )
         .await
         .map_err(|_| StorageError::TimedOut)??;
