@@ -7,7 +7,12 @@ import { listKeys, startRustfs } from '../lib/rustfs.ts'
 const BUCKET = 'holzi-e2e'
 
 type Overview = {
-  connections: Array<{ id: string; credentials: string; insecure: boolean }>
+  connections: Array<{
+    id: string
+    credentials: string
+    insecure: boolean
+    endpointScope: string
+  }>
   storages: Array<{ id: string; name: string; bucket: string }>
 }
 
@@ -71,6 +76,7 @@ scenario(
     await waitForLocation(laptop, 'storage', 20_000)
     await laptop.waitForDisplayed('storage-row')
     await laptop.waitForDisplayed('storage-insecure')
+    await laptop.waitForDisplayed('storage-local')
     ctx.step(
       'connected after a passed test',
       `form ${Math.round((Date.now() - opened) / 1000)} s, test and save ${Date.now() - saving} ms`,
@@ -78,6 +84,7 @@ scenario(
 
     const saved = await overview(laptop)
     assert.equal(saved.connections.length, 1)
+    assert.equal(saved.connections[0].endpointScope, 'local')
     assert.deepEqual(
       saved.storages.map((s) => [s.name, s.bucket]),
       [['Fotos', BUCKET]],

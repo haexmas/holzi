@@ -10,7 +10,7 @@ export const RUSTFS_IMAGE = 'rustfs/rustfs:latest'
 const REGION = 'us-east-1'
 
 export interface Rustfs {
-  /** `http://127.0.0.1:<port>`: a local address, which holzi allows for the user's own endpoints. */
+  /** `http://127.0.0.1:<port>`: a local address, so the connection gets the endpoint scope `local`. */
   endpoint: string
   accessKeyId: string
   secretAccessKey: string
