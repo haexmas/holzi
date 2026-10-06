@@ -87,6 +87,11 @@ Zugangsschlüssel erzeugen kann), lässt sich für einen Space nicht verbinden
   der aktuellen Geräteliste der Mitglieds-Vault (D28); jedes Gerät öffnet seinen
   Umschlag mit seinem Geräteschlüssel. Verwalten darf den Speicher jedes Gerät
   auf der Geräteliste der Admin-Vault, Hauptgerät oder verknüpft (D29).
+- [`038-storage-connections`](../038-storage-connections/spec.md)
+  (Speicherverbindungen): legt die Speicherverbindung fest (Anbieter, Endpunkt,
+  Region, Adressierung, Zugangsdaten im Passwortmanager als Eintrag mit Eigentümer
+  `storage`, Regel Z14 in 034) und gibt Speicher an Erweiterungen weiter. Diese
+  Spec nutzt sie und ergänzt Eignungsprüfung, Space-Buckets und Zugangsschlüssel.
 - Spec 034 (Passwortmanager): verwahrt die Hauptzugangsdaten und die
   Zugangsschlüssel dieser Spec (D32). Wie der Passwortmanager aussieht und wie
   Erweiterungen ihn nutzen, legt Spec 034 fest, nicht diese.
@@ -812,7 +817,7 @@ Relays enthält keine Objekte des Space mehr. Dasselbe in die andere Richtung.
 
 ### Key Entities
 
-- **Speicherverbindung**: Anbieter, Endpunkt, Region, Adressierung und
+- **Speicherverbindung**: wie in Spec 038 festgelegt; Anbieter, Endpunkt, Region, Adressierung und
   Hauptzugangsdaten. Gehört einer Vault, liegt in deren Passwortmanager und
   damit auf allen ihren Geräten (FR-033) und kann von mehreren Spaces und den
   eigenen Ordnern genutzt werden.
