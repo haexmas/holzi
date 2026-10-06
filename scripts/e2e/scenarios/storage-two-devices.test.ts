@@ -13,9 +13,15 @@ type Overview = {
 
 type Header = { id: string; title: string | null; owner?: string | null }
 
-/** Replaces the text of a field with `text`. */
-const replaceText = (text: string) =>
-  `${KEY.control}a${KEY.release}${KEY.backspace}${text}`
+/** Replaces the text of the field `hook` with `text`: empty it, then type. */
+async function replaceText(
+  page: { type(hook: string, text: string): Promise<void> },
+  hook: string,
+  text: string,
+): Promise<void> {
+  await page.type(hook, `${KEY.control}a${KEY.release}${KEY.backspace}`)
+  await page.type(hook, text)
+}
 
 // Spec 038, US1 and US4 (quickstart §4 and §5 step 5, SC-001, SC-004, SC-005): in Einstellungen →
 // Speicher the user connects a local RustFS. Wrong credentials are named and save nothing; the
@@ -43,7 +49,7 @@ scenario(
     const opened = Date.now()
     await laptop.click('storage-add-connection')
     await waitForLocation(laptop, 'storage.connection')
-    await laptop.type('storage-endpoint', replaceText(rustfs.endpoint))
+    await replaceText(laptop, 'storage-endpoint', rustfs.endpoint)
     await laptop.waitForDisplayed('storage-endpoint-insecure')
     await laptop.type('storage-access-key', rustfs.accessKeyId)
     await laptop.type('storage-secret', 'not-the-secret')
@@ -58,9 +64,10 @@ scenario(
     assert.deepEqual((await overview(laptop)).connections, [], 'nothing saved')
     ctx.step('wrong credentials are named and save nothing')
 
-    await laptop.type('storage-secret', replaceText(rustfs.secretAccessKey))
+    await replaceText(laptop, 'storage-secret', rustfs.secretAccessKey)
     const saving = Date.now()
-    await laptop.click('storage-save')
+    // Enter in a field submits the form, as the button does.
+    await laptop.type('storage-secret', KEY.enter)
     await waitForLocation(laptop, 'storage', 20_000)
     await laptop.waitForDisplayed('storage-row')
     await laptop.waitForDisplayed('storage-insecure')
