@@ -80,9 +80,12 @@ impl S3Store {
         body: Option<Vec<u8>>,
         deadline: Instant,
     ) -> Result<reqwest::Response, StorageError> {
-        let client = self
-            .client_for(&url, access.location.endpoint_origin)
-            .await?;
+        let client = tokio::time::timeout_at(
+            deadline,
+            self.client_for(&url, access.location.endpoint_origin),
+        )
+        .await
+        .map_err(|_| StorageError::TimedOut)??;
         let mut request = client.request(method.clone(), url);
         if let Some(body) = body {
             request = request.body(body);

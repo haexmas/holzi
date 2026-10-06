@@ -20,8 +20,8 @@ use super::model::{
 };
 use super::probe::probe;
 use super::{
-    credentials, store, Access, ConnectionRow, Credentials, EndpointOrigin, Location, RemoteStore,
-    StorageRow, TestOutcome,
+    credentials, store, Access, ConnectionRow, Credentials, CredentialsState, EndpointOrigin,
+    Location, RemoteStore, StorageRow, TestOutcome,
 };
 use crate::error::{HolziError, Result};
 use crate::passwords::clock;
@@ -277,17 +277,19 @@ impl StorageService {
 
     /// Saves a storage; a new one or a new bucket is tested first.
     pub async fn save_storage(&self, input: StorageInput) -> Result<StorageView> {
-        let connection = self.connection(&input.connection_id).await?;
         let existing = match &input.id {
             Some(id) => Some(self.storage(id).await?),
             None => None,
         };
+        let connection_id = existing.as_ref().map_or_else(
+            || input.connection_id.clone(),
+            |storage| storage.connection_id.clone(),
+        );
+        let connection = self.connection(&connection_id).await?;
         let now = clock::now();
         let row = StorageRow {
             id: input.id.unwrap_or_else(|| Uuid::new_v4().to_string()),
-            connection_id: existing
-                .as_ref()
-                .map_or(input.connection_id, |e| e.connection_id.clone()),
+            connection_id,
             name: input.name.trim().to_owned(),
             bucket: input.bucket.trim().to_owned(),
             created_at: existing
@@ -351,8 +353,10 @@ impl StorageService {
     pub async fn test_storage(&self, storage_id: &str) -> Result<TestResult> {
         let access = match self.access_of(storage_id).await {
             Ok(access) => access,
-            Err(error @ HolziError::StorageCredentialsUnavailable { .. }) => {
-                self.record(storage_id, TestOutcome::AccessDenied).await?;
+            Err(error @ HolziError::StorageCredentialsUnavailable { state }) => {
+                if state == CredentialsState::Missing {
+                    self.record(storage_id, TestOutcome::AccessDenied).await?;
+                }
                 return Err(error);
             }
             Err(error) => return Err(error),

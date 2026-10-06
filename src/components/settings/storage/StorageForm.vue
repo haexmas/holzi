@@ -89,6 +89,7 @@ async function testAsync() {
 /** Enter in a field saves. No native form: haex-ui's eye button of a password field has no
  * `type="button"`, so it would be the form's default button and catch the Enter. */
 function onEnter(event: KeyboardEvent) {
+  if (event.isComposing || event.keyCode === 229) return
   if ((event.target as HTMLElement | null)?.tagName !== 'INPUT') return
   event.preventDefault()
   void saveAsync()

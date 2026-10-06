@@ -330,3 +330,46 @@ async fn a_test_without_credentials_says_why_and_is_remembered() {
         Some(TestOutcome::AccessDenied)
     );
 }
+
+#[tokio::test]
+async fn a_test_without_synced_credentials_is_not_recorded_as_access_denied() {
+    let s = setup();
+    let connection = s
+        .service
+        .save_connection(input(None, Some(typed())))
+        .await
+        .expect("save");
+    let storage = s
+        .service
+        .save_storage(StorageInput {
+            id: None,
+            connection_id: connection.id,
+            name: "Fotos".to_owned(),
+            bucket: "holzi-test".to_owned(),
+        })
+        .await
+        .expect("storage");
+    s.db.write(|tx| {
+        tx.execute("DELETE FROM haex_passwords_item_details", &[])?;
+        tx.execute("DELETE FROM haex_deleted_rows", &[])?;
+        Ok(())
+    })
+    .await
+    .expect("the credentials are still syncing");
+
+    assert!(matches!(
+        s.service.test_storage(&storage.id).await,
+        Err(HolziError::StorageCredentialsUnavailable {
+            state: CredentialsState::Syncing
+        })
+    ));
+    let overview = s.service.overview().await.expect("overview");
+    assert_eq!(
+        overview.storages[0]
+            .last_test
+            .as_ref()
+            .map(|test| test.outcome),
+        Some(TestOutcome::Passed),
+        "syncing credentials must not look refused"
+    );
+}
