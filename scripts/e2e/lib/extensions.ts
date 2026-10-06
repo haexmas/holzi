@@ -29,7 +29,7 @@ export async function install(
   return unwrap<InstalledExtension>(
     'extension_install',
     await page.invoke('extension_install', {
-      args: { path, accepted: [], confirmDowngrade: false },
+      args: { path, accepted: [], confirmed: false },
     }),
   )
 }
@@ -37,7 +37,7 @@ export async function install(
 /** The refusal of a bundle: its install error's reason. */
 export async function refusal(page: Page, path: string): Promise<string> {
   const result = (await page.invoke('extension_install', {
-    args: { path, accepted: [], confirmDowngrade: false },
+    args: { path, accepted: [], confirmed: false },
   })) as { ok: boolean; error?: { kind?: string; reason?: string } }
   if (result.ok) throw new Error(`${path} was installed`)
   return `${result.error?.kind}:${result.error?.reason}`

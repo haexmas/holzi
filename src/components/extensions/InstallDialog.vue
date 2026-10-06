@@ -4,8 +4,9 @@
  * §Installation): Rust reads and checks the file and shows what it is; every declared permission
  * is listed with a checkbox (on by default; off means "ask when needed"). The extension and its
  * permissions hold in the whole vault, a shell permission only on this device; the dialog says so.
- * An update lists only the new permissions and warns before a downgrade. Nothing is written before
- * "Installieren".
+ * An update lists only the new permissions and warns before a downgrade; a bundle of a version the
+ * vault already holds with other content replaces it only after a confirmation. Nothing is written
+ * before "Installieren".
  *
  * With `dev` the same dialog loads a project folder in developer mode (US12, FR-064): unsigned,
  * from its development server, every permission for this device only.
@@ -24,7 +25,7 @@ const { errString } = useErrorString()
 const path = ref<string | null>(null)
 const preview = ref<InstallPreview | null>(null)
 const choices = ref<Record<string, { granted: boolean }>>({})
-const confirmDowngrade = ref(false)
+const confirmed = ref(false)
 const busy = ref(false)
 const failure = ref<string | null>(null)
 
@@ -39,17 +40,22 @@ const shown = computed(
 const usable = computed(
   () => preview.value !== null && (props.dev || preview.value.signatureValid),
 )
-const blocked = computed(
+/** A downgrade or the replacement of another bundle of the same version: the user confirms. */
+const needsConfirmation = computed(
   () =>
-    !usable.value ||
-    (preview.value?.existing?.isDowngrade === true && !confirmDowngrade.value),
+    !props.dev &&
+    (preview.value?.existing?.isDowngrade === true ||
+      preview.value?.replacesSameVersion === true),
+)
+const blocked = computed(
+  () => !usable.value || (needsConfirmation.value && !confirmed.value),
 )
 
 function reset() {
   path.value = null
   preview.value = null
   choices.value = {}
-  confirmDowngrade.value = false
+  confirmed.value = false
   failure.value = null
 }
 
@@ -109,7 +115,7 @@ async function installAsync() {
         args: {
           path: path.value,
           accepted,
-          confirmDowngrade: confirmDowngrade.value,
+          confirmed: confirmed.value,
         },
       })
     open.value = false
@@ -199,8 +205,28 @@ watch(open, (isOpen) => {
               v-if="preview.existing.isDowngrade"
               class="mt-2 flex items-center gap-2 text-destructive"
             >
-              <ShadcnCheckbox v-model="confirmDowngrade" />
+              <ShadcnCheckbox v-model="confirmed" />
               {{ t('extensions.install.confirmDowngrade') }}
+            </label>
+          </div>
+
+          <div
+            v-if="preview.replacesSameVersion && !dev"
+            class="rounded-xl bg-muted px-4 py-3 text-sm"
+          >
+            <p>
+              {{
+                t('extensions.install.replaceSameVersion', {
+                  version: preview.version,
+                })
+              }}
+            </p>
+            <label
+              v-if="!preview.existing?.isDowngrade"
+              class="mt-2 flex items-center gap-2 text-destructive"
+            >
+              <ShadcnCheckbox v-model="confirmed" />
+              {{ t('extensions.install.confirmReplace') }}
             </label>
           </div>
 

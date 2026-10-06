@@ -45,8 +45,9 @@ pub struct ExtensionInstallArgs {
     pub path: String,
     /// The choice per declared permission; a declaration without a choice becomes `ask`.
     pub accepted: Vec<PermissionChoice>,
+    /// The user confirmed a downgrade or the replacement of another bundle of the same version.
     #[serde(default)]
-    pub confirm_downgrade: bool,
+    pub confirmed: bool,
 }
 
 /// Checks the file again and installs it for the vault (FR-005).
@@ -61,14 +62,7 @@ pub async fn extension_install(
     let id = tauri::async_runtime::spawn_blocking(move || {
         let bytes = read_bundle_file(&PathBuf::from(&args.path))?;
         let now = unix_millis(std::time::SystemTime::now());
-        let installed = install(
-            &db,
-            &bytes,
-            args.accepted,
-            args.confirm_downgrade,
-            device,
-            now,
-        )?;
+        let installed = install(&db, &bytes, args.accepted, args.confirmed, device, now)?;
         let id = installed.ids.extension_id.to_string();
         let summary = db
             .read_blocking(move |q| list(q, device).map_err(Into::into))?

@@ -38,15 +38,15 @@ Die Zeile bleibt nach dem Entfernen als Grabstein. Eine Neuinstallation setzt `s
 
 ### `extension_bundles` — Fassung (unveränderlich bis auf `retired`)
 
-| Spalte           | Typ                                      | Bedeutung                                                                                                       |
-| ---------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `id`             | TEXT PK                                  | v5(`NS_BUNDLE`, SHA-256 der signierten Nachricht) — gleiche Signatur, gleiche Zeile                             |
-| `extension_id`   | TEXT FK → `extensions` ON DELETE CASCADE |                                                                                                                 |
-| `version`        | TEXT                                     | Semver aus dem Manifest                                                                                         |
-| `manifest_json`  | BLOB                                     | exakte Bytes (JCS, R2)                                                                                          |
-| `signature_json` | BLOB                                     | exakte Bytes von `haextension/signature.json`                                                                   |
-| `retired`        | INTEGER                                  | 1 = durch ein bestätigtes Downgrade zurückgezogen (R11); einzige änderbare Spalte, erneute Installation setzt 0 |
-| `added_at`       | INTEGER                                  |                                                                                                                 |
+| Spalte           | Typ                                      | Bedeutung                                                                                                                                                        |
+| ---------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | TEXT PK                                  | v5(`NS_BUNDLE`, SHA-256 der signierten Nachricht) — gleiche Signatur, gleiche Zeile                                                                              |
+| `extension_id`   | TEXT FK → `extensions` ON DELETE CASCADE |                                                                                                                                                                  |
+| `version`        | TEXT                                     | Semver aus dem Manifest                                                                                                                                          |
+| `manifest_json`  | BLOB                                     | exakte Bytes (JCS, R2)                                                                                                                                           |
+| `signature_json` | BLOB                                     | exakte Bytes von `haextension/signature.json`                                                                                                                    |
+| `retired`        | INTEGER                                  | 1 = durch ein bestätigtes Downgrade oder eine bestätigte Ersetzung derselben Version zurückgezogen (R11); einzige änderbare Spalte, erneute Installation setzt 0 |
+| `added_at`       | INTEGER                                  |                                                                                                                                                                  |
 
 **Wirksame Fassung**: höchste Semver mit `retired = 0`, bei Gleichstand die größere `id`.
 

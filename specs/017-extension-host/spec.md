@@ -160,6 +160,11 @@ Schlüssel-Wert-Speicher). Die Entscheidungen von ADR-0004 gelten. Referenzen: h
   ohne Wahl: Programme unterscheiden sich je Gerät, und Ausführen ist das größte Risiko. Die
   Dialoge sagen, wo eine Berechtigung gilt, statt danach zu fragen (Betreiber, bei der Prüfung
   von haex-notes).
+- Q: Was passiert, wenn ein Bundle dieselbe Version wie ein vorhandenes hat, aber anderen
+  Inhalt? → A: holzi warnt im Installationsdialog und ersetzt das vorhandene nur, wenn der
+  Nutzer das ausdrücklich bestätigt; das ersetzte Bundle wird zurückgezogen. Ohne Bestätigung
+  installiert holzi nicht (Betreiber, nachdem bei der Prüfung von haex-notes ein neu gebautes
+  0.1.7 neben dem alten lag und das alte lief).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -428,6 +433,8 @@ mit „Daten löschen“.
 3. **Given** ein Bundle mit einer älteren Fassung als der installierten, **When** der Nutzer
    es installieren will, **Then** warnt holzi und installiert nur nach ausdrücklicher
    Bestätigung. Bereits angewendete Migrationen werden nicht zurückgenommen.
+   Ein Bundle derselben Version mit anderem Inhalt behandelt holzi ebenso: Warnung, und erst
+   nach Bestätigung ersetzt es das vorhandene auf allen Geräten.
 4. **Given** eine deaktivierte Erweiterung, **When** irgendein Tab, eine alte Seite oder ein
    anderer Weg eine Host-Funktion für sie aufruft, **Then** lehnt holzi ab. Sie erscheint
    nicht im Launcher, ihre Tabs schließen sich, und ihre Daten bleiben.
@@ -672,7 +679,8 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
 - **FR-006**: Bei einem Update MUSS holzi nur die neu erklärten Berechtigungen zur Bestätigung
   vorlegen. Bisherige Entscheidungen bleiben, außer für erklärte Berechtigungen, die das neue
   Manifest nicht mehr erklärt: diese MÜSSEN entfernt werden. Ein Downgrade MUSS eine ausdrückliche
-  Bestätigung verlangen.
+  Bestätigung verlangen, ebenso ein Bundle derselben Version mit anderem Inhalt; bestätigt,
+  MUSS es das vorhandene ersetzen (zurückziehen), damit alle Geräte dasselbe Bundle wählen.
 - **FR-007**: Der Nutzer MUSS eine Erweiterung deaktivieren und wieder aktivieren können. Eine
   deaktivierte Erweiterung DARF keine Host-Funktion mehr ausführen; ihre Tabs schließen sich,
   ihre Daten bleiben.
