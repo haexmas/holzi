@@ -17,6 +17,7 @@ use haex_crdt::rusqlite::{params, ToSql};
 use haex_crdt::CrdtTransaction;
 use uuid::Uuid;
 
+use super::access::{sees_owned, Caller, ItemState};
 use super::model::{
     AgentHeader, AttachmentView, GroupRow, ItemDetail, ItemHeader, ItemInput, ItemPatch,
     KeyValuePatch, KeyValueView, Overview, Patch, TagRef, TagRow,
@@ -55,7 +56,7 @@ pub(super) fn load_headers(q: &mut impl Query, only: Option<&str>) -> Result<Vec
                 CASE WHEN d.password IS NOT NULL AND d.password <> '' THEN 1 ELSE 0 END, \
                 CASE WHEN d.otp_secret IS NOT NULL AND trim(d.otp_secret) <> '' THEN 1 ELSE 0 END, \
                 CASE WHEN g.id IS NULL THEN NULL ELSE gi.group_id END, \
-                gi.trashed_from_group_id \
+                gi.trashed_from_group_id, d.owner \
          FROM haex_passwords_item_details d \
          LEFT JOIN haex_passwords_group_items gi ON gi.item_id = d.id \
          LEFT JOIN haex_passwords_groups g ON g.id = gi.group_id \
@@ -81,6 +82,7 @@ pub(super) fn load_headers(q: &mut impl Query, only: Option<&str>) -> Result<Vec
                 has_totp: r.get::<_, i64>(10)? != 0,
                 group_id: r.get(11)?,
                 trashed_from_group_id: r.get(12)?,
+                owner: r.get(13)?,
                 tags: Vec::new(),
                 passkey_count: 0,
                 attachment_count: 0,
@@ -609,19 +611,37 @@ fn replace_key_values(
     Ok(())
 }
 
-/// The state the access rules need: the tag names of an entry and whether it lies in the trash
-/// (its folder is the trash or below it). `None` for a missing entry.
-pub fn item_state(q: &mut impl Query, id: &str) -> Result<Option<(Vec<String>, bool)>> {
-    let exists = q
-        .query_row(
-            "SELECT COUNT(*) FROM haex_passwords_item_details WHERE id = ?1",
-            params![id],
-            |r| r.get::<_, i64>(0),
-        )?
-        .unwrap_or(0);
-    if exists == 0 {
-        return Ok(None);
+/// What the access rules need about a stored entry, owned; [`StoredState::view`] lends it as an
+/// [`ItemState`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredState {
+    pub tags: Vec<String>,
+    /// Its folder is the trash or below it.
+    pub in_trash: bool,
+    /// The holzi function it belongs to (rule Z14), `None` for the user's own.
+    pub owner: Option<String>,
+}
+
+impl StoredState {
+    pub fn view(&self) -> ItemState<'_> {
+        ItemState {
+            tags: &self.tags,
+            in_trash: self.in_trash,
+            owner: self.owner.as_deref(),
+        }
     }
+}
+
+/// The state the access rules need of an entry; `None` for a missing entry.
+pub fn item_state(q: &mut impl Query, id: &str) -> Result<Option<StoredState>> {
+    let Some(owner) = q.query_row(
+        "SELECT owner FROM haex_passwords_item_details WHERE id = ?1",
+        params![id],
+        |r| r.get::<_, Option<String>>(0),
+    )?
+    else {
+        return Ok(None);
+    };
     let in_trash = q
         .query_row(
             "WITH RECURSIVE up(id, parent_id) AS ( \
@@ -635,7 +655,11 @@ pub fn item_state(q: &mut impl Query, id: &str) -> Result<Option<(Vec<String>, b
         )?
         .unwrap_or(0)
         > 0;
-    Ok(Some((tags::names_of_item(q, id)?, in_trash)))
+    Ok(Some(StoredState {
+        tags: tags::names_of_item(q, id)?,
+        in_trash,
+        owner,
+    }))
 }
 
 /// The ids of the entries in the trash: those whose folder is the trash or lies below it.
@@ -659,11 +683,13 @@ pub fn trashed_item_ids(q: &mut impl Query) -> Result<HashSet<String>> {
 pub fn headers_in_scope(
     q: &mut impl Query,
     scope: &super::access::Scope,
+    caller: &Caller,
 ) -> Result<Vec<ItemHeader>> {
     let trashed = trashed_item_ids(q)?;
     Ok(load_headers(q, None)?
         .into_iter()
         .filter(|h| !trashed.contains(&h.id))
+        .filter(|h| sees_owned(caller, h.owner.as_deref()))
         .filter(|h| scope.covers(&h.tags.iter().map(|t| t.name.clone()).collect::<Vec<_>>()))
         .collect())
 }
@@ -681,6 +707,7 @@ pub fn agent_headers(q: &mut impl Query) -> Result<Vec<AgentHeader>> {
     Ok(load_headers(q, None)?
         .into_iter()
         .filter(|h| !trashed.contains(&h.id))
+        .filter(|h| h.owner.is_none())
         .map(|h| AgentHeader {
             folder: h
                 .group_id

@@ -1125,6 +1125,10 @@
     "untitled": "(ohne Titel)",
     "expired": "Abgelaufen",
     "expiredOn": "Abgelaufen am {date}",
+    "owner": "Gehört zu: {name}",
+    "owners": {
+      "storage": "Speicher"
+    },
     "new": "Neu",
     "newMenu": {
       "entry": "Schlüssel",

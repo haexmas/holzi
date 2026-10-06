@@ -1125,6 +1125,10 @@
     "untitled": "(untitled)",
     "expired": "Expired",
     "expiredOn": "Expired on {date}",
+    "owner": "Belongs to: {name}",
+    "owners": {
+      "storage": "Storage"
+    },
     "new": "New",
     "newMenu": {
       "entry": "Key",

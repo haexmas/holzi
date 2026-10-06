@@ -25,6 +25,7 @@ mod history;
 pub mod import;
 mod items;
 mod organize;
+mod owned;
 mod passkeys;
 mod presets;
 mod references;

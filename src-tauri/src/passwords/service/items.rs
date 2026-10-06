@@ -50,7 +50,7 @@ impl PasswordsService {
                 Ok(match view {
                     ListView::Agent => Headers::Agent(items::agent_headers(q)?),
                     ListView::Items(scope) => {
-                        let mut headers = items::headers_in_scope(q, &scope)?;
+                        let mut headers = items::headers_in_scope(q, &scope, &caller)?;
                         // Spec 036, FR-047: a caller from outside never sees a placeholder in a
                         // list; the field is empty (the single-entry read resolves it).
                         if !matches!(caller, Caller::User) {
@@ -148,7 +148,7 @@ impl PasswordsService {
         let (caller, grants) = (caller.clone(), grants.to_vec());
         self.db()
             .read(move |q| {
-                let Some((tags, in_trash)) = items::item_state(q, &item_id)? else {
+                let Some(state) = items::item_state(q, &item_id)? else {
                     // Forbidden without a read grant, otherwise indistinguishable from outside the
                     // scope (Z3, Z5).
                     authorize_read(
@@ -157,20 +157,13 @@ impl PasswordsService {
                         &ItemState {
                             tags: &[],
                             in_trash: false,
+                            owner: None,
                         },
                     )
                     .map_err(HolziError::from)?;
                     return Err(HolziError::PasswordsNotFound.into());
                 };
-                authorize_read(
-                    &caller,
-                    &grants,
-                    &ItemState {
-                        tags: &tags,
-                        in_trash,
-                    },
-                )
-                .map_err(HolziError::from)?;
+                authorize_read(&caller, &grants, &state.view()).map_err(HolziError::from)?;
                 let mut item =
                     reveal::secret_item(q, &item_id)?.ok_or(HolziError::PasswordsNotFound)?;
                 reveal::resolve_secret_item(
@@ -307,14 +300,14 @@ impl PasswordsService {
             .write(move |tx| {
                 let state = items::item_state(tx, &item_id)?;
                 match (&state, &caller) {
-                    (Some((tags, in_trash)), _) => {
-                        let item = ItemState {
-                            tags,
-                            in_trash: *in_trash,
-                        };
-                        let result =
-                            authorize_update(&caller, &grants, &item, patch.tags.as_deref())
-                                .map_err(HolziError::from)?;
+                    (Some(state), _) => {
+                        let result = authorize_update(
+                            &caller,
+                            &grants,
+                            &state.view(),
+                            patch.tags.as_deref(),
+                        )
+                        .map_err(HolziError::from)?;
                         if patch.tags.is_some() {
                             patch.tags = Some(result);
                         }
@@ -329,6 +322,7 @@ impl PasswordsService {
                             &ItemState {
                                 tags: &[],
                                 in_trash: false,
+                                owner: None,
                             },
                             None,
                         )
