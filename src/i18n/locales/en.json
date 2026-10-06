@@ -635,6 +635,7 @@
     },
     "appearance": {
       "preset": {
+        "sky": "Sky",
         "teal": "Teal",
         "blue": "Blue",
         "violet": "Violet",

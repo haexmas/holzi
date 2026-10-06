@@ -19,10 +19,21 @@ switch) with spec 013 FR-010. The supersession is recorded in an ADR (see the pl
 | `Closing`  | app-scoped (allow-list) | passed on                                                                    |
 | `Closing`  | anything else           | rejected at once with `{ kind: "VaultClosed" }`; the command body never runs |
 
-**Allow-list (app-scoped commands, never touch the vault)**: `close_instance`, `list_instances`,
-`get_hardware_info`, `list_catalog`, `catalog_recommend_tiers`, `list_stt_catalog`,
-`stt_recommend_tiers`. A command is app-scoped only if it never calls `active_database`; tasks verify
-each entry. A new command is gated by default.
+**Allow-list (app-scoped commands, never touch the vault)**: `active_instance_name`,
+`close_instance`, `list_instances`, `get_hardware_info`, `list_catalog`,
+`catalog_recommend_tiers`, `list_stt_catalog`, `stt_recommend_tiers`. A command is app-scoped only
+if it never calls `active_database`; tasks verify each entry. A new command is gated by default.
+
+## `active_instance_name` (frontend reload recovery)
+
+```rust
+#[tauri::command]
+pub fn active_instance_name(state: State<'_, AppState>) -> Result<Option<String>>;
+```
+
+Returns the name held by this process's active-instance slot without opening or reading the vault.
+The landing page calls it during startup; when it returns a name, the frontend restores the
+workspace route instead of presenting an unlock flow that would receive `VaultAlreadyActive`.
 
 The wrapper never changes a response of a request that is already executing. See
 [research.md](../research.md) R4 for how those are covered.

@@ -163,7 +163,7 @@ test('every colour field has a name in German and English; ids are unique', () =
       )
     }
   }
-  assert.equal(ACCENT_PRESETS[0]!.id, 'teal')
+  assert.equal(ACCENT_PRESETS[0]!.id, 'sky')
 })
 
 /** The `--name: oklch(...)` declarations of the first block that starts with `selector`. */

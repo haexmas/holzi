@@ -9,6 +9,10 @@ import type { OpenInstanceArgs } from '@bindings/OpenInstanceArgs'
  * one-shot `invoke()` that re-throws typed HolziError on failure.
  */
 export function useInstance() {
+  async function activeNameAsync(): Promise<string | null> {
+    return await invoke<string | null>('active_instance_name')
+  }
+
   async function listAsync(): Promise<InstanceInfo[]> {
     return await invoke<InstanceInfo[]>('list_instances')
   }
@@ -27,5 +31,5 @@ export function useInstance() {
     await invoke('close_instance')
   }
 
-  return { listAsync, createAsync, openAsync, closeAsync }
+  return { activeNameAsync, listAsync, createAsync, openAsync, closeAsync }
 }
