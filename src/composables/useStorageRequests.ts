@@ -1,0 +1,134 @@
+/**
+ * Storage dialogs of extensions (spec 038, US3, research R6), in two steps. An extension's
+ * request (`extension-storage-request`) first shows over its own tab and asks only for a
+ * confirmation; that dialog never has fields for credentials, because an extension could draw a
+ * look-alike inside its frame. When the confirmation needs new credentials, holzi's own window over
+ * the whole app asks for them (`StorageCredentialsModal.vue`, mounted in the desktop). Both answer
+ * with `storage_dialog_resolve`; the credentials go from that window to Rust only.
+ */
+import { onBeforeUnmount, readonly, ref } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import type { CredentialsInput } from '@bindings/CredentialsInput'
+import type { StorageAnswer } from '@bindings/StorageAnswer'
+
+export type StorageRequestKind = 'add' | 'update' | 'test' | 'remove'
+
+/** What holzi shows of an extension's proposal; never credentials. */
+export type StorageProposal = {
+  name?: string
+  bucket?: string
+  currentName?: string
+  currentBucket?: string
+  providerName?: string
+  endpoint?: string
+  region?: string
+  insecure?: boolean
+  scope?: 'public' | 'local'
+  sameProvider?: boolean
+  connections?: { id: string; providerName: string }[]
+}
+
+export type StorageRequest = {
+  requestId: string
+  frame: string
+  kind: StorageRequestKind
+  proposal: StorageProposal
+  extensionName: string
+  otherExtensions: string[]
+}
+
+/** The request whose credentials holzi's window over the whole app asks for. */
+const credentialsRequest = ref<StorageRequest | null>(null)
+
+export function resolveStorageAsync(
+  requestId: string,
+  answer: StorageAnswer,
+): Promise<void> {
+  return invoke('storage_dialog_resolve', { requestId, answer })
+}
+
+/** The window over the whole app: the request it asks credentials for, and its answers. */
+export function useStorageCredentials() {
+  return {
+    request: readonly(credentialsRequest),
+    async confirmAsync(credentials: CredentialsInput): Promise<void> {
+      const open = credentialsRequest.value
+      if (!open) return
+      credentialsRequest.value = null
+      await resolveStorageAsync(open.requestId, {
+        kind: 'confirm',
+        credentials,
+      })
+    },
+    cancel(): void {
+      const open = credentialsRequest.value
+      if (!open) return
+      credentialsRequest.value = null
+      void resolveStorageAsync(open.requestId, { kind: 'cancel' }).catch(
+        () => {},
+      )
+    },
+  }
+}
+
+/** What the user chose in the dialog over the tab. */
+export type StorageChoice =
+  | { confirm: false }
+  | { confirm: true; connectionId?: string; newCredentials: boolean }
+
+/**
+ * The storage dialog of one extension frame: shows the frame's request, answers it or hands it on
+ * to holzi's window for credentials, and ends both when the request ends or the frame closes.
+ */
+export function useFrameStorageDialog(
+  frameOf: () => string | null,
+  afterAnswer: () => void,
+) {
+  const request = ref<StorageRequest | null>(null)
+  const unlisten: UnlistenFn[] = []
+  let unmounted = false
+
+  function end(requestId: string) {
+    if (request.value?.requestId === requestId) request.value = null
+    if (credentialsRequest.value?.requestId === requestId)
+      credentialsRequest.value = null
+  }
+
+  void Promise.all([
+    listen<StorageRequest>('extension-storage-request', (event) => {
+      if (event.payload.frame === frameOf()) request.value = event.payload
+    }),
+    listen<{ requestId: string }>('extension-storage-request-ended', (event) =>
+      end(event.payload.requestId),
+    ),
+  ]).then((offs) => {
+    if (unmounted) for (const off of offs) off()
+    else unlisten.push(...offs)
+  })
+
+  onBeforeUnmount(() => {
+    unmounted = true
+    for (const off of unlisten) off()
+    // Holzi cancels the dialogs of a closed frame; its window for credentials goes with them.
+    if (credentialsRequest.value?.frame === frameOf())
+      credentialsRequest.value = null
+  })
+
+  function answer(choice: StorageChoice): void {
+    const open = request.value
+    request.value = null
+    if (!open) return
+    if (choice.confirm && choice.newCredentials && !choice.connectionId) {
+      credentialsRequest.value = open
+    } else {
+      const answer: StorageAnswer = choice.confirm
+        ? { kind: 'confirm', connectionId: choice.connectionId }
+        : { kind: 'cancel' }
+      void resolveStorageAsync(open.requestId, answer).catch(() => {})
+    }
+    afterAnswer()
+  }
+
+  return { storageRequest: request, answerStorage: answer }
+}

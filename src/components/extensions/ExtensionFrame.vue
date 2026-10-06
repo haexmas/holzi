@@ -20,6 +20,8 @@ const {
   dev,
   consoleLines,
   answerDialog,
+  storageRequest,
+  answerStorage,
   onLoad,
   reloadAsync,
 } = useExtensionFrame(iframe, props.extensionId)
@@ -38,7 +40,7 @@ const {
         referrerpolicy="no-referrer"
         class="h-full w-full border-0"
         :class="{ invisible: state !== 'ready' }"
-        :inert="dialog !== null || undefined"
+        :inert="dialog !== null || storageRequest !== null || undefined"
         :title="t('extensions.frame.title')"
         @load="onLoad"
       />
@@ -59,6 +61,12 @@ const {
         class="absolute inset-0"
         :dialog="dialog"
         @answer="answerDialog"
+      />
+      <ExtensionsStorageDialog
+        v-if="storageRequest"
+        class="absolute inset-0"
+        :request="storageRequest"
+        @answer="answerStorage"
       />
     </div>
     <ExtensionsDevConsole v-if="dev" :lines="consoleLines" />
