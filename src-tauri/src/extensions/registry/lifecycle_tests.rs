@@ -108,9 +108,9 @@ fn a_device_scoped_permission_from_a_does_not_hold_on_b() {
                 tx,
                 ext,
                 &NewPermission {
-                    kind: "filesystem",
-                    action: "read",
-                    target: "/tmp/notes",
+                    kind: "shell",
+                    action: "execute",
+                    target: "/usr/bin/git",
                     status: "granted",
                     declared: false,
                     vault_device_uuid: a.me,
@@ -126,8 +126,7 @@ fn a_device_scoped_permission_from_a_does_not_hold_on_b() {
         let me = node.me;
         node.vault
             .read_blocking(move |q| {
-                permission_store::candidates(q, ext, PermissionKind::Filesystem, me)
-                    .map_err(Into::into)
+                permission_store::candidates(q, ext, PermissionKind::Shell, me).map_err(Into::into)
             })
             .expect("candidates")
             .len()

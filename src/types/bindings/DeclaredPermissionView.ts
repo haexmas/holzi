@@ -5,6 +5,6 @@
  */
 export type DeclaredPermissionView = { kind: string, action: string, target: string,
 /**
- * Remembered only for this device unless the user chooses all devices.
+ * Remembered only for this device (shell); every other kind holds on every own device.
  */
 deviceScoped: boolean, };

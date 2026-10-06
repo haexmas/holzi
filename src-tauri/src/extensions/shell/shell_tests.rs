@@ -159,7 +159,6 @@ impl Setup {
                 action: "execute".into(),
                 target: program.to_string_lossy().into_owned(),
                 status: "granted".into(),
-                all_devices: false,
                 replaces: None,
             },
             2,

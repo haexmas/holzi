@@ -229,10 +229,10 @@ ready ──neue wirksame Fassung──▶ transferring/prüfen/migrieren (offen
 ### Berechtigung
 
 ```text
-erklärt + bestätigt ──▶ granted (vault-weit; gerätebezogene Arten: Gerät, außer „für alle Geräte“)
+erklärt + bestätigt ──▶ granted (vault-weit; shell: dieses Gerät)
 erklärt + abgewählt ──▶ ask
 nicht erklärt, angefragt ──Erlauben/Verweigern ohne Merken──▶ vorläufig (Speicher)
-                        ──mit Merken──▶ granted/denied (Geltungsbereich nach Art und Wahl)
+                        ──mit Merken──▶ granted/denied (Geltungsbereich nach Art)
 Einstellungen ──ändern/widerrufen──▶ neuer Zustand, sofort wirksam (Cache verworfen)
 erklärt, Update erklärt sie nicht mehr ──▶ gelöscht
 nicht erklärt + gemerkt, Update erklärt sie ──▶ declared = 1, Zustand bleibt

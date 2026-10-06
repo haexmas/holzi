@@ -120,7 +120,6 @@ impl Setup {
                 action: action.into(),
                 target: target.into(),
                 status: "granted".into(),
-                all_devices: false,
                 replaces: None,
             },
             2,

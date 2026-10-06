@@ -202,7 +202,7 @@ fn unknown_stored_values_are_absent_never_another_permission() {
 }
 
 #[test]
-fn shell_and_filesystem_are_device_scoped_kinds() {
+fn only_the_shell_is_a_device_scoped_kind() {
     for kind in [
         PermissionKind::Database,
         PermissionKind::Filesystem,
@@ -213,7 +213,7 @@ fn shell_and_filesystem_are_device_scoped_kinds() {
         PermissionKind::Mail,
         PermissionKind::Shell,
     ] {
-        let expected = matches!(kind, PermissionKind::Filesystem | PermissionKind::Shell);
+        let expected = matches!(kind, PermissionKind::Shell);
         assert_eq!(kind.is_device_scoped(), expected, "{kind:?}");
         assert_eq!(PermissionKind::parse(kind.as_str()), Some(kind));
     }

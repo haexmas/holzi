@@ -51,10 +51,20 @@ impl PermissionKind {
         }
     }
 
-    /// Kinds whose remembered permissions hold only on the device that granted them, unless the
-    /// user chose "all devices" (Clarifications 2026-10-02): paths and programs differ per device.
+    /// Kinds whose remembered permissions hold only on the device that granted them
+    /// (Clarifications 2026-10-06): programs differ per device. Every other kind, the file system
+    /// included, holds on every own device; nobody chooses.
     pub fn is_device_scoped(self) -> bool {
-        matches!(self, Self::Filesystem | Self::Shell)
+        matches!(self, Self::Shell)
+    }
+
+    /// The `vault_device_uuid` a remembered permission of this kind is written with on `device`.
+    pub fn scope_on(self, device: Uuid) -> Uuid {
+        if self.is_device_scoped() {
+            device
+        } else {
+            VAULT_WIDE
+        }
     }
 }
 

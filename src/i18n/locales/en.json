@@ -1743,8 +1743,8 @@
       "update": "Update from {from} to {to}",
       "confirmDowngrade": "Install the older version anyway",
       "permissions": "Permissions",
-      "thisDevice": "this device only",
-      "allDevices": "all devices",
+      "vaultWide": "The extension is installed in the whole vault and also appears on your linked devices. Its permissions hold there as well.",
+      "deviceOnly": "Holds on this device only: holzi asks again on your other devices.",
       "unsupported": "Not supported by holzi: {categories}",
       "cancel": "Cancel",
       "install": "Install"
@@ -1787,8 +1787,8 @@
       "targetMissing": "The extension whose data is requested is not installed.",
       "shellWarning": "Caution: with this permission the extension can run programs on this device.",
       "remember": "Remember",
-      "allDevices": "Remember for all devices",
-      "allDevicesNote": "The permission then also holds on your other devices once they have synchronised the vault.",
+      "scopeVault": "Then holds on all your devices.",
+      "scopeDevice": "Then holds on this device only. holzi asks again on your other devices.",
       "allow": "Allow",
       "deny": "Deny"
     },

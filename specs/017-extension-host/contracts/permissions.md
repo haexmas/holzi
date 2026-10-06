@@ -40,7 +40,9 @@ Feste Regeln vor der Auswertung (keine Berechtigung ändert sie): Kerntabellen (
 
 - Jede erklärte Berechtigung erscheint mit Art, Aktion, Ziel; Vorgabe angehakt.
 - Angehakt → `granted`, abgehakt → `ask`; beides mit `declared = 1`.
-- Gerätebezogene Arten bekommen die Kennung dieses Geräts, außer der Nutzer wählt „für alle Geräte“.
+- `shell` bekommt die Kennung dieses Geräts, jede andere Art die vault-weite (`PermissionKind::scope_on`). Der
+  Dialog bietet keine Wahl; er sagt, dass die Erweiterung in der ganzen Vault installiert wird, und bei `shell`,
+  dass die Berechtigung nur auf diesem Gerät gilt.
 - Update: nur neu erklärte Berechtigungen werden vorgelegt. Gemerkte Zeilen mit `declared = 1`, deren
   (Art, Aktion, Ziel) das neue Manifest nicht mehr erklärt, werden gelöscht; erklärt ein späteres Update sie
   wieder, gelten sie als neu und werden wieder vorgelegt. Zeilen mit `declared = 0` (zur Laufzeit gemerkt)
@@ -54,8 +56,8 @@ Feste Regeln vor der Auswertung (keine Berechtigung ändert sie): Kerntabellen (
    `target`, `declared`, `deviceScoped` und `targetMissing` (Ziel einer nicht installierten Erweiterung:
    nur „Verweigern“, FR-062).
 2. Die Warteschlange im Frontend fasst gleiche (`extensionId, kind, action, target`) zusammen und zeigt eine
-   Anfrage nach der anderen: „Erlauben“, „Verweigern“, „Merken“, bei gerätebezogenen Arten zusätzlich „für
-   alle Geräte merken“ mit Hinweis auf die Wirkung; bei `shell` eine deutliche Warnung. Schließen des Dialogs
+   Anfrage nach der anderen: „Erlauben“, „Verweigern“, „Merken“ mit dem Hinweis, wo die gemerkte Entscheidung
+   gilt (`deviceScoped`: nur dieses Gerät, sonst alle Geräte); bei `shell` eine deutliche Warnung. Schließen des Dialogs
    bricht ab, verweigert nicht: `extension_permission_cancel {requestId}` nimmt die Frage aus den offenen,
    der nächste gleiche Aufruf fragt wieder.
 3. Die Entscheidung geht an `extension_permission_resolve`; Rust speichert (gemerkt) oder hält im Speicher

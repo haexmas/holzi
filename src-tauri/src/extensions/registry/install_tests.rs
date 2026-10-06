@@ -8,6 +8,7 @@ use haex_crdt::rusqlite::params;
 use haex_crdt::Database;
 
 use super::*;
+use crate::extensions::permissions::VAULT_WIDE;
 use crate::passwords::test_support::open_test_vault;
 use crate::storage::known_devices;
 use crate::vault_gate::VaultGate;
@@ -94,19 +95,12 @@ impl Vault {
     }
 }
 
-fn choice(
-    kind: &str,
-    action: &str,
-    target: &str,
-    granted: bool,
-    all_devices: bool,
-) -> PermissionChoice {
+fn choice(kind: &str, action: &str, target: &str, granted: bool) -> PermissionChoice {
     PermissionChoice {
         kind: kind.into(),
         action: action.into(),
         target: target.into(),
         granted,
-        all_devices,
     }
 }
 
@@ -123,7 +117,7 @@ fn the_preview_of_a_new_bundle_lists_its_permissions_and_writes_nothing() {
         .iter()
         .find(|d| d.kind == "filesystem")
         .unwrap();
-    assert!(fs.device_scoped);
+    assert!(!fs.device_scoped, "the file system holds on every device");
     assert_eq!(preview.existing, None);
     assert!(!preview.same_name_other_publisher);
     let fingerprint = preview.publisher_fingerprint.unwrap();
@@ -151,14 +145,14 @@ fn a_refused_bundle_is_a_preview_with_its_error_and_an_install_error() {
 }
 
 #[test]
-fn ticked_permissions_are_granted_unticked_ask_and_device_scoped_kinds_stay_on_this_device() {
+fn ticked_permissions_are_granted_unticked_ask_and_hold_on_every_device() {
     let v = vault();
     let installed = v
         .install(
             &build("demo", "1.0.0", "Demo", PERMS_V1, 1),
             vec![
-                choice("filesystem", "read", "/home/a/docs", true, false),
-                choice("web", "*", "https://a.example/*", false, false),
+                choice("filesystem", "read", "/home/a/docs", true),
+                choice("web", "*", "https://a.example/*", false),
             ],
             false,
         )
@@ -172,7 +166,7 @@ fn ticked_permissions_are_granted_unticked_ask_and_device_scoped_kinds_stay_on_t
                 "/home/a/docs".into(),
                 "granted".into(),
                 true,
-                v.device
+                VAULT_WIDE
             ),
             (
                 "web".into(),
@@ -186,17 +180,38 @@ fn ticked_permissions_are_granted_unticked_ask_and_device_scoped_kinds_stay_on_t
 }
 
 #[test]
-fn all_devices_remembers_a_device_scoped_kind_vault_wide() {
+fn only_a_shell_permission_is_remembered_for_this_device() {
     let v = vault();
+    let perms = r#"{"filesystem":[{"target":"/home/a/docs","operation":"read"}],"shell":[{"target":"/usr/bin/git"}]}"#;
+    let preview = v.preview(&build("demo", "1.0.0", "Demo", perms, 1));
+    let scoped: Vec<(&str, bool)> = preview
+        .declared
+        .iter()
+        .map(|d| (d.kind.as_str(), d.device_scoped))
+        .collect();
+    assert_eq!(scoped, vec![("filesystem", false), ("shell", true)]);
     let installed = v
         .install(
-            &build("demo", "1.0.0", "Demo", PERMS_V1, 1),
-            vec![choice("filesystem", "read", "/home/a/docs", true, true)],
+            &build("demo", "1.0.0", "Demo", perms, 1),
+            vec![
+                choice("filesystem", "read", "/home/a/docs", true),
+                choice("shell", "execute", "/usr/bin/git", true),
+            ],
             false,
         )
         .unwrap();
-    let rows = v.permissions(installed.ids.extension_id);
-    assert_eq!(rows[0].4, VAULT_WIDE);
+    let scopes: Vec<(String, Uuid)> = v
+        .permissions(installed.ids.extension_id)
+        .into_iter()
+        .map(|row| (row.0, row.4))
+        .collect();
+    assert_eq!(
+        scopes,
+        vec![
+            ("filesystem".into(), VAULT_WIDE),
+            ("shell".into(), v.device)
+        ]
+    );
 }
 
 #[test]
@@ -249,7 +264,7 @@ fn an_update_deletes_dropped_declarations_keeps_runtime_rows_and_puts_only_new_o
 
     v.install(
         &v2,
-        vec![choice("web", "*", "https://b.example/*", true, false)],
+        vec![choice("web", "*", "https://b.example/*", true)],
         false,
     )
     .unwrap();

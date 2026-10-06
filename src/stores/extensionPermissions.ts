@@ -40,11 +40,10 @@ export const useExtensionPermissionsStore = defineStore(
       requestId: string,
       decision: 'allow' | 'deny',
       remember: boolean,
-      allDevices: boolean,
     ): Promise<void> {
       queue.value = remove(queue.value, requestId)
       await invoke('extension_permission_resolve', {
-        args: { requestId, decision, remember, allDevices },
+        args: { requestId, decision, remember },
       })
     }
 

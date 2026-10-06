@@ -157,7 +157,6 @@ fn a_revoked_poll_permission_ends_the_watch() {
             action: "poll".into(),
             target: "127.0.0.1".into(),
             status: "denied".into(),
-            all_devices: false,
             replaces: None,
         },
         3,

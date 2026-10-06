@@ -129,9 +129,7 @@ pub struct PermissionSetArgs {
     pub target: String,
     /// `granted`, `denied` or `ask`.
     pub status: String,
-    /// Remember for every own device; else for this device only.
-    pub all_devices: bool,
-    /// The row this setting replaces (a change of scope), if any.
+    /// The row this setting replaces, if any: a row of a scope the kind no longer has.
     #[serde(default)]
     pub replaces: Option<String>,
 }
@@ -139,7 +137,8 @@ pub struct PermissionSetArgs {
 /// Writes a permission as the settings chose it; only forms holzi can read are accepted.
 pub fn set(db: &VaultDb, device: Uuid, args: PermissionSetArgs, now_ms: i64) -> Result<()> {
     let extension_id = parse_id(&args.extension_id)?;
-    let scope = if args.all_devices { VAULT_WIDE } else { device };
+    let kind = PermissionKind::parse(&args.kind).ok_or_else(|| invalid("unknown kind"))?;
+    let scope = kind.scope_on(device);
     if Permission::from_row(&args.kind, &args.action, &args.target, &args.status, scope).is_none() {
         return Err(invalid("permission not understood"));
     }
@@ -228,9 +227,6 @@ pub struct PermissionResolveArgs {
     pub decision: PermissionDecision,
     /// Store the decision; else it holds until holzi is closed.
     pub remember: bool,
-    /// For device-scoped kinds: remember for every own device.
-    #[serde(default)]
-    pub all_devices: bool,
 }
 
 /// Answers an open question: remembered as a row or held in memory, then every frame of the
@@ -252,11 +248,7 @@ pub fn resolve(
         PermissionDecision::Deny => PermissionStatus::Denied,
     };
     if args.remember {
-        let scope = if question.kind.is_device_scoped() && !args.all_devices {
-            device
-        } else {
-            VAULT_WIDE
-        };
+        let scope = question.kind.scope_on(device);
         let Question {
             extension_id,
             kind,

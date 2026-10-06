@@ -21,7 +21,7 @@ use crate::extensions::bundle::{limits, verify_bundle, BundleRejection, Manifest
 use crate::extensions::ids::{extension_id, TablePrefix};
 use crate::extensions::permissions::manifest_map::DeclaredPermission;
 use crate::extensions::permissions::store::{self as permission_store, NewPermission};
-use crate::extensions::permissions::{PermissionStatus, VAULT_WIDE};
+use crate::extensions::permissions::PermissionStatus;
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -33,7 +33,7 @@ pub struct DeclaredPermissionView {
     pub kind: String,
     pub action: String,
     pub target: String,
-    /// Remembered only for this device unless the user chooses all devices.
+    /// Remembered only for this device (shell); every other kind holds on every own device.
     pub device_scoped: bool,
 }
 
@@ -133,9 +133,6 @@ pub struct PermissionChoice {
     pub target: String,
     /// Ticked: `granted`; unticked: `ask`.
     pub granted: bool,
-    /// For device-scoped kinds: remember for every own device instead of only this one.
-    #[serde(default)]
-    pub all_devices: bool,
 }
 
 /// `3614 253f 84ba 66a8 … 3ca2 823f 5ca9 7d34`.
@@ -261,8 +258,8 @@ pub fn install_preview(q: &mut impl Query, bytes: &[u8]) -> Result<InstallPrevie
 }
 
 /// Writes the declared permissions (contracts/permissions.md §Installation): a declaration without
-/// any row becomes `granted` (ticked) or `ask` (unticked) with `declared = 1`, for device-scoped
-/// kinds on this device unless the choice says all devices; a runtime row (`declared = 0`) the
+/// any row becomes `granted` (ticked) or `ask` (unticked) with `declared = 1`, in the scope of
+/// its kind (`PermissionKind::scope_on`); a runtime row (`declared = 0`) the
 /// manifest now declares becomes `declared = 1` with its state kept; a declared row the manifest
 /// no longer declares is deleted; every other row stays.
 pub fn apply_declarations(
@@ -295,17 +292,12 @@ pub fn apply_declarations(
         let kind = declaration.kind.as_str();
         let choice = choices.get(&key_of(kind, &action, &declaration.target_text));
         let granted = choice.is_some_and(|c| c.granted);
-        let all_devices = choice.is_some_and(|c| c.all_devices);
         let status = if granted {
             PermissionStatus::Granted
         } else {
             PermissionStatus::Ask
         };
-        let scope = if declaration.kind.is_device_scoped() && !all_devices {
-            device
-        } else {
-            VAULT_WIDE
-        };
+        let scope = declaration.kind.scope_on(device);
         permission_store::put(
             tx,
             extension_id,

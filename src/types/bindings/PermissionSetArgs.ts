@@ -6,10 +6,6 @@ export type PermissionSetArgs = { extensionId: string, kind: string, action: str
  */
 status: string,
 /**
- * Remember for every own device; else for this device only.
- */
-allDevices: boolean,
-/**
- * The row this setting replaces (a change of scope), if any.
+ * The row this setting replaces, if any: a row of a scope the kind no longer has.
  */
 replaces: string | null, };

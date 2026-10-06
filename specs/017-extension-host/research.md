@@ -476,8 +476,9 @@ Frontend (gegen ADR-0004).
   Unbekannte Art, Aktion oder Ziel aus der Datenbank gelten als nicht vorhanden (FR-022; HV fällt auf Db/Read
   zurück, `crud.rs:246-255`). Schreibweisen `readWrite` und `read_write` werden beim Lesen des Manifests
   vereinheitlicht.
-- Geltungsbereich über `vault_device_uuid` nach ADR-0001 (Nil-Kennung = vault-weit). Shell und Dateisystem sind
-  gerätebezogene Arten: Vorgabe Gerät, wählbar „für alle Geräte“ (Clarification 2026-10-02).
+- Geltungsbereich über `vault_device_uuid` nach ADR-0001 (Nil-Kennung = vault-weit). Nur die Shell ist eine
+  gerätebezogene Art und gilt immer auf dem Gerät; alles andere vault-weit, ohne Wahl (Clarification 2026-10-06,
+  ersetzt die vom 2026-10-02).
 - Vorläufige Berechtigungen nur im Speicher von Rust, bis die Vault schließt.
 - Anfrage: Rust antwortet mit 1004 und schickt `extension-permission-request {requestId, ext, kind, action,
 target, declared, deviceScoped}` an die Oberfläche; die Warteschlange im Frontend fasst gleiche Anfragen

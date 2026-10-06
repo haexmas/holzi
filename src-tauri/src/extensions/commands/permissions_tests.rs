@@ -107,7 +107,6 @@ fn resolve_open(s: &Setup, decision: PermissionDecision, remember: bool) {
             request_id: request["requestId"].as_str().unwrap().to_owned(),
             decision,
             remember,
-            all_devices: false,
         },
         2,
     )
@@ -208,7 +207,6 @@ fn a_setting_never_replaces_a_row_of_another_extension() {
             action: "read".into(),
             target: foreign(),
             status: "denied".into(),
-            all_devices: true,
             replaces: Some(foreign_row.to_string()),
         },
         2,
@@ -251,7 +249,6 @@ fn denied_beats_granted_and_a_change_applies_to_the_next_call() {
                 action: "read".into(),
                 target: target.into(),
                 status: status.into(),
-                all_devices: true,
                 replaces: None,
             },
             3,

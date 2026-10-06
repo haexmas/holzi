@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * The question of an extension for a permission (spec 017, US3, T069, contracts/permissions.md):
- * one at a time, "Erlauben" or "Verweigern", "Merken" to keep the answer, for device-scoped kinds
- * "für alle Geräte merken". Closing the dialog cancels; it never denies. Mounted once in the
+ * one at a time, "Erlauben" or "Verweigern", "Merken" to keep the answer, which then holds on every
+ * own device, for the shell only on this one. Closing the dialog cancels; it never denies. Mounted once in the
  * desktop, following the controlled dialog of `chat/PermissionPrompt.vue`.
  */
 const { t } = useI18n()
@@ -10,14 +10,12 @@ const { errString } = useErrorString()
 const store = useExtensionPermissionsStore()
 
 const remember = ref(true)
-const allDevices = ref(false)
 const failure = ref<string | null>(null)
 
 watch(
   () => store.shown?.requestId,
   () => {
     remember.value = true
-    allDevices.value = false
     failure.value = null
   },
 )
@@ -26,12 +24,7 @@ async function answerAsync(decision: 'allow' | 'deny') {
   const question = store.shown
   if (!question) return
   try {
-    await store.answerAsync(
-      question.requestId,
-      decision,
-      remember.value,
-      question.deviceScoped && allDevices.value,
-    )
+    await store.answerAsync(question.requestId, decision, remember.value)
   } catch (error) {
     failure.value = errString(error)
   }
@@ -80,15 +73,13 @@ function onUpdateOpen(open: boolean) {
           <ShadcnCheckbox v-model="remember" />
           {{ t('extensions.permissionRequest.remember') }}
         </label>
-        <div v-if="store.shown.deviceScoped && remember" class="space-y-1">
-          <label class="flex items-center gap-2 text-sm">
-            <ShadcnCheckbox v-model="allDevices" />
-            {{ t('extensions.permissionRequest.allDevices') }}
-          </label>
-          <p class="text-xs text-muted-foreground">
-            {{ t('extensions.permissionRequest.allDevicesNote') }}
-          </p>
-        </div>
+        <p v-if="remember" class="text-xs text-muted-foreground">
+          {{
+            store.shown.deviceScoped
+              ? t('extensions.permissionRequest.scopeDevice')
+              : t('extensions.permissionRequest.scopeVault')
+          }}
+        </p>
         <p v-if="failure" class="text-sm text-destructive" role="alert">
           {{ failure }}
         </p>

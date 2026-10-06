@@ -5,8 +5,4 @@ export type PermissionResolveArgs = { requestId: string, decision: PermissionDec
 /**
  * Store the decision; else it holds until holzi is closed.
  */
-remember: boolean,
-/**
- * For device-scoped kinds: remember for every own device.
- */
-allDevices: boolean, };
+remember: boolean, };

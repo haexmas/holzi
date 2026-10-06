@@ -46,8 +46,9 @@ Schlüssel-Wert-Speicher). Die Entscheidungen von ADR-0004 gelten. Referenzen: h
   Berechtigung hat einen Zustand: **erteilt**, **verweigert** oder **fragen**. Eine
   **gemerkte** Berechtigung bleibt bestehen; eine **vorläufige** gilt nur, bis die Vault
   geschlossen wird. Eine gemerkte Berechtigung gilt entweder **vault-weit** (auf allen eigenen
-  Geräten) oder **geräteeigen** (nur auf dem Gerät, auf dem sie erteilt wurde). Shell und
-  Dateisystem sind **gerätebezogene Arten**: Für sie ist geräteeigen die Vorgabe.
+  Geräten) oder **geräteeigen** (nur auf dem Gerät, auf dem sie erteilt wurde). Die Shell ist
+  die einzige **gerätebezogene Art**: Eine gemerkte Shell-Berechtigung gilt immer geräteeigen,
+  jede andere immer vault-weit. Der Nutzer wählt das nicht.
 - **Erweiterungsrahmen**: das abgeschottete iframe, in dem eine Erweiterung in einem Tab läuft,
   und der Kanal, über den es mit holzi spricht. holzi erzeugt beide und weiß daher, welcher
   Erweiterung ein Rahmen gehört.
@@ -127,9 +128,8 @@ Schlüssel-Wert-Speicher). Die Entscheidungen von ADR-0004 gelten. Referenzen: h
   Schreiben“), auf Kerntabellen nie. Kerndaten erreicht sie nur über typisierte
   Host-Funktionen wie die Passwort-Funktionen aus 034.
 - Q: Gelten gemerkte Berechtigungen für Shell und Dateisystem auch auf allen eigenen Geräten?
-  → A: Nein, standardmäßig nur auf dem Gerät, auf dem sie erteilt wurden. Der Nutzer kann bei
-  der Entscheidung ausdrücklich „für alle Geräte merken“ wählen. Alle anderen Arten gelten
-  gemerkt vault-weit.
+  → A: Überholt durch die Klärung vom 2026-10-06 (unten). Ursprünglich: standardmäßig nur auf
+  dem Gerät, auf dem sie erteilt wurden, mit der Wahl „für alle Geräte merken“.
 - Q: Übernimmt holzi das Signaturformat von haex-vault? → A: Nein. haex-vault signiert nur die
   aneinandergehängten Dateiinhalte, ohne Pfade und Dateigrenzen; Inhalte lassen sich so ohne
   Schlüssel zwischen Dateien verschieben, Dateien umbenennen oder leere Dateien ergänzen. holzi
@@ -152,6 +152,14 @@ Schlüssel-Wert-Speicher). Die Entscheidungen von ADR-0004 gelten. Referenzen: h
 - Q: (Planung) Was passiert mit einem Rahmen, wenn sein Tab in ein anderes Fenster wandert oder der
   Arbeitsbereich wechselt? → A: Er lädt neu und kehrt an seinen Ort zurück; ungespeicherter Zustand im
   Rahmen geht dabei verloren (Plan, R17).
+
+### Session 2026-10-06
+
+- Q: Für welche Geräte gilt eine gemerkte Dateisystem-Berechtigung, und darf der Nutzer das
+  wählen? → A: Für alle eigenen Geräte, ohne Wahl. Nur die Shell bleibt geräteeigen, ebenfalls
+  ohne Wahl: Programme unterscheiden sich je Gerät, und Ausführen ist das größte Risiko. Die
+  Dialoge sagen, wo eine Berechtigung gilt, statt danach zu fragen (Betreiber, bei der Prüfung
+  von haex-notes).
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -261,12 +269,12 @@ Einstellungen widerrufen und prüfen, dass die nächste Anfrage wieder fragt.
    Hinweis, ob die Erweiterung das erklärt hat; die Erweiterung wartet auf die Entscheidung
    und erfährt sie danach.
 3. **Given** eine Anfrage, **When** der Nutzer mit „Merken“ entscheidet, **Then** gilt die
-   Entscheidung dauerhaft, bei Shell und Dateisystem nur auf diesem Gerät, bei allen anderen
-   Arten auf allen eigenen Geräten; ohne „Merken“ gilt sie nur auf diesem Gerät bis zum
-   Schließen der Vault.
-4. **Given** eine Anfrage für Shell oder Dateisystem, **When** der Nutzer „für alle Geräte
-   merken“ wählt, **Then** gilt die Entscheidung dauerhaft auf allen eigenen Geräten, und die
-   Anfrage hat vorher deutlich gesagt, dass sie damit auch auf den anderen Geräten gilt.
+   Entscheidung dauerhaft, bei der Shell nur auf diesem Gerät, bei allen anderen Arten auf
+   allen eigenen Geräten; ohne „Merken“ gilt sie nur auf diesem Gerät bis zum Schließen der
+   Vault.
+4. **Given** eine Anfrage, **When** „Merken“ gewählt ist, **Then** sagt die Anfrage, wo die
+   Entscheidung gelten wird (bei der Shell „nur auf diesem Gerät“, sonst „auf allen deinen
+   Geräten“), und bietet keine Wahl des Geltungsbereichs an.
 5. **Given** eine verweigerte Berechtigung und eine erteilte, die beide passen, **When** die
    Erweiterung anfragt, **Then** gilt die Verweigerung.
 6. **Given** mehrere gleichartige Anfragen kurz hintereinander, **When** holzi sie zeigt,
@@ -319,7 +327,7 @@ vergleichen. Danach auf A ein Update installieren und prüfen, dass B es überni
    die Erweiterung auf Gerät B dieselbe Anfrage stellt, **Then** gilt die Berechtigung auch
    dort. Eine vault-weite Berechtigung für Dateien gilt für einen Pfad, den es auf B nicht
    geben muss (FR-047).
-6. **Given** eine geräteeigene Berechtigung für Shell oder Dateisystem auf Gerät A, **When**
+6. **Given** eine geräteeigene Berechtigung für die Shell auf Gerät A, **When**
    die Erweiterung auf Gerät B dieselbe Anfrage stellt, **Then** fragt holzi auf B erneut.
 7. **Given** eine Erweiterung, die auf einem Gerät deinstalliert wird, **When** die anderen
    Geräte die Änderungen bekommen, **Then** ist sie auch dort deinstalliert, mit oder ohne
@@ -707,9 +715,10 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   Berechtigung MUSS Art, Aktion und Ziel haben. Ziele MÜSSEN ein genauer Wert, ein Präfix mit
   `*` oder `*` für alles sein.
 - **FR-016**: Die erklärten und bei der Installation bestätigten Berechtigungen MÜSSEN als
-  „erteilt“ gelten, abgewählte als „fragen“. Bestätigte Berechtigungen gerätebezogener Arten
-  MÜSSEN geräteeigen für das installierende Gerät gelten, außer der Nutzer wählt im
-  Installationsdialog „für alle Geräte“; auf anderen Geräten stehen sie sonst auf „fragen“. Eine Berechtigung, die nicht erklärt war, MUSS
+  „erteilt“ gelten, abgewählte als „fragen“. Bestätigte Shell-Berechtigungen MÜSSEN geräteeigen
+  für das installierende Gerät gelten, alle anderen vault-weit; der Installationsdialog MUSS
+  sagen, dass die Erweiterung in der ganzen Vault installiert wird, und bei der Shell, dass sie
+  nur auf diesem Gerät gilt. Eine Berechtigung, die nicht erklärt war, MUSS
   zur Laufzeit erfragt und in der Anfrage als „nicht erklärt“ gekennzeichnet werden.
 - **FR-017**: Bei mehreren passenden Berechtigungen MUSS „verweigert“ vor „erteilt“ und
   „erteilt“ vor „fragen“ gelten. „Lesen und Schreiben“ deckt „Lesen“. Bei Passwörtern gilt das je
@@ -719,12 +728,13 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   das verweigerte `calendar` tragen).
 - **FR-018**: Eine Anfrage MUSS Erweiterung, Art, Aktion, Ziel und die Kennzeichnung aus
   FR-016 zeigen und „Erlauben“ und „Verweigern“ mit der Wahl „Merken“ bieten. Gemerkte
-  Entscheidungen MÜSSEN Vault-Daten sein und vault-weit gelten, außer bei gerätebezogenen
-  Arten (Shell, Dateisystem): Dort MÜSSEN sie geräteeigen gelten (ADR-0001), und die Anfrage
-  MUSS zusätzlich „für alle Geräte merken“ bieten, mit deutlichem Hinweis auf die Wirkung.
-  Nicht gemerkte gelten nur auf diesem Gerät bis zum Schließen der Vault. Die
-  Einstellungs-App MUSS bei jeder Berechtigung zeigen, ob sie vault-weit oder geräteeigen ist
-  und für welches Gerät, und das Ändern in beide Richtungen erlauben.
+  Entscheidungen MÜSSEN Vault-Daten sein und vault-weit gelten, außer bei der Shell: Dort
+  MÜSSEN sie geräteeigen gelten (ADR-0001). Eine Wahl des Geltungsbereichs gibt es nicht; die
+  Anfrage MUSS sagen, wo die gemerkte Entscheidung gelten wird. Nicht gemerkte gelten nur auf
+  diesem Gerät bis zum Schließen der Vault. Die Einstellungs-App MUSS bei jeder Berechtigung
+  zeigen, ob sie vault-weit oder geräteeigen ist und für welches Gerät. Ändert der Nutzer dort
+  den Zustand einer Zeile, deren Geltungsbereich nicht zu ihrer Art passt (aus der Zeit vor der
+  Klärung vom 2026-10-06), MUSS holzi sie durch eine Zeile im Geltungsbereich der Art ersetzen.
 - **FR-019**: Anfragen MÜSSEN in einer Warteschlange nacheinander erscheinen, gleiche
   Anfragen zusammengefasst. Die Erweiterung MUSS die Entscheidung erfahren, damit das
   vault-sdk die Anfrage wiederholen oder aufgeben kann. Eine Anfrage, auf die niemand mehr
@@ -829,8 +839,8 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   „Dokumente“), Ordner beobachten.
 - **FR-047**: Dateiberechtigungen MÜSSEN für einen Pfad mit Unterordnern und für „Lesen“
   oder „Lesen und Schreiben“ gelten. Geprüft MUSS immer das tatsächliche Ziel werden, nach
-  Auflösen von `..` und symbolischen Links. Eine geräteeigene Berechtigung gilt nur auf ihrem
-  Gerät; eine vault-weite gilt auf jedem Gerät für denselben Pfad, wenn es ihn dort gibt.
+  Auflösen von `..` und symbolischen Links. Eine gemerkte Dateiberechtigung gilt vault-weit auf
+  jedem Gerät für denselben Pfad, wenn es ihn dort gibt.
 - **FR-048**: Was der Nutzer in einem Dialog zum Öffnen oder Speichern selbst auswählt, MUSS
   die Erweiterung ohne weitere Berechtigung lesen (Öffnen) oder lesen und schreiben (Speichern)
   dürfen, solange der Rahmen offen ist, aus dem der Dialog kam; danach nicht mehr.
