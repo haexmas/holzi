@@ -40,12 +40,36 @@ holzi PR #308) und ist nicht Teil dieser Spec.
 - [`033-multi-device-e2e`](../033-multi-device-e2e/spec.md) FR-022: Die Plattform-Beschreibung
   für Android ergänzt diese Spec um das, was auf dem Telefon geprüft wurde.
 
+## Clarifications
+
+### Session 2026-10-07
+
+- Q: Wird der Android-Build nur von Hand auf dem Telefon geprüft? → A: Nein. Die CI testet den
+  Android-Build zusätzlich automatisch; die Prüfung von Hand auf dem Telefon bleibt für das, was
+  sich nicht automatisieren lässt.
+- Q: Kann man auf Android einen vorhandenen Tresor aus einer Tresordatei öffnen? → A: Ja. Der
+  Hauptweg bleibt das Neuanlegen; das Öffnen einer Tresordatei kommt als zweiter Weg dazu.
+- Q: Was passiert mit einer Tresordatei, die auf Android über die Dateiauswahl geöffnet wird?
+  → A: holzi übernimmt eine Kopie in den eigenen Speicher; danach ist es ein gewöhnlicher Tresor,
+  das Original bleibt unberührt.
+- Q: Was sollen die automatischen Android-Tests in der CI abdecken? → A: Die vorhandene
+  e2e-Suite des Desktops läuft möglichst vollständig auch im Android-Emulator; ausgenommen sind
+  nur Fälle, deren Funktion es auf Android nicht gibt, jeweils mit Begründung.
+- Q: Wann soll die Android-e2e-Suite in der CI laufen? → A: Bei jedem Pull Request, als
+  Pflicht-Check vor dem Merge.
+- Q: Soll holzi auf Android Bildschirmfotos und die Vorschau in der App-Übersicht verhindern?
+  → A: Ja, standardmäßig an, solange ein Tresor offen ist; die Person kann es in den
+  Einstellungen ausschalten.
+- Q: Ist das Entsperren per Fingerabdruck oder Gesichtserkennung Teil dieser Spec? → A: Nein.
+  042 entsperrt nur per Passwort; biometrisches Entsperren bekommt eine eigene Spec.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - holzi auf dem Telefon installieren, Tresor öffnen, Passwörter nutzen (Priority: P1)
 
 Die Person lädt das APK aus dem CI-Lauf herunter (oder installiert es per Kabel), startet
-holzi auf ihrem Android-Telefon, legt einen neuen Tresor an oder entsperrt einen vorhandenen und
+holzi auf ihrem Android-Telefon, legt einen neuen Tresor an (der Hauptweg), öffnet eine
+vorhandene Tresordatei oder entsperrt einen Tresor, den sie schon auf dem Telefon hat, und
 benutzt den Passwortmanager mit dem Finger: Einträge lesen und bearbeiten, zwischen den Tabs
 wischen, mehrere Einträge per Langdruck auswählen, Anhänge in der Lightbox ansehen. Der Window
 Manager zeigt jedes Fenster bildschirmfüllend; die Zurück-Geste von Android führt im aktiven Tab
@@ -64,33 +88,42 @@ durchgehen, den Tresor schließen und erneut entsperren; die Einträge sind unve
 1. **Given** ein Android-Telefon ohne holzi, **When** die Person das APK installiert und
    holzi startet, **Then** erscheint die Tresorauswahl, und sie kann einen neuen Tresor mit
    Passwort anlegen.
-2. **Given** ein angelegter Tresor, **When** die Person ihn schließt, **Then** endet die App;
+2. **Given** eine Tresordatei von holzi im Download-Ordner oder einem Cloud-Speicher,
+   **When** die Person in der Tresorauswahl „Tresordatei öffnen“ wählt, die Datei über die
+   Dateiauswahl von Android auswählt und das Passwort eingibt, **Then** übernimmt holzi eine
+   Kopie in den eigenen Speicher, der Tresor ist offen und erscheint danach in der
+   Tresorauswahl; die Originaldatei bleibt unverändert.
+3. **Given** ein angelegter Tresor, **When** die Person ihn schließt, **Then** endet die App;
    beim nächsten Start erscheint die Tresorauswahl, und nach dem Entsperren sind alle zuvor
    gespeicherten Daten da.
-3. **Given** ein offener Tresor auf einem 360 px breiten Bildschirm, **When** die Person den
+4. **Given** ein offener Tresor auf einem 360 px breiten Bildschirm, **When** die Person den
    Passwortmanager öffnet, **Then** füllt das Fenster den Bildschirm, nichts ragt seitlich
    hinaus, und keine Bedienelemente liegen unter Statusleiste, Navigationsleiste oder
    Kamera-Aussparung.
-4. **Given** ein geöffneter Eintrag, **When** die Person waagrecht wischt, **Then** wechselt
+5. **Given** ein geöffneter Eintrag, **When** die Person waagrecht wischt, **Then** wechselt
    die Ansicht zwischen Details, Extra und Verlauf; ein Tippen auf einen Tab wechselt ebenso.
-5. **Given** die Eintragsliste, **When** die Person eine Zeile lange drückt, **Then** ist die
+6. **Given** die Eintragsliste, **When** die Person eine Zeile lange drückt, **Then** ist die
    Zeile ausgewählt, die Auswahlleiste erscheint, und weitere Zeilen lassen sich per Tippen
    hinzufügen; das Zeilenmenü über den Menüknopf der Zeile bietet dieselben Aktionen wie das
    Kontextmenü am Desktop.
-6. **Given** ein Eintrag mit Bildanhängen, **When** die Person eine Anhangkarte antippt,
+7. **Given** ein offener Tresor mit angezeigtem Passwort, **When** die Person die
+   App-Übersicht öffnet oder ein Bildschirmfoto versucht, **Then** zeigt die Vorschau nichts
+   vom Inhalt, und das Bildschirmfoto wird verweigert; nach dem Ausschalten in den
+   Einstellungen sind beide wieder möglich.
+8. **Given** ein Eintrag mit Bildanhängen, **When** die Person eine Anhangkarte antippt,
    **Then** öffnet die Lightbox; Zwei-Finger-Zoom vergrößert, Wischen wechselt das Bild,
    Zurück schließt die Lightbox.
-7. **Given** ein Eingabefeld unten im Bildschirm, **When** die Person es antippt, **Then**
+9. **Given** ein Eingabefeld unten im Bildschirm, **When** die Person es antippt, **Then**
    bleibt das Feld über der Bildschirmtastatur sichtbar.
-8. **Given** ein Tab mit Zurück-Eintrag, **When** die Person die Android-Zurück-Geste
-   ausführt, **Then** geht der Tab einen Schritt zurück; ohne Zurück-Eintrag öffnet sich die
-   Fensterübersicht; bei offener Fensterübersicht schließt sie sich; die App wird dabei nie
-   verlassen (Spec 020 FR-019).
-9. **Given** ein Dialog, der eine Datei erwartet (z. B. Anhang hinzufügen, Import aus
-   haex-vault, Hintergrundbild), **When** die Person ihn öffnet, **Then** erscheint die
-   Dateiauswahl von Android, und die gewählte Datei wird übernommen, auch wenn sie aus einem
-   Cloud-Speicher oder dem Download-Ordner stammt.
-10. **Given** eine Funktion ohne Android-Gegenstück (Ordner wählen, Terminal, CLI-Delegate,
+10. **Given** ein Tab mit Zurück-Eintrag, **When** die Person die Android-Zurück-Geste
+    ausführt, **Then** geht der Tab einen Schritt zurück; ohne Zurück-Eintrag öffnet sich die
+    Fensterübersicht; bei offener Fensterübersicht schließt sie sich; die App wird dabei nie
+    verlassen (Spec 020 FR-019).
+11. **Given** ein Dialog, der eine Datei erwartet (z. B. Anhang hinzufügen, Import aus
+    haex-vault, Hintergrundbild), **When** die Person ihn öffnet, **Then** erscheint die
+    Dateiauswahl von Android, und die gewählte Datei wird übernommen, auch wenn sie aus einem
+    Cloud-Speicher oder dem Download-Ordner stammt.
+12. **Given** eine Funktion ohne Android-Gegenstück (Ordner wählen, Terminal, CLI-Delegate,
     Ordner beobachten, Grafikkarten-Erkennung), **When** die Person oder eine Erweiterung sie
     aufruft, **Then** erscheint der Hinweis „Auf diesem Gerät nicht verfügbar“, und holzi
     läuft weiter.
@@ -99,7 +132,8 @@ durchgehen, den Tresor schließen und erneut entsperren; die Einträge sind unve
 
 ### User Story 2 - APK aus der CI bekommen (Priority: P1)
 
-Die Person, die holzi entwickelt, bekommt zu jedem Pull Request ein installierbares APK und für
+Die Person, die holzi entwickelt, bekommt zu jedem Pull Request ein installierbares, in der CI
+automatisch getestetes APK und für
 Releases ein signiertes APK, das sich über eine ältere Version installieren lässt, ohne Daten zu
 verlieren.
 
@@ -116,7 +150,10 @@ installieren, ohne dass der Tresor verloren geht.
    Android nicht mehr baut, und stellt sonst ein installierbares APK als Artefakt bereit.
 2. **Given** ein Release, **When** die CI das Release-APK baut, **Then** ist es mit dem
    Signaturschlüssel von holzi signiert, und dieser Schlüssel liegt nicht im Repository.
-3. **Given** ein installiertes Release-APK, **When** die Person ein neueres Release-APK
+3. **Given** ein Pull Request, **When** die CI läuft, **Then** installiert sie das APK auf
+   einem Android-Emulator, führt dort die e2e-Suite des Desktops aus und wird rot, wenn ein Fall
+   fehlschlägt.
+4. **Given** ein installiertes Release-APK, **When** die Person ein neueres Release-APK
    installiert, **Then** ersetzt Android die App, und vorhandene Tresore bleiben erhalten.
 
 ---
@@ -255,6 +292,10 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
 - **Bildschirm wird gedreht oder Fenstergröße ändert sich** (geteilter Bildschirm, faltbares
   Telefon): Die Sitzung bleibt bestehen, der Kompaktmodus folgt der neuen Breite, nichts wird
   neu entsperrt.
+- **Gewählte Datei ist keine Tresordatei von holzi oder das Passwort ist falsch**: Die
+  Tresorauswahl meldet das verständlich; an der Datei ändert sich nichts.
+- **In der Tresorauswahl gibt es schon einen Tresor mit demselben Namen**: holzi schlägt einen
+  anderen Namen vor; der vorhandene Tresor wird nie überschrieben.
 - **Dateiauswahl abgebrochen**: Der Dialog bleibt unverändert offen, keine Fehlermeldung.
 - **Datei aus der Dateiauswahl ist nicht mehr lesbar** (Cloud-Datei offline, Berechtigung
   entzogen): Verständliche Meldung, kein Absturz.
@@ -276,7 +317,14 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
 - **FR-001**: holzi MUSS als Android-App auf Telefonen mit 64-Bit-ARM-Prozessor installierbar
   und startbar sein; für Emulatoren MUSS es zusätzlich eine x86_64-Variante geben.
 - **FR-002**: Nach dem Start MUSS die Tresorauswahl erscheinen; die Person MUSS dort einen
-  Tresor anlegen und einen vorhandenen entsperren können.
+  Tresor anlegen und einen vorhandenen entsperren können. Das Anlegen ist der hervorgehobene
+  Hauptweg.
+- **FR-002a**: Die Person MUSS in der Tresorauswahl eine Tresordatei von holzi über die
+  Dateiauswahl von Android wählen und mit ihrem Passwort öffnen können. holzi MUSS dabei eine
+  Kopie in den eigenen Speicher übernehmen und DARF die Originaldatei weder ändern noch löschen;
+  danach MUSS der Tresor als gewöhnlicher Tresor in der Tresorauswahl erscheinen. Eine Kopie,
+  die nicht vollständig übernommen oder nicht entsperrt werden konnte, DARF keinen Rest im
+  Speicher von holzi hinterlassen.
 - **FR-003**: Tresore MÜSSEN im privaten Speicher der App liegen; andere Apps DÜRFEN sie
   nicht lesen können.
 - **FR-004**: Alles, was holzi am Desktop dauerhaft speichert (Tresor, Einstellungen,
@@ -299,6 +347,10 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
   waagrechtes Scrollen der Seite funktionieren.
 - **FR-011**: Bedienelemente DÜRFEN NICHT unter Statusleiste, Navigationsleiste oder
   Kamera-Aussparung liegen.
+- **FR-011a**: Solange ein Tresor offen ist, MUSS holzi auf Android standardmäßig Bildschirmfotos
+  und Bildschirmaufnahmen verhindern und in der App-Übersicht von Android ein leeres
+  Vorschaubild zeigen. Die Person MUSS das in den Einstellungen ausschalten können; die Wahl
+  gilt nur für dieses Gerät und wird ohne Speichern-Knopf sofort wirksam.
 - **FR-012**: Ein fokussiertes Eingabefeld MUSS sichtbar bleiben, wenn die Bildschirmtastatur
   erscheint.
 - **FR-013**: Die Android-Zurück-Geste MUSS sich wie in Spec 020 FR-019 verhalten und DARF die
@@ -373,6 +425,14 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
 - **FR-033**: Release-APKs MÜSSEN mit einem eigenen Signaturschlüssel signiert sein, der nicht
   im Repository liegt; aufeinanderfolgende Releases MÜSSEN denselben Schlüssel tragen, damit
   ein Update die installierte App ersetzt.
+- **FR-033a**: Die CI MUSS bei jedem Pull Request das APK auf einem Android-Emulator
+  installieren und die vorhandene e2e-Suite des Desktops dort ausführen; schlägt ein Fall fehl,
+  MUSS der Lauf rot werden. Dieser Lauf MUSS ein Pflicht-Check vor dem Merge sein.
+- **FR-033b**: Ein e2e-Fall DARF auf Android nur ausgenommen werden, wenn seine Funktion es auf
+  Android nicht gibt (FR-016); jede Ausnahme MUSS mit Begründung an einer Stelle aufgeführt
+  sein. Für jede Ausnahme MUSS es einen Android-Fall geben, der das „nicht verfügbar“ prüft.
+- **FR-033c**: Neue e2e-Fälle MÜSSEN ab dieser Spec auf Desktop und Android laufen, außer sie
+  fallen unter FR-033b.
 - **FR-034**: Wer holzi entwickelt, MUSS holzi im Entwicklungsmodus auf einem angeschlossenen
   Telefon oder Emulator starten können, wobei Änderungen an der Oberfläche ohne neues APK
   sichtbar werden.
@@ -405,8 +465,10 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
   von 10 Sekunden sichtbar und umgekehrt.
 - **SC-006**: Eine Prüf-Erweiterung findet auf Android in keinem ihrer Rahmen die interne
   Schnittstelle von holzi.
-- **SC-007**: Jeder Pull Request zeigt nach dem CI-Lauf ein installierbares APK; ein Bruch des
-  Android-Builds fällt im selben Pull Request auf, nicht erst danach.
+- **SC-007**: Jeder Pull Request zeigt nach dem CI-Lauf ein installierbares APK und das
+  Ergebnis der e2e-Suite auf Android; mindestens 90 % der e2e-Fälle des Desktops laufen auch auf
+  Android, der Rest steht begründet in der Ausnahmeliste; ein Bruch des Android-Builds oder seines Verhaltens
+  fällt im selben Pull Request auf, nicht erst danach.
 - **SC-008**: Ein Update von einem Release-APK auf das nächste behält 100 % der Tresore und
   Einstellungen.
 - **SC-009**: Auf einem Telefon mit mindestens 6 GB Arbeitsspeicher beginnt das vorgeschlagene
@@ -418,14 +480,15 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
   dem Telefon der Person und auf einem aktuellen Emulator.
 - Der Build läuft in der Nix-devShell (atoms `holzi` 0.8.0); die CI darf eine eigene
   Android-Umgebung aufsetzen, solange sie dieselben Versionen von SDK, NDK und Rust benutzt.
-- Ein vorhandener Desktop-Tresor kommt per Sync auf das Telefon (User Story 3), nicht durch
-  Kopieren der Tresordatei.
+- Ein vorhandener Desktop-Tresor kommt vorzugsweise per Sync auf das Telefon (User Story 3);
+  das Öffnen einer Tresordatei (FR-002a) ist der zweite Weg.
 - Die Prüf-Builds der Pull Requests sind mit dem Debug-Schlüssel signiert; sie lassen sich
   nicht über ein Release-APK installieren und umgekehrt. Das ist so gewollt.
 - Den Signaturschlüssel erzeugt und verwahrt die Person, die holzi betreut; die CI bekommt ihn
   als Geheimnis (Constitution I).
-- Eine automatische Testsuite auf einem Android-Emulator in der CI ist nicht verlangt; die
-  Akzeptanz auf dem Telefon geschieht von Hand nach der Quickstart-Anleitung des Plans.
+- Was sich nicht im Emulator prüfen lässt (echte Gesten wie Zwei-Finger-Zoom, Kamera-
+  Aussparung, Wechsel zwischen WLAN und Mobilfunk), prüft die Person von Hand auf dem Telefon
+  nach der Quickstart-Anleitung des Plans.
 - Welche Technik lokale Modelle auf Android ausführt (der Desktop-Lader oder das in ADR 0002
   geplante native Backend), entscheidet der Plan; die Spec verlangt nur, dass die
   Telefon-Voreinstellungen laufen.
@@ -440,3 +503,4 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
 - Tablet-spezifische Darstellung über den Kompaktmodus und die normale Darstellung hinaus.
 - Portabler Modus (Spec 014).
 - Autofill von Passwörtern in anderen Android-Apps.
+- Entsperren per Fingerabdruck oder Gesichtserkennung (eigene Spec, auch für den Desktop).

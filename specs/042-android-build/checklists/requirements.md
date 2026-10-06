@@ -44,3 +44,8 @@
   Pfad-basierte Dateiflüsse auf content-URIs umstellen (FR-015, FR-022), Verhalten des
   Neustarts aus Spec 013 auf Android (FR-006), Entwicklungsmodus auf dem Telefon (FR-034),
   Technik für lokale Modelle (ADR 0002, FR-027).
+- Nach `/speckit-clarify` (2026-10-07) neu für den Plan: Die e2e-Suite läuft heute über
+  tauri-driver, das Android nicht unterstützt; der Plan braucht einen Treiber für den
+  Android-Emulator (Spec 033 FR-022 nennt Appium) und Runner mit KVM für jeden Pull Request
+  (FR-033a bis FR-033c). Der Bildschirmschutz (FR-011a) darf die Bildschirmfotos der e2e-Suite
+  nicht verhindern. Tresordatei übernehmen (FR-002a) gibt es auch am Desktop noch nicht.
