@@ -8,6 +8,9 @@
 
 **Input**: User description: "Im Passwortmanager soll der Verlauf statt als zweispaltige Ansicht mit Dropdown in einer Spalte angezeigt werden. Die Anzeige von ‚gespeichert am …‘ soll dezenter werden."
 
+**Supersedes**: die Darstellung der Stände als Zeitleiste aus spec 036 FR-007 (die Auswahl, die
+Reihenfolge und die Wiederherstellung bleiben).
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Frühere Eintragsstände übersichtlich auswählen (Priority: P1)
@@ -54,6 +57,31 @@ lesbar und deutlich kleiner bzw. weniger betont als die Inhaltsüberschrift darg
 2. **Given** die Zeit ist ungültig oder fehlt, **When** der Stand angezeigt wird,
    **Then** bleibt die bestehende Platzhalterdarstellung erhalten.
 
+### User Story 3 - Eintragsaktionen verlässlich ausführen (Priority: P2)
+
+Ein Nutzer löscht einen Eintrag direkt aus dessen Kopfzeile, hält ein Geheimnis mit der Maus
+gedrückt, um es anzusehen, und lädt die Oberfläche bei geöffnetem Vault neu, ohne dabei
+hängenzubleiben.
+
+**Why this priority**: Die Lösch-Schaltfläche im Eintragskopf war ohne Bestätigung wirkungslos;
+ein lang aufgedecktes Geheimnis verschob das Layout und beendete das Halten sofort; ein
+Neuladen der Oberfläche zeigte einen Vault, der bereits offen ist, als gesperrt an.
+
+**Independent Test**: Im Eintragskopf „Löschen“ wählen und bestätigen; ein langes Passwort mit
+der Maus gedrückt halten; die Oberfläche bei offenem Vault neu laden.
+
+**Acceptance Scenarios**:
+
+1. **Given** ein Eintrag ist geöffnet, **When** der Nutzer im Eintragskopf „Löschen“ wählt,
+   **Then** erscheint die bestehende Bestätigung, und nach dem Bestätigen liegt der Eintrag im
+   Papierkorb und die Ansicht verlässt ihn.
+2. **Given** der Nutzer hält die Aufdecken-Schaltfläche mit der Maus, **When** der aufgedeckte
+   Wert das Layout der Zeile verändert, **Then** bleibt der Wert sichtbar, bis die Maustaste
+   losgelassen wird oder das Halten anders endet (Abbruch, verlorener Zeiger).
+3. **Given** dieser Prozess hält einen offenen Vault, **When** die Oberfläche neu lädt und auf der
+   Startseite landet, **Then** kehrt sie in den Arbeitsbereich dieses Vaults zurück, statt eine
+   Entsperrung anzubieten, die mit „Vault bereits aktiv“ scheitern würde.
+
 ### Edge Cases
 
 - Eine lange Liste von Verlaufsständen bleibt im Dropdown auswählbar, ohne die Seite horizontal
@@ -78,6 +106,14 @@ lesbar und deutlich kleiner bzw. weniger betont als die Inhaltsüberschrift darg
 - **FR-005**: Die bestehenden Lade-, Fehler-, leereren Verlauf- und Geheimnis-Sichtbarkeitsregeln
   DÜRFEN durch die Layoutänderung nicht verloren gehen.
 - **FR-006**: Die Auswahl MUSS per Tastatur und mit einem zugänglichen Namen bedienbar bleiben.
+- **FR-007**: Die Lösch-Schaltfläche im Eintragskopf MUSS die bestehende Papierkorb-Bestätigung
+  öffnen; nach dem Löschen verlässt die Ansicht den Eintrag.
+- **FR-008**: Ein mit der Maus gehaltenes Geheimnis MUSS sichtbar bleiben, solange die Maustaste
+  gehalten wird, auch wenn der Wert das Layout verändert; es MUSS beim Loslassen, beim Abbruch
+  und bei einem verlorenen Zeiger wieder verborgen werden.
+- **FR-009**: Nach einem Neuladen der Oberfläche MUSS die Startseite einen in diesem Prozess
+  offenen Vault erkennen und in dessen Arbeitsbereich zurückkehren; die Abfrage öffnet oder liest
+  den Vault nicht (spec 013, app-scoped Befehl `active_instance_name`).
 
 ## Success Criteria
 
@@ -95,7 +131,9 @@ lesbar und deutlich kleiner bzw. weniger betont als die Inhaltsüberschrift darg
 ## Assumptions
 
 - Das bestehende Dropdown- und Übersetzungssystem des Projekts wird wiederverwendet.
-- Der bisherige relative/exakte Zeittext und die Reihenfolge „neueste zuerst“ bleiben bestehen.
-- Es sind keine Änderungen am Datenmodell, an Backend-Befehlen oder an der Navigation nötig.
+- Die Reihenfolge „neueste zuerst“ bleibt bestehen; die Optionen des Dropdowns nennen den exakten
+  Zeitpunkt und die geänderten Felder (der relative Zeittext der Zeitleiste entfällt).
+- Es sind keine Änderungen am Datenmodell nötig. Der einzige neue Backend-Befehl ist die
+  app-scoped Abfrage des aktiven Vault-Namens (FR-009, Vertrag in spec 013).
 - Die Änderung gilt für die bestehende Desktop-/Webview-Passwortmanageransicht; neue responsive
   Breakpoints sind nicht Teil dieses Changes.

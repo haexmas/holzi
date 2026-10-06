@@ -22,5 +22,5 @@ Die Snapshot-Komponente bleibt fachlich unverändert.
 
 - Ein eigener neuer History-Dropdown-Baustein: unnötige Duplizierung vorhandener
   Auswahl-/Formatierungslogik.
-- Eine Änderung an Vault-Commands oder Snapshot-Daten: die gewünschte Änderung ist rein
-  präsentational.
+- Eine Änderung an Snapshot-Daten: die Verlaufsänderung ist rein präsentational. (Der
+  app-scoped Befehl `active_instance_name` gehört zu US3/FR-009, nicht zum Verlauf.)

@@ -33,5 +33,6 @@
 
 ## Notes
 
-- Die Anforderungen betreffen ausschließlich die bestehende Verlaufansicht; Datenzugriff und
-  Wiederherstellung bleiben unverändert.
+- US1/US2 betreffen die bestehende Verlaufansicht; Datenzugriff und Wiederherstellung bleiben
+  unverändert. US3 ergänzt die Lösch-Bestätigung im Eintragskopf, das gehaltene Aufdecken und
+  die Rückkehr in den offenen Vault nach einem Neuladen.

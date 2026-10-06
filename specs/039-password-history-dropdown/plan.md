@@ -30,8 +30,10 @@ Die Zeitzeile im Standkopf wird typografisch zu einer dezenten Metainformation z
 **Performance Goals**: Kein zusätzlicher Backend-Aufruf beim Öffnen; pro Auswahl weiterhin
 genau der bestehende Ladevorgang für den gewählten Stand
 
-**Constraints**: Keine Änderung an Backend-Verträgen, Datenmodell, Navigation oder
-Geheimnisbehandlung; deutsche und englische Übersetzungen bleiben synchron
+**Constraints**: Keine Änderung am Datenmodell; einziger neuer Backend-Befehl ist das app-scoped
+`active_instance_name` (FR-009, auf der Allow-List des Vault-Gates, liest nur den Namen im
+Prozess-Slot); Geheimnisse werden weiterhin erst beim Aufdecken geholt; deutsche und englische
+Übersetzungen bleiben synchron
 
 **Scale/Scope**: Zwei bestehende Passwortmanager-Komponenten plus betroffene Übersetzungen
 und Spezifikationsartefakte
@@ -91,6 +93,13 @@ wechselt.
    `text-muted-foreground`-Darstellung statt einer dominanten Überschrift.
 4. Übersetzungstexte bleiben unverändert, sofern kein zusätzlicher zugänglicher Labeltext
    benötigt wird; der bestehende Schlüssel `passwords.history.states` wird als Label genutzt.
+5. `EntryView.vue` rendert die bestehende `PasswordsDeleteDialog` für den Eintrag (FR-007).
+6. `MaskedValue.vue` hält einen Maus-Druck per Pointer-Capture, ignoriert ein `pointerleave`
+   während der Capture und verbirgt den Wert bei `pointerup`, `pointercancel` und
+   `lostpointercapture` (FR-008). `settings/Row.vue` legt das Steuerelement auf schmalen
+   Viewports in eine eigene, rechtsbündige Zeile.
+7. `pages/index.vue` fragt beim Start `active_instance_name` ab und navigiert bei einem Namen in
+   den Arbeitsbereich (FR-009); der Vertrag steht in spec 013 `contracts/`.
 
 ## Complexity Tracking
 
