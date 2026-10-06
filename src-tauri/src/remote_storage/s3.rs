@@ -1,0 +1,293 @@
+//! S3 over `rusty-s3` and `reqwest` (spec 038, research R1, R7, R8).
+//!
+//! `rusty-s3` signs presigned addresses (SigV4) and reads the XML of a listing; `reqwest` with
+//! rustls sends them. Each call resolves and checks the host first ([`address::pin`]) and builds a
+//! client that connects to exactly the checked addresses, with no proxy and no redirects (an S3
+//! provider answers with an error, not a redirect, so a redirect is [`StorageError::Network`]).
+//! Answers are read in chunks up to their limit and within the one deadline of the call, as in
+//! `extensions/web.rs`. Errors name what went wrong, never the endpoint, a header or the provider's
+//! text; the log gets the status and the provider's error code.
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use async_trait::async_trait;
+use reqwest::{Method, StatusCode, Url};
+use rusty_s3::actions::ListObjectsV2;
+use rusty_s3::{Bucket, S3Action, UrlStyle};
+use tokio::time::Instant;
+
+use super::address::{self, Resolver, SystemResolver};
+use super::{
+    Access, Addressing, Credentials, EndpointOrigin, ObjectInfo, RemoteStore, StorageError,
+};
+
+/// How long a signed address stays valid; longer than any deadline of a call.
+const SIGNED_FOR: Duration = Duration::from_secs(15 * 60);
+
+/// The largest page of a listing holzi reads (1000 keys of at most 1024 bytes and their data).
+const MAX_LIST_PAGE: usize = 8 * 1024 * 1024;
+
+/// The part of an error answer holzi reads for its code.
+const MAX_ERROR_BODY: usize = 64 * 1024;
+
+/// Keys per page holzi asks for (the S3 maximum).
+const PAGE: usize = 1000;
+
+/// The S3 implementation of [`RemoteStore`].
+pub struct S3Store {
+    resolver: Arc<dyn Resolver>,
+}
+
+impl S3Store {
+    pub fn new(resolver: Arc<dyn Resolver>) -> Self {
+        Self { resolver }
+    }
+
+    /// With the resolver of the operating system.
+    pub fn system() -> Self {
+        Self::new(Arc::new(SystemResolver))
+    }
+
+    /// A client that reaches the host of `url` only at its checked addresses.
+    async fn client_for(
+        &self,
+        url: &Url,
+        origin: EndpointOrigin,
+    ) -> Result<reqwest::Client, StorageError> {
+        let pinned = address::pin(url, origin, self.resolver.as_ref())
+            .await
+            .map_err(|error| {
+                log::warn!("remote storage: endpoint refused: {error}");
+                StorageError::Network
+            })?;
+        let mut builder = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .no_proxy()
+            .user_agent(concat!("holzi/", env!("CARGO_PKG_VERSION")));
+        if let Some(host) = &pinned.host {
+            builder = builder.resolve_to_addrs(host, &pinned.addrs);
+        }
+        builder.build().map_err(|_| StorageError::Network)
+    }
+
+    /// Sends one signed request and returns the answer when its status is a success.
+    async fn send(
+        &self,
+        access: &Access,
+        method: Method,
+        url: Url,
+        body: Option<Vec<u8>>,
+        deadline: Instant,
+    ) -> Result<reqwest::Response, StorageError> {
+        let client = self
+            .client_for(&url, access.location.endpoint_origin)
+            .await?;
+        let mut request = client.request(method.clone(), url);
+        if let Some(body) = body {
+            request = request.body(body);
+        }
+        let response = tokio::time::timeout_at(deadline, request.send())
+            .await
+            .map_err(|_| StorageError::TimedOut)?
+            .map_err(|error| {
+                log::warn!(
+                    "remote storage: {method} failed: {}",
+                    if error.is_timeout() {
+                        "timed out"
+                    } else if error.is_connect() {
+                        "could not connect"
+                    } else {
+                        "network error"
+                    }
+                );
+                StorageError::Network
+            })?;
+        if response.status().is_success() {
+            Ok(response)
+        } else {
+            Err(failure(&method, response, deadline).await)
+        }
+    }
+}
+
+fn bucket(access: &Access) -> Result<Bucket, StorageError> {
+    let location = &access.location;
+    let endpoint = address::endpoint_url(location).map_err(|_| StorageError::Network)?;
+    let style = match location.addressing {
+        Addressing::Path => UrlStyle::Path,
+        Addressing::Virtual => UrlStyle::VirtualHost,
+    };
+    Bucket::new(
+        endpoint,
+        style,
+        location.bucket.clone(),
+        location.region.clone(),
+    )
+    .map_err(|_| StorageError::Network)
+}
+
+fn signing(credentials: &Credentials) -> rusty_s3::Credentials {
+    let key = credentials.access_key_id.clone();
+    let secret = credentials.secret_access_key.as_str();
+    match &credentials.session_token {
+        Some(token) => rusty_s3::Credentials::new_with_token(key, secret, token.as_str()),
+        None => rusty_s3::Credentials::new(key, secret),
+    }
+}
+
+/// Reads `response` up to `max` bytes before `deadline`; more is [`StorageError::TooLarge`].
+async fn read_body(
+    mut response: reqwest::Response,
+    max: usize,
+    deadline: Instant,
+) -> Result<Vec<u8>, StorageError> {
+    let mut body = Vec::new();
+    while let Some(chunk) = tokio::time::timeout_at(deadline, response.chunk())
+        .await
+        .map_err(|_| StorageError::TimedOut)?
+        .map_err(|_| StorageError::Network)?
+    {
+        if body.len() + chunk.len() > max {
+            return Err(StorageError::TooLarge);
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
+}
+
+/// The `<Code>` of an S3 error answer, if it is a plain word.
+fn error_code(body: &[u8]) -> Option<String> {
+    let text = std::str::from_utf8(body).ok()?;
+    let start = text.find("<Code>")? + "<Code>".len();
+    let end = start + text[start..].find("</Code>")?;
+    let code = &text[start..end];
+    (!code.is_empty() && code.len() <= 64 && code.bytes().all(|b| b.is_ascii_alphanumeric()))
+        .then(|| code.to_owned())
+}
+
+/// Maps an answer that is not a success (research R7).
+async fn failure(method: &Method, response: reqwest::Response, deadline: Instant) -> StorageError {
+    let status = response.status();
+    let code = read_body(response, MAX_ERROR_BODY, deadline)
+        .await
+        .ok()
+        .and_then(|body| error_code(&body));
+    log::warn!(
+        "remote storage: {method} answered {status} ({})",
+        code.as_deref().unwrap_or("no code")
+    );
+    classify(status, code.as_deref())
+}
+
+/// The error for an answer with `status` and the provider's error `code`.
+pub fn classify(status: StatusCode, code: Option<&str>) -> StorageError {
+    match code {
+        Some("NoSuchKey" | "NoSuchBucket") => return StorageError::NotFound,
+        Some(
+            "InvalidAccessKeyId"
+            | "SignatureDoesNotMatch"
+            | "ExpiredToken"
+            | "InvalidToken"
+            | "TokenRefreshRequired"
+            | "AuthorizationHeaderMalformed"
+            | "AuthorizationQueryParametersError",
+        ) => return StorageError::AccessDenied,
+        Some("AccessDenied") => return StorageError::MissingRight,
+        _ => {}
+    }
+    match status {
+        StatusCode::NOT_FOUND => StorageError::NotFound,
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => StorageError::AccessDenied,
+        _ => StorageError::Network,
+    }
+}
+
+#[async_trait]
+impl RemoteStore for S3Store {
+    async fn put(
+        &self,
+        access: &Access,
+        key: &str,
+        body: Vec<u8>,
+        deadline: Instant,
+    ) -> Result<(), StorageError> {
+        let bucket = bucket(access)?;
+        let credentials = signing(&access.credentials);
+        let url = bucket.put_object(Some(&credentials), key).sign(SIGNED_FOR);
+        self.send(access, Method::PUT, url, Some(body), deadline)
+            .await
+            .map(drop)
+    }
+
+    async fn get(
+        &self,
+        access: &Access,
+        key: &str,
+        max_bytes: usize,
+        deadline: Instant,
+    ) -> Result<Vec<u8>, StorageError> {
+        let bucket = bucket(access)?;
+        let credentials = signing(&access.credentials);
+        let url = bucket.get_object(Some(&credentials), key).sign(SIGNED_FOR);
+        let response = self.send(access, Method::GET, url, None, deadline).await?;
+        read_body(response, max_bytes, deadline).await
+    }
+
+    async fn list(
+        &self,
+        access: &Access,
+        prefix: &str,
+        max: usize,
+        deadline: Instant,
+    ) -> Result<Vec<ObjectInfo>, StorageError> {
+        let bucket = bucket(access)?;
+        let credentials = signing(&access.credentials);
+        let mut objects = Vec::new();
+        let mut token: Option<String> = None;
+        loop {
+            let mut action = bucket.list_objects_v2(Some(&credentials));
+            action.with_prefix(prefix.to_owned());
+            action.with_max_keys(PAGE);
+            if let Some(token) = token.take() {
+                action.with_continuation_token(token);
+            }
+            let url = action.sign(SIGNED_FOR);
+            let response = self.send(access, Method::GET, url, None, deadline).await?;
+            let body = read_body(response, MAX_LIST_PAGE, deadline).await?;
+            let text = std::str::from_utf8(&body).map_err(|_| StorageError::Network)?;
+            let page = ListObjectsV2::parse_response(text).map_err(|_| {
+                log::warn!("remote storage: a listing did not parse");
+                StorageError::Network
+            })?;
+            objects.extend(page.contents.into_iter().map(|object| ObjectInfo {
+                key: object.key,
+                size: object.size,
+                last_modified: object.last_modified,
+            }));
+            if objects.len() > max {
+                return Err(StorageError::TooLarge);
+            }
+            match page.next_continuation_token {
+                Some(next) if !next.is_empty() => token = Some(next),
+                _ => return Ok(objects),
+            }
+        }
+    }
+
+    async fn delete(
+        &self,
+        access: &Access,
+        key: &str,
+        deadline: Instant,
+    ) -> Result<(), StorageError> {
+        let bucket = bucket(access)?;
+        let credentials = signing(&access.credentials);
+        let url = bucket
+            .delete_object(Some(&credentials), key)
+            .sign(SIGNED_FOR);
+        self.send(access, Method::DELETE, url, None, deadline)
+            .await
+            .map(drop)
+    }
+}
