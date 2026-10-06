@@ -736,7 +736,8 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   den Zustand einer Zeile, MUSS sie ihren Geltungsbereich behalten, wenn er zu ihrer Art passt
   (eine Shell-Berechtigung eines anderen Geräts bleibt auf diesem Gerät); passt er nicht (aus der
   Zeit vor der Klärung vom 2026-10-06), MUSS holzi sie durch eine Zeile im Geltungsbereich der Art
-  ersetzen.
+  ersetzen. Eine vault-weite „Erlauben“-Zeile der Shell aus dieser Zeit DARF nirgends gelten, jedes
+  Gerät fragt neu; eine vault-weite „Verweigern“-Zeile gilt weiter.
 - **FR-019**: Anfragen MÜSSEN in einer Warteschlange nacheinander erscheinen, gleiche
   Anfragen zusammengefasst. Die Erweiterung MUSS die Entscheidung erfahren, damit das
   vault-sdk die Anfrage wiederholen oder aufgeben kann. Eine Anfrage, auf die niemand mehr
