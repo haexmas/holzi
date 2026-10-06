@@ -12,6 +12,10 @@
  * tab (FR-032) either way, wrapped in `wm/NewTabMenu.vue`'s dropdown.
  * Activating a tab scrolls it into view (FR-035). Like Firefox, tabs take up
  * to 14rem each and shrink evenly to 6rem before the strip scrolls.
+ * The active tab (spec 040-active-tab-emphasis) gets a raised surface, a
+ * heavier title and an accent bar at its lower edge, so it is not told
+ * apart by colour alone. Its focus ring is inset: the scrolling tablist
+ * clips anything drawn outside a tab, which hid the outline before.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { WmTab } from '~/lib/wm/types'
@@ -199,7 +203,7 @@ watch(
         role="tab"
         :aria-selected="row.tab.id === activeTabId"
         :tabindex="row.tab.id === activeTabId ? 0 : -1"
-        class="flex min-w-24 basis-56 cursor-pointer items-center gap-1.5 rounded-t-md border-b-2 border-transparent px-2 py-1 text-sm"
+        class="flex min-w-24 basis-56 cursor-pointer items-center gap-1.5 rounded-t-md border-b-2 border-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         :class="
           row.tab.id === activeTabId
             ? 'border-primary bg-card font-semibold text-foreground shadow-sm dark:bg-secondary'

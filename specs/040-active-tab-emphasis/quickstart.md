@@ -11,8 +11,9 @@
 2. Confirm the selected tab has a clearly contrasting surface, stronger title weight, and a visible accent at its lower edge.
 3. Switch tabs and confirm the visual treatment moves to the newly selected tab.
 4. Repeat in light and dark color schemes.
-5. Confirm long tab titles remain truncated and close/new-tab controls remain usable.
-6. Confirm a single-tab window and compact mode retain their existing title-only presentation.
+5. Move keyboard focus into the tab strip and use the arrow keys; confirm the focused tab shows a visible focus ring in both schemes.
+6. Confirm long tab titles remain truncated and close/new-tab controls remain usable.
+7. Confirm a single-tab window and compact mode retain their existing title-only presentation.
 
 ## Automated checks
 

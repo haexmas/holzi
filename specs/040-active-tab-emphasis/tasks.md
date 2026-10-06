@@ -4,7 +4,7 @@ description: 'Task list for making the active window-manager tab easier to ident
 
 # Tasks: Active Tab Emphasis
 
-**Input**: Design documents from `specs/039-active-tab-emphasis/`
+**Input**: Design documents from `specs/040-active-tab-emphasis/`
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `quickstart.md`
 
@@ -14,7 +14,7 @@ description: 'Task list for making the active window-manager tab easier to ident
 
 **Purpose**: Confirm the existing component and theme tokens are the implementation surface.
 
-- [x] T001 Confirm the existing active-tab binding and theme utility classes in `src/components/wm/TabBar.vue` against `specs/039-active-tab-emphasis/research.md`
+- [x] T001 Confirm the existing active-tab binding and theme utility classes in `src/components/wm/TabBar.vue` against `specs/040-active-tab-emphasis/research.md`
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
@@ -30,7 +30,7 @@ description: 'Task list for making the active window-manager tab easier to ident
 
 ### Implementation for User Story 1
 
-- [x] T003 [US1] Strengthen the active multi-tab class branch in `src/components/wm/TabBar.vue` with a contrasting theme surface, existing medium font weight, and a visible bottom accent while leaving the inactive and compact branches unchanged
+- [x] T003 [US1] Strengthen the active multi-tab class branch in `src/components/wm/TabBar.vue` with a contrasting theme surface, a semibold title, and a visible bottom accent while leaving the inactive and compact branches unchanged
 
 **Checkpoint**: User Story 1 is complete when the active tab is visually obvious, selection moves the treatment correctly, and existing tab controls remain usable.
 
@@ -40,7 +40,8 @@ description: 'Task list for making the active window-manager tab easier to ident
 
 - [x] T004 [P] Run `pnpm check:templates` and `pnpm check:wm-navigation` for template validity and unchanged tab behavior
 - [x] T005 [P] Run `pnpm lint` and `pnpm typecheck` for frontend correctness
-- [ ] T006 [P] Perform the light/dark visual validation from `specs/039-active-tab-emphasis/quickstart.md`
+- [ ] T006 [P] Perform the light/dark visual validation from `specs/040-active-tab-emphasis/quickstart.md`
+- [x] T007 [US1] Give the multi-tab `role="tab"` element in `src/components/wm/TabBar.vue` an inset focus-visible ring, since the scrolling tablist clips the default outline (FR-007)
 
 ## Dependencies & Execution Order
 
@@ -48,7 +49,7 @@ description: 'Task list for making the active window-manager tab easier to ident
 
 - Phase 1 and Phase 2 are complete because the existing implementation was inspected during planning.
 - Phase 3 depends on the confirmed existing active-tab binding.
-- Phase 4 depends on T003.
+- Phase 4 depends on T003 and T007.
 
 ### User Story Dependencies
 
@@ -56,7 +57,7 @@ description: 'Task list for making the active window-manager tab easier to ident
 
 ### Parallel Opportunities
 
-- T004, T005, and T006 can run independently after T003; T006 is the manual visual check.
+- T004, T005, and T006 can run independently after T003 and T007; T006 is the manual visual check.
 
 ## Implementation Strategy
 

@@ -30,6 +30,7 @@ Als Nutzer möchte ich den aktiven Tab eines Fensters auf den ersten Blick erken
 - Tabs mit langen Titeln dürfen die Hervorhebung nicht aus dem sichtbaren Tab-Bereich herausdrängen.
 - Die Schließen-, Scroll- und Neu-Tab-Steuerelemente bleiben bedienbar und werden nicht von der Hervorhebung überdeckt.
 - Die vorhandene Tastatur- und ARIA-Auswahl des aktiven Tabs bleibt unverändert.
+- Die Hervorhebung darf sich nicht allein auf Farbe stützen; Schriftgewicht und Akzentbalken bleiben auch ohne Farbwahrnehmung erkennbar.
 
 ## Requirements
 
@@ -41,6 +42,7 @@ Als Nutzer möchte ich den aktiven Tab eines Fensters auf den ersten Blick erken
 - **FR-004**: Die Hervorhebung MUSS in hellen und dunklen Farbschemata ausreichend Kontrast für Tab-Titel und Symbole bieten.
 - **FR-005**: Die Darstellung einzelner Tabs und kompakter Fenster DARF durch die Mehrfach-Tab-Hervorhebung nicht verändert werden.
 - **FR-006**: Die bestehende Auswahl-, Schließ- und Tastaturbedienung der Tabs MUSS erhalten bleiben.
+- **FR-007**: Ein per Tastatur fokussierter Tab MUSS einen sichtbaren Fokusindikator zeigen, der sich von der Hervorhebung des aktiven Tabs unterscheidet und nicht von der Tab-Leiste abgeschnitten wird.
 
 ## Success Criteria
 

@@ -2,7 +2,7 @@
 
 **Branch**: `feat/active-tab-emphasis` | **Date**: 2026-10-06 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/039-active-tab-emphasis/spec.md`
+**Input**: Feature specification from `specs/040-active-tab-emphasis/spec.md`
 
 ## Summary
 
@@ -48,7 +48,7 @@ See [research.md](research.md). The existing `TabBar.vue` already exposes the co
 ### Documentation (this feature)
 
 ```text
-specs/039-active-tab-emphasis/
+specs/040-active-tab-emphasis/
 ├── checklists/requirements.md
 ├── spec.md
 ├── plan.md
@@ -69,7 +69,7 @@ scripts/check-vue-templates.ts # Existing template validation
 
 ## Design Details
 
-The active multi-tab state will use a stronger surface contrast than the title-bar background, retain `font-medium`, and add a theme-aware bottom accent. Inactive tabs keep their muted text and hover treatment. The conditional branch remains keyed by `row.tab.id === activeTabId`, so selection changes automatically update the presentation while ARIA and keyboard semantics remain untouched.
+The active multi-tab state will use a raised surface against the title-bar background (`bg-card`, and `bg-secondary` in the dark scheme where the card equals the window background), raise the title from `font-medium` to `font-semibold`, and add a 2px bottom accent in the primary token. Weight and the accent bar are non-colour cues, so the active tab is not told apart by colour alone; the primary token keeps at least 3:1 against every surface (spec 035 control pairs). Keyboard focus gets an inset `ring-ring` focus ring, because the scrolling tablist clips an outline drawn outside the tab. Inactive tabs keep their muted text and hover treatment. The conditional branch remains keyed by `row.tab.id === activeTabId`, so selection changes automatically update the presentation while ARIA and keyboard semantics remain untouched.
 
 The compact and single-tab branches are intentionally outside this change and retain their current classes.
 
