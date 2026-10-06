@@ -38,7 +38,7 @@ and updated E2E scenarios. No new test framework.
 
 - [ ] T007 [US1] In `src/components/settings/AppearanceView.vue`: move `<SettingsColorSchemeSetting />` to the top of the view above the file buttons, and update the doc comment to "Erscheinungsbild" (spec 042); in `src/components/settings/ColorSchemeSetting.vue` change the doc comment's category name to "Erscheinungsbild"
 - [ ] T008 [P] [US1] Update E2E scenarios to the new paths and test ids: `scripts/e2e/scenarios/settings-categories.test.ts` (`CATEGORIES` without `appearance`; General is an overview — open `settings-row-general.basic` before expecting `settings-alias` and `session-restore-switch`), `settings-color-scheme.test.ts` and `appearance-basic.test.ts` (replace `settings-category-appearance` with `settings-category-general` + `settings-row-general.appearance`), `settings-narrow-window.test.ts` (category loop), `settings-search.test.ts` (`['gerätename', 'general']` → expected location `general.basic`), `settings-deep-links.test.ts`
-- [ ] T009 [US1] Run `pnpm typecheck`, `pnpm lint`, `pnpm check:settings`, `pnpm build`; commit `refactor(settings): fold appearance into general` 
+- [ ] T009 [US1] Run `pnpm typecheck`, `pnpm lint`, `pnpm check:settings`, `pnpm build`; commit `refactor(settings): fold appearance into general`
 
 **Checkpoint**: US1 complete and shippable alone.
 
