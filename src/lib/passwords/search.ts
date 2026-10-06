@@ -1,8 +1,8 @@
 // Password manager search (spec 034-password-manager, FR-007, research R11): filters the headers
 // the window already holds. Exactly four things are searched — title, username, URL and the tag
 // names — never a note, a password or any other field, so the search can never become a way to
-// probe a secret. The words match fuzzily (Fuse.js) and the hits come best first. Pure, so
-// `scripts/check-passwords-search.ts` runs it without vue.
+// probe a secret. The words match fuzzily (Fuse.js) or as an abbreviation, and the hits come best
+// first. Pure, so `scripts/check-passwords-search.ts` runs it without vue.
 import Fuse from 'fuse.js'
 
 /** What the search looks at; an `ItemHeader` satisfies it, and so does nothing that carries more. */
@@ -83,6 +83,12 @@ function withoutPlaceholders(text: string | null): string | null {
  * three letters must match exactly, from four letters on one typo passes, from seven two. */
 const FUZZY_THRESHOLD = 0.3
 
+/** The score of a hit by abbreviation alone, so it ranks behind an exact or typo hit. */
+const ABBREVIATION_SCORE = 0.5
+
+/** The searched fields, as Fuse knows them. */
+const KEYS = ['title', 'username', 'url', 'tags']
+
 /** The folded text of one searched field; the tags are a list. */
 function fieldOf(header: SearchableHeader, key: string): string | string[] {
   switch (key) {
@@ -95,6 +101,20 @@ function fieldOf(header: SearchableHeader, key: string): string | string[] {
     default:
       return header.tags.map((tag) => fold(tag.name))
   }
+}
+
+/** True when the letters of the word appear in order in one word of a searched field, starting
+ * with its first letter: "itms" finds "itemis", "gthb" finds "github". Fuse counts the left-out
+ * letters as typos and rejects them. */
+function abbreviates(word: string, header: SearchableHeader): boolean {
+  return KEYS.flatMap((key) => fieldOf(header, key))
+    .flatMap((text) => text.split(/[^\p{L}\p{N}]+/u))
+    .some((token) => {
+      if (token[0] !== word[0]) return false
+      let next = 0
+      for (const letter of token) if (letter === word[next]) next++
+      return next >= word.length
+    })
 }
 
 /** True when every word of the query matches one of the searched texts. A blank query matches
@@ -123,7 +143,7 @@ export function filterHeaders<T extends SearchableHeader>(
   // ponytail: the index is built for every query; at 5,000 entries a word takes 20 to 80 ms.
   // Upgrade: keep a `Fuse.createIndex` per list of headers and debounce the search field.
   const fuse = new Fuse(tagged, {
-    keys: ['title', 'username', 'url', 'tags'],
+    keys: KEYS,
     getFn: (header, path) =>
       fieldOf(header, Array.isArray(path) ? (path[0] ?? '') : path),
     ignoreLocation: true,
@@ -133,11 +153,19 @@ export function filterHeaders<T extends SearchableHeader>(
   // The scores of the words add up; a header missing one word drops out.
   let scores = new Map<number, number>(tagged.map((_, index) => [index, 0]))
   for (const word of words) {
+    const fuzzy = new Map(
+      fuse.search(word).map((result) => [result.refIndex, result.score ?? 0]),
+    )
     const next = new Map<number, number>()
-    for (const result of fuse.search(word)) {
-      const before = scores.get(result.refIndex)
-      if (before !== undefined)
-        next.set(result.refIndex, before + (result.score ?? 0))
+    for (const [index, before] of scores) {
+      const typo = fuzzy.get(index)
+      const score =
+        typo !== undefined && typo <= ABBREVIATION_SCORE
+          ? typo
+          : abbreviates(word, tagged[index]!)
+            ? ABBREVIATION_SCORE
+            : typo
+      if (score !== undefined) next.set(index, before + score)
     }
     scores = next
     if (scores.size === 0) return []
