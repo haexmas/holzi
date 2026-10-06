@@ -105,8 +105,9 @@ ohne das aktuelle Passwort (nirgends gespeichert) kann ein Agent die Datei aber 
 und Höchstgröße 4 MiB (Vertrauensgrenze: die Präferenz kommt auch per Sync und über `set_pref`).
 
 **Rationale**: Ein Wert von 200–600 KB passt in eine Sync-Seite (`PAGE_BUDGET = 4 MiB − 64 KiB`,
-`sync/change.rs:21`; größere Werte würden ohnehin geteilt, `Change::split` `:110-132`). Nostr trägt keine
-Zeilendaten. Der CSP erlaubt `data:` in `img-src` (`tauri.conf.json:28, :40`).
+`sync/change.rs:21`; größere Werte würden ohnehin geteilt, `Change::split` `:110-132`). T037 prüft
+den erwarteten ~500-KB-Fall über zwei Geräte. Nostr trägt keine Zeilendaten. Der CSP erlaubt `data:`
+in `img-src` (`tauri.conf.json:28, :40`).
 
 ponytail: jede Änderung an `preferences` liest im Workspace den ganzen Wert erneut über IPC
 (`refreshAsync`); bei ≤ 600 KB unkritisch. Upgrade-Pfad: eigene Zeile in `haex_passwords_binaries`-artiger
@@ -123,8 +124,11 @@ verworfen.
 
 Bestehender Kandidat: `scaledUrl(bytes, mime)` in `src/composables/usePasswordsThumbnails.ts:27-55`
 (gleicher Ablauf, Kante 320, liefert Object-URL). Vorschlag gemäß graphify-first-Regel: den gemeinsamen
-Kern als `downscaleToWebp(source: Blob, maxEdge: number): Promise<Blob>` nach `src/lib/images/downscale.ts`
-ziehen und von beiden Stellen nutzen (~15 Zeilen gespart, ein Aufrufer umgeschrieben). Freigabe durch den
+Kern als `downscaleToWebp(bytes: ArrayBuffer, mime: string, maxEdge: number): Promise<Blob>` nach
+`src/lib/images/downscale.ts`
+ziehen und von beiden Stellen nutzen (~15 Zeilen gespart, ein Aufrufer umgeschrieben). Die gemeinsame
+Signatur ist `downscaleToWebp(bytes: ArrayBuffer, mime: string, maxEdge: number)`; die File-Auswahl
+liest ihre `File` vor dem Aufruf als `ArrayBuffer`. Freigabe durch den
 Operator mit diesem Plan.
 
 **Rationale**: Der native Input braucht weder `fs:allow-read-file` (heute nur `read-text-file`,
@@ -136,9 +140,9 @@ Operator mit diesem Plan.
 mit `wm.app.open { at: '/general/appearance' }`; neu ist nur `settings.appearance.removeBackground`
 (`effect: 'write'`). `settings.general.setLanguage` (`effect: 'write'`) wie geplant.
 
-**Rationale**: Tauri v2 gibt Dateizugriff nur für Pfade frei, die der Nutzer im Dialog gewählt hat
-`[Likely]`; ein vom Agenten genannter Pfad läge außerhalb des fs-Scope und bräuchte eine breite
-Leseberechtigung für beliebige Dateien. FR-019 wird entsprechend angepasst.
+**Rationale**: Der native File-Input liefert der Ansicht bereits die vom Nutzer ausgewählte `File`;
+ein Agent übergibt keinen Dateipfad. Dadurch braucht die Hintergrundauswahl keinen breiten
+Tauri-Dateiscope, und FR-019 kann die Auswahl bei der Nutzeransicht belassen.
 
 ## R9 — Tests
 

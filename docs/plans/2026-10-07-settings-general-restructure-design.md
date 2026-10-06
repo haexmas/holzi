@@ -1,6 +1,7 @@
 # Settings: "Allgemein" with "Grundeinstellung" and "Erscheinungsbild"
 
-**Status**: Design agreed with the operator on 2026-10-07; to be specified via `/speckit-specify`.
+**Status**: Design agreed with the operator on 2026-10-07; specified and planned in
+[`specs/042-settings-general-restructure/`](../../specs/042-settings-general-restructure/).
 Follows the haex-vault settings layout (`components/haex/system/settings/general/{basic,appearance}.vue`)
 as part of the ongoing alignment with haex-vault's look.
 
@@ -65,11 +66,12 @@ never becomes an agent tool.
 ## Workspace background
 
 - Vault preference `appearance.background`: a WebP data URL, or absent.
-- "Choose image…" (Tauri file dialog, like the appearance import) and "Remove" (only when set).
+- "Choose image…" via a native file input and "Remove" (only when set).
 - The frontend scales the image to at most 2560 px on the long edge and encodes it as WebP at
   quality 0.8 (expected 200–600 KB).
 - `wm/Desktop.vue` renders it with `background-size: cover` behind every workspace; without one it
   stays `bg-muted/10`.
-- Actions: `settings.appearance.setBackground` (file path) and `settings.appearance.removeBackground`.
-- **Open**: verify that a value of ~500 KB syncs cleanly as a single preference. If it does not,
-  store the image as its own row in a CRDT table instead.
+- The user chooses the file in the view; the only background action is
+  `settings.appearance.removeBackground`.
+- The existing sync page budget carries the expected ~500-KB value as one preference; T037 adds a
+  two-device regression check for that limit, so no separate CRDT image table is needed.

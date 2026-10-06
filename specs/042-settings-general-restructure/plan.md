@@ -16,8 +16,9 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 
 - **Struktur** (R1): nur Registry-Einträge, vorhandene `OverviewView`/`SettingsRow`; `subView` bekommt
   `settingKeys`.
-- **Sprache** (R2, R3): `@nuxtjs/i18n` erkennt die Systemsprache (per Probe bestätigt, sonst reine Funktion
-  - Plugin); Vault-Präferenz `general.language` über neues `useLanguage` nach dem Muster `useColorScheme`.
+- **Sprache** (R2, R3): T001 bestätigt zuerst, ob `@nuxtjs/i18n` die Systemsprache ohne Persistenz
+  erkennt; andernfalls übernimmt eine reine Funktion plus Plugin diese Aufgabe. Die Vault-Präferenz
+  `general.language` wird über neues `useLanguage` nach dem Muster `useColorScheme` gelesen und geschrieben.
 - **Passwort** (R4, R5): Command `change_vault_passphrase`, Ablauf aus haex-vault (Checkpoint → DELETE →
   rekey → WAL), Prüfung des aktuellen Passworts über eine zweite, nur lesende Connection; nicht im
   Action-Katalog.
@@ -74,8 +75,8 @@ _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 | spaex: phasing-discipline                                    | ✅ Teil der laufenden haex-vault-Angleichung                                                                                                                                   |
 | ADR nötig?                                                   | Nein — keine Core-Principle-Änderung                                                                                                                                           |
 
-**Post-Design Re-Check**: unverändert ✅. Einzige Abweichung vom abgestimmten Entwurf: kein
-`setBackground(pfad)` für Agenten (R8); FR-019 angepasst, zur Bestätigung im Review.
+**Post-Design Re-Check**: ✅ bestanden mit einer dokumentierten Abweichung vom Entwurf: kein
+`setBackground(pfad)` für Agenten (R8); FR-019 wurde entsprechend angepasst.
 
 ## Project Structure
 
