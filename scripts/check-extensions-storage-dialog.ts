@@ -10,12 +10,18 @@ import { parse } from 'vue/compiler-sfc'
 type Node = {
   type: number
   tag?: string
-  props?: { type: number; name: string; value?: { content: string } }[]
+  props?: {
+    type: number
+    name: string
+    value?: { content: string }
+    arg?: { content?: string }
+  }[]
   children?: Node[]
 }
 
 const ELEMENT = 1
 const ATTRIBUTE = 6
+const DIRECTIVE = 7
 const TEXT_FIELDS = new Set([
   'textarea',
   'uiinput',
@@ -38,20 +44,45 @@ function fields(node: Node, found: string[] = []): string[] {
       const type = attribute('type') ?? 'text'
       if (type !== 'radio' && type !== 'checkbox') found.push(`input[${type}]`)
     }
-    if (attribute('contenteditable') !== undefined)
-      found.push(`${tag}[contenteditable]`)
+    // Present at all, also bare (`<div contenteditable>`) or bound (`:contenteditable`).
+    const editable = node.props?.some(
+      (p) =>
+        (p.type === ATTRIBUTE && p.name === 'contenteditable') ||
+        (p.type === DIRECTIVE &&
+          p.name === 'bind' &&
+          p.arg?.content === 'contenteditable'),
+    )
+    if (editable) found.push(`${tag}[contenteditable]`)
   }
   for (const child of node.children ?? []) fields(child, found)
   return found
 }
 
-function template(path: string): Node {
-  const source = readFileSync(new URL(path, import.meta.url), 'utf8')
-  const { descriptor, errors } = parse(source, { filename: path })
+function parsed(source: string, filename: string): Node {
+  const { descriptor, errors } = parse(source, { filename })
   assert.deepEqual(errors, [])
-  assert.ok(descriptor.template?.ast, path)
+  assert.ok(descriptor.template?.ast, filename)
   return descriptor.template.ast as unknown as Node
 }
+
+function template(path: string): Node {
+  return parsed(readFileSync(new URL(path, import.meta.url), 'utf8'), path)
+}
+
+test('the check finds every kind of field it promises to find', () => {
+  const found = fields(
+    parsed(
+      `<template><div contenteditable /><p :contenteditable="x" /><input /><input type="radio" /><UiInputPassword /></template>`,
+      'fixture.vue',
+    ),
+  )
+  assert.deepEqual(found, [
+    'div[contenteditable]',
+    'p[contenteditable]',
+    'input[text]',
+    'uiinputpassword',
+  ])
+})
 
 test('the storage dialog over a tab has no field for credentials', () => {
   assert.deepEqual(
