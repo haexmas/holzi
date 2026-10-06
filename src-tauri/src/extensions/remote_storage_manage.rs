@@ -126,7 +126,6 @@ fn grant(ctx: &CallContext, storage_id: &str) -> Result<(), BridgeError> {
             action: "readWrite".into(),
             target: storage_id.to_owned(),
             status: "granted".into(),
-            all_devices: true,
             replaces: None,
         },
         unix_millis(SystemTime::now()),
