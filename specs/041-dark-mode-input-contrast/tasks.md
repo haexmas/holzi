@@ -1,11 +1,11 @@
 # Tasks: Dark-Mode-Input-Kontrast
 
-**Input**: Design documents from `/specs/039-dark-mode-input-contrast/`
+**Input**: Design documents from `/specs/041-dark-mode-input-contrast/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, quickstart.md
 
-**Tests**: No new test task is required for this one-token visual change; the
-existing formatter, build, and appearance checks provide the validation seam.
+**Tests**: T006 adds a contrast check to the existing appearance checks; the
+formatter and build cover the rest.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
@@ -37,6 +37,7 @@ existing formatter, build, and appearance checks provide the validation seam.
 
 - [x] T004 Run the formatter check, relevant appearance check, and production build from `quickstart.md`
 - [x] T005 Review the final diff for scope, unchanged Light Mode values, and absence of debug instrumentation
+- [x] T006 [US1] Add a check in `scripts/check-appearance-matrix.ts` that the Dark Mode `--input` contrast against every surface is at least the Light Mode one, for every component colour preset (FR-001, SC-004)
 
 ## Dependencies & Execution Order
 
@@ -45,7 +46,7 @@ existing formatter, build, and appearance checks provide the validation seam.
 - **Setup (Phase 1)**: T001 is complete and has no dependencies.
 - **Foundational (Phase 2)**: T002 follows T001 and confirms the implementation seam.
 - **User Story 1 (Phase 3)**: T003 follows T002.
-- **Polish (Phase 4)**: T004 and T005 follow T003; T004 must pass before handoff.
+- **Polish (Phase 4)**: T004, T005 and T006 follow T003; T004 and T006 must pass before handoff.
 
 ### User Story Dependencies
 

@@ -2,7 +2,7 @@
 
 **Branch**: `fix/dark-mode-input-contrast` | **Date**: 2026-10-06 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/039-dark-mode-input-contrast/spec.md`
+**Input**: Feature specification from `/specs/041-dark-mode-input-contrast/spec.md`
 
 ## Summary
 
@@ -21,8 +21,9 @@ present across the common input styling.
 
 **Storage**: N/A
 
-**Testing**: Prettier check for the changed stylesheet, Nuxt production build,
-and the existing automated checks relevant to appearance/style
+**Testing**: `pnpm check:appearance`, which now compares the input border
+contrast of both schemes on every surface, the formatter check, and the Nuxt
+production build
 
 **Target Platform**: Desktop Tauri webview and browser-based Nuxt preview
 
@@ -57,10 +58,11 @@ _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 ### Documentation (this feature)
 
 ```text
-specs/039-dark-mode-input-contrast/
+specs/041-dark-mode-input-contrast/
 ├── plan.md              # This file
 ├── research.md          # Phase 0 output
 ├── data-model.md        # Not applicable; documents no persisted model
+├── checklists/requirements.md
 ├── quickstart.md        # Phase 1 validation guide
 └── tasks.md             # Phase 2 implementation tasks
 ```

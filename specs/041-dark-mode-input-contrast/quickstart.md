@@ -6,6 +6,7 @@ From the repository root:
 
 ```sh
 pnpm exec prettier --check src/assets/css/tailwind.css
+pnpm check:appearance
 pnpm build
 ```
 

@@ -34,7 +34,7 @@ Als Nutzer möchte ich auch im Dark Mode die Begrenzung nicht fokussierter Einga
 
 ### Functional Requirements
 
-- **FR-001**: System MUST render non-focused input-field boundaries with sufficient contrast against the surrounding surface in Dark Mode.
+- **FR-001**: System MUST render non-focused input-field boundaries in Dark Mode with at least the WCAG contrast ratio against every surface (background, card, popover, sidebar, muted) that the same boundary has in Light Mode.
 - **FR-002**: System MUST preserve the existing Light Mode appearance of input fields.
 - **FR-003**: System MUST preserve visible focus indicators for focused input fields.
 - **FR-004**: System MUST apply the improvement consistently to the shared input styling used by the application.
@@ -46,6 +46,7 @@ Als Nutzer möchte ich auch im Dark Mode die Begrenzung nicht fokussierter Einga
 - **SC-001**: In the Dark Mode visual check, the boundary of every checked non-focused input field is immediately distinguishable from both its fill and its surrounding surface.
 - **SC-002**: The Light Mode visual check shows no unintended change to input-field boundaries.
 - **SC-003**: The application build and existing automated checks complete successfully after the styling change.
+- **SC-004**: `pnpm check:appearance` measures the input boundary against every surface in both schemes, for every component colour preset, and fails if Dark Mode falls below Light Mode.
 
 ## Assumptions
 
