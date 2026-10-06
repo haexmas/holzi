@@ -133,7 +133,8 @@ fn unlisted_methods_are_not_supported_and_later_ones_not_available() {
     }
     assert_eq!(
         code(call(&s.ctx, "extension_remote_storage_list", &Value::Null)),
-        8001
+        3001,
+        "remote storage is offered since spec 038; a call without a storage is invalid"
     );
 }
 

@@ -33,7 +33,9 @@ pub enum Target {
     Program(PathBuf),
     /// A tag of the password manager, compared in its folded form.
     Tag(String),
-    /// A remote storage connection.
+    /// A remote storage, by its id; for the action `add` the host of an endpoint
+    /// (`host:port`, `host`, an IPv6 address as `[addr]` or `[addr]:port`), matched like a mail
+    /// server (spec 038 FR-009b).
     StorageId(String),
 }
 
@@ -75,6 +77,11 @@ pub enum RequestTarget {
     Program(PathBuf),
     Tag(String),
     StorageId(String),
+    /// The host of a storage endpoint an extension proposes (spec 038 FR-009b).
+    Endpoint {
+        host: String,
+        port: u16,
+    },
 }
 
 /// A parsed http(s) request URL.
@@ -158,6 +165,14 @@ impl Target {
             (Self::Program(program), RequestTarget::Program(asked)) => program == asked,
             (Self::Tag(tag), RequestTarget::Tag(asked)) => *tag == fold(asked),
             (Self::StorageId(id), RequestTarget::StorageId(asked)) => id == asked,
+            (Self::StorageId(host), RequestTarget::Endpoint { host: asked, port }) => {
+                parse_endpoint_host(host).is_some_and(|server| {
+                    server.matches(&RequestTarget::MailServer {
+                        host: asked.clone(),
+                        port: *port,
+                    })
+                })
+            }
             _ => false,
         }
     }
@@ -281,6 +296,24 @@ fn parse_url_pattern(value: &str) -> Option<UrlPattern> {
         port: port.filter(|port| *port != default_port),
         path: path.to_owned(),
         path_prefix,
+    })
+}
+
+/// The host of a storage endpoint (`add`): like a mail server, or an IPv6 address in brackets
+/// (`[fd00::1]`, `[fd00::1]:9000`) in the form the request names it.
+fn parse_endpoint_host(value: &str) -> Option<Target> {
+    let Some(rest) = value.strip_prefix('[') else {
+        return parse_mail_server(value);
+    };
+    let (ip, port) = rest.split_once(']')?;
+    let port = match port {
+        "" => None,
+        port => Some(port.strip_prefix(':')?.parse::<u16>().ok()?),
+    };
+    let ip: std::net::Ipv6Addr = ip.parse().ok()?;
+    Some(Target::MailServer {
+        host: format!("[{ip}]"),
+        port,
     })
 }
 

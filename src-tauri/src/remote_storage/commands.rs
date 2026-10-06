@@ -84,3 +84,14 @@ pub async fn storage_removal_preview(
 pub async fn storage_test(state: State<'_, AppState>, id: String) -> Result<TestResult> {
     service(&state)?.test_storage(&id).await
 }
+
+/// Answers a storage dialog of an extension (research R6). Credentials in the answer come from
+/// holzi's window over the whole app and stay in Rust.
+#[tauri::command]
+pub fn storage_dialog_resolve(
+    state: State<'_, AppState>,
+    request_id: String,
+    answer: crate::extensions::remote_storage_dialog::StorageAnswer,
+) {
+    state.extensions().storage.resolve(&request_id, answer);
+}

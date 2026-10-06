@@ -1809,6 +1809,38 @@
       "loadTitle": "Load an extension in developer mode",
       "loadHint": "Unsigned, from the development server on this device. Its tables, permissions and storage stay on this device and go when it is unloaded.",
       "load": "Load"
+    },
+    "storageDialog": {
+      "title": {
+        "add": "“{name}” wants to add a storage",
+        "update": "“{name}” wants to change a storage",
+        "test": "“{name}” wants to test a storage",
+        "remove": "“{name}” wants to remove a storage"
+      },
+      "name": "Name",
+      "bucket": "Bucket",
+      "provider": "Provider",
+      "endpoint": "Endpoint",
+      "local": "In your own network",
+      "insecure": "Unencrypted",
+      "credentialsFrom": "Credentials",
+      "existing": "From the connection “{name}”",
+      "newCredentials": "Enter new credentials",
+      "credentialsNext": "holzi then asks for the credentials in its own window. The extension never gets them.",
+      "others": "These extensions lose access too: {names}",
+      "continue": "Continue",
+      "confirm": {
+        "add": "Add",
+        "update": "Change",
+        "test": "Test",
+        "remove": "Remove"
+      }
+    },
+    "storageCredentials": {
+      "title": "Credentials for a storage",
+      "for": "“{name}” wants to use a storage at {provider}.",
+      "onlyHere": "holzi asks for credentials only in this window over the whole app, never in an extension's tab. They go to the password manager; the extension never gets them.",
+      "confirm": "Test and save"
     }
   }
 }

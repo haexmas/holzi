@@ -23,6 +23,7 @@ import {
   sameLocation,
 } from '~/lib/extensions/shim-protocol'
 import { detectPlatform, embeddedShortcuts } from '~/lib/wm/keybindings'
+import { useFrameStorageDialog } from '~/composables/useStorageRequests'
 import { formatLocation, type TabLocation } from '~/lib/wm/navigation'
 import { useErrorString } from '~/composables/useErrorString'
 import { useTabRouter } from '~/composables/useTabRouter'
@@ -70,6 +71,12 @@ export function useExtensionFrame(
   const error = ref<string | null>(null)
   const src = ref<string | null>(null)
   const dialog = ref<FrameDialog | null>(null)
+  /** A storage request of this frame (spec 038), over the tab like `dialog`. */
+  const { storageRequest, storageCredentialsPending, answerStorage } =
+    useFrameStorageDialog(
+      () => frame,
+      () => void nextTick(() => iframe.value?.focus()),
+    )
   /** A development version (spec 017, US12): its console output is shown. */
   const dev = ref(false)
   const consoleLines = ref<DevConsoleLine[]>([])
@@ -384,6 +391,9 @@ export function useExtensionFrame(
     dev,
     consoleLines,
     answerDialog,
+    storageRequest,
+    storageCredentialsPending,
+    answerStorage,
     onLoad,
     reloadAsync,
   }

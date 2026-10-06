@@ -1809,6 +1809,38 @@
       "loadTitle": "Erweiterung im Entwicklermodus laden",
       "loadHint": "Unsigniert vom Entwicklungsserver auf diesem Gerät. Tabellen, Berechtigungen und Speicher bleiben auf diesem Gerät und gehen beim Entladen.",
       "load": "Laden"
+    },
+    "storageDialog": {
+      "title": {
+        "add": "„{name}“ möchte einen Speicher anlegen",
+        "update": "„{name}“ möchte einen Speicher ändern",
+        "test": "„{name}“ möchte einen Speicher testen",
+        "remove": "„{name}“ möchte einen Speicher entfernen"
+      },
+      "name": "Name",
+      "bucket": "Bucket",
+      "provider": "Anbieter",
+      "endpoint": "Endpunkt",
+      "local": "Im eigenen Netz",
+      "insecure": "Unverschlüsselt",
+      "credentialsFrom": "Zugangsdaten",
+      "existing": "Von der Verbindung „{name}“",
+      "newCredentials": "Neue Zugangsdaten eingeben",
+      "credentialsNext": "holzi fragt danach in seinem eigenen Fenster nach den Zugangsdaten. Die Erweiterung bekommt sie nie.",
+      "others": "Auch diese Erweiterungen verlieren den Zugriff: {names}",
+      "continue": "Weiter",
+      "confirm": {
+        "add": "Anlegen",
+        "update": "Ändern",
+        "test": "Testen",
+        "remove": "Entfernen"
+      }
+    },
+    "storageCredentials": {
+      "title": "Zugangsdaten für einen Speicher",
+      "for": "„{name}“ möchte einen Speicher bei {provider} nutzen.",
+      "onlyHere": "holzi fragt Zugangsdaten nur in diesem Fenster über der ganzen App, nie im Tab einer Erweiterung. Sie landen im Passwortmanager; die Erweiterung bekommt sie nie.",
+      "confirm": "Testen und speichern"
     }
   }
 }

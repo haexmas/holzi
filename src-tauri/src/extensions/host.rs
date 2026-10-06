@@ -60,6 +60,8 @@ pub struct ExtensionHost {
     pub mail_watches: super::mail::watch::MailWatches,
     /// Shells started by extensions (US11).
     pub shells: super::shell::ShellState,
+    /// Provider and dialogs of the remote storage of extensions (spec 038).
+    pub storage: super::remote_storage_dialog::StorageState,
     /// Entry and Content-Security-Policy per bundle started in this process.
     started: Mutex<HashMap<Uuid, Arc<Started>>>,
     /// The bundle each extension last started with on this device, to see an update.
@@ -200,6 +202,7 @@ impl ExtensionHost {
     /// Ends the dialogs of a closed frame: their calls answer `false`.
     pub fn drop_dialogs_of(&self, frame: &str) {
         self.dialogs().retain(|_, (f, _)| f != frame);
+        self.storage.drop_of(frame);
     }
 
     /// A place for one more SQL call of `extension_id`, or `None` while `max` are running. Other

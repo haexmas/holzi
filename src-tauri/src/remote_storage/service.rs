@@ -99,8 +99,7 @@ fn failed(result: super::probe::ProbeResult) -> Result<()> {
 }
 
 impl StorageService {
-    /// Creates a storage service over the supplied vault, password service, remote provider and
-    /// resolver.
+    /// A storage service over the vault, its password manager, a provider and a resolver.
     pub fn new(
         db: VaultDb,
         passwords: PasswordsService,
@@ -161,7 +160,7 @@ impl StorageService {
     }
 
     /// Loads a connection by ID, returning `StorageNotFound` when it is absent.
-    async fn connection(&self, id: &str) -> Result<ConnectionRow> {
+    pub async fn connection(&self, id: &str) -> Result<ConnectionRow> {
         let id = id.to_owned();
         self.db
             .read(move |q| Ok(store::connection(q, &id)?))
@@ -170,7 +169,7 @@ impl StorageService {
     }
 
     /// Loads a storage by ID, returning `StorageNotFound` when it is absent.
-    async fn storage(&self, id: &str) -> Result<StorageRow> {
+    pub async fn storage(&self, id: &str) -> Result<StorageRow> {
         let id = id.to_owned();
         self.db
             .read(move |q| Ok(store::storage(q, &id)?))
@@ -194,6 +193,24 @@ impl StorageService {
     /// Saves a connection of the user (see the module). A new or changed endpoint gets its scope
     /// anew (research R8); the user may set a local one.
     pub async fn save_connection(&self, input: ConnectionInput) -> Result<ConnectionView> {
+        self.save_connection_in(input, None).await
+    }
+
+    /// A proposal's new connection, only while its endpoint lies in the `scope` the user confirmed:
+    /// one that resolves elsewhere since (DNS rebinding) is invalid before any test (research R8).
+    pub async fn save_proposed_connection(
+        &self,
+        input: ConnectionInput,
+        scope: EndpointScope,
+    ) -> Result<ConnectionView> {
+        self.save_connection_in(input, Some(scope)).await
+    }
+
+    async fn save_connection_in(
+        &self,
+        input: ConnectionInput,
+        confirmed_scope: Option<EndpointScope>,
+    ) -> Result<ConnectionView> {
         let endpoint = input.endpoint.as_deref().unwrap_or("").trim().to_owned();
         let existing = match &input.id {
             Some(id) => Some(self.connection(id).await?),
@@ -244,6 +261,9 @@ impl StorageService {
         }
         if moved {
             row.endpoint_scope = self.scope_of(&url).await?;
+        }
+        if confirmed_scope.is_some_and(|scope| scope != row.endpoint_scope) {
+            return Err(invalid("endpoint"));
         }
         if let Some(credentials) = test_with {
             let access = Access {

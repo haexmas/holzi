@@ -139,18 +139,21 @@ pub fn check_endpoint(endpoint: &str) -> Result<Url, AddressError> {
 /// The address a connection talks to: its endpoint, or for AWS without one the regional one.
 pub fn endpoint_url(location: &Location) -> Result<Url, AddressError> {
     if location.provider_kind == ProviderKind::Aws && location.endpoint.trim().is_empty() {
-        let region = &location.region;
-        if region.is_empty()
-            || !region
-                .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-        {
-            return Err(AddressError::Invalid);
-        }
-        return Url::parse(&format!("https://s3.{region}.amazonaws.com"))
-            .map_err(|_| AddressError::Invalid);
+        return aws_endpoint(&location.region);
     }
     check_endpoint(&location.endpoint)
+}
+
+/// The regional address of AWS S3 for `region` (lower-case letters, digits and `-`).
+pub fn aws_endpoint(region: &str) -> Result<Url, AddressError> {
+    if region.is_empty()
+        || !region
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    {
+        return Err(AddressError::Invalid);
+    }
+    Url::parse(&format!("https://s3.{region}.amazonaws.com")).map_err(|_| AddressError::Invalid)
 }
 
 /// Whether the endpoint sends without encryption; the settings and the dialog mark it.

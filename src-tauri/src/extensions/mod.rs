@@ -23,6 +23,13 @@ pub mod passwords;
 pub mod permissions;
 pub mod protocol;
 pub mod registry;
+pub mod remote_storage;
+pub mod remote_storage_dialog;
+pub mod remote_storage_endpoint;
+pub mod remote_storage_keys;
+pub mod remote_storage_manage;
+#[cfg(test)]
+pub(crate) mod remote_storage_test_support;
 pub mod shell;
 pub mod sql;
 pub mod web;
