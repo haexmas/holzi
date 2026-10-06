@@ -199,10 +199,10 @@ watch(
         role="tab"
         :aria-selected="row.tab.id === activeTabId"
         :tabindex="row.tab.id === activeTabId ? 0 : -1"
-        class="flex min-w-24 basis-56 cursor-pointer items-center gap-1.5 rounded-t-md px-2 py-1 text-sm"
+        class="flex min-w-24 basis-56 cursor-pointer items-center gap-1.5 rounded-t-md border-b-2 border-transparent px-2 py-1 text-sm"
         :class="
           row.tab.id === activeTabId
-            ? 'bg-background font-medium'
+            ? 'border-primary bg-card font-semibold text-foreground shadow-sm dark:bg-secondary'
             : 'text-muted-foreground hover:bg-accent'
         "
         @pointerdown.stop
