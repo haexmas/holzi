@@ -62,6 +62,8 @@ holzi PR #308) und ist nicht Teil dieser Spec.
   Einstellungen ausschalten.
 - Q: Ist das Entsperren per Fingerabdruck oder Gesichtserkennung Teil dieser Spec? → A: Nein.
   042 entsperrt nur per Passwort; biometrisches Entsperren bekommt eine eigene Spec.
+- Q: Gibt es das Übernehmen einer Tresordatei auch am Desktop? → A: Ja. FR-002a gilt auf allen
+  Plattformen; am Desktop wählt die Person die Datei im Dateidialog des Systems.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -320,7 +322,9 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
   Tresor anlegen und einen vorhandenen entsperren können. Das Anlegen ist der hervorgehobene
   Hauptweg.
 - **FR-002a**: Die Person MUSS in der Tresorauswahl eine Tresordatei von holzi über die
-  Dateiauswahl von Android wählen und mit ihrem Passwort öffnen können. holzi MUSS dabei eine
+  Dateiauswahl des Systems (auf Android die Dateiauswahl von Android, am Desktop der
+  Dateidialog) wählen und mit ihrem Passwort öffnen können; das gilt auf Android und am
+  Desktop. holzi MUSS dabei eine
   Kopie in den eigenen Speicher übernehmen und DARF die Originaldatei weder ändern noch löschen;
   danach MUSS der Tresor als gewöhnlicher Tresor in der Tresorauswahl erscheinen. Eine Kopie,
   die nicht vollständig übernommen oder nicht entsperrt werden konnte, DARF keinen Rest im
