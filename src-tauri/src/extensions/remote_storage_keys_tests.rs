@@ -120,3 +120,37 @@ fn keys_of_the_provider_outside_the_area_are_dropped() {
     );
     assert_eq!(area.strip("other/a"), None);
 }
+
+#[test]
+fn encoded_separators_and_dots_stay_literal_inside_the_area() {
+    let area = Area::new(storage_vault_id(&VAULT_A), installed(), false);
+    let endpoint = "https://s3.example.com".parse().expect("endpoint");
+    let bucket = rusty_s3::Bucket::new(endpoint, rusty_s3::UrlStyle::Path, "b", "eu").expect("b");
+    let inside = format!("/b/{}", area.prefix());
+    for key in [
+        "%2e%2e/x",
+        "a/%2E%2E/%2e%2e/x",
+        "a%2F..%2F..%2Fx",
+        "..%2fx",
+        ".%2e/x",
+        "%2F",
+        "%5C..%5Cx",
+        "a?x=%2e%2e%2F",
+        "a#%2e%2e%2F",
+        "a;/%2e%2e/x",
+    ] {
+        let full = area.key(key).expect(key);
+        let url = bucket.object_url(&full).expect("url");
+        assert!(
+            url.path().starts_with(&inside),
+            "{key:?} reached {}",
+            url.path()
+        );
+        assert!(
+            !url.path().contains("/../") && !url.path().contains("/./"),
+            "{key:?}"
+        );
+        assert_eq!(url.query(), None, "{key:?}");
+        assert_eq!(url.fragment(), None, "{key:?}");
+    }
+}
