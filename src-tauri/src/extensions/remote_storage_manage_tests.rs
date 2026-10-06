@@ -208,6 +208,29 @@ fn an_endpoint_that_leaves_its_confirmed_scope_after_the_dialog_is_refused() {
 }
 
 #[test]
+fn an_ipv6_endpoint_is_asked_for_and_granted_in_brackets() {
+    let s = setup();
+    let proposal =
+        add(json!({ "endpoint": "http://[fd00::1]:9000", "region": "home", "bucket": "b" }));
+    let error = s
+        .call("extension_remote_storage_add_backend", proposal.clone())
+        .unwrap_err();
+    assert_eq!(error.code.as_u16(), 1004);
+    assert_eq!(
+        error.details.expect("details")["target"],
+        json!("[fd00::1]:9000")
+    );
+    s.permit("add", "[fd00::1]:9000", "granted");
+    assert_eq!(
+        s.code("extension_remote_storage_add_backend", proposal),
+        1002,
+        "the grant leads to the dialog, which the user cancels"
+    );
+    let dialog = s.events.dialogs().pop().expect("a dialog");
+    assert_eq!(dialog["proposal"]["scope"], json!("local"));
+}
+
+#[test]
 fn a_failed_test_creates_nothing() {
     let s = setup();
     s.permit("add", "*", "granted");

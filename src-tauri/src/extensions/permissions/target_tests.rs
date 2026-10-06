@@ -276,6 +276,33 @@ fn the_host_of_a_proposed_storage_endpoint_matches_like_a_mail_server() {
 }
 
 #[test]
+fn an_ipv6_endpoint_matches_a_grant_in_brackets() {
+    let endpoint = RequestTarget::Endpoint {
+        host: "[fd00::1]".to_string(),
+        port: 9000,
+    };
+    for target in ["[fd00::1]:9000", "[FD00:0:0::1]", "[fd00::1]", "*"] {
+        assert!(
+            matches(PermissionKind::RemoteStorage, target, &endpoint),
+            "{target}"
+        );
+    }
+    for target in [
+        "[fd00::1]:9001",
+        "[fd00::2]",
+        "fd00::1",
+        "[fd00::1",
+        "[fd00::1]9000",
+        "[nas.local]",
+    ] {
+        assert!(
+            !matches(PermissionKind::RemoteStorage, target, &endpoint),
+            "{target}"
+        );
+    }
+}
+
+#[test]
 fn add_is_an_action_of_remote_storage_that_read_write_does_not_cover() {
     let add = Action::parse(PermissionKind::RemoteStorage, "add").expect("add");
     assert_eq!(add.as_string(), "add");
