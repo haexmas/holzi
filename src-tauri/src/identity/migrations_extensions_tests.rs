@@ -164,7 +164,7 @@ const COLUMNS: [(&str, &[&str]); 15] = [
     ),
 ];
 
-fn has_hlc_column(db: &Database, table: &str) -> bool {
+pub(super) fn has_hlc_column(db: &Database, table: &str) -> bool {
     db.with_connection(|conn| {
         Ok(conn.query_row(
             "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = 'haex_hlc_no_sync'",
@@ -176,7 +176,7 @@ fn has_hlc_column(db: &Database, table: &str) -> bool {
         > 0
 }
 
-fn unique_indexes(db: &Database, table: &str) -> i64 {
+pub(super) fn unique_indexes(db: &Database, table: &str) -> i64 {
     db.with_connection(|conn| {
         Ok(conn.query_row(
             "SELECT COUNT(*) FROM pragma_index_list(?1) \

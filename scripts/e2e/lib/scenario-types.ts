@@ -49,7 +49,9 @@ export interface ScenarioResult {
 }
 
 export interface ScenarioOptions {
-  needs?: { closeBehavior: CloseBehavior }
+  /** What the scenario needs; without it the scenario is skipped. `container`: a working `docker`
+   * (spec 038: a local RustFS). */
+  needs?: { closeBehavior?: CloseBehavior; container?: boolean }
   timeoutMs?: number
 }
 

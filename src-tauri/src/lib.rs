@@ -14,6 +14,7 @@ pub mod model_capabilities;
 pub mod models;
 pub mod passwords;
 pub mod providers;
+pub mod remote_storage;
 pub mod state;
 pub mod state_utils;
 pub mod storage;
@@ -117,6 +118,10 @@ use passwords::commands::usage::passwords_item_usage;
 use providers::connect::{connect_cli_delegate, submit_cli_delegate_code, DelegateConnectState};
 use providers::{
     add_provider, delete_provider, list_provider_models, list_providers, refresh_provider_models,
+};
+use remote_storage::commands::{
+    storage_connection_remove, storage_connection_save, storage_list, storage_removal_preview,
+    storage_remove, storage_save, storage_test,
 };
 use storage::preferences_commands::{clear_pref, get_pref, set_pref};
 use storage::wm_session_commands::{
@@ -233,6 +238,16 @@ pub fn run() {
                 }
             })?;
             app.manage(presence);
+            // Spec 038: deleting the credentials of a storage connection in the password manager
+            // warns first (spec 034 FR-034); the provider reads the vault open when it is asked.
+            let app_for_usage = app.handle().clone();
+            app.state::<AppState>()
+                .usage()
+                .register(std::sync::Arc::new(
+                    remote_storage::credentials::StorageUsage::new(move || {
+                        app_for_usage.try_state::<AppState>()?.database().ok()
+                    }),
+                ));
             // Spec 017 US8: what holzi does outside its window for extensions (browser, notifications).
             app.state::<AppState>()
                 .extensions()
@@ -370,6 +385,13 @@ pub fn run() {
             passwords_preset_save,
             passwords_preset_delete,
             passwords_item_usage,
+            storage_list,
+            storage_connection_save,
+            storage_connection_remove,
+            storage_save,
+            storage_remove,
+            storage_removal_preview,
+            storage_test,
             passwords_references_parse,
             passwords_copy,
             passwords_reference_token,

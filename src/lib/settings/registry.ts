@@ -6,7 +6,13 @@ import { normalizePath, type TabHistory } from '../wm/navigation.ts'
 import { matchRoute } from '../wm/routeMatch.ts'
 
 export type SettingsCategoryId =
-  'general' | 'appearance' | 'models' | 'agents' | 'extensions' | 'federation'
+  | 'general'
+  | 'appearance'
+  | 'models'
+  | 'agents'
+  | 'storage'
+  | 'extensions'
+  | 'federation'
 
 export type SettingsCategory = {
   id: SettingsCategoryId
@@ -57,6 +63,7 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   category('appearance', '/appearance', 'lucide:palette'),
   category('models', '/models', 'lucide:box'),
   category('agents', '/agents', 'lucide:bot'),
+  category('storage', '/storage', 'lucide:cloud'),
   category('extensions', '/extensions', 'lucide:puzzle'),
   category('federation', '/federation', 'lucide:share-2'),
 ]
@@ -156,6 +163,16 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
     icon: 'lucide:ban',
     overviewRow: true,
   }),
+  // Spec 038: storage connections (S3) and the storages on them. The forms and the removal are
+  // reached from the list, never searched for.
+  categoryLocation('storage'),
+  subView('storage.connection', 'storage/connections/:connectionId', 'storage'),
+  subView(
+    'storage.storage',
+    'storage/connections/:connectionId/storages/:storageId',
+    'storage',
+  ),
+  subView('storage.remove', 'storage/remove/:kind/:id', 'storage'),
   // Spec 017: installed extensions, installing from a file.
   categoryLocation('extensions'),
   // Reached from an extension's row in the list, never searched for.
