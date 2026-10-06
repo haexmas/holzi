@@ -168,20 +168,20 @@ test('text and component tints change only their own tokens', () => {
   assert.notEqual(warmText.foreground, base.foreground)
   assert.equal(warmText.background, base.background)
   assert.equal(warmText.muted, base.muted)
-  const coolComponent = derive(
-    { ...DEFAULT_APPEARANCE, component: { preset: 'cool' } },
+  const violetComponent = derive(
+    { ...DEFAULT_APPEARANCE, component: { preset: 'violet' } },
     'light',
   ).tokens
   for (const name of ['secondary', 'muted', 'accent', 'input', 'border']) {
     assert.notEqual(
-      coolComponent[name as TokenName],
+      violetComponent[name as TokenName],
       base[name as TokenName],
       name,
     )
   }
-  assert.equal(coolComponent.background, base.background)
-  assert.equal(coolComponent.card, base.card)
-  assert.equal(coolComponent.foreground, base.foreground)
+  assert.equal(violetComponent.background, base.background)
+  assert.equal(violetComponent.card, base.card)
+  assert.equal(violetComponent.foreground, base.foreground)
 })
 
 test('the window hint is not part of the tokens', () => {
@@ -225,13 +225,13 @@ test('window and container tints change only their own surfaces', () => {
   ).tokens
   assert.notEqual(warmWindow.background, base.background)
   assert.equal(warmWindow.card, base.card)
-  const coolContainer = derive(
-    { ...DEFAULT_APPEARANCE, container: { preset: 'cool' } },
+  const violetContainer = derive(
+    { ...DEFAULT_APPEARANCE, container: { preset: 'violet' } },
     'light',
   ).tokens
-  assert.equal(coolContainer.background, base.background)
+  assert.equal(violetContainer.background, base.background)
   for (const name of ['card', 'popover', 'sidebar'] as const) {
-    assert.notEqual(coolContainer[name], base[name], name)
+    assert.notEqual(violetContainer[name], base[name], name)
   }
 })
 
