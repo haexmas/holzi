@@ -22,6 +22,6 @@ Manuell in der laufenden App:
    Passwörter und Chats vorhanden. Agent bitten „öffne die Passwortänderung“ → Ansicht öffnet sich; „ändere
    mein Vaultpasswort auf X“ → Agent kann es nicht.
 4. **Hintergrund (US4)**: Erscheinungsbild → Bild wählen (ein 6000×4000-JPEG) → Hintergrund hinter allen
-   Workspaces, Wert < 1 MB; „Entfernen“ → Standard. Eine Textdatei mit `.png`-Endung → Fehlermeldung.
+   Workspaces, Wert innerhalb des 4-MiB-Limits; „Entfernen“ → Standard. Eine Textdatei mit `.png`-Endung → Fehlermeldung.
 5. **Sync (SC-003, SC-005)**: zweites, verknüpftes Gerät: Sprache und Hintergrund kommen nach dem Sync an;
    dessen Passwort bleibt das alte.

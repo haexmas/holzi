@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-07
 
-**Status**: Ready for planning
+**Status**: Ready for implementation
 
 **Input**: User description: "ich möchte die menü punkte in den einstellungen überarbeiten. 1. "Allgemein" soll die Unterpunkte "Grundeinstellung" und "Erscheinungsbild" bekommen 2. unter grundeinstellung möchte ich Sprache, Vaultname und Vaultpasswort anpassen können 3. unter erscheinungsbild soll das Theme und der Workspace Hintergrund festgelegt werden können"
 
@@ -140,5 +140,6 @@ Als Nutzer lege ich ein Bild als Hintergrund für meine Workspaces fest oder ent
 - Supported languages stay German and English.
 - The password change follows haex-vault's proven sequence for re-encrypting a vault; holzi does not keep the password in memory, so the current one is verified against the vault file.
 - The password plays no part in synchronization, so a change needs no step on sync servers.
-- A background of a few hundred kilobytes synchronizes like any other vault setting; the plan verifies this and falls back to its own synchronized record if needed.
+- A background of a few hundred kilobytes fits the existing synchronized preference/page budget; T037
+  covers that boundary with a two-device regression check.
 - No backward compatibility: holzi has no users yet.

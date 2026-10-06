@@ -99,7 +99,7 @@ and updated E2E scenarios. No new test framework.
 - [ ] T034 [US4] Put `<SettingsBackgroundSetting />` right after the color scheme in `src/components/settings/AppearanceView.vue`; add `'settings.background.label'` to the `general.appearance` `settingKeys` in `src/lib/settings/registry.ts`
 - [ ] T035 [US4] In `src/lib/actions/settingsActions.ts` add `setting({ id: 'settings.appearance.removeBackground', description: 'Remove the workspace background image for the whole vault; the default background shows again.', scope: 'settings.device', effect: 'write' })`; handler in `src/stores/settingsActionHandlers.ts` calling `useWorkspaceBackground().removeAsync()`
 - [ ] T036 [P] [US4] i18n in de/en: `settings.background.{label,description,choose,remove,failed,saved}`, `actions.settings.appearance.removeBackground`; append "Hintergrund Hintergrundbild background wallpaper" to the `general.appearance` keywords
-- [ ] T037 [US4] Run typecheck/lint/check:settings/build and `cargo test storage::preferences_commands`; commit `feat(settings): workspace background image`
+- [ ] T037 [US4] Add a two-device sync regression check for an approximately 500-KB background preference, then run typecheck/lint/check:settings/build and `cargo test storage::preferences_commands`; commit `feat(settings): workspace background image`
 
 **Checkpoint**: All four stories work independently.
 
