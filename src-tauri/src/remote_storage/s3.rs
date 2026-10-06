@@ -40,6 +40,7 @@ pub struct S3Store {
 }
 
 impl S3Store {
+    /// Creates an S3 provider using `resolver` to check and pin request destinations.
     pub fn new(resolver: Arc<dyn Resolver>) -> Self {
         Self { resolver }
     }
@@ -114,6 +115,8 @@ impl S3Store {
     }
 }
 
+/// Builds the signing bucket from the validated endpoint, region and addressing style.
+/// Invalid endpoint or bucket configuration becomes a network error.
 fn bucket(access: &Access) -> Result<Bucket, StorageError> {
     let location = &access.location;
     let endpoint = address::endpoint_url(location).map_err(|_| StorageError::Network)?;
@@ -130,6 +133,7 @@ fn bucket(access: &Access) -> Result<Bucket, StorageError> {
     .map_err(|_| StorageError::Network)
 }
 
+/// Builds signing credentials, including the session token when present.
 fn signing(credentials: &Credentials) -> rusty_s3::Credentials {
     let key = credentials.access_key_id.clone();
     let secret = credentials.secret_access_key.as_str();
@@ -208,6 +212,7 @@ pub fn classify(status: StatusCode, code: Option<&str>) -> StorageError {
 
 #[async_trait]
 impl RemoteStore for S3Store {
+    /// Uploads an object through a signed PUT request using the supplied deadline.
     async fn put(
         &self,
         access: &Access,
@@ -223,6 +228,7 @@ impl RemoteStore for S3Store {
             .map(drop)
     }
 
+    /// Downloads an object through a signed GET request, bounded by `max_bytes` and `deadline`.
     async fn get(
         &self,
         access: &Access,
@@ -237,6 +243,7 @@ impl RemoteStore for S3Store {
         read_body(response, max_bytes, deadline).await
     }
 
+    /// Follows signed listing pages for `prefix`, rejecting results above `max` or the deadline.
     async fn list(
         &self,
         access: &Access,
@@ -278,6 +285,7 @@ impl RemoteStore for S3Store {
         }
     }
 
+    /// Deletes an object through a signed DELETE request using the supplied deadline.
     async fn delete(
         &self,
         access: &Access,

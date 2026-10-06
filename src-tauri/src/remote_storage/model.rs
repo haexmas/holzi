@@ -23,6 +23,7 @@ pub struct CredentialsInput {
 }
 
 impl fmt::Debug for CredentialsInput {
+    /// Formats credential input with only the access key ID, omitting secret fields.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CredentialsInput")
             .field("access_key_id", &self.access_key_id)

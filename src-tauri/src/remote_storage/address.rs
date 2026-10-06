@@ -51,6 +51,7 @@ pub fn classify(ip: IpAddr) -> Class {
     }
 }
 
+/// Classifies IPv4 addresses as forbidden, local or public for endpoint validation.
 fn classify_v4(ip: Ipv4Addr) -> Class {
     if ip.is_link_local()
         || ip.is_unspecified()
@@ -66,6 +67,7 @@ fn classify_v4(ip: Ipv4Addr) -> Class {
     }
 }
 
+/// Classifies an IPv6 address after the caller has handled IPv4-mapped addresses.
 fn classify_v6(ip: Ipv6Addr) -> Class {
     let first = ip.segments()[0];
     if ip.is_unspecified() || ip.is_multicast() || first & 0xffc0 == 0xfe80 {
@@ -86,6 +88,7 @@ pub fn allowed(ip: IpAddr, origin: EndpointOrigin, https: bool) -> bool {
     }
 }
 
+/// Recognizes localhost and its subdomains regardless of case or a trailing dot.
 fn is_localhost(name: &str) -> bool {
     let name = name.trim_end_matches('.').to_ascii_lowercase();
     name == "localhost" || name.ends_with(".localhost")
@@ -152,6 +155,7 @@ pub fn is_insecure(url: &Url) -> bool {
 /// Turns a host name into addresses; the system resolver in holzi, a fixed table in tests.
 #[async_trait]
 pub trait Resolver: Send + Sync {
+    /// Resolves `host` and `port` to candidate IP addresses, or returns a lookup error.
     async fn lookup(&self, host: &str, port: u16) -> io::Result<Vec<IpAddr>>;
 }
 
@@ -160,6 +164,7 @@ pub struct SystemResolver;
 
 #[async_trait]
 impl Resolver for SystemResolver {
+    /// Returns the IP addresses found by the operating system for `host` and `port`.
     async fn lookup(&self, host: &str, port: u16) -> io::Result<Vec<IpAddr>> {
         Ok(tokio::net::lookup_host((host, port))
             .await?

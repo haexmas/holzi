@@ -31,11 +31,13 @@ pub(crate) fn service(state: &State<'_, AppState>) -> Result<StorageService> {
     Ok(StorageService::new(db, passwords, s3_store()))
 }
 
+/// Lists connections and storages with credential availability and local test results.
 #[tauri::command]
 pub async fn storage_list(state: State<'_, AppState>) -> Result<StorageOverview> {
     service(&state)?.overview().await
 }
 
+/// Creates or updates a connection, testing new credentials or changed address data first.
 #[tauri::command]
 pub async fn storage_connection_save(
     state: State<'_, AppState>,
@@ -44,21 +46,25 @@ pub async fn storage_connection_save(
     service(&state)?.save_connection(input).await
 }
 
+/// Removes a connection, its storages and permissions, then any unused credentials.
 #[tauri::command]
 pub async fn storage_connection_remove(state: State<'_, AppState>, id: String) -> Result<()> {
     service(&state)?.remove_connection(&id).await
 }
 
+/// Creates or updates a storage, testing access before saving a new or changed bucket.
 #[tauri::command]
 pub async fn storage_save(state: State<'_, AppState>, input: StorageInput) -> Result<StorageView> {
     service(&state)?.save_storage(input).await
 }
 
+/// Removes a storage together with its extension permissions and local test result.
 #[tauri::command]
 pub async fn storage_remove(state: State<'_, AppState>, id: String) -> Result<()> {
     service(&state)?.remove_storage(&id).await
 }
 
+/// Returns the storage names and extension IDs affected by a proposed removal.
 #[tauri::command]
 pub async fn storage_removal_preview(
     state: State<'_, AppState>,
@@ -67,6 +73,7 @@ pub async fn storage_removal_preview(
     service(&state)?.removal_preview(target).await
 }
 
+/// Tests access to a storage and returns the outcome and any test object left behind.
 #[tauri::command]
 pub async fn storage_test(state: State<'_, AppState>, id: String) -> Result<TestResult> {
     service(&state)?.test_storage(&id).await

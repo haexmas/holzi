@@ -153,6 +153,7 @@ pub struct Credentials {
 }
 
 impl fmt::Debug for Credentials {
+    /// Formats credentials with the secret key and any session token redacted.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Credentials")
             .field("access_key_id", &self.access_key_id)
@@ -233,6 +234,7 @@ pub enum StorageError {
 /// call ends at `deadline`.
 #[async_trait]
 pub trait RemoteStore: Send + Sync {
+    /// Writes `body` to `key` in the bucket described by `access`, before `deadline`.
     async fn put(
         &self,
         access: &Access,
@@ -260,6 +262,7 @@ pub trait RemoteStore: Send + Sync {
         deadline: Instant,
     ) -> Result<Vec<ObjectInfo>, StorageError>;
 
+    /// Deletes `key` from the bucket described by `access`, before `deadline`.
     async fn delete(
         &self,
         access: &Access,

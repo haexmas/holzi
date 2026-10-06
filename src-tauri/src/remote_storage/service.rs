@@ -35,12 +35,14 @@ pub struct StorageService {
     store: Arc<dyn RemoteStore>,
 }
 
+/// Builds a validation error identifying the rejected input field.
 fn invalid(field: &str) -> HolziError {
     HolziError::StorageInvalid {
         field: field.to_owned(),
     }
 }
 
+/// Builds the public connection view with credential availability and the HTTP warning flag.
 fn view(row: &ConnectionRow, credentials: super::CredentialsState) -> ConnectionView {
     ConnectionView {
         id: row.id.clone(),
@@ -55,6 +57,8 @@ fn view(row: &ConnectionRow, credentials: super::CredentialsState) -> Connection
     }
 }
 
+/// Validates required credential fields and normalizes the key ID and optional token.
+/// The secret access key is preserved exactly as entered.
 fn credentials_of(input: CredentialsInput) -> Result<Credentials> {
     let access_key_id = input.access_key_id.trim().to_owned();
     if access_key_id.is_empty() || input.secret_access_key.is_empty() {
@@ -70,6 +74,7 @@ fn credentials_of(input: CredentialsInput) -> Result<Credentials> {
     })
 }
 
+/// Accepts a passed probe or returns its failure outcome and possible leftover object key.
 fn failed(result: super::probe::ProbeResult) -> Result<()> {
     match result.outcome {
         TestOutcome::Passed => Ok(()),
@@ -81,6 +86,7 @@ fn failed(result: super::probe::ProbeResult) -> Result<()> {
 }
 
 impl StorageService {
+    /// Creates a storage service over the supplied vault, password service and remote provider.
     pub fn new(db: VaultDb, passwords: PasswordsService, store: Arc<dyn RemoteStore>) -> Self {
         Self {
             db,
@@ -121,6 +127,7 @@ impl StorageService {
             .await
     }
 
+    /// Loads a connection by ID, returning `StorageNotFound` when it is absent.
     async fn connection(&self, id: &str) -> Result<ConnectionRow> {
         let id = id.to_owned();
         self.db
@@ -129,6 +136,7 @@ impl StorageService {
             .ok_or(HolziError::StorageNotFound)
     }
 
+    /// Loads a storage by ID, returning `StorageNotFound` when it is absent.
     async fn storage(&self, id: &str) -> Result<StorageRow> {
         let id = id.to_owned();
         self.db
@@ -262,6 +270,8 @@ impl StorageService {
             .await
     }
 
+    /// Attempts to delete an unreferenced credential entry, logging deletion failures.
+    /// A failed reference lookup leaves the entry in place.
     async fn delete_credentials_if_unused(&self, item_id: &str) {
         let id = item_id.to_owned();
         let in_use = self

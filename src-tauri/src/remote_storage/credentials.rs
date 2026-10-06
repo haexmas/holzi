@@ -30,6 +30,7 @@ pub const CALLER: Caller = Caller::Internal { feature: FEATURE };
 /// The custom field that holds a session token.
 pub const SESSION_TOKEN: &str = "sessionToken";
 
+/// Grants the internal storage caller read and write access for credential operations.
 fn grants() -> [Grant; 1] {
     [Grant::new(GrantAction::ReadWrite, Scope::All)]
 }
@@ -148,6 +149,7 @@ impl<F> StorageUsage<F>
 where
     F: Fn() -> Option<VaultDb> + Send + Sync,
 {
+    /// Creates a usage check that obtains the active vault from `database` on each request.
     pub fn new(database: F) -> Self {
         Self { database }
     }
@@ -157,10 +159,13 @@ impl<F> EntryUsage for StorageUsage<F>
 where
     F: Fn() -> Option<VaultDb> + Send + Sync,
 {
+    /// Identifies storage as the feature using the password entry.
     fn feature(&self) -> &'static str {
         FEATURE
     }
 
+    /// Checks whether a connection references the entry; returns false if the vault is unavailable
+    /// or the lookup fails.
     fn uses(&self, item_id: &str) -> bool {
         let Some(db) = (self.database)() else {
             return false;

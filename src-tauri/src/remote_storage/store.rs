@@ -21,6 +21,7 @@ const CONNECTION_COLUMNS: &str = "id, provider_name, provider_kind, endpoint, en
 
 const STORAGE_COLUMNS: &str = "id, connection_id, name, bucket, created_at, updated_at";
 
+/// Builds a validation error identifying the rejected row field.
 fn invalid(field: &str) -> HolziError {
     HolziError::StorageInvalid {
         field: field.to_owned(),
@@ -36,6 +37,7 @@ fn unknown(column: usize) -> haex_crdt::rusqlite::Error {
     )
 }
 
+/// Decodes a connection row in `CONNECTION_COLUMNS` order, rejecting unknown enum values.
 fn connection_of(r: &Row<'_>) -> haex_crdt::rusqlite::Result<ConnectionRow> {
     Ok(ConnectionRow {
         id: r.get(0)?,
@@ -52,6 +54,7 @@ fn connection_of(r: &Row<'_>) -> haex_crdt::rusqlite::Result<ConnectionRow> {
     })
 }
 
+/// Decodes a storage row in `STORAGE_COLUMNS` order.
 fn storage_of(r: &Row<'_>) -> haex_crdt::rusqlite::Result<StorageRow> {
     Ok(StorageRow {
         id: r.get(0)?,
@@ -75,6 +78,7 @@ pub fn connections(q: &mut impl Query) -> Result<Vec<ConnectionRow>> {
     )?)
 }
 
+/// Loads the connection with `id`, or returns `None` when no row exists.
 pub fn connection(q: &mut impl Query, id: &str) -> Result<Option<ConnectionRow>> {
     Ok(q.query_row(
         &format!("SELECT {CONNECTION_COLUMNS} FROM haex_storage_connections WHERE id = ?1"),
@@ -92,6 +96,7 @@ pub fn storages(q: &mut impl Query) -> Result<Vec<StorageRow>> {
     )?)
 }
 
+/// Loads the storage with `id`, or returns `None` when no row exists.
 pub fn storage(q: &mut impl Query, id: &str) -> Result<Option<StorageRow>> {
     Ok(q.query_row(
         &format!("SELECT {STORAGE_COLUMNS} FROM haex_storages WHERE id = ?1"),
@@ -100,6 +105,7 @@ pub fn storage(q: &mut impl Query, id: &str) -> Result<Option<StorageRow>> {
     )?)
 }
 
+/// Returns the IDs of storages belonging to a connection for removal.
 fn storages_of(q: &mut impl Query, connection_id: &str) -> Result<Vec<String>> {
     Ok(q.query_map(
         "SELECT id FROM haex_storages WHERE connection_id = ?1",
@@ -108,6 +114,7 @@ fn storages_of(q: &mut impl Query, connection_id: &str) -> Result<Vec<String>> {
     )?)
 }
 
+/// Checks the trimmed character count is between one and `max` and rejects control characters.
 fn name_ok(text: &str, max: usize) -> bool {
     let length = text.trim().chars().count();
     (1..=max).contains(&length) && !text.chars().any(char::is_control)
