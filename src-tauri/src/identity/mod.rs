@@ -21,6 +21,9 @@ mod migrations_passwords_owner_tests;
 mod migrations_passwords_refs;
 #[cfg(test)]
 mod migrations_passwords_refs_tests;
+pub mod migrations_storage;
+#[cfg(test)]
+mod migrations_storage_tests;
 #[cfg(test)]
 mod migrations_tests;
 

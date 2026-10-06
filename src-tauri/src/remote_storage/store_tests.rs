@@ -1,0 +1,246 @@
+//! The tables of storage connections (data-model.md): rows written and read, the field rules, and
+//! removals that take the permissions of extensions with them in the same write (FR-007, T030).
+
+// These tests count rows and delete markers directly, which the CRDT write path does not expose.
+#![allow(clippy::disallowed_methods)]
+
+use super::store::{self, bucket_ok};
+use super::test_support::{grant_storage, vault};
+use super::{Addressing, ConnectionRow, EndpointScope, ProviderKind, StorageRow, TestOutcome};
+use crate::error::HolziError;
+use crate::vault_gate::VaultDb;
+
+fn connection(id: &str, item: &str) -> ConnectionRow {
+    ConnectionRow {
+        id: id.to_owned(),
+        provider_name: "RustFS".to_owned(),
+        provider_kind: ProviderKind::Rustfs,
+        endpoint: "http://127.0.0.1:9000".to_owned(),
+        endpoint_scope: EndpointScope::Local,
+        region: "us-east-1".to_owned(),
+        addressing: Addressing::Path,
+        credentials_item_id: item.to_owned(),
+        created_at: "2026-10-06T10:00:00.000Z".to_owned(),
+        updated_at: "2026-10-06T10:00:00.000Z".to_owned(),
+    }
+}
+
+fn storage(id: &str, connection_id: &str) -> StorageRow {
+    StorageRow {
+        id: id.to_owned(),
+        connection_id: connection_id.to_owned(),
+        name: format!("Speicher {id}"),
+        bucket: "holzi-test".to_owned(),
+        created_at: "2026-10-06T10:00:00.000Z".to_owned(),
+        updated_at: "2026-10-06T10:00:00.000Z".to_owned(),
+    }
+}
+
+fn put(db: &VaultDb, c: Option<ConnectionRow>, s: Option<StorageRow>) -> Result<(), HolziError> {
+    db.write_blocking(move |tx| {
+        if let Some(c) = &c {
+            store::put_connection(tx, c)?;
+        }
+        if let Some(s) = &s {
+            store::put_storage(tx, s)?;
+        }
+        Ok(())
+    })
+}
+
+fn count(db: &VaultDb, sql: &str) -> i64 {
+    let sql = sql.to_owned();
+    db.read_blocking(move |q| Ok(q.query_row(&sql, &[], |r| r.get::<_, i64>(0))?.unwrap_or(0)))
+        .expect("count")
+}
+
+use crate::storage::query::Query;
+
+#[test]
+fn rows_are_written_read_back_and_updated() {
+    let (_dir, db) = vault();
+    put(
+        &db,
+        Some(connection("c1", "item-1")),
+        Some(storage("s1", "c1")),
+    )
+    .expect("insert");
+
+    let mut changed = connection("c1", "item-1");
+    changed.provider_name = "Heim".to_owned();
+    changed.created_at = "ignored on update".to_owned();
+    changed.updated_at = "2026-10-06T11:00:00.000Z".to_owned();
+    put(&db, Some(changed), None).expect("update");
+
+    let (c, s) = db
+        .read_blocking(|q| {
+            Ok((
+                store::connection(q, "c1")?.expect("connection"),
+                store::storages(q)?,
+            ))
+        })
+        .expect("read");
+    assert_eq!(c.provider_name, "Heim");
+    assert_eq!(c.created_at, "2026-10-06T10:00:00.000Z", "created_at stays");
+    assert_eq!(c.updated_at, "2026-10-06T11:00:00.000Z");
+    assert_eq!(s, vec![storage("s1", "c1")]);
+}
+
+#[test]
+fn field_rules_are_checked_before_a_write() {
+    let (_dir, db) = vault();
+    let field = |error: HolziError| match error {
+        HolziError::StorageInvalid { field } => field,
+        other => panic!("unexpected {other:?}"),
+    };
+    let mut c = connection("c1", "item-1");
+    c.provider_name = " ".to_owned();
+    assert_eq!(field(put(&db, Some(c), None).unwrap_err()), "providerName");
+    let mut c = connection("c1", "item-1");
+    c.provider_name = "x".repeat(81);
+    assert_eq!(field(put(&db, Some(c), None).unwrap_err()), "providerName");
+    let mut c = connection("c1", "item-1");
+    c.region = String::new();
+    assert_eq!(field(put(&db, Some(c), None).unwrap_err()), "region");
+    let mut c = connection("c1", "item-1");
+    c.endpoint = String::new();
+    assert_eq!(
+        field(put(&db, Some(c.clone()), None).unwrap_err()),
+        "endpoint"
+    );
+    c.provider_kind = ProviderKind::Aws;
+    put(&db, Some(c), None).expect("aws needs no endpoint");
+
+    let mut s = storage("s1", "c1");
+    s.bucket = "Holzi".to_owned();
+    assert_eq!(field(put(&db, None, Some(s)).unwrap_err()), "bucket");
+    assert!(matches!(
+        put(&db, None, Some(storage("s1", "missing"))),
+        Err(HolziError::StorageNotFound)
+    ));
+}
+
+#[test]
+fn bucket_names_follow_the_s3_rules() {
+    for ok in ["abc", "holzi-test", "a.b.c", &"a".repeat(63)] {
+        assert!(bucket_ok(ok), "{ok}");
+    }
+    for bad in [
+        "ab",
+        &"a".repeat(64),
+        "Abc",
+        "a_b",
+        "-ab",
+        "ab-",
+        "a..b",
+        "a b",
+        "äbc",
+    ] {
+        assert!(!bucket_ok(bad), "{bad}");
+    }
+}
+
+#[test]
+fn removing_a_storage_takes_its_permissions_and_test_result_with_it() {
+    let (_dir, db) = vault();
+    put(
+        &db,
+        Some(connection("c1", "item-1")),
+        Some(storage("s1", "c1")),
+    )
+    .expect("insert");
+    put(&db, None, Some(storage("s2", "c1"))).expect("insert");
+    grant_storage(&db, "notes", "s1", "granted");
+    grant_storage(&db, "photos", "s2", "granted");
+    grant_storage(&db, "backup", "*", "granted");
+    db.write_blocking(|tx| Ok(store::record_test(tx, "s1", TestOutcome::Passed, "now")?))
+        .expect("record");
+
+    db.write_blocking(|tx| Ok(store::remove_storage(tx, "s1")?))
+        .expect("remove");
+
+    let targets: Vec<String> = db
+        .read_blocking(|q| {
+            q.query_map(
+                "SELECT target FROM extension_permissions ORDER BY target",
+                &[],
+                |r| r.get(0),
+            )
+        })
+        .expect("targets");
+    assert_eq!(
+        targets,
+        ["*", "s2"],
+        "only the permission that names s1 goes"
+    );
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM storage_tests_no_sync"), 0);
+    assert_eq!(
+        count(&db, "SELECT COUNT(*) FROM haex_storages WHERE id = 's1'"),
+        0
+    );
+    for table in ["haex_storages", "extension_permissions"] {
+        assert_eq!(
+            count(
+                &db,
+                &format!("SELECT COUNT(*) FROM haex_deleted_rows WHERE table_name = '{table}'")
+            ),
+            1,
+            "the removal of {table} reaches the other devices with the same write"
+        );
+    }
+}
+
+#[test]
+fn removing_a_connection_frees_its_credentials_only_when_unused() {
+    let (_dir, db) = vault();
+    put(
+        &db,
+        Some(connection("c1", "shared")),
+        Some(storage("s1", "c1")),
+    )
+    .expect("insert");
+    put(&db, Some(connection("c2", "shared")), None).expect("insert");
+    put(&db, Some(connection("c3", "own")), None).expect("insert");
+
+    let freed = db
+        .write_blocking(|tx| Ok(store::remove_connection(tx, "c1")?))
+        .expect("remove c1");
+    assert_eq!(freed, None, "c2 still uses the entry");
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM haex_storages"), 0);
+    let freed = db
+        .write_blocking(|tx| Ok(store::remove_connection(tx, "c3")?))
+        .expect("remove c3");
+    assert_eq!(freed.as_deref(), Some("own"));
+    assert!(matches!(
+        db.write_blocking(|tx| Ok(store::remove_connection(tx, "c3")?)),
+        Err(HolziError::StorageNotFound)
+    ));
+}
+
+#[test]
+fn test_results_are_kept_per_storage_and_replaced() {
+    let (_dir, db) = vault();
+    db.write_blocking(|tx| {
+        store::record_test(tx, "s1", TestOutcome::Unreachable, "t1")?;
+        store::record_test(tx, "s1", TestOutcome::Passed, "t2")?;
+        Ok(())
+    })
+    .expect("record");
+    let tests = db.read_blocking(|q| Ok(store::tests(q)?)).expect("tests");
+    assert_eq!(
+        tests.get("s1"),
+        Some(&("t2".to_owned(), TestOutcome::Passed))
+    );
+}
+
+#[test]
+fn the_extensions_of_a_storage_are_those_granted_it_by_id() {
+    let (_dir, db) = vault();
+    grant_storage(&db, "notes", "s1", "granted");
+    grant_storage(&db, "photos", "s1", "denied");
+    grant_storage(&db, "backup", "*", "granted");
+    let names = db
+        .read_blocking(|q| Ok(store::extensions_of(q, "s1")?))
+        .expect("names");
+    assert_eq!(names, ["notes"]);
+}

@@ -15,7 +15,7 @@ import {
 // Spec 036, quickstart M1 and M2 (US1, US2): an entry shows Details and Extra as tabs. A tap or an arrow key
 // changes the tab and the slide follows; the tab belongs to the place, so back and forward find it;
 // the editor keeps the inputs of Details while Extra is shown; a save that fails at the TOTP field
-// jumps to Details; the Verlauf tab shows the states as a timeline, newest chosen, a secret hides again
+// jumps to Details; the Verlauf tab offers the states in a dropdown (spec 039), newest chosen, a secret hides again
 // when the tab is left, and a restore (after a confirmation) makes a new top state and keeps the older
 // ones. The swipe gesture itself is manual (the rig has no reliable touch gestures).
 scenario('passwords-tabs', {}, async (ctx) => {
@@ -130,7 +130,7 @@ scenario('passwords-tabs', {}, async (ctx) => {
     'the saved entry offers Verlauf',
   )
 
-  // The history: three changes make four states; the timeline shows them newest first.
+  // The history: three changes make four states; the dropdown offers them newest first.
   await updateEntry(instance, id, { username: 'anna-2' })
   await updateEntry(instance, id, { username: 'anna-3' })
   await updateEntry(instance, id, { password: 'SECRET-MARKER-E2E-TABS-NEW' })
@@ -151,33 +151,48 @@ scenario('passwords-tabs', {}, async (ctx) => {
   await ctx.waitFor('the Verlauf slide', async () =>
     slideShows(instance, 'history'),
   )
-  await instance.waitForDisplayed(`passwords-history-state-${states[0]}`)
-  const dots = await instance.exec<number>(
-    `return document.querySelectorAll('[data-testid^="passwords-history-state-"]').length`,
-  )
-  assert.equal(dots, states.length, 'one dot per state')
-  const checked = await instance.exec<string | null>(
-    `const on = document.querySelector('[data-testid^="passwords-history-state-"][aria-checked="true"]')
-     return on ? on.getAttribute('data-testid') : null`,
-  )
+  // The states are offered by a dropdown (spec 039); its options follow the history's order.
+  const offered = async () =>
+    instance.exec<{ count: number; checked: number; focused: boolean }>(
+      `const all = [...document.querySelectorAll('[role="option"]')]
+       return {
+         count: all.length,
+         checked: all.findIndex((o) => o.getAttribute('data-state') === 'checked'),
+         focused: all.includes(document.activeElement),
+       }`,
+    )
+  const openStates = async () => {
+    await instance.click('passwords-history-select')
+    await ctx.waitFor(
+      'the history states to open with a focused option',
+      async () => (await offered()).focused,
+    )
+  }
+  const closedStates = async () =>
+    ctx.waitFor(
+      'the history states to close',
+      async () => (await offered()).count === 0,
+    )
+  await instance.waitForDisplayed('passwords-history-select')
+  await openStates()
+  const first = await offered()
+  assert.equal(first.count, states.length, 'one option per state')
+  assert.equal(first.checked, 0, 'the newest state is chosen first')
+  await instance.typeToFocused(KEY.arrowDown)
+  await instance.typeToFocused(KEY.enter)
+  await closedStates()
+  await openStates()
   assert.equal(
-    checked,
-    `passwords-history-state-${states[0]}`,
-    'the newest state is chosen first',
+    (await offered()).checked,
+    1,
+    'the arrow key and Enter choose the next state',
   )
-  await instance.type(`passwords-history-state-${states[0]}`, KEY.arrowDown)
-  await ctx.waitFor(
-    'the next history state by arrow key',
-    async () =>
-      (await instance.exec<string | null>(
-        `const on = document.querySelector('[data-testid^="passwords-history-state-"][aria-checked="true"]')
-         return on ? on.getAttribute('data-testid') : null`,
-      )) === `passwords-history-state-${states[1]}`,
-  )
-  ctx.step('the timeline shows every state, newest chosen')
+  ctx.step('the dropdown offers every state, newest chosen')
 
   // A secret of a state hides again when the tab is left.
-  await instance.click(`passwords-history-state-${states[states.length - 1]}`)
+  await instance.typeToFocused(KEY.end)
+  await instance.typeToFocused(KEY.enter)
+  await closedStates()
   await instance.waitForDisplayed('passwords-history-snapshot')
   // The keyboard toggles a reveal (a mouse press only holds it).
   await instance.type('passwords-reveal-history-password', KEY.enter)
@@ -201,7 +216,10 @@ scenario('passwords-tabs', {}, async (ctx) => {
   // Restore the oldest state after a confirmation: a new top state, nothing shortened.
   const before = (await historyIds(instance, id)).length
   await selectTab(instance, 'history')
-  await instance.click(`passwords-history-state-${states[states.length - 1]}`)
+  await openStates()
+  await instance.typeToFocused(KEY.end)
+  await instance.typeToFocused(KEY.enter)
+  await closedStates()
   await instance.click('passwords-history-restore')
   await instance.waitForDisplayed('passwords-history-restore-confirm')
   await instance.click('passwords-history-restore-confirm')

@@ -416,6 +416,10 @@
         "title": "Agents",
         "keywords": "agents delegates Claude Codex"
       },
+      "storage": {
+        "title": "Storage",
+        "keywords": "Storage S3 bucket RustFS AWS MinIO cloud connection credentials"
+      },
       "extensions": {
         "title": "Extensions",
         "keywords": "extension haextension app install permissions"
@@ -486,6 +490,17 @@
       "extensions": {
         "detail": {
           "title": "Extension"
+        }
+      },
+      "storage": {
+        "connection": {
+          "title": "Connection"
+        },
+        "storage": {
+          "title": "Storage"
+        },
+        "remove": {
+          "title": "Remove"
         }
       }
     },
@@ -744,6 +759,90 @@
         "load": "Load project",
         "loadHint": "Folder with haextension/manifest.json",
         "unload": "Unload"
+      }
+    },
+    "storage": {
+      "intro": "Connections to S3-compatible providers. Each connection holds storages, one bucket each. Extensions only see the names and use a storage only with your permission.",
+      "addConnection": "Add connection",
+      "addConnectionHint": "An S3-compatible provider such as RustFS or AWS",
+      "none": "No connection yet.",
+      "addStorage": "Add storage",
+      "insecure": "Unencrypted",
+      "insecureHint": "Data travels unencrypted (http). This is only allowed within your own network.",
+      "local": "Local",
+      "localHint": "The endpoint is in your own network or on this device.",
+      "credentialsState": {
+        "syncing": "Credentials are syncing",
+        "missing": "New credentials needed"
+      },
+      "untested": "Not tested on this device yet",
+      "lastTest": "{outcome} · {at}",
+      "usedBy": "Used by: {extensions}",
+      "outcome": {
+        "passed": "Test passed",
+        "accessDenied": "Credentials wrong",
+        "unreachable": "Endpoint not reachable",
+        "bucketMissing": "Bucket missing",
+        "missingRight": "A right is missing (write, read, list or delete)"
+      },
+      "leftover": "The test object “{key}” could not be deleted. Please delete it at the provider.",
+      "invalid": {
+        "providerName": "The name needs 1 to 80 characters.",
+        "region": "The region needs 1 to 64 characters.",
+        "endpoint": "This endpoint is not allowed: http only goes to addresses in your own network, holzi never reaches addresses like 169.254.x.x, and a name may not point to both your own and public addresses.",
+        "credentials": "Access key and secret are required.",
+        "name": "The name needs 1 to 80 characters.",
+        "bucket": "Bucket names have 3 to 63 characters: lower-case letters, digits, dot and hyphen."
+      },
+      "credentialsUnavailable": {
+        "syncing": "The credentials have not arrived on this device yet.",
+        "missing": "The credentials were deleted. Enter new ones at the connection."
+      },
+      "fields": {
+        "providerKind": "Provider",
+        "providerName": "Name",
+        "endpoint": "Endpoint",
+        "region": "Region",
+        "addressing": "Addressing",
+        "accessKeyId": "Access key",
+        "secretAccessKey": "Secret",
+        "sessionToken": "Session token (optional)",
+        "bucket": "Bucket",
+        "storageName": "Name of the storage"
+      },
+      "kinds": {
+        "aws": "AWS S3",
+        "rustfs": "RustFS",
+        "other": "Other S3-compatible provider"
+      },
+      "addressingModes": {
+        "path": "Path (host/bucket)",
+        "virtual": "Virtual host (bucket.host)"
+      },
+      "groups": {
+        "connection": "Connection",
+        "credentials": "Credentials",
+        "storage": "First storage",
+        "test": "Test"
+      },
+      "newCredentials": "Enter new credentials",
+      "credentialsKept": "The credentials are in the password manager as “S3: {name}”.",
+      "testBucketHint": "holzi checks the connection with this bucket before saving it.",
+      "save": "Test and save",
+      "saveName": "Save",
+      "testing": "Testing …",
+      "test": "Test now",
+      "remove": "Remove",
+      "cancel": "Cancel",
+      "notFound": "This connection or storage no longer exists.",
+      "removal": {
+        "connectionTitle": "Remove connection “{name}”",
+        "storageTitle": "Remove storage “{name}”",
+        "storages": "These storages are removed:",
+        "extensions": "These extensions lose access:",
+        "credentials": "The credentials are deleted from the password manager.",
+        "objects": "The data in the bucket stays at the provider.",
+        "confirm": "Remove for good"
       }
     }
   },

@@ -416,6 +416,10 @@
         "title": "Agenten",
         "keywords": "Agenten Delegaten Claude Codex"
       },
+      "storage": {
+        "title": "Speicher",
+        "keywords": "Speicher S3 Bucket RustFS AWS MinIO Cloud Verbindung Zugangsdaten"
+      },
       "extensions": {
         "title": "Erweiterungen",
         "keywords": "Erweiterung Haextension App Installieren Berechtigungen"
@@ -486,6 +490,17 @@
       "extensions": {
         "detail": {
           "title": "Erweiterung"
+        }
+      },
+      "storage": {
+        "connection": {
+          "title": "Verbindung"
+        },
+        "storage": {
+          "title": "Speicher"
+        },
+        "remove": {
+          "title": "Entfernen"
         }
       }
     },
@@ -744,6 +759,90 @@
         "load": "Projekt laden",
         "loadHint": "Ordner mit haextension/manifest.json",
         "unload": "Entladen"
+      }
+    },
+    "storage": {
+      "intro": "Verbindungen zu S3-kompatiblen Anbietern. Auf jeder Verbindung liegen Speicher, je ein Bucket. Erweiterungen sehen nur die Namen und nutzen einen Speicher nur mit deiner Erlaubnis.",
+      "addConnection": "Verbindung hinzufügen",
+      "addConnectionHint": "Ein S3-kompatibler Anbieter wie RustFS oder AWS",
+      "none": "Noch keine Verbindung.",
+      "addStorage": "Speicher hinzufügen",
+      "insecure": "Unverschlüsselt",
+      "insecureHint": "Daten gehen unverschlüsselt (http) über das Netz. Das ist nur im eigenen Netz erlaubt.",
+      "local": "Lokal",
+      "localHint": "Der Endpunkt liegt im eigenen Netz oder auf diesem Gerät.",
+      "credentialsState": {
+        "syncing": "Zugangsdaten werden synchronisiert",
+        "missing": "Neue Zugangsdaten nötig"
+      },
+      "untested": "Auf diesem Gerät noch nicht getestet",
+      "lastTest": "{outcome} · {at}",
+      "usedBy": "Genutzt von: {extensions}",
+      "outcome": {
+        "passed": "Test bestanden",
+        "accessDenied": "Zugangsdaten falsch",
+        "unreachable": "Endpunkt nicht erreichbar",
+        "bucketMissing": "Bucket fehlt",
+        "missingRight": "Ein Recht fehlt (Schreiben, Lesen, Auflisten oder Löschen)"
+      },
+      "leftover": "Das Testobjekt „{key}“ konnte nicht gelöscht werden. Lösche es bitte beim Anbieter.",
+      "invalid": {
+        "providerName": "Der Name braucht 1 bis 80 Zeichen.",
+        "region": "Die Region braucht 1 bis 64 Zeichen.",
+        "endpoint": "Dieser Endpunkt ist nicht erlaubt: http geht nur zu Adressen im eigenen Netz, Adressen wie 169.254.x.x erreicht holzi nie, und ein Name darf nicht zugleich auf eigene und öffentliche Adressen zeigen.",
+        "credentials": "Zugangsschlüssel und Geheimnis sind nötig.",
+        "name": "Der Name braucht 1 bis 80 Zeichen.",
+        "bucket": "Bucket-Namen haben 3 bis 63 Zeichen: Kleinbuchstaben, Ziffern, Punkt und Bindestrich."
+      },
+      "credentialsUnavailable": {
+        "syncing": "Die Zugangsdaten sind auf diesem Gerät noch nicht angekommen.",
+        "missing": "Die Zugangsdaten wurden gelöscht. Gib bei der Verbindung neue ein."
+      },
+      "fields": {
+        "providerKind": "Anbieter",
+        "providerName": "Name",
+        "endpoint": "Endpunkt",
+        "region": "Region",
+        "addressing": "Adressierung",
+        "accessKeyId": "Zugangsschlüssel",
+        "secretAccessKey": "Geheimnis",
+        "sessionToken": "Sitzungs-Token (optional)",
+        "bucket": "Bucket",
+        "storageName": "Name des Speichers"
+      },
+      "kinds": {
+        "aws": "AWS S3",
+        "rustfs": "RustFS",
+        "other": "Anderer S3-kompatibler Anbieter"
+      },
+      "addressingModes": {
+        "path": "Pfad (Host/Bucket)",
+        "virtual": "Virtueller Host (Bucket.Host)"
+      },
+      "groups": {
+        "connection": "Verbindung",
+        "credentials": "Zugangsdaten",
+        "storage": "Erster Speicher",
+        "test": "Test"
+      },
+      "newCredentials": "Neue Zugangsdaten eingeben",
+      "credentialsKept": "Die Zugangsdaten liegen im Passwortmanager als „S3: {name}“.",
+      "testBucketHint": "Mit diesem Bucket prüft holzi die Verbindung, bevor sie gespeichert wird.",
+      "save": "Testen und speichern",
+      "saveName": "Speichern",
+      "testing": "Wird getestet …",
+      "test": "Jetzt testen",
+      "remove": "Entfernen",
+      "cancel": "Abbrechen",
+      "notFound": "Diese Verbindung oder dieser Speicher existiert nicht mehr.",
+      "removal": {
+        "connectionTitle": "Verbindung „{name}“ entfernen",
+        "storageTitle": "Speicher „{name}“ entfernen",
+        "storages": "Diese Speicher werden entfernt:",
+        "extensions": "Diese Erweiterungen verlieren den Zugriff:",
+        "credentials": "Die Zugangsdaten werden aus dem Passwortmanager gelöscht.",
+        "objects": "Die Daten im Bucket bleiben beim Anbieter.",
+        "confirm": "Endgültig entfernen"
       }
     }
   },

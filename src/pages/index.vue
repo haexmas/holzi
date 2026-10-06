@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const { t } = useI18n()
 const store = useInstancesStore()
+const { activeNameAsync } = useInstance()
 
 const createSheetOpen = ref(false)
 const linkSheetOpen = ref(false)
@@ -23,6 +24,21 @@ onMounted(async () => {
   } catch (e) {
     listenerError = e
   }
+
+  let activeName: string | null = null
+  try {
+    activeName = await activeNameAsync()
+  } catch (e) {
+    listenerError ??= e
+  }
+  if (activeName) {
+    store.setActiveInstance(activeName)
+    await navigateTo(`/workspace/${encodeURIComponent(activeName)}`, {
+      replace: true,
+    })
+    return
+  }
+
   await store.syncAsync()
   if (listenerError !== undefined) {
     store.lastError =

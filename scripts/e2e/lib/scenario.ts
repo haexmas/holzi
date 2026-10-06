@@ -15,6 +15,7 @@ import { captureFailure } from './artifacts.ts'
 import { createGroup, maxDevicesFrom } from './group.ts'
 import type { CaptureDevice } from './group.ts'
 import { createLinuxHost } from './platform/linux.ts'
+import { containerRuntimeAvailable } from './rustfs.ts'
 import type {
   E2EEnv,
   RunDeps,
@@ -72,6 +73,8 @@ function skipReasonFor(
   options: ScenarioOptions,
   env: E2EEnv,
 ): string | undefined {
+  if (options.needs?.container && !containerRuntimeAvailable())
+    return 'no container runtime (docker) answers here'
   const needed = options.needs?.closeBehavior
   if (needed === undefined || needed === env.closeBehavior) return undefined
   return needed === 'relaunch'

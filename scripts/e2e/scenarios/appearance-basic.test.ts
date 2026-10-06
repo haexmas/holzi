@@ -273,6 +273,6 @@ scenario('appearance-basic', { timeoutMs: 300_000 }, async (ctx) => {
     true,
     'the colour scheme stays',
   )
-  assert.equal(await theme(page, '--background'), 'oklch(0.955 0 0)')
+  assert.equal(await theme(page, '--background'), 'oklch(0.955 0.009 240)')
   ctx.step('reset restores the defaults and keeps the colour scheme')
 })

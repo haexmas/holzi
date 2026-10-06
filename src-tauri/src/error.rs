@@ -280,6 +280,34 @@ pub enum HolziError {
     /// The extension is disabled (FR-007).
     #[error("Extension disabled")]
     ExtensionDisabled,
+
+    // --- Storage connections (spec 038, contracts/tauri-commands.md) ---
+    // None of these carries an endpoint, a credential or the text of a provider.
+    /// A field of a connection or a storage breaks its rule (`field`: `providerName`, `region`,
+    /// `endpoint`, `credentials`, `name`, `bucket`); for `endpoint` also an address holzi does not
+    /// reach (research R8).
+    #[error("Invalid storage field: {field}")]
+    StorageInvalid { field: String },
+
+    /// No connection or storage with this id.
+    #[error("Storage not found")]
+    StorageNotFound,
+
+    /// The connection test failed, nothing was saved (FR-003). `leftoverKey` names the test object
+    /// when holzi could not delete it (SC-004).
+    #[error("Storage test failed: {outcome:?}")]
+    StorageTestFailed {
+        outcome: crate::remote_storage::TestOutcome,
+        #[serde(rename = "leftoverKey")]
+        leftover_key: Option<String>,
+    },
+
+    /// The credentials entry of the connection is not on this device (`syncing`) or was deleted
+    /// (`missing`), data-model.md.
+    #[error("Storage credentials unavailable")]
+    StorageCredentialsUnavailable {
+        state: crate::remote_storage::CredentialsState,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, HolziError>;

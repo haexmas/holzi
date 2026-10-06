@@ -80,7 +80,7 @@ export const DEFAULT_LIGHTNESS: Record<Scheme, Record<TintToken, number>> = {
     secondary: 0.269,
     muted: 0.269,
     accent: 0.269,
-    input: 0.269,
+    input: 0.35,
     border: 0.269,
     'sidebar-accent': 0.35,
     'sidebar-border': 0.269,

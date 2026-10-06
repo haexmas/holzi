@@ -8,6 +8,7 @@ const CATEGORIES = [
   'appearance',
   'models',
   'agents',
+  'storage',
   'extensions',
   'federation',
 ]
