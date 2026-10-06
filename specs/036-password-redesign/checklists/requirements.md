@@ -39,3 +39,6 @@
   „Verlauf nicht wählbar im Bearbeiten“ (FR-008).
 - Die Begriffe Credential-ID, Gegenstelle (Relying Party), Herkunft und Zähler sind
   Fachbegriffe der Passkey-Welt, keine Umsetzungsdetails.
+- Quickstart Teil 3 (M1–M7) am 2026-10-06 vom Betreiber am Desktop vollständig geprüft, alles
+  in Ordnung. Offen sind nur die Telefon-Teile (Wischen, Langdruck, Menüknopf, Gesten der
+  Lightbox auf einem Touchscreen), weil es noch keinen Android-Build gibt (T081).
