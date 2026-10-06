@@ -71,6 +71,18 @@ const SETTINGS_VIEWS: Record<string, Component> = {
   'agents.denyRules': defineAsyncComponent(
     () => import('~/components/settings/DelegateDenyRulesSetting.vue'),
   ),
+  storage: defineAsyncComponent(
+    () => import('~/components/settings/storage/StorageListView.vue'),
+  ),
+  'storage.connection': defineAsyncComponent(
+    () => import('~/components/settings/storage/ConnectionForm.vue'),
+  ),
+  'storage.storage': defineAsyncComponent(
+    () => import('~/components/settings/storage/StorageForm.vue'),
+  ),
+  'storage.remove': defineAsyncComponent(
+    () => import('~/components/settings/storage/RemovalView.vue'),
+  ),
   extensions: defineAsyncComponent(
     () => import('~/components/settings/extensions/ExtensionsListView.vue'),
   ),

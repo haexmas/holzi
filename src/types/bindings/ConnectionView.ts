@@ -7,7 +7,7 @@ import type { ProviderKind } from "./ProviderKind";
 /**
  * A connection as the settings show it.
  */
-export type ConnectionView = { id: string, providerName: string, providerKind: ProviderKind, endpoint: string, region: string, addressing: Addressing,
+export type ConnectionView = { id: string, providerName: string, providerKind: ProviderKind, endpoint: string, region: string, addressing: Addressing, 
 /**
  * The endpoint sends without encryption (`http`).
  */

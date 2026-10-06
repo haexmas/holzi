@@ -154,9 +154,6 @@ impl StorageService {
     /// (research R8).
     pub async fn save_connection(&self, input: ConnectionInput) -> Result<ConnectionView> {
         let endpoint = input.endpoint.as_deref().unwrap_or("").trim().to_owned();
-        if !store::bucket_ok(&input.bucket_for_test) {
-            return Err(invalid("bucket"));
-        }
         let existing = match &input.id {
             Some(id) => Some(self.connection(id).await?),
             None => None,
@@ -203,6 +200,9 @@ impl StorageService {
             (None, Some(_)) => None,
         };
         if let Some(credentials) = test_with {
+            if !store::bucket_ok(&input.bucket_for_test) {
+                return Err(invalid("bucket"));
+            }
             let access = Access {
                 location,
                 credentials,
