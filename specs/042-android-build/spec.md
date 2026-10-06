@@ -64,6 +64,8 @@ holzi PR #308) und ist nicht Teil dieser Spec.
   042 entsperrt nur per Passwort; biometrisches Entsperren bekommt eine eigene Spec.
 - Q: Gibt es das Übernehmen einer Tresordatei auch am Desktop? → A: Ja. FR-002a gilt auf allen
   Plattformen; am Desktop wählt die Person die Datei im Dateidialog des Systems.
+- Q: Welcher Anteil der Desktop-e2e-Fälle muss auch auf Android laufen? → A: Mindestens 80 %,
+  Ziel 90 %.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -470,8 +472,8 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
 - **SC-006**: Eine Prüf-Erweiterung findet auf Android in keinem ihrer Rahmen die interne
   Schnittstelle von holzi.
 - **SC-007**: Jeder Pull Request zeigt nach dem CI-Lauf ein installierbares APK und das
-  Ergebnis der e2e-Suite auf Android; mindestens 90 % der e2e-Fälle des Desktops laufen auch auf
-  Android, der Rest steht begründet in der Ausnahmeliste; ein Bruch des Android-Builds oder seines Verhaltens
+  Ergebnis der e2e-Suite auf Android; mindestens 80 % der e2e-Fälle des Desktops laufen auch auf
+  Android (Ziel: 90 %), der Rest steht begründet in der Ausnahmeliste; ein Bruch des Android-Builds oder seines Verhaltens
   fällt im selben Pull Request auf, nicht erst danach.
 - **SC-008**: Ein Update von einem Release-APK auf das nächste behält 100 % der Tresore und
   Einstellungen.
