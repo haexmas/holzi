@@ -17,7 +17,7 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 - **Struktur** (R1): nur Registry-Einträge, vorhandene `OverviewView`/`SettingsRow`; `subView` bekommt
   `settingKeys`.
 - **Sprache** (R2, R3): `@nuxtjs/i18n` erkennt die Systemsprache (per Probe bestätigt, sonst reine Funktion
-  + Plugin); Vault-Präferenz `general.language` über neues `useLanguage` nach dem Muster `useColorScheme`.
+  - Plugin); Vault-Präferenz `general.language` über neues `useLanguage` nach dem Muster `useColorScheme`.
 - **Passwort** (R4, R5): Command `change_vault_passphrase`, Ablauf aus haex-vault (Checkpoint → DELETE →
   rekey → WAL), Prüfung des aktuellen Passworts über eine zweite, nur lesende Connection; nicht im
   Action-Katalog.
@@ -55,24 +55,24 @@ wie in haex-vault); Hintergrund ≤ 4 MiB als Präferenzwert
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 `.specify/memory/constitution.md` (I–VIII) und `.spaex/constitution.md`:
 
-| Prinzip | Bewertung |
-|---|---|
-| I No secrets in git | ✅ Passwörter nur zur Laufzeit; Tests nutzen Wegwerf-Passwörter in Tempdirs |
-| II No local absolute paths | ✅ keine |
-| III–V Identity / pinned refs / opt-in | ✅ nicht berührt; haex-vault nur als Vorbild zitiert, kein Code-Import |
-| VI Self-modifying instructions | ✅ keine Agent-Konfiguration geändert |
-| VII Relay unavailability | ✅ alles lokal; Sync nur für Präferenzen wie bisher |
-| VIII No concealment | ✅ |
-| spaex: speckit-workflow-adherence | ✅ specify → plan → tasks → implement |
-| spaex: pr-required-for-main, conventional commits, no squash | ✅ Topic-Branch, PR |
-| spaex: graphify-first-authoring | ✅ Kandidaten geprüft: `useColorScheme` (Muster für `useLanguage`), `scaledUrl` (Extraktion R7, Operator-Freigabe mit diesem Plan), MIN_PASSPHRASE-Duplikat (→ `validate_new`) |
-| spaex: ponytail | ✅ zwei `ponytail:`-Kommentare (Rekey-Key im SQL-Text, Präferenz-Refresh liest ganzen Wert) |
-| spaex: phasing-discipline | ✅ Teil der laufenden haex-vault-Angleichung |
-| ADR nötig? | Nein — keine Core-Principle-Änderung |
+| Prinzip                                                      | Bewertung                                                                                                                                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| I No secrets in git                                          | ✅ Passwörter nur zur Laufzeit; Tests nutzen Wegwerf-Passwörter in Tempdirs                                                                                                    |
+| II No local absolute paths                                   | ✅ keine                                                                                                                                                                       |
+| III–V Identity / pinned refs / opt-in                        | ✅ nicht berührt; haex-vault nur als Vorbild zitiert, kein Code-Import                                                                                                         |
+| VI Self-modifying instructions                               | ✅ keine Agent-Konfiguration geändert                                                                                                                                          |
+| VII Relay unavailability                                     | ✅ alles lokal; Sync nur für Präferenzen wie bisher                                                                                                                            |
+| VIII No concealment                                          | ✅                                                                                                                                                                             |
+| spaex: speckit-workflow-adherence                            | ✅ specify → plan → tasks → implement                                                                                                                                          |
+| spaex: pr-required-for-main, conventional commits, no squash | ✅ Topic-Branch, PR                                                                                                                                                            |
+| spaex: graphify-first-authoring                              | ✅ Kandidaten geprüft: `useColorScheme` (Muster für `useLanguage`), `scaledUrl` (Extraktion R7, Operator-Freigabe mit diesem Plan), MIN_PASSPHRASE-Duplikat (→ `validate_new`) |
+| spaex: ponytail                                              | ✅ zwei `ponytail:`-Kommentare (Rekey-Key im SQL-Text, Präferenz-Refresh liest ganzen Wert)                                                                                    |
+| spaex: phasing-discipline                                    | ✅ Teil der laufenden haex-vault-Angleichung                                                                                                                                   |
+| ADR nötig?                                                   | Nein — keine Core-Principle-Änderung                                                                                                                                           |
 
 **Post-Design Re-Check**: unverändert ✅. Einzige Abweichung vom abgestimmten Entwurf: kein
 `setBackground(pfad)` für Agenten (R8); FR-019 angepasst, zur Bestätigung im Review.

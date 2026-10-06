@@ -6,29 +6,29 @@ as part of the ongoing alignment with haex-vault's look.
 
 ## Decisions
 
-| # | Question | Decision |
-|---|----------|----------|
-| 1 | What happens to the category "Darstellung"? | It leaves the sidebar and becomes "Allgemein → Erscheinungsbild"; every existing appearance control moves along. |
-| 2 | Where do device name and session restore go? | "Grundeinstellung". |
-| 3 | Where is the language stored? | As a vault preference (synced). The device itself remembers nothing. |
-| 4 | Language before a vault is open? | The system language if it is `de`/`en`, otherwise English. The start screen offers a language picker whose choice lasts only until the app restarts. |
-| 5 | Start-screen choice vs. vault language? | The vault's language wins on unlock. A vault without a stored language (new or existing) stores the currently active one. |
-| 6 | Vault name? | Dropped: no screen would show it. Can be added later as one more vault preference key. |
-| 7 | Changing the vault password? | Current password, new password, repetition. Applies to this device only. |
-| 8 | Workspace background? | One image for all workspaces, stored as a vault preference (synced), with a remove action. |
-| 9 | Backward compatibility? | None: holzi has no users yet. Old paths and keys are replaced, not aliased. |
-| 10 | Agent access to the password? | An agent can never change it, but it can open the password view (`wm.app.open` with `at`). |
+| #   | Question                                     | Decision                                                                                                                                             |
+| --- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | What happens to the category "Darstellung"?  | It leaves the sidebar and becomes "Allgemein → Erscheinungsbild"; every existing appearance control moves along.                                     |
+| 2   | Where do device name and session restore go? | "Grundeinstellung".                                                                                                                                  |
+| 3   | Where is the language stored?                | As a vault preference (synced). The device itself remembers nothing.                                                                                 |
+| 4   | Language before a vault is open?             | The system language if it is `de`/`en`, otherwise English. The start screen offers a language picker whose choice lasts only until the app restarts. |
+| 5   | Start-screen choice vs. vault language?      | The vault's language wins on unlock. A vault without a stored language (new or existing) stores the currently active one.                            |
+| 6   | Vault name?                                  | Dropped: no screen would show it. Can be added later as one more vault preference key.                                                               |
+| 7   | Changing the vault password?                 | Current password, new password, repetition. Applies to this device only.                                                                             |
+| 8   | Workspace background?                        | One image for all workspaces, stored as a vault preference (synced), with a remove action.                                                           |
+| 9   | Backward compatibility?                      | None: holzi has no users yet. Old paths and keys are replaced, not aliased.                                                                          |
+| 10  | Agent access to the password?                | An agent can never change it, but it can open the password view (`wm.app.open` with `at`).                                                           |
 
 ## Structure
 
 The sidebar loses `appearance`. "Allgemein" (`/`) becomes an overview (the existing `OverviewView`)
 with two rows:
 
-| Location | Path | Contents |
-|---|---|---|
-| `general.basic` | `/general/basic` | Language, vault password (row → sub-view), device name, session restore |
-| `general.basic.password` | `/general/basic/password` | Current / new / repeat, "this device only" hint |
-| `general.appearance` | `/general/appearance` | Color scheme, workspace background, accent and tint rows, window hint, import/export/reset |
+| Location                 | Path                      | Contents                                                                                   |
+| ------------------------ | ------------------------- | ------------------------------------------------------------------------------------------ |
+| `general.basic`          | `/general/basic`          | Language, vault password (row → sub-view), device name, session restore                    |
+| `general.basic.password` | `/general/basic/password` | Current / new / repeat, "this device only" hint                                            |
+| `general.appearance`     | `/general/appearance`     | Color scheme, workspace background, accent and tint rows, window hint, import/export/reset |
 
 The settings search `settingKeys` move with their controls. Existing E2E settings and appearance
 scenarios get the new paths.
