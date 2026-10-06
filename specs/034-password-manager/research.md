@@ -426,6 +426,13 @@ in Titelreihenfolge; ohne bleibt die Titelreihenfolge. Grenze (`ponytail`): der 
 Anfrage gebaut, bei 5.000 Einträgen 20 bis 80 ms; nächster Schritt `Fuse.createIndex` je
 Kopfdatenliste und eine entprellte Suche.
 
+_Geändert 2026-10-06 (FR-007):_ Fuse wertet ausgelassene Buchstaben als Tippfehler, „itms“
+gegen „itemis“ hat 0,5 und fällt durch; ein höherer `threshold` ließe „github“ mit derselben
+Güte durch. Darum trifft ein Wort zusätzlich als Abkürzung (Buchstaben der Reihe nach in einem
+Wort eines Feldes, ab dessen erstem Buchstaben) mit fester Güte 0,5, hinter den Tippfehlern.
+Mit Suchtext gilt der geöffnete Ordner nicht mehr: der Ort ist dann „Suche“ (Brotkrumen ohne
+Ordner), die Liste zeigte aber nur dessen direkte Einträge.
+
 ## R12 — Import in Rust: alles übernehmen, in Schritten, mit Bericht und Rückgängigmachen
 
 **Befund**: haex-vault importiert in der Oberfläche, schreibt Zeile für Zeile ohne
