@@ -39,7 +39,8 @@ Schlüsselpräfix (Spec 017 T106, die neun Funktionen `extension_remote_storage_
   Berechtigung erlaubt. Diese Spec setzt das für S3 um.
 - **Spec 017** (Erweiterungs-Host): Diese Spec erfüllt T106, User Story 10 (Szenarien 2 bis 4) und
   FR-054 und FR-055 dort. Die Berechtigungsart `remoteStorage` mit Ziel „ein Speicher“ und den
-  Aktionen Lesen sowie Lesen und Schreiben gibt es dort schon. Bis diese Spec gebaut ist, antworten
+  Aktionen Lesen sowie Lesen und Schreiben gibt es dort schon; diese Spec ergänzt die Aktion `add` mit
+  dem Host eines Endpunkts als Ziel (FR-009b). Bis diese Spec gebaut ist, antworten
   die neun Funktionen „nicht verfügbar“ (8001).
 - **Spec 029** (eigener S3-Speicher für Spaces): 029 nutzt die Speicherverbindung dieser Spec,
   ergänzt um ihre Eignungsprüfung, Space-Buckets und Zugangsschlüssel. Was 029 über die Verbindung
@@ -271,6 +272,13 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   zu sehen, Objekte aufzulisten und herunterzuladen, „Lesen und Schreiben“ zusätzlich Hochladen und
   Löschen. Ein Speicher, den keine Berechtigung der Erweiterung deckt, DARF für sie weder in der Liste
   erscheinen noch erreichbar sein. Zustände und Rückfragen folgen Spec 017.
+- **FR-009b** (Betreiber 2026-10-06): Schlägt eine Erweiterung beim Hinzufügen einen eigenen Endpunkt
+  vor (nicht `sameProviderAs`), MUSS sie dafür eine Berechtigung `remoteStorage` mit der Aktion `add`
+  und dem Host des Endpunkts (`host:port`, `host` für alle Ports oder `*`) als Ziel haben; im Zustand
+  „fragen“ fragt holzi nach Spec 017 und nennt dabei den Host. Mit dieser Berechtigung darf der
+  Endpunkt auch im lokalen Netz oder auf dem eigenen Rechner liegen und dort `http` nutzen (FR-017).
+  Die Bestätigung im Dialog und die Zugangsdaten im Fenster von holzi bleiben nötig (FR-013a);
+  „Lesen und Schreiben“ deckt `add` nicht.
 - **FR-009a**: Die Liste der Speicher für eine Erweiterung MUSS je Speicher nur Kennung, Art (`s3`),
   Namen des Speichers, Namen des Anbieters und Namen des Buckets enthalten, nie Endpunkt, Region oder
   Zugangsdaten.
@@ -313,11 +321,13 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
 - **FR-017**: holzi MUSS das S3-Protokoll selbst sprechen; eine Erweiterung erreicht den Anbieter nur
   über holzi. Verschlüsselte Verbindungen zum Anbieter MÜSSEN die Zertifikate prüfen; unverschlüsselte
   Endpunkte (`http`) DÜRFEN nur für Adressen im lokalen Netz oder auf dem eigenen Rechner erlaubt sein
-  und MÜSSEN im Dialog als unverschlüsselt gekennzeichnet sein. Adressen im lokalen Netz oder auf dem
-  eigenen Rechner DÜRFEN nur Endpunkte haben, die der Nutzer in holzi eingegeben hat, nie der Vorschlag
-  einer Erweiterung; Link-Local-Adressen (auch der Metadatendienst `169.254.169.254`) DÜRFEN nie
-  erreicht werden. holzi MUSS die Adresse vor jedem Aufruf prüfen und genau die geprüfte Adresse
-  verbinden (Review 2026-10-06, research R8).
+  und MÜSSEN im Dialog als unverschlüsselt gekennzeichnet sein. Einen Endpunkt im lokalen Netz oder auf
+  dem eigenen Rechner DARF der Nutzer in holzi eingeben oder eine Erweiterung vorschlagen, die dafür die
+  Berechtigung `remoteStorage` mit der Aktion `add` für diesen Host hat (FR-009b); Link-Local-Adressen
+  (auch der Metadatendienst `169.254.169.254`) DÜRFEN nie erreicht werden. holzi MUSS die Adresse vor
+  jedem Aufruf prüfen, genau die geprüfte Adresse verbinden und einen Endpunkt, der beim Festlegen
+  öffentlich war, nie zu einer lokalen Adresse verbinden (Review 2026-10-06, Betreiber 2026-10-06,
+  research R8).
 
 ### Key Entities
 
@@ -328,7 +338,8 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   nicht synchronisiert (data-model `storage_tests_no_sync`).
 - **Bereich einer Erweiterung**: abgeleitet aus Speicher und Identität der Erweiterung; wird nicht
   gespeichert.
-- **Berechtigung `remoteStorage`**: wie in Spec 017, mit einem Speicher als Ziel.
+- **Berechtigung `remoteStorage`**: wie in Spec 017, mit einem Speicher als Ziel; die Aktion `add` hat
+  den Host eines Endpunkts als Ziel (FR-009b).
 
 ## Success Criteria _(mandatory)_
 

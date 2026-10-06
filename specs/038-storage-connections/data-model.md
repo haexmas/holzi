@@ -16,7 +16,7 @@ Eine Speicherverbindung (Spec: Begriffe, FR-001, FR-006).
 | `provider_name`       | TEXT | Pflicht, 1–80 Zeichen, vom Nutzer (z. B. „Hetzner“); in der Liste der Erweiterung |
 | `provider_kind`       | TEXT | `aws`, `rustfs`, `other` (Vorbelegung von Endpunkt und Adressierung)              |
 | `endpoint`            | TEXT | `https://…` oder `http://…` nur für lokale Adressen (R8); bei `aws` leer erlaubt  |
-| `endpoint_origin`     | TEXT | `user` oder `extension` (R8, Review 2026-10-06); lokale Adressen nur bei `user`   |
+| `endpoint_scope`      | TEXT | `public` oder `local`, beim Festlegen des Endpunkts (R8, FR-009b)                 |
 | `region`              | TEXT | Pflicht, 1–64 Zeichen                                                             |
 | `addressing`          | TEXT | `path` oder `virtual`                                                             |
 | `credentials_item_id` | TEXT | Kennung des Eintrags im Passwortmanager (`owner = 'storage'`), Pflicht            |
