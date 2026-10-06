@@ -167,40 +167,42 @@ Grenzwert.
 
 ## R8 — Unverschlüsselte Endpunkte
 
-**Entscheidung** (Review 2026-10-06): Jede Verbindung merkt sich, woher ihr Endpunkt kommt
-(`endpoint_origin`: `user` = vom Nutzer in holzi eingegeben, `extension` = Vorschlag einer Erweiterung,
-auch wenn der Nutzer ihn bestätigt hat). Vor jedem Aufruf, auch vor dem Verbindungstest, löst holzi den
-Host des Endpunkts selbst auf und prüft **jede** aufgelöste Adresse:
+**Entscheidung** (Review 2026-10-06, Betreiber 2026-10-06): Jede Verbindung merkt sich beim Festlegen
+ihres Endpunkts dessen Adressbereich (`endpoint_scope`): `local`, wenn der Host auf Loopback oder private
+Adressen auflöst, sonst `public`. `local` ist erlaubt für einen Endpunkt, den der Nutzer in holzi
+eingibt, und für den Vorschlag einer Erweiterung mit der Berechtigung `remoteStorage`/`add` für diesen
+Host (FR-009b); ohne diese Berechtigung fragt holzi (1004) oder lehnt ab (1002), bevor der Dialog
+erscheint. Vor jedem Aufruf, auch vor dem Verbindungstest, löst holzi den Host des Endpunkts selbst auf und
+prüft **jede** aufgelöste Adresse:
 
 - Immer abgelehnt: Link-Local (`169.254.0.0/16` samt `169.254.169.254` für Metadaten der Cloud,
   `fe80::/10`), unspezifizierte Adressen (`0.0.0.0`, `::`), Multicast und Broadcast, jeweils auch in
   IPv4-gemappter Form (`::ffff:a.b.c.d`).
 - Loopback (`127.0.0.0/8`, `::1`, `localhost`) und private Adressen (RFC 1918, RFC 4193) nur bei
-  `endpoint_origin = user`, nie für den Endpunkt aus einem Vorschlag einer Erweiterung.
-- Alle übrigen Adressen erlaubt.
+  `endpoint_scope = local`.
+- Öffentliche Adressen nur bei `endpoint_scope = public`.
 
 Ist eine aufgelöste Adresse nicht erlaubt, scheitert der Aufruf (2002 `network`, im Test „Endpunkt nicht
 erreichbar“). Die Verbindung geht an genau die geprüfte Adresse (`reqwest::ClientBuilder::resolve` für
-diesen Aufruf); reqwest löst den Namen nicht ein zweites Mal auf, ein Wechsel der Adresse dazwischen (DNS
-rebinding) erreicht also nichts. Der Hostname bleibt für TLS (SNI, Zertifikat) und die Signatur (`Host`).
+diesen Aufruf); reqwest löst den Namen nicht ein zweites Mal auf. Ein Name, der beim Festlegen öffentlich
+war und später auf eine lokale Adresse zeigt (DNS rebinding), erreicht also nichts. Der Hostname bleibt
+für TLS (SNI, Zertifikat) und die Signatur (`Host`).
 
-`https` immer; `http` nur, wenn alle aufgelösten Adressen Loopback oder privat sind, also nur bei
-`endpoint_origin = user` und nie zu Link-Local; der Dialog und die Einstellungen kennzeichnen ihn. Ein
-Vorschlag einer Erweiterung mit `http`, mit `localhost` oder mit einer IP-Adresse als Host, die für ihn
-nach den Regeln oben nicht erlaubt ist, wird schon beim Aufruf abgelehnt (3001, vor dem Dialog); löst ein vorgeschlagener Name erst später auf eine
-solche Adresse auf, scheitert der Test bzw. der Aufruf. Einen Speicher im Heimnetz legt der Nutzer in den
-Einstellungen an und gibt ihn frei. Ändert der Nutzer den Endpunkt einer Verbindung in den Einstellungen,
-wird `endpoint_origin` zu `user`. Keine Weiterleitungen folgen (S3 antwortet mit Fehler statt
-Umleitung; eine Umleitung wäre ein Fehler 2002).
+`https` immer; `http` nur bei `endpoint_scope = local` und nie zu Link-Local; der Dialog und die
+Einstellungen kennzeichnen ihn als unverschlüsselt und lokal. Ein Vorschlag einer Erweiterung mit `http`
+auf einen Host, der nicht lokal auflöst, wird beim Aufruf abgelehnt (3001, vor dem Dialog). Ändert der
+Nutzer den Endpunkt in den Einstellungen, legt holzi `endpoint_scope` neu fest. Keine Weiterleitungen folgen
+(S3 antwortet mit Fehler statt Umleitung; eine Umleitung wäre ein Fehler 2002).
 
-**Begründung**: FR-017. Selbst betriebenes RustFS im Heimnetz ohne Zertifikat ist ein Kernfall, aber nur
-als Eingabe des Nutzers. `extensions/web.rs` prüft aufgelöste Adressen nicht; ohne eigene Prüfung könnte
-eine Erweiterung über einen vorgeschlagenen Endpunkt signierte Anfragen von holzi an Dienste im lokalen
-Netz oder an den Metadatendienst einer Cloud-Maschine schicken (SSRF), auch über einen Namen, der erst
-nach der Prüfung auf eine solche Adresse zeigt.
+**Begründung**: FR-017, FR-009b. Selbst betriebenes RustFS im Heimnetz ohne Zertifikat ist ein Kernfall,
+auch eingerichtet von einer Erweiterung (Betreiber 2026-10-06). Die Berechtigung `add` nennt den Host in
+der Rückfrage, der Dialog zeigt den Endpunkt als lokal; ohne beides könnte eine Erweiterung signierte
+Anfragen von holzi an Dienste im lokalen Netz schicken (SSRF). Den Metadatendienst einer Cloud-Maschine
+erreicht sie nie. `extensions/web.rs` prüft aufgelöste Adressen nicht, darum die eigene Prüfung hier.
 
 **Verworfen**: Prüfung nur des eingegebenen Namens oder nur beim Speichern (bis Review 2026-10-06):
-DNS rebinding umgeht sie.
+DNS rebinding umgeht sie. Lokale Endpunkte nur vom Nutzer (`endpoint_origin`, Review 2026-10-06):
+der Betreiber will, dass eine Erweiterung mit Berechtigung einen lokalen Speicher einrichten kann.
 
 ## R9 — Der Verbindungstest
 
