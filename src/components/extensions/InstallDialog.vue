@@ -2,9 +2,10 @@
 /**
  * Installing an extension from a `.xt` file (spec 017, US1, T048, contracts/permissions.md
  * §Installation): Rust reads and checks the file and shows what it is; every declared permission
- * is listed with a checkbox (on by default; off means "ask when needed"), device-scoped kinds
- * offer "nur dieses Gerät" or "alle Geräte". An update lists only the new permissions and warns
- * before a downgrade. Nothing is written before "Installieren".
+ * is listed with a checkbox (on by default; off means "ask when needed"). The extension and its
+ * permissions hold in the whole vault, a shell permission only on this device; the dialog says so.
+ * An update lists only the new permissions and warns before a downgrade. Nothing is written before
+ * "Installieren".
  *
  * With `dev` the same dialog loads a project folder in developer mode (US12, FR-064): unsigned,
  * from its development server, every permission for this device only.
@@ -22,9 +23,7 @@ const { errString } = useErrorString()
 
 const path = ref<string | null>(null)
 const preview = ref<InstallPreview | null>(null)
-const choices = ref<Record<string, { granted: boolean; allDevices: boolean }>>(
-  {},
-)
+const choices = ref<Record<string, { granted: boolean }>>({})
 const confirmDowngrade = ref(false)
 const busy = ref(false)
 const failure = ref<string | null>(null)
@@ -81,7 +80,7 @@ async function chooseAsync() {
           path: selected,
         })
     for (const permission of shown.value)
-      choices.value[key(permission)] = { granted: true, allDevices: false }
+      choices.value[key(permission)] = { granted: true }
   } catch (error) {
     failure.value = errString(error)
   } finally {
@@ -99,7 +98,6 @@ async function installAsync() {
       action: p.action,
       target: p.target,
       granted: choices.value[key(p)]?.granted ?? false,
-      allDevices: choices.value[key(p)]?.allDevices ?? false,
     }))
     if (props.dev)
       await invoke('extension_dev_confirm', {
@@ -173,6 +171,9 @@ watch(open, (isOpen) => {
                 })
               }}
             </p>
+            <p v-if="!dev" class="text-xs text-muted-foreground">
+              {{ t('extensions.install.vaultWide') }}
+            </p>
           </div>
 
           <p
@@ -227,28 +228,12 @@ watch(open, (isOpen) => {
                   }}</span>
                 </span>
               </label>
-              <div
+              <p
                 v-if="permission.deviceScoped && !dev"
-                class="flex gap-4 pl-7 text-xs"
-                role="radiogroup"
+                class="pl-7 text-xs text-muted-foreground"
               >
-                <label class="flex items-center gap-1.5">
-                  <input
-                    v-model="choices[key(permission)]!.allDevices"
-                    type="radio"
-                    :value="false"
-                  />
-                  {{ t('extensions.install.thisDevice') }}
-                </label>
-                <label class="flex items-center gap-1.5">
-                  <input
-                    v-model="choices[key(permission)]!.allDevices"
-                    type="radio"
-                    :value="true"
-                  />
-                  {{ t('extensions.install.allDevices') }}
-                </label>
-              </div>
+                {{ t('extensions.install.deviceOnly') }}
+              </p>
             </li>
           </SettingsGroup>
 

@@ -146,7 +146,6 @@ fn setup() -> Setup {
         action: "read".into(),
         target: calendar_tables(),
         granted: true,
-        all_devices: false,
     };
     let week = install(&vault, &week, vec![choice], false, device, 2)
         .unwrap()
@@ -216,7 +215,6 @@ impl Setup {
                 action: action.into(),
                 target: target.into(),
                 status: "granted".into(),
-                all_devices: false,
                 replaces: None,
             },
             4,
@@ -427,7 +425,6 @@ fn a_database_target_that_is_not_an_extension_is_never_stored() {
                 action: "read".into(),
                 target: target.into(),
                 status: "granted".into(),
-                all_devices: false,
                 replaces: None,
             },
             4,

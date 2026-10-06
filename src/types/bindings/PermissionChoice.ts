@@ -7,8 +7,4 @@ export type PermissionChoice = { kind: string, action: string, target: string,
 /**
  * Ticked: `granted`; unticked: `ask`.
  */
-granted: boolean,
-/**
- * For device-scoped kinds: remember for every own device instead of only this one.
- */
-allDevices: boolean, };
+granted: boolean, };

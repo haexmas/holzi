@@ -153,7 +153,6 @@ impl Setup {
                 action: "show".into(),
                 target: "*".into(),
                 status: "granted".into(),
-                all_devices: false,
                 replaces: None,
             },
             2,

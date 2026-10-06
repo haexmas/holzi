@@ -70,8 +70,8 @@ Test-Bundle `perm-probe.xt` fragt eine nicht erklärte Berechtigung an.
 
 1. „Erlauben“ ohne „Merken“ → gilt bis zum Schließen der Vault.
 2. „Erlauben“ mit „Merken“ → gilt nach Neustart; in den Einstellungen als vault-weit sichtbar.
-3. Dateisystem „Merken“ → in den Einstellungen als „nur dieses Gerät“; mit „für alle Geräte merken“ als
-   vault-weit.
+3. Dateisystem „Merken“ → in den Einstellungen als „alle Geräte“; Shell „Merken“ → als dieses Gerät. Keiner
+   der Dialoge bietet eine Wahl des Geltungsbereichs.
 4. Zehn gleiche Anfragen schnell hintereinander → eine Anfrage, eine Entscheidung für alle.
 5. In den Einstellungen auf „verweigert“ → die nächste Anfrage scheitert sofort, auch im offenen Tab.
 
@@ -93,7 +93,7 @@ und End-to-End `extension-two-devices`:
    nach den Migrationen sind die Zeilen da.
 3. Bundle auf B per Test-Haken verfälschen → B startet nicht, zeigt den Grund, Sync läuft weiter.
 4. Update auf A → B wendet die neuen Migrationen an; ein offener Tab lädt neu.
-5. Gerätebezogene Berechtigung auf A → B fragt erneut.
+5. Shell-Berechtigung auf A → B fragt erneut; eine Dateiberechtigung von A gilt auf B.
 6. Auf A „entfernen, Daten löschen“ → auf B Tabellen weg, keine späten Zeilen aus alten Gruppen.
 
 ## 7. Meldungen, Kontext, Speicher, fremde Tabellen, Lebenszyklus, Entwicklermodus (US5–US7, US12, L3)

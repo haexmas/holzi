@@ -9,7 +9,7 @@ export type PermissionRequestEvent = { requestId: string, extensionId: string, d
  */
 declared: boolean,
 /**
- * Remembered for this device only unless "for all devices" is chosen.
+ * Remembered for this device only (shell); every other kind for every own device.
  */
 deviceScoped: boolean,
 /**

@@ -119,7 +119,6 @@ impl Setup {
                 action: action.into(),
                 target: target.into(),
                 status: status.into(),
-                all_devices: false,
                 replaces: None,
             },
             2,

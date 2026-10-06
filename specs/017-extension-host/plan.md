@@ -42,8 +42,8 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](.
   Navigation zu einer anderen Erweiterung; SDK prüft `event.source`. Das Frontend reicht Anfragen nur an einen
   Command `extension_bridge_call`, Rust prüft. Ein eingefügter Rahmen-Shim bildet Hash-Navigation, Titel,
   `beforeunload`, `window.close()` und Tastenkürzel auf die Tab-Schnittstelle ab.
-- **Berechtigungen** (R15): reines Rust-Modul, Geltungsbereich vault-weit oder Gerät nach ADR-0001 (Shell und
-  Dateisystem standardmäßig Gerät, wählbar für alle Geräte), Anfrage SDK-kompatibel über Fehler 1004 und
+- **Berechtigungen** (R15): reines Rust-Modul, Geltungsbereich vault-weit oder Gerät nach ADR-0001 (Shell immer
+  Gerät, alles andere vault-weit, ohne Wahl; Clarification 2026-10-06), Anfrage SDK-kompatibel über Fehler 1004 und
   Wiederholung, Warteschlange und Kategorie „Erweiterungen“ in den Einstellungen.
 - **Übrige Host-Funktionen** (R18–R21): Netz mit selbst geprüften Weiterleitungen, Dateien mit aufgelöstem
   Ziel, Sperrliste und Dialog-Auswahl als Berechtigung, Benachrichtigungen mit Klick, Passwörter als Adapter

@@ -2,7 +2,8 @@
 /**
  * The permissions of one extension (spec 017, US3, T070): every remembered permission with kind,
  * action, target, state and where it holds ("alle Geräte" or the device's name), declared or not;
- * the state and, for device-scoped kinds, the scope change on selection; "Widerrufen" removes it.
+ * the state changes on selection; "Widerrufen" removes it. Where a permission holds follows its
+ * kind (shell on this device, everything else on all devices); nobody chooses.
  * Decisions held until holzi is closed are listed with "Entfernen".
  */
 import { invoke } from '@tauri-apps/api/core'
@@ -22,8 +23,6 @@ const statusOptions = computed<SettingsSelectOption[]>(() =>
     label: t(`settings.extensions.status.${value}`),
   })),
 )
-
-const DEVICE_SCOPED = new Set(['filesystem', 'shell'])
 
 async function loadAsync() {
   try {
@@ -46,11 +45,7 @@ async function runAsync(action: () => Promise<unknown>) {
   await loadAsync()
 }
 
-function setAsync(
-  permission: PermissionView,
-  status: string,
-  allDevices: boolean,
-) {
+function setAsync(permission: PermissionView, status: string) {
   return runAsync(() =>
     invoke('extension_permission_set', {
       args: {
@@ -59,7 +54,6 @@ function setAsync(
         action: permission.action,
         target: permission.target,
         status,
-        allDevices,
         replaces: permission.id,
       },
     }),
@@ -132,25 +126,11 @@ onMounted(loadAsync)
         :model-value="permission.status"
         :options="statusOptions"
         class="w-40"
-        @update:model-value="
-          setAsync(permission, $event, permission.allDevices)
-        "
+        @update:model-value="setAsync(permission, $event)"
       />
       <span v-else-if="permission.temporary" class="text-sm">{{
         t(`settings.extensions.status.${permission.status}`)
       }}</span>
-      <label
-        v-if="DEVICE_SCOPED.has(permission.kind) && !permission.temporary"
-        class="flex items-center gap-2 text-xs"
-      >
-        <ShadcnCheckbox
-          :model-value="permission.allDevices"
-          @update:model-value="
-            setAsync(permission, permission.status, $event === true)
-          "
-        />
-        {{ t('settings.extensions.allDevices') }}
-      </label>
       <UiButton size="sm" variant="outline" @click="removeAsync(permission)">
         {{
           permission.temporary

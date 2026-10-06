@@ -275,7 +275,6 @@ fn everything_of_a_development_version_stays_on_this_device_and_goes_with_unload
         action: "read".into(),
         target: "/tmp/holzi-dev".into(),
         granted: true,
-        all_devices: false,
     };
     let id = confirm(&s.vault, dir.path(), vec![choice], s.device, 1).unwrap();
     assert_eq!(s.count("SELECT COUNT(*) FROM extension_permissions"), 0);

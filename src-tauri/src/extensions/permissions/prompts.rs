@@ -31,7 +31,7 @@ pub struct PermissionRequestEvent {
     pub target: String,
     /// The manifest declares this permission.
     pub declared: bool,
-    /// Remembered for this device only unless "for all devices" is chosen.
+    /// Remembered for this device only (shell); every other kind for every own device.
     pub device_scoped: bool,
     /// A `database` target of an extension that is not installed: only "Verweigern" is offered.
     pub target_missing: bool,
