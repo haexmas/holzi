@@ -28,6 +28,8 @@ pub enum Op {
 pub struct FakeStore {
     objects: Mutex<BTreeMap<(String, String), Vec<u8>>>,
     failures: Mutex<HashMap<Op, StorageError>>,
+    /// Errors for the next call of an operation only.
+    once: Mutex<HashMap<Op, StorageError>>,
     calls: Mutex<Vec<(Op, String)>>,
 }
 
@@ -39,6 +41,11 @@ impl FakeStore {
     /// Every later call of `op` answers `error`.
     pub fn fail(&self, op: Op, error: StorageError) {
         self.failures.lock().expect("lock").insert(op, error);
+    }
+
+    /// The next call of `op` answers `error`, later ones work again.
+    pub fn fail_once(&self, op: Op, error: StorageError) {
+        self.once.lock().expect("lock").insert(op, error);
     }
 
     /// The keys stored in `bucket`.
@@ -59,6 +66,9 @@ impl FakeStore {
 
     fn enter(&self, op: Op, key: &str) -> Result<(), StorageError> {
         self.calls.lock().expect("lock").push((op, key.to_owned()));
+        if let Some(error) = self.once.lock().expect("lock").remove(&op) {
+            return Err(error);
+        }
         match self.failures.lock().expect("lock").get(&op) {
             Some(error) => Err(*error),
             None => Ok(()),

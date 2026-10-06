@@ -49,9 +49,10 @@ function textFields(page: Page, testid: string): Promise<number> {
 // Spec 038, US2 and US3 (quickstart §5): an extension uses a storage the user made in the
 // settings and proposes another bucket on the same provider. holzi confirms it over the tab with a
 // dialog that has no field for credentials; new credentials are typed only in holzi's window over
-// the whole app. Objects land in the extension's own area of the bucket. A call carrying
-// credentials is refused without a dialog, and a local endpoint needs the add permission for its
-// host first. Needs Docker for RustFS; skipped without it.
+// the whole app, which names wrong ones and stays open for a correction. Objects land in the
+// extension's own area of the bucket. A call carrying credentials is refused without a dialog, and
+// a local endpoint needs the add permission for its host first. Needs Docker for RustFS; skipped
+// without it.
 scenario(
   'extension-storage',
   { timeoutMs: 300_000, needs: { container: true } },
@@ -211,8 +212,33 @@ scenario(
     await page.click('storage-dialog-confirm')
     await page.waitForDisplayed('storage-credentials-modal', 10_000)
     await page.type('storage-credentials-access-key', rustfs.accessKeyId)
-    await page.type('storage-credentials-secret', rustfs.secretAccessKey)
+    await page.type('storage-credentials-secret', 'not-the-secret')
     // Enter in a field confirms, as the button does.
+    await page.type('storage-credentials-secret', KEY.enter)
+    await page.waitForDisplayed('storage-credentials-failure', 20_000)
+    const refused = await page.exec<string>(
+      `return document.querySelector('[data-testid="storage-credentials-failure"]').textContent.trim()`,
+    )
+    assert.match(refused, /Zugangsdaten falsch|Credentials wrong/)
+    assert.equal(
+      await inFrame<string>(
+        page,
+        probe,
+        `return Promise.race([
+           window.answer.then(() => 'answered'),
+           new Promise((r) => setTimeout(() => r('waiting'), 300)),
+         ])`,
+      ),
+      'waiting',
+      'the extension waits while the user corrects the credentials',
+    )
+    ctx.step('wrong credentials are named in holzi’s window, which stays open')
+
+    await page.type(
+      'storage-credentials-secret',
+      `${KEY.control}a${KEY.release}${KEY.backspace}`,
+    )
+    await page.type('storage-credentials-secret', rustfs.secretAccessKey)
     await page.type('storage-credentials-secret', KEY.enter)
     const updated = await answer(page, probe)
     assert.equal(updated.error, undefined, JSON.stringify(updated))
@@ -220,7 +246,7 @@ scenario(
       !JSON.stringify(updated).includes(rustfs.secretAccessKey),
       'the extension never gets the credentials',
     )
-    ctx.step('new credentials typed in holzi’s window over the whole app')
+    ctx.step('corrected credentials typed in holzi’s window over the whole app')
 
     const withCredentials = await probeRequest(
       page,

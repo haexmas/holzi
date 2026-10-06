@@ -134,6 +134,12 @@ Zugangsdaten geht nur vom Fenster von holzi an Rust, nie an die Erweiterung; Rus
 gibt der Erweiterung nur Kennung oder Fehler. Schließen des Rahmens oder Ablauf zählt als Abbruch
 (`drop_dialogs_of`), auch wenn das Fenster für die Zugangsdaten schon offen ist; es schließt dann.
 
+Die Antwort mit Zugangsdaten wartet auf deren Test (FR-013b, Betreiber 2026-10-07):
+`storage_dialog_resolve` liefert `StorageTrial` zurück. Scheitert der Test, bekommt das Fenster
+`failed { outcome }`, zeigt den Text der Einstellungen und bleibt offen; der Aufruf der Erweiterung
+wartet im selben Dialog (`Dialog::failed`, `Dialog::answer`) auf korrigierte Zugangsdaten oder den
+Abbruch, mit neuer Frist von 300 s je Antwort. Endet die Anfrage, bekommt das Fenster `ended`.
+
 **Begründung**: Ein vorhandenes, getestetes Muster für „Erweiterung wartet auf den Nutzer“; FR-013,
 FR-013a. Eine native Dialogbox (wie der Speichern-Dialog) kann keine Formularfelder. Was im Rahmen eines
 Tabs liegt, kann eine Erweiterung pixelgleich nachzeichnen; ein Formular für Zugangsdaten dort könnte sie

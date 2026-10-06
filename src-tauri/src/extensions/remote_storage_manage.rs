@@ -16,7 +16,7 @@ use super::permissions::Action;
 use super::remote_storage::{
     check_storage, invalid, item, not_found, overview, provider, service, text,
 };
-use super::remote_storage_dialog::{ask, DialogKind, StorageAnswer};
+use super::remote_storage_dialog::{ask, open, Dialog, DialogKind, StorageAnswer};
 use super::remote_storage_endpoint::{check_aws, Proposed};
 use crate::error::HolziError;
 use crate::passwords::clock::unix_millis;
@@ -56,6 +56,26 @@ fn kind_of(outcome: TestOutcome) -> &'static str {
         TestOutcome::AccessDenied | TestOutcome::MissingRight => "accessDenied",
         TestOutcome::Unreachable => "network",
         TestOutcome::BucketMissing => "bucketMissing",
+    }
+}
+
+/// Saves with the credentials typed in holzi's window. A failed test goes back to that window,
+/// which waits for corrected credentials or a cancel (1002); the extension never sees it.
+fn with_credentials<T>(
+    dialog: &mut Dialog<'_>,
+    mut credentials: CredentialsInput,
+    save: impl Fn(CredentialsInput) -> crate::error::Result<T>,
+) -> Result<T, BridgeError> {
+    loop {
+        match save(credentials) {
+            Err(HolziError::StorageTestFailed { outcome, .. }) => {
+                dialog.failed(outcome);
+                credentials = confirmed(dialog.answer()?)?
+                    .credentials
+                    .ok_or_else(cancelled)?;
+            }
+            saved => return saved.map_err(from_service),
+        }
     }
 }
 
@@ -268,7 +288,7 @@ fn add_with_endpoint(
         .as_ref()
         .and_then(|p| p.url.host_str().map(str::to_owned))
         .unwrap_or_else(|| "AWS".to_owned());
-    let answer = confirmed(ask(
+    let mut dialog = open(
         ctx,
         DialogKind::Add,
         &extension_name(ctx),
@@ -284,7 +304,8 @@ fn add_with_endpoint(
             "sameProvider": false,
         }),
         &[],
-    )?)?;
+    )?;
+    let answer = confirmed(dialog.answer()?)?;
     let storage_name = answer.name.clone().unwrap_or_else(|| name.to_owned());
     let storage_bucket = answer.bucket.clone().unwrap_or_else(|| bucket.to_owned());
     if let Some(connection_id) = answer.connection_id {
@@ -305,20 +326,22 @@ fn add_with_endpoint(
     let credentials = answer.credentials.ok_or_else(cancelled)?;
     // The scope the dialog showed; AWS by region is public.
     let scope = proposed.map_or(EndpointScope::Public, |p| p.scope);
-    let connection = block_on(service.save_proposed_connection(
-        ConnectionInput {
-            id: None,
-            provider_name,
-            provider_kind: kind,
-            endpoint: Some(endpoint_text),
-            region: region.to_owned(),
-            addressing,
-            credentials: Some(credentials),
-            bucket_for_test: storage_bucket.clone(),
-        },
-        scope,
-    ))
-    .map_err(from_service)?;
+    let connection = with_credentials(&mut dialog, credentials, |credentials| {
+        block_on(service.save_proposed_connection(
+            ConnectionInput {
+                id: None,
+                provider_name: provider_name.clone(),
+                provider_kind: kind,
+                endpoint: Some(endpoint_text.clone()),
+                region: region.to_owned(),
+                addressing,
+                credentials: Some(credentials),
+                bucket_for_test: storage_bucket.clone(),
+            },
+            scope,
+        ))
+    })?;
+    drop(dialog);
     match block_on(service.save_storage(StorageInput {
         id: None,
         connection_id: connection.id.clone(),
@@ -348,7 +371,7 @@ pub fn update_backend(ctx: &CallContext, params: &Value) -> Result<Value, Bridge
     let service = service(ctx);
     let storage = block_on(service.storage(storage_id)).map_err(from_service)?;
     let connection = block_on(service.connection(&storage.connection_id)).map_err(from_service)?;
-    let answer = confirmed(ask(
+    let mut dialog = open(
         ctx,
         DialogKind::Update,
         &extension_name(ctx),
@@ -364,23 +387,26 @@ pub fn update_backend(ctx: &CallContext, params: &Value) -> Result<Value, Bridge
             "scope": connection.endpoint_scope.as_str(),
         }),
         &[],
-    )?)?;
+    )?;
+    let answer = confirmed(dialog.answer()?)?;
     let new_bucket = answer
         .bucket
         .unwrap_or_else(|| bucket.unwrap_or(&storage.bucket).to_owned());
     if let Some(credentials) = answer.credentials {
-        block_on(service.save_connection(ConnectionInput {
-            id: Some(connection.id.clone()),
-            provider_name: connection.provider_name.clone(),
-            provider_kind: connection.provider_kind,
-            endpoint: Some(connection.endpoint.clone()),
-            region: connection.region.clone(),
-            addressing: connection.addressing,
-            credentials: Some(credentials),
-            bucket_for_test: new_bucket.clone(),
-        }))
-        .map_err(from_service)?;
+        with_credentials(&mut dialog, credentials, |credentials| {
+            block_on(service.save_connection(ConnectionInput {
+                id: Some(connection.id.clone()),
+                provider_name: connection.provider_name.clone(),
+                provider_kind: connection.provider_kind,
+                endpoint: Some(connection.endpoint.clone()),
+                region: connection.region.clone(),
+                addressing: connection.addressing,
+                credentials: Some(credentials),
+                bucket_for_test: new_bucket.clone(),
+            }))
+        })?;
     }
+    drop(dialog);
     block_on(
         service.save_storage(StorageInput {
             id: Some(storage.id.clone()),
@@ -446,3 +472,7 @@ pub fn remove_backend(ctx: &CallContext, params: &Value) -> Result<Value, Bridge
 #[cfg(test)]
 #[path = "remote_storage_manage_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "remote_storage_credentials_tests.rs"]
+mod credentials_tests;
