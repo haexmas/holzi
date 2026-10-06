@@ -18,6 +18,7 @@ use crate::extensions::registry::effective::effective_bundle;
 use crate::extensions::registry::install::install;
 use crate::extensions::remote_storage_dialog::StorageAnswer;
 use crate::passwords::service::PasswordsService;
+use crate::remote_storage::address::Resolver;
 use crate::remote_storage::model::{ConnectionInput, CredentialsInput, StorageInput};
 use crate::remote_storage::service::StorageService;
 use crate::remote_storage::test_support::{resolver, vault, FakeStore};
@@ -101,6 +102,11 @@ pub(crate) fn credentials() -> CredentialsInput {
 }
 
 pub(crate) fn setup() -> Setup {
+    setup_with(resolver(&[]))
+}
+
+/// The setup with `names` as the resolver of the host's storage calls.
+pub(crate) fn setup_with(names: Arc<dyn Resolver>) -> Setup {
     let (dir, vault) = vault();
     vault
         .write_blocking(|tx| crate::sync::keys::ensure_vault_identity(tx, true).map(|_| ()))
@@ -125,7 +131,7 @@ pub(crate) fn setup() -> Setup {
         .bundle_id;
     let fake = Arc::new(FakeStore::new());
     let host = Arc::new(ExtensionHost::default());
-    host.storage.set(fake.clone(), resolver(&[]));
+    host.storage.set(fake.clone(), names);
     let events = Arc::new(Events {
         host: Arc::clone(&host),
         seen: Mutex::new(Vec::new()),

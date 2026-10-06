@@ -2,12 +2,19 @@
 //! through a confirmed dialog of holzi, credentials never through the bridge, a proposed endpoint
 //! only with the `add` permission for its host, and nothing created when the test fails.
 
+use std::io;
+use std::net::IpAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use crate::extensions::remote_storage_dialog::StorageAnswer;
 use crate::extensions::remote_storage_test_support::{
-    credentials, setup, ACCESS_KEY, ENDPOINT, REGION, SECRET,
+    credentials, setup, setup_with, ACCESS_KEY, ENDPOINT, REGION, SECRET,
 };
+use crate::remote_storage::address::Resolver;
 use crate::remote_storage::test_support::Op;
 use crate::remote_storage::StorageError;
 use crate::storage::query::Query;
@@ -161,6 +168,43 @@ fn addresses_holzi_never_reaches_are_refused_before_the_dialog() {
         );
     }
     assert!(s.events.dialogs().is_empty());
+}
+
+/// A name that resolves to a public address first and to a local one after (DNS rebinding).
+#[derive(Default)]
+struct Rebinding(AtomicUsize);
+
+#[async_trait]
+impl Resolver for Rebinding {
+    async fn lookup(&self, _host: &str, _port: u16) -> io::Result<Vec<IpAddr>> {
+        let first = self.0.fetch_add(1, Ordering::SeqCst) == 0;
+        let ip = if first { "93.184.216.34" } else { "10.0.0.5" };
+        Ok(vec![ip.parse().expect("ip")])
+    }
+}
+
+#[test]
+fn an_endpoint_that_leaves_its_confirmed_scope_after_the_dialog_is_refused() {
+    let s = setup_with(Arc::new(Rebinding::default()));
+    s.permit("add", "s3.rebind.example", "granted");
+    s.events.answer_with(with_credentials());
+    let entries = s.count("SELECT COUNT(*) FROM haex_passwords_item_details");
+    let calls = s.fake.calls().len();
+    let proposal =
+        add(json!({ "endpoint": "https://s3.rebind.example", "region": "eu", "bucket": "b" }));
+    let error = s
+        .call("extension_remote_storage_add_backend", proposal)
+        .unwrap_err();
+    assert_eq!(error.code.as_u16(), 3001, "{}", error.message);
+    let dialog = s.events.dialogs().pop().expect("a dialog");
+    assert_eq!(dialog["proposal"]["scope"], json!("public"));
+    assert_eq!(s.fake.calls().len(), calls, "no test reached the provider");
+    assert_eq!(s.count("SELECT COUNT(*) FROM haex_storage_connections"), 1);
+    assert_eq!(
+        s.count("SELECT COUNT(*) FROM haex_passwords_item_details"),
+        entries,
+        "no credentials kept"
+    );
 }
 
 #[test]

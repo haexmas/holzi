@@ -1,40 +1,35 @@
 //! An extension proposes, changes, tests and removes storages (spec 038 US3, FR-013, FR-013a,
 //! FR-009b, contracts/bridge.md, research R6, R8, R11). Every change goes through a dialog of holzi;
 //! credentials are typed only in holzi's window over the whole app and never pass the bridge: a
-//! call with credentials is refused before any dialog. A proposed endpoint needs the permission
-//! `remoteStorage`/`add` for its host, with which it may also be local; addresses holzi never
-//! reaches are refused before the dialog too.
+//! call with credentials is refused before any dialog. A proposed endpoint is checked before the
+//! dialog too ([`super::remote_storage_endpoint`]).
 
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
-use reqwest::Url;
 use serde_json::{json, Map, Value};
-use url::Host;
 
 use super::bridge::blocking::block_on;
 use super::bridge::dispatch::CallContext;
 use super::commands::permissions::{set, PermissionSetArgs};
 use super::error::{BridgeError, ExtensionErrorCode};
-use super::permissions::{Action, RequestTarget};
+use super::permissions::Action;
 use super::remote_storage::{
-    check, check_storage, grants, invalid, item, not_found, overview, provider, service, text,
+    check_storage, invalid, item, not_found, overview, provider, service, text,
 };
 use super::remote_storage_dialog::{ask, DialogKind, StorageAnswer};
+use super::remote_storage_endpoint::Proposed;
 use crate::error::HolziError;
 use crate::passwords::clock::unix_millis;
-use crate::remote_storage::address::{self, AddressError};
+use crate::remote_storage::address;
 use crate::remote_storage::model::{ConnectionInput, CredentialsInput, StorageInput};
 use crate::remote_storage::service::StorageService;
-use crate::remote_storage::{Addressing, ConnectionRow, EndpointScope, ProviderKind, TestOutcome};
+use crate::remote_storage::{Addressing, EndpointScope, ProviderKind, TestOutcome};
 use crate::storage::query::Query;
 
 pub const MODULE: &str = module_path!();
 
 /// Fields a call may never carry (FR-013a).
 const CREDENTIAL_FIELDS: [&str; 3] = ["accessKeyId", "secretAccessKey", "sessionToken"];
-
-/// How long holzi waits for the addresses of a proposed endpoint before the dialog.
-const RESOLVE_TIME: Duration = Duration::from_secs(10);
 
 fn cancelled() -> BridgeError {
     BridgeError::new(
@@ -169,55 +164,6 @@ fn confirmed(answer: StorageAnswer) -> Result<Confirmed, BridgeError> {
     }
 }
 
-/// A proposed endpoint, checked before the dialog (research R8, FR-009b).
-struct Proposed {
-    url: Url,
-    scope: EndpointScope,
-}
-
-/// Checks a proposed endpoint: its form, the `add` permission for its host (1004/1002), and that
-/// its addresses lie in one scope holzi reaches (`http` only to a local one).
-fn proposed_endpoint(ctx: &CallContext, endpoint: &str) -> Result<Proposed, BridgeError> {
-    let url = address::check_endpoint(endpoint).map_err(|_| invalid("endpoint not allowed"))?;
-    let host = match url.host() {
-        Some(Host::Domain(name)) => name.to_ascii_lowercase(),
-        Some(Host::Ipv4(ip)) => ip.to_string(),
-        Some(Host::Ipv6(ip)) => format!("[{ip}]"),
-        None => return Err(invalid("endpoint not allowed")),
-    };
-    let port = url
-        .port_or_known_default()
-        .ok_or_else(|| invalid("endpoint not allowed"))?;
-    let grants = grants(ctx)?;
-    check(
-        ctx,
-        &grants,
-        Action::Add,
-        RequestTarget::Endpoint {
-            host: host.clone(),
-            port,
-        },
-        &format!("{host}:{port}"),
-    )?;
-    let resolver = ctx.host.storage.resolver();
-    let scope = block_on(async {
-        tokio::time::timeout(RESOLVE_TIME, address::scope_of(&url, resolver.as_ref())).await
-    });
-    match scope {
-        Ok(Ok(scope)) => Ok(Proposed { url, scope }),
-        Ok(Err(AddressError::Invalid | AddressError::NotAllowed)) => {
-            Err(invalid("endpoint not allowed"))
-        }
-        Ok(Err(AddressError::Unresolved)) | Err(_) => Err(provider("network")),
-    }
-}
-
-/// Whether `connection` talks to `url` in `region`: the user may pick it instead of new
-/// credentials.
-fn same_place(connection: &ConnectionRow, url: &Url, region: &str) -> bool {
-    Url::parse(&connection.endpoint).is_ok_and(|own| own == *url) && connection.region == region
-}
-
 /// `{request: {name, type: "s3", config: {endpoint?, region?, bucket, pathStyle?},
 /// sameProviderAs?}}` → the new storage as in the list.
 pub fn add_backend(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
@@ -295,7 +241,7 @@ fn add_with_endpoint(
     };
     let endpoint = optional_text(&config, "endpoint")?.filter(|e| !e.trim().is_empty());
     let (kind, proposed) = match endpoint {
-        Some(endpoint) => (ProviderKind::Other, Some(proposed_endpoint(ctx, endpoint)?)),
+        Some(endpoint) => (ProviderKind::Other, Some(Proposed::check(ctx, endpoint)?)),
         None => (ProviderKind::Aws, None),
     };
     let addressing = match path_style.unwrap_or(proposed.is_some()) {
@@ -305,13 +251,13 @@ fn add_with_endpoint(
     let endpoint_text = proposed
         .as_ref()
         .map_or(String::new(), |p| p.url.to_string());
-    let connections = block_on(service.connections()).map_err(from_service)?;
+    let connections = overview(service)?.connections;
     let reusable: Vec<Value> = proposed
         .as_ref()
         .map(|p| {
             connections
                 .iter()
-                .filter(|c| same_place(c, &p.url, region))
+                .filter(|c| p.fits(c, region))
                 .map(|c| json!({ "id": c.id, "providerName": c.provider_name }))
                 .collect()
         })
@@ -343,11 +289,7 @@ fn add_with_endpoint(
         let chosen = connections
             .iter()
             .find(|c| c.id == connection_id)
-            .filter(|c| {
-                proposed
-                    .as_ref()
-                    .is_some_and(|p| same_place(c, &p.url, region))
-            })
+            .filter(|c| proposed.as_ref().is_some_and(|p| p.fits(c, region)))
             .ok_or_else(|| invalid("connection does not fit the proposal"))?;
         let saved = block_on(service.save_storage(StorageInput {
             id: None,
@@ -359,16 +301,21 @@ fn add_with_endpoint(
         return Ok(saved.id);
     }
     let credentials = answer.credentials.ok_or_else(cancelled)?;
-    let connection = block_on(service.save_connection(ConnectionInput {
-        id: None,
-        provider_name,
-        provider_kind: kind,
-        endpoint: Some(endpoint_text),
-        region: region.to_owned(),
-        addressing,
-        credentials: Some(credentials),
-        bucket_for_test: storage_bucket.clone(),
-    }))
+    // The scope the dialog showed; AWS by region is public.
+    let scope = proposed.map_or(EndpointScope::Public, |p| p.scope);
+    let connection = block_on(service.save_proposed_connection(
+        ConnectionInput {
+            id: None,
+            provider_name,
+            provider_kind: kind,
+            endpoint: Some(endpoint_text),
+            region: region.to_owned(),
+            addressing,
+            credentials: Some(credentials),
+            bucket_for_test: storage_bucket.clone(),
+        },
+        scope,
+    ))
     .map_err(from_service)?;
     match block_on(service.save_storage(StorageInput {
         id: None,

@@ -25,6 +25,7 @@ pub mod protocol;
 pub mod registry;
 pub mod remote_storage;
 pub mod remote_storage_dialog;
+pub mod remote_storage_endpoint;
 pub mod remote_storage_keys;
 pub mod remote_storage_manage;
 #[cfg(test)]
