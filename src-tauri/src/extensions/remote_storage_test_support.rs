@@ -204,7 +204,6 @@ impl Setup {
                 action: action.into(),
                 target: target.into(),
                 status: status.into(),
-                all_devices: true,
                 replaces: None,
             },
             0,
