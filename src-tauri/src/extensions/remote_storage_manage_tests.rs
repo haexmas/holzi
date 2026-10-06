@@ -4,10 +4,10 @@
 
 use serde_json::{json, Value};
 
-use crate::extensions::remote_storage::tests::{
+use crate::extensions::remote_storage_dialog::StorageAnswer;
+use crate::extensions::remote_storage_test_support::{
     credentials, setup, ACCESS_KEY, ENDPOINT, REGION, SECRET,
 };
-use crate::extensions::remote_storage_dialog::StorageAnswer;
 use crate::remote_storage::test_support::Op;
 use crate::remote_storage::StorageError;
 use crate::storage::query::Query;

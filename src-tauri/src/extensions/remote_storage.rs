@@ -345,4 +345,4 @@ pub fn delete(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
 
 #[cfg(test)]
 #[path = "remote_storage_tests.rs"]
-pub(crate) mod tests;
+mod tests;

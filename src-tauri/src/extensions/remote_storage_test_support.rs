@@ -1,0 +1,229 @@
+//! The setup of the remote storage tests of the bridge (spec 038): a vault with an identity, the
+//! probe extension installed, the fake provider in the host, two storages the user made in the
+//! settings, and events that answer storage dialogs as a test sets them.
+
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+
+use serde_json::Value;
+use zeroize::Zeroizing;
+
+use crate::extensions::bridge::blocking::block_on;
+use crate::extensions::bridge::dispatch::{call as bridge_call, CallContext, Emit};
+use crate::extensions::commands::permissions::{set, PermissionSetArgs};
+use crate::extensions::error::BridgeError;
+use crate::extensions::host::ExtensionHost;
+use crate::extensions::ids::storage_vault_id;
+use crate::extensions::registry::effective::effective_bundle;
+use crate::extensions::registry::install::install;
+use crate::extensions::remote_storage_dialog::StorageAnswer;
+use crate::passwords::service::PasswordsService;
+use crate::remote_storage::model::{ConnectionInput, CredentialsInput, StorageInput};
+use crate::remote_storage::service::StorageService;
+use crate::remote_storage::test_support::{resolver, vault, FakeStore};
+use crate::remote_storage::{Addressing, ProviderKind};
+use crate::storage::known_devices;
+use crate::storage::query::Query;
+use crate::vault_gate::VaultDb;
+
+pub(crate) const ACCESS_KEY: &str = "AKIDLEAKMARKER";
+pub(crate) const SECRET: &str = "secret-leak-marker-5f1e";
+pub(crate) const ENDPOINT: &str = "http://127.0.0.1:9000";
+pub(crate) const REGION: &str = "region-leak-marker";
+
+/// Records events and answers storage dialogs with the answer set for the test.
+pub(crate) struct Events {
+    pub host: Arc<ExtensionHost>,
+    pub seen: Mutex<Vec<(String, Value)>>,
+    pub answer: Mutex<Option<StorageAnswer>>,
+    /// Close the frame instead of answering.
+    pub close_frame: Mutex<bool>,
+}
+
+impl Emit for Events {
+    fn emit(&self, event: &str, payload: Value) {
+        self.seen
+            .lock()
+            .expect("lock")
+            .push((event.to_owned(), payload.clone()));
+        if event != "extension-storage-request" {
+            return;
+        }
+        let request_id = payload["requestId"].as_str().unwrap_or_default().to_owned();
+        if *self.close_frame.lock().expect("lock") {
+            self.host
+                .drop_dialogs_of(payload["frame"].as_str().unwrap_or_default());
+            return;
+        }
+        let answer = self
+            .answer
+            .lock()
+            .expect("lock")
+            .clone()
+            .unwrap_or(StorageAnswer::Cancel);
+        self.host.storage.resolve(&request_id, answer);
+    }
+}
+
+impl Events {
+    pub fn dialogs(&self) -> Vec<Value> {
+        self.seen
+            .lock()
+            .expect("lock")
+            .iter()
+            .filter(|(event, _)| event == "extension-storage-request")
+            .map(|(_, payload)| payload.clone())
+            .collect()
+    }
+
+    pub fn answer_with(&self, answer: StorageAnswer) {
+        *self.answer.lock().expect("lock") = Some(answer);
+    }
+}
+
+pub(crate) struct Setup {
+    _dir: tempfile::TempDir,
+    pub vault: VaultDb,
+    pub fake: Arc<FakeStore>,
+    pub events: Arc<Events>,
+    pub ctx: CallContext,
+    /// Two storages the user made in the settings, on one connection.
+    pub photos: String,
+    pub notes: String,
+}
+
+pub(crate) fn credentials() -> CredentialsInput {
+    CredentialsInput {
+        access_key_id: ACCESS_KEY.to_owned(),
+        secret_access_key: Zeroizing::new(SECRET.to_owned()),
+        session_token: None,
+    }
+}
+
+pub(crate) fn setup() -> Setup {
+    let (dir, vault) = vault();
+    vault
+        .write_blocking(|tx| crate::sync::keys::ensure_vault_identity(tx, true).map(|_| ()))
+        .expect("vault identity");
+    let device = vault
+        .read_blocking(|q| known_devices::list_devices(q))
+        .expect("devices")[0]
+        .vault_device_uuid;
+    let bytes = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/extension_bundles/good-minimal.xt"),
+    )
+    .expect("fixture");
+    let extension = install(&vault, &bytes, vec![], false, device, 1)
+        .expect("install")
+        .ids
+        .extension_id;
+    let bundle = vault
+        .read_blocking(move |q| effective_bundle(q, extension).map_err(Into::into))
+        .expect("bundle")
+        .expect("effective")
+        .bundle_id;
+    let fake = Arc::new(FakeStore::new());
+    let host = Arc::new(ExtensionHost::default());
+    host.storage.set(fake.clone(), resolver(&[]));
+    let events = Arc::new(Events {
+        host: Arc::clone(&host),
+        seen: Mutex::new(Vec::new()),
+        answer: Mutex::new(None),
+        close_frame: Mutex::new(false),
+    });
+    let service = StorageService::new(
+        vault.clone(),
+        PasswordsService::new(vault.clone()),
+        fake.clone(),
+        resolver(&[]),
+    );
+    let connection = block_on(service.save_connection(ConnectionInput {
+        id: None,
+        provider_name: "RustFS".to_owned(),
+        provider_kind: ProviderKind::Rustfs,
+        endpoint: Some(ENDPOINT.to_owned()),
+        region: REGION.to_owned(),
+        addressing: Addressing::Path,
+        credentials: Some(credentials()),
+        bucket_for_test: "photos".to_owned(),
+    }))
+    .expect("connection");
+    let storage = |name: &str, bucket: &str| {
+        block_on(service.save_storage(StorageInput {
+            id: None,
+            connection_id: connection.id.clone(),
+            name: name.to_owned(),
+            bucket: bucket.to_owned(),
+        }))
+        .expect("storage")
+        .id
+    };
+    let photos = storage("Fotos", "photos");
+    let notes = storage("Notizen", "notes");
+    Setup {
+        _dir: dir,
+        ctx: CallContext {
+            db: vault.clone(),
+            session: host.frames.open(extension, bundle, "tab"),
+            host,
+            device,
+            emitter: events.clone(),
+        },
+        vault,
+        fake,
+        events,
+        photos,
+        notes,
+    }
+}
+
+impl Setup {
+    pub fn call(&self, method: &str, params: Value) -> Result<Value, BridgeError> {
+        bridge_call(&self.ctx, method, &params)
+    }
+
+    pub fn code(&self, method: &str, params: Value) -> u16 {
+        self.call(method, params)
+            .map_or_else(|e| e.code.as_u16(), |_| 0)
+    }
+
+    pub fn permit(&self, action: &str, target: &str, status: &str) {
+        set(
+            &self.vault,
+            self.ctx.device,
+            PermissionSetArgs {
+                extension_id: self.ctx.session.extension_id.to_string(),
+                kind: "remoteStorage".into(),
+                action: action.into(),
+                target: target.into(),
+                status: status.into(),
+                all_devices: true,
+                replaces: None,
+            },
+            0,
+        )
+        .expect("permit");
+    }
+
+    /// The extension's area in every bucket.
+    pub fn prefix(&self) -> String {
+        let pubkey = self
+            .vault
+            .read_blocking(|q| crate::sync::keys::vault_pubkey(q))
+            .expect("read")
+            .expect("identity");
+        format!(
+            "holzi-ext/{}/{}/",
+            storage_vault_id(&pubkey),
+            self.ctx.session.extension_id
+        )
+    }
+
+    pub fn count(&self, sql: &str) -> i64 {
+        let sql = sql.to_owned();
+        self.vault
+            .read_blocking(move |q| Ok(q.query_row(&sql, &[], |r| r.get(0))?.unwrap_or(0)))
+            .expect("count")
+    }
+}
