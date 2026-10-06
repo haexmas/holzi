@@ -32,8 +32,8 @@ scenario('appearance-basic', { timeoutMs: 300_000 }, async (ctx) => {
   await openSettings(page)
   await page.click('settings-category-appearance')
   await waitForLocation(page, 'appearance')
-  const teal = await themeHue(page, '--primary')
-  assert.equal(teal, 180, 'the default accent is teal')
+  const sky = await themeHue(page, '--primary')
+  assert.equal(sky, 237, 'the default accent is sky')
 
   // A colour field applies at once and is saved.
   await page.click('appearance-swatch-accent-blue')
@@ -124,8 +124,8 @@ scenario('appearance-basic', { timeoutMs: 300_000 }, async (ctx) => {
   )
   assert.equal(await theme(page, '--card'), before.card)
   const afterWindow = await theme(page, '--background')
-  await reveal(page, 'appearance-swatch-container-cool')
-  await page.click('appearance-swatch-container-cool')
+  await reveal(page, 'appearance-swatch-container-violet')
+  await page.click('appearance-swatch-container-violet')
   await ctx.waitFor(
     'the container to change',
     async () => (await theme(page, '--card')) !== before.card,
@@ -264,7 +264,7 @@ scenario('appearance-basic', { timeoutMs: 300_000 }, async (ctx) => {
   await page.click('appearance-reset-confirm')
   await ctx.waitFor(
     'the defaults to return',
-    async () => (await themeHue(page, '--primary')) === 180,
+    async () => (await themeHue(page, '--primary')) === 237,
   )
   assert.equal(
     await page.exec<boolean>(

@@ -31,11 +31,11 @@ export interface Appearance {
 
 export const DEFAULT_APPEARANCE: Appearance = {
   v: 1,
-  accent: { preset: 'teal' },
-  window: { preset: 'neutral' },
-  container: { preset: 'neutral' },
-  text: { preset: 'neutral' },
-  component: { preset: 'neutral' },
+  accent: { preset: 'sky' },
+  window: { preset: 'cool' },
+  container: { preset: 'cool' },
+  text: { preset: 'cool' },
+  component: { preset: 'cool' },
   windowHint: false,
 }
 

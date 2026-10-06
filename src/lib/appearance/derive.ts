@@ -54,6 +54,11 @@ const CHROMA_CAP = {
   text: 0.04,
 }
 
+/** Chroma a tint keeps per unit of distance from white: light surfaces fade towards grey like
+ * Tailwind's slate (50: L 0.984 / C 0.003, 300: L 0.869 / C 0.022), so they stay in gamut at their
+ * own lightness instead of being pushed darker. */
+const TAPER = 0.2
+
 /** Safety margin over the limits, so rounding the values to three decimals cannot cross them. */
 const MARGIN = 0.02
 
@@ -119,9 +124,10 @@ export function derive(appearance: Appearance, scheme: Scheme): Derived {
   const tintColor = (name: TintToken): Oklch => {
     const control = TOKEN_CONTROL[name] as keyof typeof tints
     const tint = tints[control]
+    const l = DEFAULT_LIGHTNESS[scheme][name] + (shift[name] ?? 0)
     return fitTint({
-      l: DEFAULT_LIGHTNESS[scheme][name] + (shift[name] ?? 0),
-      c: tint.c * scale[control],
+      l,
+      c: Math.min(tint.c * scale[control], TAPER * (1 - l)),
       h: tint.h,
     })
   }

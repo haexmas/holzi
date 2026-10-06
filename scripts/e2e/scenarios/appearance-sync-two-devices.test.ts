@@ -18,7 +18,7 @@ scenario('appearance-sync-two-devices', { timeoutMs: 300_000 }, async (ctx) => {
   ] as const) {
     await ctx.waitFor(
       `the ${name} to apply the default appearance`,
-      async () => (await themeHue(device, '--primary')) === 180,
+      async () => (await themeHue(device, '--primary')) === 237,
       { timeoutMs: 20_000, fixed: true },
     )
   }

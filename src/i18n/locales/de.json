@@ -620,6 +620,7 @@
     },
     "appearance": {
       "preset": {
+        "sky": "Himmelblau",
         "teal": "Blaugrün",
         "blue": "Blau",
         "violet": "Violett",

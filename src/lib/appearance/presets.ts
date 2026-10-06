@@ -4,6 +4,7 @@
 export type Preset = { id: string; h: number; c: number }
 
 export const ACCENT_PRESETS: readonly Preset[] = [
+  { id: 'sky', h: 237, c: 0.17 },
   { id: 'teal', h: 180, c: 0.17 },
   { id: 'blue', h: 255, c: 0.17 },
   { id: 'violet', h: 300, c: 0.17 },
