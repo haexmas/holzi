@@ -21,6 +21,9 @@ Zustand (`activeTab`) gekoppelt: Tippen auf einen Trigger ruft `slideTo`, ein Wi
 - `simulateTouch: false`: nur Finger und Stift wischen, nicht die Maus (sonst kollidiert das
   Ziehen mit dem Markieren von Text am Rechner); am Rechner wechseln Tippen und die
   Pfeiltasten der Tab-Leiste (reka-ui bringt sie mit).
+  _Geändert 2026-10-05 (PR #287, FR-002):_ Die Maus zieht doch (`simulateTouch` an,
+  `threshold: 8`), und das Modul `Mousewheel` (`forceToAxis`) wechselt bei einer waagerechten
+  Touchpad-Geste. Markierbare Werte tragen `data-no-swipe`, damit Markieren weiter geht.
 - `noSwiping: true` mit `noSwipingSelector: 'input, textarea, select, [data-no-swipe], .swiper-no-swiping'`
   und `touchStartPreventDefault: false`; Codes, Tabellen und waagerecht scrollbare Flächen
   tragen `data-no-swipe` (FR-003).
@@ -267,7 +270,11 @@ und bleibt im Bauteil). Im Editor bleibt das Eingabefeld Text; darunter stehen d
 des Felds (aus `passwords_references_parse`, entprellt mit 200 ms) mit „entfernen“, daneben
 der Knopf „Verweis einfügen“ (`ReferencePicker.vue`: Eintrag suchen in den Kopfdaten des
 Stores, dann Wert wählen). Ein vorhandenes Passwort (Modus `keep`) trägt seine Marken aus
-`ItemDetail.password_references`, ohne den Wert zu laden. Die Suche (`search.ts`) faltet
+`ItemDetail.password_references`, ohne den Wert zu laden.
+_Geändert 2026-10-05 (PR #287):_ „Verweis einfügen“ ist ein Link-Symbol im Feld selbst
+(Append-Slot, `ReferenceInsert.vue`), neben dem Kopierknopf; `ReferenceField.vue` zeigt nur
+noch die Marken unter dem Feld. Den Modus `keep` gibt es nicht mehr: Passwort und eigene
+Felder stehen mit ihren Platzhaltern im Feld (034 FR-005), die Marken kommen aus dem Text. Die Suche (`search.ts`) faltet
 Platzhalter weg und findet sie nicht als Text.
 
 **Begründung**: Eine Grammatik in einer Sprache (R3); Geheimnisse bleiben im Backend (FR-028).

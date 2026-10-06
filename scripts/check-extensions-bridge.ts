@@ -5,6 +5,7 @@ import { test } from 'node:test'
 
 import {
   FrameEventQueue,
+  MAX_HELD_EVENTS,
   encodeBytes,
   eventMessage,
   readRequest,
@@ -94,6 +95,49 @@ test('events are held until the port is ready, then delivered in order, only for
     data: null,
     timestamp: 1,
   })
+})
+
+test('a frame that is not ready holds a bounded number of events, dropping old shell output first', () => {
+  const delivered: FrameEvent[] = []
+  const queue = new FrameEventQueue('f1', (e) => delivered.push(e))
+  const event = (type: string, data: unknown): FrameEvent => ({
+    frame: 'f1',
+    type,
+    data,
+    timestamp: 1,
+  })
+  queue.push(event('extension:permission-resolved', 'first'))
+  for (let i = 0; i < MAX_HELD_EVENTS * 3; i++)
+    queue.push(event('shell:output', i))
+  queue.push(event('shell:exit', 'end'))
+  queue.ready()
+  assert.equal(delivered.length, MAX_HELD_EVENTS)
+  assert.deepEqual(
+    delivered[0],
+    event('extension:permission-resolved', 'first'),
+  )
+  assert.deepEqual(delivered.at(-1), event('shell:exit', 'end'))
+  const outputs = delivered.filter((e) => e.type === 'shell:output')
+  assert.equal(outputs.length, MAX_HELD_EVENTS - 2)
+  assert.equal(
+    outputs.at(-1)?.data,
+    MAX_HELD_EVENTS * 3 - 1,
+    'the newest output stays',
+  )
+
+  // With nothing but other events held, the oldest one goes.
+  const others: FrameEvent[] = []
+  const busy = new FrameEventQueue('f1', (e) => others.push(e))
+  const warn = console.warn
+  console.warn = () => {}
+  try {
+    for (let i = 0; i <= MAX_HELD_EVENTS; i++) busy.push(event('x', i))
+  } finally {
+    console.warn = warn
+  }
+  busy.ready()
+  assert.equal(others.length, MAX_HELD_EVENTS)
+  assert.equal(others[0]?.data, 1)
 })
 
 test('a file change reaches the SDK flat, other events keep their data', () => {

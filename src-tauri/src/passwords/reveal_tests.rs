@@ -118,6 +118,66 @@ fn copy_value_returns_username_password_code_and_fields() {
 }
 
 #[test]
+fn copy_value_resolves_url_and_note() {
+    let (_dir, db) = open_test_vault();
+    let source = create(
+        &db,
+        &ItemInput {
+            username: Some("bob".to_string()),
+            ..ItemInput::default()
+        },
+    );
+    let id = create(
+        &db,
+        &ItemInput {
+            url: Some("https://example.invalid".to_string()),
+            note: Some(format!("user {{${source}:username}}")),
+            ..ItemInput::default()
+        },
+    );
+    let get = |f: CopyField| read(&db, |q| copy_value(q, &id, &f)).expect("copy");
+    assert_eq!(get(CopyField::Url).as_str(), "https://example.invalid");
+    assert_eq!(get(CopyField::Note).as_str(), "user bob");
+}
+
+#[test]
+fn the_editor_reads_password_and_custom_values_with_placeholders_unresolved() {
+    let (_dir, db) = open_test_vault();
+    let source = create(
+        &db,
+        &ItemInput {
+            username: Some("bob".to_string()),
+            password: Some("source-pw".to_string()),
+            ..ItemInput::default()
+        },
+    );
+    let stored_password = format!("{{${source}:password}}-x");
+    let stored_value = format!("{{${source}:username}}");
+    let id = create(
+        &db,
+        &ItemInput {
+            password: Some(stored_password.clone()),
+            key_values: vec![KeyValueInput {
+                key: "Login".to_string(),
+                value: Some(stored_value.clone()),
+            }],
+            ..ItemInput::default()
+        },
+    );
+    let resolved = read(&db, |q| reveal(q, &id, &SecretField::Password)).expect("password");
+    assert_eq!(resolved.value.as_str(), "source-pw-x");
+    let stored = read(&db, |q| reveal(q, &id, &SecretField::StoredPassword)).expect("stored");
+    assert_eq!(stored.value.as_str(), stored_password);
+    let detail = read(&db, |q| items::get_item(q, &id))
+        .expect("get")
+        .expect("exists");
+    assert_eq!(
+        detail.key_values[0].value.as_deref(),
+        Some(stored_value.as_str())
+    );
+}
+
+#[test]
 fn totp_code_follows_rfc_6238_and_reports_the_remaining_time() {
     let (_dir, db) = open_test_vault();
     let (id, _) = entry(&db);

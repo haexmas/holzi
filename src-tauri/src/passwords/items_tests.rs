@@ -187,14 +187,16 @@ fn the_overview_carries_no_secret_note_or_value() {
 }
 
 #[test]
-fn get_item_reports_flags_but_never_values() {
+fn get_item_reports_flags_for_secrets_and_the_custom_values() {
     let (_dir, db) = open_test_vault();
     let id = create(&db, &full_input());
     let json = serde_json::to_string(&detail(&db, &id)).expect("json");
-    for secret in ["-password", "-pin", "JBSWY3DPEHPK3PXP"] {
+    for secret in ["-password", "JBSWY3DPEHPK3PXP"] {
         assert!(!json.contains(secret), "{secret} leaked: {json}");
     }
-    // The note is part of the detail (it is not a secret field), the values of fields are not.
+    // The note and the custom values are part of the detail (custom values show unmasked,
+    // spec 034 FR-005 as amended); password and TOTP secret are flags only.
+    assert!(json.contains("-pin"));
     assert!(json.contains("hasPassword"));
     assert!(read(&db, |q| items::get_item(q, "missing"))
         .expect("get")

@@ -327,6 +327,41 @@ fn reopening_a_pre_0026_vault_installs_the_passkey_link_triggers() {
 }
 
 #[test]
+fn reopening_a_pre_0027_vault_tracks_the_owner_of_a_password_entry() {
+    let trigger_sql = |db: &Database| -> String {
+        db.with_connection(|conn| {
+            Ok(conn.query_row(
+                "SELECT sql FROM sqlite_master \
+                 WHERE type = 'trigger' AND name = 'z_dirty_haex_passwords_item_details_update'",
+                [],
+                |r| r.get(0),
+            )?)
+        })
+        .expect("the update trigger of the entries must exist")
+    };
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("vault.db");
+    let installation_id = installation_id_path(dir.path());
+
+    let old = open_vault(dir.path(), source_without("0027_passwords_owner"), 16);
+    assert!(
+        !trigger_sql(&old).contains("owner"),
+        "precondition: the pre-0027 trigger must not know the column yet"
+    );
+    drop(old);
+
+    let upgraded = Database::open(vault_config(PASSPHRASE, &db_path, &installation_id, false))
+        .expect("reopen upgraded vault");
+    let sql = trigger_sql(&upgraded);
+    assert!(
+        sql.contains("owner"),
+        "0027 added `owner` to the CRDT-tracked entries (spec 038, rule Z14), but the production \
+         open path left it untracked — an owner set on one device would not reach the others. \
+         Bump HOLZI_TRIGGER_VERSION.\n{sql}"
+    );
+}
+
+#[test]
 fn a_vault_from_before_spec_024_gets_its_derived_identity_and_first_device_list() {
     let dir = tempfile::tempdir().expect("tempdir");
     let placeholder = [21u8; 32];

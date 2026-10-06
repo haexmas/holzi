@@ -127,6 +127,7 @@ impl Target {
             }
             K::RemoteStorage if value == "*" => Some(Self::Any),
             K::RemoteStorage => (!value.is_empty()).then(|| Self::StorageId(value.to_owned())),
+            K::Mail if value == "*" => Some(Self::Any),
             K::Mail => parse_mail_server(value),
             K::Shell if value == "*" => Some(Self::Any),
             K::Shell => clean_absolute(value).map(Self::Program),

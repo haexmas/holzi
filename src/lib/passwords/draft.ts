@@ -1,7 +1,8 @@
 // The draft of the entry editor (spec 034, US1, research R7): the form state, and how it turns into
-// a create input or into a partial update that sends only what the user changed. A secret that was
-// not touched is not in the update at all, so the window never needs the stored password (FR-005).
-// Pure, so `scripts/check-passwords-draft.ts` runs it without vue.
+// a create input or into a partial update that sends only what the user changed. The password and
+// the custom values are plain fields holding the stored values with their placeholders unresolved;
+// one that was not changed is not in the update. Pure, so `scripts/check-passwords-draft.ts` runs it
+// without vue.
 
 /** The part of an `ItemDetail` the form starts from (structural, so this module stays loadable
  * by the Node check scripts without the generated bindings). */
@@ -14,7 +15,7 @@ export type DetailLike = {
   color: string | null
   expiresAt: string | null
   tags: { name: string }[]
-  keyValues: { id: string; key: string | null; hasValue: boolean }[]
+  keyValues: { id: string; key: string | null; value: string | null }[]
 }
 
 /** Same shape as the generated `ItemInput`. */
@@ -53,13 +54,11 @@ export type PatchOut = {
   keyValues?: { id?: string; key: string; value?: string }[]
 }
 
-/** A custom field in the form. `value` is `null` while the stored value is untouched. */
+/** A custom field in the form; `id` is `null` for a new one. */
 export type KeyValueDraft = {
   id: string | null
   key: string
-  value: string | null
-  /** Whether the stored field has a value (only for fields that exist already). */
-  hasStoredValue: boolean
+  value: string
 }
 
 /** What the user does to the TOTP of the entry. */
@@ -83,7 +82,7 @@ export type Draft = {
   color: string | null
   /** `YYYY-MM-DD` or empty. */
   expiresAt: string
-  password: { mode: 'keep' } | { mode: 'set'; value: string }
+  password: string
   otp: OtpDraft
   /** Tag names. */
   tags: string[]
@@ -99,15 +98,16 @@ export function emptyDraft(): Draft {
     icon: null,
     color: null,
     expiresAt: '',
-    password: { mode: 'set', value: '' },
+    password: '',
     otp: { mode: 'keep' },
     tags: [],
     keyValues: [],
   }
 }
 
-/** The form state of a stored entry: texts as they are, secrets untouched. */
-export function draftFromDetail(detail: DetailLike): Draft {
+/** The form state of a stored entry: texts and the stored password as they are, the TOTP secret
+ * untouched. */
+export function draftFromDetail(detail: DetailLike, password: string): Draft {
   return {
     title: detail.title ?? '',
     username: detail.username ?? '',
@@ -116,14 +116,13 @@ export function draftFromDetail(detail: DetailLike): Draft {
     icon: detail.icon,
     color: detail.color,
     expiresAt: detail.expiresAt ?? '',
-    password: { mode: 'keep' },
+    password,
     otp: { mode: 'keep' },
     tags: detail.tags.map((tag) => tag.name),
     keyValues: detail.keyValues.map((field) => ({
       id: field.id,
       key: field.key ?? '',
-      value: null,
-      hasStoredValue: field.hasValue,
+      value: field.value ?? '',
     })),
   }
 }
@@ -152,11 +151,9 @@ export function toInput(draft: Draft): InputOut {
     tags: [...draft.tags],
     keyValues: draft.keyValues
       .filter((field) => field.key.trim() !== '')
-      .map((field) => ({ key: field.key, value: field.value ?? undefined })),
+      .map((field) => ({ key: field.key, value: field.value })),
   }
-  if (draft.password.mode === 'set' && draft.password.value !== '') {
-    input.password = draft.password.value
-  }
+  if (draft.password !== '') input.password = draft.password
   if (draft.otp.mode === 'set' && draft.otp.text.trim() !== '') {
     input.otpSecret = draft.otp.text
     if (draft.otp.digits !== null) input.otpDigits = draft.otp.digits
@@ -182,7 +179,7 @@ export function toPatch(initial: Draft, draft: Draft): PatchOut {
   if (draft.color !== initial.color) patch.color = draft.color
   if (draft.expiresAt !== initial.expiresAt)
     patch.expiresAt = orNull(draft.expiresAt)
-  if (draft.password.mode === 'set') patch.password = draft.password.value
+  if (draft.password !== initial.password) patch.password = draft.password
   if (draft.otp.mode === 'clear') {
     patch.otpSecret = null
   } else if (draft.otp.mode === 'set') {
@@ -198,8 +195,7 @@ export function toPatch(initial: Draft, draft: Draft): PatchOut {
     patch.keyValues = draft.keyValues.map((field) => ({
       id: field.id ?? undefined,
       key: field.key,
-      // `undefined` keeps the stored value of a field that was not touched.
-      value: field.value ?? undefined,
+      value: field.value,
     }))
   }
   return patch

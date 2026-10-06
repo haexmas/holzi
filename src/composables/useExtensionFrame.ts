@@ -221,6 +221,9 @@ export function useExtensionFrame(
   function startHandshake(): void {
     closeSdkPorts()
     events.reset()
+    // The old page's unacknowledged shell output is lost; its shells stop waiting for it.
+    if (frame)
+      void invoke('extension_frame_reloaded', { frame }).catch(() => {})
     state.value = 'loading'
     offerPort()
     initTimer = setInterval(offerPort, INIT_INTERVAL_MS)

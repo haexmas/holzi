@@ -1125,7 +1125,19 @@
     "untitled": "(ohne Titel)",
     "expired": "Abgelaufen",
     "expiredOn": "Abgelaufen am {date}",
+    "owner": "Gehört zu: {name}",
+    "owners": {
+      "storage": "Speicher"
+    },
     "new": "Neu",
+    "newMenu": {
+      "entry": "Schlüssel",
+      "folder": "Ordner"
+    },
+    "tagFilter": {
+      "label": "Nach Tag filtern",
+      "all": "Alle Tags"
+    },
     "back": "Zurück",
     "edit": "Bearbeiten",
     "save": "Speichern",
@@ -1183,7 +1195,6 @@
       "replace": "Ersetzen",
       "fieldName": "Name",
       "fieldValue": "Wert",
-      "keepValue": "(unverändert)",
       "addField": "Feld hinzufügen",
       "removeField": "Feld entfernen",
       "otpLabel": "TOTP-Secret oder otpauth-Adresse",
@@ -1295,7 +1306,6 @@
       "open": "Generieren",
       "again": "Neu erzeugen",
       "copy": "Kopieren",
-      "copied": "Passwort kopiert.",
       "use": "Übernehmen",
       "preset": "Voreinstellung",
       "noPreset": "Keine (Standardwerte)",
@@ -1510,7 +1520,8 @@
       "label": "Bereiche des Eintrags",
       "details": "Details",
       "extra": "Extra",
-      "history": "Verlauf"
+      "history": "Verlauf",
+      "detailsEmpty": "Noch keine Angaben. Über den Stift fügst du Benutzername, Passwort und mehr hinzu."
     },
     "breadcrumb": {
       "label": "Pfad",

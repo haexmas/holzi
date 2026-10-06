@@ -12,7 +12,7 @@ use super::frames::{FrameSession, FrameSource};
 use super::{database, methods, permissions};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
-use crate::extensions::{fs, kv, logs, notifications, passwords, shell, web};
+use crate::extensions::{fs, kv, logs, mail, notifications, passwords, shell, web};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -269,6 +269,61 @@ pub static METHODS: &[Method] = &[
         module: passwords::MODULE,
     },
     Method {
+        name: "extension_mail_list_mailboxes",
+        handler: mail::commands::list_mailboxes,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_fetch_envelopes",
+        handler: mail::commands::fetch_envelopes,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_fetch_message",
+        handler: mail::commands::fetch_message,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_fetch_attachment",
+        handler: mail::commands::fetch_attachment,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_set_flags",
+        handler: mail::commands::set_flags,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_move_messages",
+        handler: mail::commands::move_messages,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_append_message",
+        handler: mail::commands::append_message,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_send_message",
+        handler: mail::commands::send_message,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_build_rfc822",
+        handler: mail::commands::build_rfc822,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_start_watch",
+        handler: mail::commands::start_watch,
+        module: mail::commands::MODULE,
+    },
+    Method {
+        name: "extension_mail_stop_watch",
+        handler: mail::commands::stop_watch,
+        module: mail::commands::MODULE,
+    },
+    Method {
         name: "extension_shell_list_available",
         handler: shell::list_available,
         module: shell::MODULE,
@@ -284,6 +339,11 @@ pub static METHODS: &[Method] = &[
         module: shell::MODULE,
     },
     Method {
+        name: "extension_shell_ack",
+        handler: shell::ack,
+        module: shell::MODULE,
+    },
+    Method {
         name: "extension_shell_resize",
         handler: shell::resize,
         module: shell::MODULE,
@@ -296,11 +356,11 @@ pub static METHODS: &[Method] = &[
 ];
 
 /// Methods of later deliveries (research R1): they answer 8001 until they land.
-const LATER: &[&str] = &["extension_remote_storage_", "extension_mail_"];
+const LATER: &[&str] = &["extension_remote_storage_"];
 
 /// Whether the caller may run host functions: an installed, enabled extension, or a development
 /// version while developer mode is on for this device (US12).
-fn is_enabled(ctx: &CallContext) -> Result<bool, BridgeError> {
+pub(crate) fn is_enabled(ctx: &CallContext) -> Result<bool, BridgeError> {
     let id = ctx.session.extension_id;
     let device = ctx.device;
     let dev = ctx.session.source == FrameSource::DevServer;
