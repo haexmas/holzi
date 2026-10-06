@@ -1229,6 +1229,7 @@
     "owners": {
       "storage": "Storage"
     },
+    "menu": "Menu",
     "new": "New",
     "newMenu": {
       "entry": "Key",
@@ -1301,6 +1302,9 @@
       "otpPlaceholder": "JBSWY3DPEHPK3PXP",
       "otpSet": "A TOTP secret is stored.",
       "otpWillBeRemoved": "The TOTP secret is removed when you save.",
+      "otpDigits": "Digits",
+      "otpPeriod": "Period (s)",
+      "otpAlgorithm": "Algorithm",
       "otpErrors": {
         "otpSecret": "This is not a valid TOTP secret (Base32) or otpauth address.",
         "otpDigits": "The number of digits must be between 6 and 10.",
@@ -1328,7 +1332,6 @@
       "reason": "An entry in the password manager has unsaved changes."
     },
     "settings": {
-      "open": "Settings",
       "title": "Password manager settings",
       "clipboard": {
         "title": "Clear clipboard after",

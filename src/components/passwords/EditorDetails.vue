@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * The tab Details of the editor (spec 036, FR-001, FR-004; fields from spec 034 FR-001..FR-003):
- * title, username, password, address, TOTP, note, expiry, tags, icon and colour. The password is
- * a plain field holding the stored value; every field copies and the text fields take references
- * from buttons in the field. An invalid TOTP value is refused at its field (`otpError`). The
+ * title, username, password, address, TOTP (secret, digits, period, algorithm), note, expiry, tags,
+ * icon and colour. The password is a plain field holding the stored value; every field copies and
+ * the text fields take references from buttons in the field. An invalid TOTP value is refused at its field (`otpError`). The
  * generator opens in a drawer. The draft is the parent's object; this tab only edits it.
  */
 import type { ItemDetail } from '@bindings/ItemDetail'
@@ -62,17 +62,37 @@ function otpText(): string {
   return draft.value.otp.mode === 'set' ? draft.value.otp.text : ''
 }
 
-function setOtpText(text: string) {
-  if (draft.value.otp.mode === 'set') draft.value.otp.text = text
-  else
+/** The TOTP being set; a kept one becomes one being set with nothing filled in yet. */
+function otpToSet() {
+  if (draft.value.otp.mode !== 'set')
     draft.value.otp = {
       mode: 'set',
-      text,
+      text: '',
       digits: null,
       period: null,
       algorithm: null,
     }
+  return draft.value.otp
 }
+
+function setOtpText(text: string) {
+  otpToSet().text = text
+}
+
+/** An empty part is `null`: it comes from an otpauth address, else from the default. */
+function setOtpNumber(part: 'digits' | 'period', value: unknown) {
+  const number = Number.parseInt(String(value ?? ''), 10)
+  otpToSet()[part] = Number.isNaN(number) ? null : number
+}
+
+function setOtpAlgorithm(value: string | null | undefined) {
+  otpToSet().algorithm = value ?? null
+}
+
+const OTP_ALGORITHMS = ['SHA1', 'SHA256', 'SHA512'].map((name) => ({
+  value: name,
+  label: name,
+}))
 
 const showOtpInput = computed(
   () => isNew.value || !props.detail?.hasOtpSecret || replacingOtp.value,
@@ -167,12 +187,14 @@ const showOtpInput = computed(
           <UiButton
             type="button"
             variant="outline"
-            size="sm"
+            size="icon"
+            class="shrink-0"
+            :aria-label="t('passwords.generator.open')"
+            :tooltip="t('passwords.generator.open')"
             data-testid="passwords-generate"
             @click="generatorOpen = true"
           >
             <Icon name="lucide:wand-sparkles" class="size-4" />
-            {{ t('passwords.generator.open') }}
           </UiButton>
         </div>
         <PasswordsReferenceField
@@ -242,6 +264,43 @@ const showOtpInput = computed(
             />
           </template>
         </UiInput>
+        <div v-if="showOtpInput" class="mt-1.5 grid grid-cols-3 gap-2">
+          <UiInput
+            id="pw-otp-digits"
+            :model-value="draft.otp.mode === 'set' ? draft.otp.digits : null"
+            :label="t('passwords.editor.otpDigits')"
+            :labels="fieldLabels.input.value"
+            label-bg="var(--muted)"
+            type="number"
+            min="6"
+            max="10"
+            placeholder="6"
+            data-testid="passwords-field-otp-digits"
+            @update:model-value="setOtpNumber('digits', $event)"
+          />
+          <UiInput
+            id="pw-otp-period"
+            :model-value="draft.otp.mode === 'set' ? draft.otp.period : null"
+            :label="t('passwords.editor.otpPeriod')"
+            :labels="fieldLabels.input.value"
+            label-bg="var(--muted)"
+            type="number"
+            min="1"
+            max="300"
+            placeholder="30"
+            data-testid="passwords-field-otp-period"
+            @update:model-value="setOtpNumber('period', $event)"
+          />
+          <UiSelect
+            id="pw-otp-algorithm"
+            :model-value="draft.otp.mode === 'set' ? draft.otp.algorithm : null"
+            :options="OTP_ALGORITHMS"
+            :label="t('passwords.editor.otpAlgorithm')"
+            label-bg="var(--muted)"
+            data-testid="passwords-field-otp-algorithm"
+            @update:model-value="setOtpAlgorithm"
+          />
+        </div>
         <div v-else class="flex flex-wrap items-center gap-2">
           <span
             class="min-w-0 flex-1 text-sm"

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * The first row of the password manager frame (spec 034, FR-007, FR-039): the sidebar button, the
- * search field bound to `?q=` of the place with the tag filter beside it, the settings menu and
- * "Neu", which creates an entry or a folder (in the open folder).
+ * search field bound to `?q=` of the place with the tag filter beside it, "+", which creates an
+ * entry or a folder (in the open folder), and the menu with generator, import, tags and settings.
  * The search text is the only free text a place carries; it is never a secret (the search looks
  * at title, username, URL and tag names only).
  */
@@ -50,6 +50,7 @@ const sidebarLabel = computed(() =>
 )
 
 const settingsOpen = ref(false)
+const tagManager = ref(false)
 
 const folderDialog = ref(false)
 /** A new folder goes into the folder the list shows, else to the top level. */
@@ -97,33 +98,23 @@ function keepEditorFocus(event: Event) {
       :labels="fieldLabels.input.value"
       :prepend-icon="Search"
       clearable
-      class="max-w-72 min-w-0 [&_input::-webkit-search-cancel-button]:hidden"
+      class="min-w-0 flex-1 [&_input::-webkit-search-cancel-button]:hidden"
       data-testid="passwords-search"
       @update:model-value="onUpdate"
       @keydown.esc.prevent.stop="clear"
     />
     <PasswordsTagFilter />
-    <div class="ml-auto flex items-center gap-1">
-      <UiButton
-        variant="ghost"
-        size="icon"
-        class="shrink-0"
-        :aria-label="t('passwords.settings.open')"
-        :tooltip="t('passwords.settings.open')"
-        data-testid="passwords-settings"
-        @click="settingsOpen = true"
-      >
-        <Icon name="lucide:settings-2" class="size-4" />
-      </UiButton>
+    <div class="flex items-center gap-1">
       <ShadcnDropdownMenu>
         <ShadcnDropdownMenuTrigger as-child>
           <UiButton
+            size="icon"
             class="shrink-0"
             :aria-label="t('passwords.new')"
+            :tooltip="t('passwords.new')"
             data-testid="passwords-new"
           >
             <Icon name="lucide:plus" class="size-4" />
-            <span class="hidden @md:inline">{{ t('passwords.new') }}</span>
           </UiButton>
         </ShadcnDropdownMenuTrigger>
         <ShadcnDropdownMenuContent
@@ -148,8 +139,58 @@ function keepEditorFocus(event: Event) {
           </ShadcnDropdownMenuItem>
         </ShadcnDropdownMenuContent>
       </ShadcnDropdownMenu>
+      <ShadcnDropdownMenu>
+        <ShadcnDropdownMenuTrigger as-child>
+          <UiButton
+            variant="ghost"
+            size="icon"
+            class="shrink-0"
+            :aria-label="t('passwords.menu')"
+            :tooltip="t('passwords.menu')"
+            data-testid="passwords-menu"
+          >
+            <Icon name="lucide:menu" class="size-4" />
+          </UiButton>
+        </ShadcnDropdownMenuTrigger>
+        <ShadcnDropdownMenuContent align="end">
+          <ShadcnDropdownMenuItem
+            class="gap-2"
+            data-testid="passwords-open-generator"
+            @select="router.push('/generator')"
+          >
+            <Icon name="lucide:dices" class="size-4" />
+            {{ t('passwords.generator.title') }}
+          </ShadcnDropdownMenuItem>
+          <ShadcnDropdownMenuItem
+            class="gap-2"
+            data-testid="passwords-open-import"
+            @select="router.push('/import')"
+          >
+            <Icon name="lucide:file-down" class="size-4" />
+            {{ t('passwords.import.open') }}
+          </ShadcnDropdownMenuItem>
+          <ShadcnDropdownMenuItem
+            class="gap-2"
+            data-testid="passwords-manage-tags"
+            @select="tagManager = true"
+          >
+            <Icon name="lucide:tags" class="size-4" />
+            {{ t('passwords.tags.manage') }}
+          </ShadcnDropdownMenuItem>
+          <ShadcnDropdownMenuSeparator />
+          <ShadcnDropdownMenuItem
+            class="gap-2"
+            data-testid="passwords-settings"
+            @select="settingsOpen = true"
+          >
+            <Icon name="lucide:settings-2" class="size-4" />
+            {{ t('passwords.settings.title') }}
+          </ShadcnDropdownMenuItem>
+        </ShadcnDropdownMenuContent>
+      </ShadcnDropdownMenu>
     </div>
     <PasswordsClipboardSetting v-model:open="settingsOpen" />
+    <PasswordsTagManager v-model:open="tagManager" />
     <PasswordsFolderDialog
       v-model:open="folderDialog"
       :group="null"
