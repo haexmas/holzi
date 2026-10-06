@@ -13,6 +13,7 @@ use crate::extensions::host::ExtensionHost;
 
 pub const FRAME_EVENT: &str = "extension-frame-event";
 
+/// Sends `event_type` to every open frame of `extension_id`.
 pub fn emit_to_frames(
     emitter: &dyn Emit,
     host: &ExtensionHost,
@@ -20,10 +21,24 @@ pub fn emit_to_frames(
     event_type: &str,
     data: &Value,
 ) {
+    emit_to_frames_counted(emitter, host, extension_id, event_type, data, |_| {});
+}
+
+/// [`emit_to_frames`], telling `before` each frame right before its event goes out: whatever the
+/// frame answers to the event comes after `before` saw it.
+pub fn emit_to_frames_counted(
+    emitter: &dyn Emit,
+    host: &ExtensionHost,
+    extension_id: Uuid,
+    event_type: &str,
+    data: &Value,
+    mut before: impl FnMut(&str),
+) {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as u64);
     for session in host.frames.of_extension(extension_id) {
+        before(&session.frame);
         emitter.emit(
             FRAME_EVENT,
             json!({

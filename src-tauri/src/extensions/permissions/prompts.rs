@@ -3,10 +3,12 @@
 //! A call that needs a permission answers 1004 (the vault-sdk waits for
 //! `extension:permission-resolved` and repeats). holzi's window gets one
 //! `extension-permission-request` per open question: identical questions of several frames are
-//! merged, and a question disappears when all frames that wait for it are closed. The decision is
+//! merged, and a question disappears when all frames that wait for it are closed. The SDK waits
+//! for the target its 1004 named, which for a shell program is the name the extension gave, not
+//! the canonical path asked about; each such name hears the decision. The decision is
 //! remembered in `extension_permissions`, or held in memory until the process ends (ADR-0003).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde::{Deserialize, Serialize};
@@ -78,6 +80,14 @@ impl HeldDecision {
 struct Pending {
     question: Question,
     frames: HashSet<String>,
+    told: BTreeSet<String>,
+}
+
+/// An open question taken out to be answered.
+pub struct Asked {
+    pub question: Question,
+    /// The targets the waiting calls were told (`details.target` of their 1004).
+    pub told: BTreeSet<String>,
 }
 
 /// Open questions and the decisions held in memory.
@@ -88,17 +98,25 @@ pub struct PermissionState {
     temporary: Mutex<HashMap<Uuid, Vec<HeldDecision>>>,
 }
 
+/// Names one open question remembers it was told under. An extension can name one program in
+/// endless spellings (`/usr/bin//bash`, `/usr/./bin/bash`, ...); further names are not remembered,
+/// so their calls hear no decision and stay waiting until the question is asked again.
+pub const MAX_TOLD: usize = 32;
+
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl PermissionState {
-    /// Registers that `frame` waits for `question`. Returns the request id and whether the
-    /// question is new (only then holzi's window is told).
-    pub fn ask(&self, question: Question, frame: &str) -> (String, bool) {
+    /// Registers that `frame` waits for `question`, told as `told`. Returns the request id and
+    /// whether the question is new (only then holzi's window is told).
+    pub fn ask(&self, question: Question, frame: &str, told: &str) -> (String, bool) {
         let mut pending = lock(&self.pending);
         if let Some((id, open)) = pending.iter_mut().find(|(_, p)| p.question == question) {
             open.frames.insert(frame.to_owned());
+            if open.told.len() < MAX_TOLD {
+                open.told.insert(told.to_owned());
+            }
             return (id.clone(), false);
         }
         let id = token::mint();
@@ -107,14 +125,18 @@ impl PermissionState {
             Pending {
                 question,
                 frames: HashSet::from([frame.to_owned()]),
+                told: BTreeSet::from([told.to_owned()]),
             },
         );
         (id, true)
     }
 
     /// Takes an open question out to answer it.
-    pub fn take(&self, request_id: &str) -> Option<Question> {
-        lock(&self.pending).remove(request_id).map(|p| p.question)
+    pub fn take(&self, request_id: &str) -> Option<Asked> {
+        lock(&self.pending).remove(request_id).map(|p| Asked {
+            question: p.question,
+            told: p.told,
+        })
     }
 
     /// A frame closed: questions nobody waits for any more disappear. Returns their ids.
