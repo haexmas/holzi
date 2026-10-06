@@ -72,10 +72,11 @@ export function useExtensionFrame(
   const src = ref<string | null>(null)
   const dialog = ref<FrameDialog | null>(null)
   /** A storage request of this frame (spec 038), over the tab like `dialog`. */
-  const { storageRequest, answerStorage } = useFrameStorageDialog(
-    () => frame,
-    () => void nextTick(() => iframe.value?.focus()),
-  )
+  const { storageRequest, storageCredentialsPending, answerStorage } =
+    useFrameStorageDialog(
+      () => frame,
+      () => void nextTick(() => iframe.value?.focus()),
+    )
   /** A development version (spec 017, US12): its console output is shown. */
   const dev = ref(false)
   const consoleLines = ref<DevConsoleLine[]>([])
@@ -391,6 +392,7 @@ export function useExtensionFrame(
     consoleLines,
     answerDialog,
     storageRequest,
+    storageCredentialsPending,
     answerStorage,
     onLoad,
     reloadAsync,

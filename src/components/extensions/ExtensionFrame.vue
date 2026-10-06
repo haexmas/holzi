@@ -21,6 +21,7 @@ const {
   consoleLines,
   answerDialog,
   storageRequest,
+  storageCredentialsPending,
   answerStorage,
   onLoad,
   reloadAsync,
@@ -40,7 +41,12 @@ const {
         referrerpolicy="no-referrer"
         class="h-full w-full border-0"
         :class="{ invisible: state !== 'ready' }"
-        :inert="dialog !== null || storageRequest !== null || undefined"
+        :inert="
+          dialog !== null ||
+          storageRequest !== null ||
+          storageCredentialsPending ||
+          undefined
+        "
         :title="t('extensions.frame.title')"
         @load="onLoad"
       />

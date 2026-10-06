@@ -6,7 +6,7 @@
  * the whole app asks for them (`StorageCredentialsModal.vue`, mounted in the desktop). Both answer
  * with `storage_dialog_resolve`; the credentials go from that window to Rust only.
  */
-import { onBeforeUnmount, readonly, ref } from 'vue'
+import { computed, onBeforeUnmount, readonly, ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type { CredentialsInput } from '@bindings/CredentialsInput'
@@ -115,20 +115,35 @@ export function useFrameStorageDialog(
       credentialsRequest.value = null
   })
 
+  /**
+   * holzi's window asks for this frame's credentials: the frame stays inert, so neither a focus
+   * call nor the extension's script takes the keyboard away from that window.
+   */
+  const credentialsPending = computed(
+    () =>
+      credentialsRequest.value !== null &&
+      credentialsRequest.value.frame === frameOf(),
+  )
+
   function answer(choice: StorageChoice): void {
     const open = request.value
     request.value = null
     if (!open) return
     if (choice.confirm && choice.newCredentials && !choice.connectionId) {
+      // No `afterAnswer`: focusing the frame now would send the typed credentials to it.
       credentialsRequest.value = open
-    } else {
-      const answer: StorageAnswer = choice.confirm
-        ? { kind: 'confirm', connectionId: choice.connectionId }
-        : { kind: 'cancel' }
-      void resolveStorageAsync(open.requestId, answer).catch(() => {})
+      return
     }
+    const answer: StorageAnswer = choice.confirm
+      ? { kind: 'confirm', connectionId: choice.connectionId }
+      : { kind: 'cancel' }
+    void resolveStorageAsync(open.requestId, answer).catch(() => {})
     afterAnswer()
   }
 
-  return { storageRequest: request, answerStorage: answer }
+  return {
+    storageRequest: request,
+    storageCredentialsPending: credentialsPending,
+    answerStorage: answer,
+  }
 }
