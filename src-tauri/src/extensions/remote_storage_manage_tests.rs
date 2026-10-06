@@ -231,6 +231,51 @@ fn an_ipv6_endpoint_is_asked_for_and_granted_in_brackets() {
 }
 
 #[test]
+fn an_aws_proposal_needs_the_add_permission_for_its_regional_host() {
+    let s = setup();
+    let aws = |region: &str| add(json!({ "region": region, "bucket": "b" }));
+    let error = s
+        .call("extension_remote_storage_add_backend", aws("eu-central-1"))
+        .unwrap_err();
+    assert_eq!(error.code.as_u16(), 1004);
+    assert_eq!(
+        error.details,
+        Some(json!({
+            "resourceType": "remoteStorage",
+            "action": "add",
+            "target": "s3.eu-central-1.amazonaws.com"
+        }))
+    );
+    assert_eq!(
+        s.code("extension_remote_storage_add_backend", aws("EU/1")),
+        3001
+    );
+    assert!(s.events.dialogs().is_empty(), "refused before any dialog");
+
+    s.permit("add", "s3.eu-central-1.amazonaws.com", "granted");
+    assert_eq!(
+        s.code("extension_remote_storage_add_backend", aws("us-east-1")),
+        1004,
+        "the grant names one region"
+    );
+    assert_eq!(
+        s.code("extension_remote_storage_add_backend", aws("eu-central-1")),
+        1002,
+        "the grant leads to the dialog, which the user cancels"
+    );
+    let dialog = s.events.dialogs().pop().expect("a dialog");
+    assert_eq!(dialog["proposal"]["providerName"], json!("AWS"));
+    assert_eq!(dialog["proposal"]["scope"], json!("public"));
+
+    s.permit("add", "*", "granted");
+    assert_eq!(
+        s.code("extension_remote_storage_add_backend", aws("us-east-1")),
+        1002,
+        "a grant for every host covers AWS too"
+    );
+}
+
+#[test]
 fn a_failed_test_creates_nothing() {
     let s = setup();
     s.permit("add", "*", "granted");

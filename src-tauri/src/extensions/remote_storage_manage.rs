@@ -17,7 +17,7 @@ use super::remote_storage::{
     check_storage, invalid, item, not_found, overview, provider, service, text,
 };
 use super::remote_storage_dialog::{ask, DialogKind, StorageAnswer};
-use super::remote_storage_endpoint::Proposed;
+use super::remote_storage_endpoint::{check_aws, Proposed};
 use crate::error::HolziError;
 use crate::passwords::clock::unix_millis;
 use crate::remote_storage::address;
@@ -242,7 +242,10 @@ fn add_with_endpoint(
     let endpoint = optional_text(&config, "endpoint")?.filter(|e| !e.trim().is_empty());
     let (kind, proposed) = match endpoint {
         Some(endpoint) => (ProviderKind::Other, Some(Proposed::check(ctx, endpoint)?)),
-        None => (ProviderKind::Aws, None),
+        None => {
+            check_aws(ctx, region)?;
+            (ProviderKind::Aws, None)
+        }
     };
     let addressing = match path_style.unwrap_or(proposed.is_some()) {
         true => Addressing::Path,

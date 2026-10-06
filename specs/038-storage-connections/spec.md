@@ -278,7 +278,8 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   „fragen“ fragt holzi nach Spec 017 und nennt dabei den Host. Mit dieser Berechtigung darf der
   Endpunkt auch im lokalen Netz oder auf dem eigenen Rechner liegen und dort `http` nutzen (FR-017).
   Die Bestätigung im Dialog und die Zugangsdaten im Fenster von holzi bleiben nötig (FR-013a);
-  „Lesen und Schreiben“ deckt `add` nicht.
+  „Lesen und Schreiben“ deckt `add` nicht. Ein Vorschlag für AWS nur mit Region gilt als eigener
+  Endpunkt mit dem Host `s3.<region>.amazonaws.com` (Betreiber in #285, Review von PR D).
 - **FR-009a**: Die Liste der Speicher für eine Erweiterung MUSS je Speicher nur Kennung, Art (`s3`),
   Namen des Speichers, Namen des Anbieters und Namen des Buckets enthalten, nie Endpunkt, Region oder
   Zugangsdaten.

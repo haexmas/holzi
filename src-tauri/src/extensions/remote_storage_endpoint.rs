@@ -1,7 +1,8 @@
 //! An endpoint an extension proposes for a new storage (spec 038 FR-009b, FR-017, research R8),
 //! checked before holzi shows its dialog: its form, the permission `remoteStorage`/`add` for its
 //! host, and that all its addresses lie in one scope holzi reaches (`http` only to a local one).
-//! The scope found here is what the dialog shows and what the new connection must keep.
+//! The scope found here is what the dialog shows and what the new connection must keep. AWS by
+//! region needs `add` for its regional host as well ([`check_aws`]).
 
 use std::time::Duration;
 
@@ -41,16 +42,8 @@ impl Proposed {
         let port = url
             .port_or_known_default()
             .ok_or_else(|| invalid("endpoint not allowed"))?;
-        check(
-            ctx,
-            &grants(ctx)?,
-            Action::Add,
-            RequestTarget::Endpoint {
-                host: host.clone(),
-                port,
-            },
-            &format!("{host}:{port}"),
-        )?;
+        let asked = format!("{host}:{port}");
+        may_add(ctx, host, port, &asked)?;
         let resolver = ctx.host.storage.resolver();
         let scope = block_on(async {
             tokio::time::timeout(RESOLVE_TIME, address::scope_of(&url, resolver.as_ref())).await
@@ -71,4 +64,27 @@ impl Proposed {
             && connection.region == region
             && connection.endpoint_scope == self.scope
     }
+}
+
+/// The permission `remoteStorage`/`add` for `host` and `port`; without it 1004 naming `asked`
+/// (state "ask") or 1002.
+fn may_add(ctx: &CallContext, host: String, port: u16, asked: &str) -> Result<(), BridgeError> {
+    check(
+        ctx,
+        &grants(ctx)?,
+        Action::Add,
+        RequestTarget::Endpoint { host, port },
+        asked,
+    )
+}
+
+/// An AWS proposal by `region` alone: the region must name a regional host, and the extension
+/// needs `add` for `s3.<region>.amazonaws.com` (or `*`) like for an own endpoint (FR-009b).
+pub(super) fn check_aws(ctx: &CallContext, region: &str) -> Result<(), BridgeError> {
+    let url = address::aws_endpoint(region).map_err(|_| invalid("invalid region"))?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| invalid("invalid region"))?
+        .to_owned();
+    may_add(ctx, host.clone(), 443, &host)
 }
