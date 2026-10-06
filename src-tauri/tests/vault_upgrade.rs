@@ -361,6 +361,40 @@ fn reopening_a_pre_0027_vault_tracks_the_owner_of_a_password_entry() {
     );
 }
 
+/// `0028_storage_connections` (spec 038) introduces the CRDT-tracked storage connections and
+/// storages. A vault from the release before it stores trigger version 17, so only the bump to 18
+/// installs their triggers; without them a storage would stay on the device it was created on.
+#[test]
+fn reopening_a_pre_0028_vault_installs_the_storage_triggers() {
+    let trigger_count = |db: &Database, table: &str| -> i64 {
+        db.with_connection(|conn| {
+            Ok(conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master \
+                 WHERE type = 'trigger' AND name LIKE 'z_dirty_' || ?1 || '_%'",
+                [table],
+                |r| r.get(0),
+            )?)
+        })
+        .expect("count triggers")
+    };
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("vault.db");
+    let installation_id = installation_id_path(dir.path());
+
+    let old = open_vault(dir.path(), source_without("0028_storage_connections"), 17);
+    drop(old);
+
+    let upgraded = Database::open(vault_config(PASSPHRASE, &db_path, &installation_id, false))
+        .expect("reopen upgraded vault");
+    for table in ["haex_storage_connections", "haex_storages"] {
+        assert!(
+            trigger_count(&upgraded, table) > 0,
+            "{table} is CRDT-tracked (spec 038 FR-006), but the production open path left it \
+             without triggers — its writes will not sync. Bump HOLZI_TRIGGER_VERSION."
+        );
+    }
+}
+
 #[test]
 fn a_vault_from_before_spec_024_gets_its_derived_identity_and_first_device_list() {
     let dir = tempfile::tempdir().expect("tempdir");

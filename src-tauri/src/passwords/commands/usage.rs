@@ -29,6 +29,14 @@ pub async fn passwords_item_usage(
     state: State<'_, AppState>,
     args: ItemUsageArgs,
 ) -> Result<ItemUsageResult> {
-    let features = service(&state)?.item_usage(&Caller::User, &args.item_id)?;
+    // A provider may read the vault (spec 038 `StorageUsage`), so it runs off the async thread.
+    let service = service(&state)?;
+    let features = tauri::async_runtime::spawn_blocking(move || {
+        service.item_usage(&Caller::User, &args.item_id)
+    })
+    .await
+    .map_err(|e| crate::error::HolziError::Io {
+        reason: e.to_string(),
+    })??;
     Ok(ItemUsageResult { features })
 }

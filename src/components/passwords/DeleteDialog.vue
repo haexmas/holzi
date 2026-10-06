@@ -25,7 +25,11 @@ const emit = defineEmits<{
   done: []
 }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
+
+/** The name of a holzi function that uses an entry, as the owner badge shows it (spec 038). */
+const featureName = (feature: string) =>
+  te(`passwords.owners.${feature}`) ? t(`passwords.owners.${feature}`) : feature
 const { errString } = useErrorString()
 const store = usePasswordsStore()
 const { trashAsync, itemUsageAsync } = usePasswords()
@@ -113,7 +117,7 @@ async function confirmAsync() {
             >
               {{
                 t('passwords.delete.usedBy', {
-                  features: warning.features.join(', '),
+                  features: warning.features.map(featureName).join(', '),
                 })
               }}
             </p>

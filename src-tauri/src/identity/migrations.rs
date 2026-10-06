@@ -42,6 +42,7 @@ use super::migrations_extensions::SYNC_PARKING_0025;
 use super::migrations_passwords::PASSWORDS_0022;
 use super::migrations_passwords_owner::PASSWORDS_OWNER_0027;
 use super::migrations_passwords_refs::PASSWORDS_REFS_0026;
+use super::migrations_storage::STORAGE_0028;
 
 /// CRDT trigger-schema version holzi installs on open.
 ///
@@ -83,7 +84,8 @@ use super::migrations_passwords_refs::PASSWORDS_REFS_0026;
 /// - 16: `0026_passwords_refs` (spec 036) introduced the CRDT-tracked
 ///   `haex_passwords_passkey_links`.
 /// - 17: `0027_passwords_owner` (spec 038) added `owner` to `haex_passwords_item_details`.
-pub const HOLZI_TRIGGER_VERSION: i32 = 17;
+/// - 18: `0028_storage_connections` (spec 038) introduced two new CRDT-tracked tables.
+pub const HOLZI_TRIGGER_VERSION: i32 = 18;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -608,6 +610,10 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
     m.insert(
         MigrationName::from("0027_passwords_owner"),
         PASSWORDS_OWNER_0027.to_owned(),
+    );
+    m.insert(
+        MigrationName::from("0028_storage_connections"),
+        STORAGE_0028.to_owned(),
     );
 
     Arc::new(StaticMigrationSource(m))

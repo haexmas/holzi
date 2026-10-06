@@ -189,6 +189,12 @@ tokio-util = { version = "0.7", features = ["rt"] }
 sysinfo = "0.39"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream", "json", "query"] }
 
+# S3 of holzi's storage connections (spec 038, research R1). Sans-IO: it only
+# signs requests (SigV4 over RustCrypto `hmac`/`sha2`) and parses answers, the
+# transfer goes through the `reqwest` above. Default features `rustcrypto` and
+# `full`; never `aws-lc-rs`.
+rusty-s3 = "0.10"
+
 # `async-trait` lets provider adapters expose `async fn` in a `dyn`-safe
 # trait. The chat dispatch needs `Arc<dyn ProviderAdapter>` to swap
 # between local and api_key adapters at runtime; a native `async fn` in
