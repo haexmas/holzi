@@ -20,6 +20,11 @@ publisherFingerprint?: string, declared: Array<DeclaredPermissionView>,
  */
 unsupportedCategories: Array<string>, existing?: ExistingInstall,
 /**
+ * A live bundle of the same version with other content is in the vault; installing replaces
+ * it and needs a confirmation.
+ */
+replacesSameVersion: boolean,
+/**
  * Another installed extension has the same name but another publisher (US7-2).
  */
 sameNameOtherPublisher: boolean, };

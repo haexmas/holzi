@@ -3,6 +3,8 @@
 //! so no column has to name the current bundle (a last-writer-wins column would let an older
 //! version win).
 
+use haex_crdt::rusqlite::params;
+use haex_crdt::CrdtTransaction;
 use uuid::Uuid;
 
 use crate::error::Result;
@@ -71,4 +73,29 @@ pub fn retired_above(
             .then_with(|| a.bundle_id.to_string().cmp(&b.bundle_id.to_string()))
     });
     Ok(above)
+}
+
+/// The other live bundles of `version`: same version, other content. On a tie the larger id would
+/// win, so installing over one of them needs a confirmation and then retires them.
+pub fn same_version_others(
+    q: &mut impl Query,
+    extension_id: Uuid,
+    new_bundle: Uuid,
+    version: &semver::Version,
+) -> Result<Vec<EffectiveBundle>> {
+    Ok(live_bundles(q, extension_id)?
+        .into_iter()
+        .filter(|b| &b.version == version && b.bundle_id != new_bundle)
+        .collect())
+}
+
+/// Sets `retired = 1` on `bundles` (a confirmed downgrade or replacement, R11).
+pub fn retire(tx: &mut CrdtTransaction<'_>, bundles: &[EffectiveBundle]) -> Result<()> {
+    for bundle in bundles {
+        tx.execute(
+            "UPDATE extension_bundles SET retired = 1 WHERE id = ?1",
+            params![bundle.bundle_id.to_string()],
+        )?;
+    }
+    Ok(())
 }

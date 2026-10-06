@@ -5,4 +5,8 @@ export type ExtensionInstallArgs = { path: string,
 /**
  * The choice per declared permission; a declaration without a choice becomes `ask`.
  */
-accepted: Array<PermissionChoice>, confirmDowngrade: boolean, };
+accepted: Array<PermissionChoice>,
+/**
+ * The user confirmed a downgrade or the replacement of another bundle of the same version.
+ */
+confirmed: boolean, };

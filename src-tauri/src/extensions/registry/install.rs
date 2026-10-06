@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use super::effective::{effective_bundle, live_bundles};
+use super::effective::{effective_bundle, live_bundles, retire, same_version_others};
 use crate::error::{HolziError, Result};
 use crate::extensions::bundle::store::{store_blobs, write_registry_rows, BundleIds};
 use crate::extensions::bundle::{limits, verify_bundle, BundleRejection, Manifest, VerifiedBundle};
@@ -99,6 +99,9 @@ pub struct InstallPreview {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub existing: Option<ExistingInstall>,
+    /// A live bundle of the same version with other content is in the vault; installing replaces
+    /// it and needs a confirmation.
+    pub replaces_same_version: bool,
     /// Another installed extension has the same name but another publisher (US7-2).
     pub same_name_other_publisher: bool,
 }
@@ -118,6 +121,7 @@ impl InstallPreview {
             declared: Vec::new(),
             unsupported_categories: Vec::new(),
             existing: None,
+            replaces_same_version: false,
             same_name_other_publisher: false,
         }
     }
@@ -240,6 +244,13 @@ pub fn preview_of(
         declared: declared.iter().map(DeclaredPermissionView::from).collect(),
         unsupported_categories: manifest.permissions.unsupported_categories.clone(),
         existing,
+        replaces_same_version: !same_version_others(
+            q,
+            id,
+            BundleIds::of(bundle, manifest).bundle_id,
+            &manifest.version,
+        )?
+        .is_empty(),
         same_name_other_publisher,
     })
 }
@@ -353,24 +364,6 @@ fn refresh_display_name(tx: &mut CrdtTransaction<'_>, extension_id: Uuid) -> Res
     Ok(())
 }
 
-/// Retires every live bundle newer than `version` (a confirmed downgrade, R11).
-fn retire_newer(
-    tx: &mut CrdtTransaction<'_>,
-    extension_id: Uuid,
-    version: &semver::Version,
-) -> Result<()> {
-    for newer in live_bundles(tx, extension_id)?
-        .into_iter()
-        .filter(|b| &b.version > version)
-    {
-        tx.execute(
-            "UPDATE extension_bundles SET retired = 1 WHERE id = ?1",
-            params![newer.bundle_id.to_string()],
-        )?;
-    }
-    Ok(())
-}
-
 /// What an install did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Installed {
@@ -379,14 +372,15 @@ pub struct Installed {
 
 /// Installs a bundle from its bytes. Blocking: run it on a blocking thread.
 ///
-/// Verifies again, refuses a downgrade without `confirm_downgrade`, stores the BLOBs (each in its
-/// own write) and then, in one write, the registry rows, the permissions, a retirement of newer
-/// bundles on a downgrade and the display name of the effective bundle.
+/// Verifies again, refuses a downgrade or the replacement of another bundle of the same version
+/// without `confirmed`, stores the BLOBs (each in its own write) and then, in one write, the
+/// registry rows, the permissions, the retirement of the bundles it supersedes and the display
+/// name of the effective bundle.
 pub fn install(
     db: &VaultDb,
     bytes: &[u8],
     choices: Vec<PermissionChoice>,
-    confirm_downgrade: bool,
+    confirmed: bool,
     device: Uuid,
     now_ms: i64,
 ) -> Result<Installed> {
@@ -403,17 +397,23 @@ pub fn install(
             reason: "dev_prefix_conflict".into(),
         });
     }
-    let current = db.read_blocking(move |q| {
+    let new_bundle = BundleIds::of(&bundle, &manifest).bundle_id;
+    let version = manifest.version.clone();
+    let (current, replaces) = db.read_blocking(move |q| {
+        let replaces = !same_version_others(q, id, new_bundle, &version)?.is_empty();
         if !is_installed(q, id)? {
-            return Ok(None);
+            return Ok((None, replaces));
         }
-        effective_bundle(q, id).map_err(Into::into)
+        Ok((effective_bundle(q, id)?, replaces))
     })?;
     let is_downgrade = current.is_some_and(|c| manifest.version < c.version);
-    if is_downgrade && !confirm_downgrade {
+    if is_downgrade && !confirmed {
         return Err(HolziError::ExtensionInstall {
             reason: "downgrade_not_confirmed".into(),
         });
+    }
+    if replaces && !confirmed {
+        return Err(not_confirmed_replacement());
     }
 
     store_blobs(db, &bundle)?;
@@ -425,6 +425,11 @@ pub fn install(
             }
             .into());
         }
+        let mut superseded = same_version_others(tx, id, new_bundle, &manifest.version)?;
+        // Again in the write: another device may have synced one in since the check above.
+        if !superseded.is_empty() && !confirmed {
+            return Err(not_confirmed_replacement().into());
+        }
         let ids = write_registry_rows(tx, &bundle, &manifest, now_ms)?;
         apply_declarations(
             tx,
@@ -435,12 +440,23 @@ pub fn install(
             now_ms,
         )?;
         if is_downgrade {
-            retire_newer(tx, ids.extension_id, &manifest.version)?;
+            superseded.extend(
+                live_bundles(tx, id)?
+                    .into_iter()
+                    .filter(|b| b.version > manifest.version),
+            );
         }
+        retire(tx, &superseded)?;
         refresh_display_name(tx, ids.extension_id)?;
         Ok(ids)
     })?;
     Ok(Installed { ids })
+}
+
+fn not_confirmed_replacement() -> HolziError {
+    HolziError::ExtensionInstall {
+        reason: "replace_not_confirmed".into(),
+    }
 }
 
 #[cfg(test)]

@@ -323,6 +323,7 @@ pub fn preview(q: &mut impl Query, project: &DevProject, device: Uuid) -> Result
             .collect(),
         unsupported_categories: manifest.permissions.unsupported_categories.clone(),
         existing: None,
+        replaces_same_version: false,
         same_name_other_publisher: false,
     })
 }

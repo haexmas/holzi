@@ -355,3 +355,56 @@ fn the_fingerprint_shows_the_first_and_last_four_groups() {
         "3614 253f 84ba 66a8 … 3ca2 823f 5ca9 7d34"
     );
 }
+
+fn effective_id(v: &Vault, extension: Uuid) -> Uuid {
+    v.vault
+        .read_blocking(move |q| effective_bundle(q, extension).map_err(Into::into))
+        .unwrap()
+        .unwrap()
+        .bundle_id
+}
+
+#[test]
+fn the_same_version_with_other_content_replaces_only_after_a_confirmation() {
+    let v = vault();
+    let first = v
+        .install(&build("demo", "1.0.0", "First", "{}", 1), vec![], false)
+        .unwrap()
+        .ids;
+    let same = build("demo", "1.0.0", "First", "{}", 1);
+    assert!(
+        !v.preview(&same).replaces_same_version,
+        "the same bundle again"
+    );
+    let other = build("demo", "1.0.0", "Other", "{}", 1);
+    assert!(v.preview(&other).replaces_same_version);
+    assert!(matches!(
+        v.install(&other, vec![], false),
+        Err(HolziError::ExtensionInstall { ref reason }) if reason == "replace_not_confirmed"
+    ));
+    assert_eq!(effective_id(&v, first.extension_id), first.bundle_id);
+
+    let replaced = v.install(&other, vec![], true).unwrap().ids;
+    assert_eq!(effective_id(&v, first.extension_id), replaced.bundle_id);
+    assert!(
+        !v.preview(&other).replaces_same_version,
+        "the first one is retired"
+    );
+}
+
+#[test]
+fn after_a_removal_the_same_version_is_a_fresh_install() {
+    let v = vault();
+    let first = v
+        .install(&build("demo", "1.0.0", "First", "{}", 1), vec![], false)
+        .unwrap()
+        .ids;
+    super::super::remove::remove(&v.vault, first.extension_id, false, 2_000).unwrap();
+    let other = build("demo", "1.0.0", "Other", "{}", 1);
+    assert!(
+        !v.preview(&other).replaces_same_version,
+        "removing deletes the bundles"
+    );
+    let installed = v.install(&other, vec![], false).unwrap().ids;
+    assert_eq!(effective_id(&v, first.extension_id), installed.bundle_id);
+}
