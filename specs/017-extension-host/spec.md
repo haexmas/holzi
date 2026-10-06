@@ -62,6 +62,10 @@ Schlüssel-Wert-Speicher). Die Entscheidungen von ADR-0004 gelten. Referenzen: h
   haex-vault und holzi laufen. Die Richtung A (Werkzeuge einer Erweiterung für den Agenten
   über MCP) ist Spec 018, das Ergänzen von Werkzeugen in den bestehenden haextensions ist
   Spec 019.
+- [ADR-0008](../../docs/adr/0008-extension-bundle-signature-and-sql-authorizer.md): hält das
+  Bundle-Format `haextension-bundle/2` mit Signatur je Datei und die zwei unabhängigen Prüfungen
+  des SQL von Erweiterungen (Vorprüfung und SQLite-Authorizer) fest, die über holzi hinaus in
+  vault-sdk und haex-crdt wirken.
 - [`015-workspace-shell`](../015-workspace-shell/spec.md) und
   [`030-app-multi-instance`](../030-app-multi-instance/spec.md): Eine Erweiterung ist eine App
   im wm wie Chat und Einstellungen und nutzt die Tab-Schnittstelle aus

@@ -266,6 +266,33 @@ that cannot reach each other directly, and the Sync-Server (spec 026) keeps a
 mailbox for devices that are offline.
 _Avoid_: "Relay" on its own.
 
+### Erweiterungen (spec 017)
+
+**Erweiterung / haextension**:
+An app of a third party that runs inside holzi in a tab, from a signed bundle (`.xt`, ADR-0008)
+that is vault data, so every own device has it. Identified by publisher key and name; its tables
+carry the prefix `<publicKey>__<name>__`.
+_Avoid_: plugin, add-on.
+
+**Prüfstelle**:
+The one place in holzi that takes every request of an extension, knows which extension sent it
+(from its frame, never from the request), checks the permission and runs the host function
+(`extensions::bridge::dispatch`, ADR-0004 direction B).
+_Avoid_: gateway, proxy.
+
+**Erweiterungsrahmen**:
+The sandboxed iframe in which an extension runs in a tab, with the channel over which it talks to
+holzi. holzi creates both, so it knows whose a frame is; a frame has no access to holzi's own
+interface on any platform.
+_Avoid_: webview (holzi has no native extension webviews).
+
+**Berechtigung (vault-weit / Gerät)**:
+The permission of an extension to run one kind of host function on a target, in the state
+granted, denied or ask. A remembered one is vault data and holds **vault-wide** (all own devices)
+or for **one device** (ADR-0001); shell and file system default to the device. A temporary one
+lasts until the vault closes. Spec 034 calls the same thing "Freigabe".
+_Avoid_: grant for the stored row (use it only for the password manager's `Grant`).
+
 ### Internationalisierung (i18n)
 
 All user-visible text uses `@nuxtjs/i18n`. Backend commands and
