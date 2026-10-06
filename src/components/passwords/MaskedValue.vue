@@ -47,13 +47,44 @@ function toggle() {
   else hide()
 }
 
+type PointerCaptureTarget = {
+  setPointerCapture: (pointerId: number) => void
+  hasPointerCapture: (pointerId: number) => boolean
+  releasePointerCapture: (pointerId: number) => void
+}
+
+function captureTarget(event: PointerEvent): PointerCaptureTarget | null {
+  const target = event.currentTarget
+  if (!target || typeof target !== 'object') return null
+  if (
+    !('setPointerCapture' in target) ||
+    !('hasPointerCapture' in target) ||
+    !('releasePointerCapture' in target)
+  ) {
+    return null
+  }
+  return target as PointerCaptureTarget
+}
+
 function onPointerDown(event: PointerEvent) {
   if (event.pointerType === 'touch') return
+  captureTarget(event)?.setPointerCapture(event.pointerId)
   void showAsync()
 }
 
 function onPointerEnd(event: PointerEvent) {
-  if (event.pointerType !== 'touch') hide()
+  if (event.pointerType === 'touch') return
+  const target = captureTarget(event)
+  if (
+    event.type === 'pointerleave' &&
+    target?.hasPointerCapture(event.pointerId)
+  ) {
+    return
+  }
+  if (target?.hasPointerCapture(event.pointerId)) {
+    target.releasePointerCapture(event.pointerId)
+  }
+  hide()
 }
 
 function onClick(event: MouseEvent) {
@@ -68,7 +99,7 @@ onBeforeUnmount(hide)
 </script>
 
 <template>
-  <span class="flex min-w-0 items-center gap-2" data-no-swipe>
+  <span class="flex min-w-0 max-w-full items-center gap-2" data-no-swipe>
     <span
       class="min-w-0 flex-1 truncate font-mono text-sm"
       :class="value === null ? 'text-muted-foreground' : ''"

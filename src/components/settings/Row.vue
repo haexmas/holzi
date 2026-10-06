@@ -60,7 +60,7 @@ const BASE =
       </div>
       <div
         v-if="$slots.default"
-        class="flex max-w-full shrink-0 flex-wrap items-center gap-2"
+        class="flex w-full max-w-full shrink-0 flex-wrap items-center justify-end gap-2 md:w-auto md:justify-start"
       >
         <slot />
       </div>

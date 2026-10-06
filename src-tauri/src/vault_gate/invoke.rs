@@ -13,6 +13,7 @@ use crate::error::HolziError;
 /// Commands that never touch the vault and stay callable after a close starts. Confirmed one by
 /// one in research R3; `close_instance` is here because a close must always be accepted (FR-002).
 pub const APP_SCOPED_COMMANDS: &[&str] = &[
+    "active_instance_name",
     "close_instance",
     "list_instances",
     "get_hardware_info",

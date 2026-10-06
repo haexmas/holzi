@@ -269,5 +269,11 @@ async function removeOtpAsync() {
         </PasswordsEntryTabs>
       </template>
     </div>
+
+    <PasswordsDeleteDialog
+      v-model:open="deleteOpen"
+      :targets="[{ kind: 'item', id: itemId }]"
+      @done="leaveDeleted"
+    />
   </div>
 </template>

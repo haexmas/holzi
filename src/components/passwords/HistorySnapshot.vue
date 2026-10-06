@@ -34,11 +34,14 @@ function when(stamp: string | null): string {
     data-testid="passwords-history-snapshot"
   >
     <div class="flex flex-col items-start gap-2">
-      <h2 class="text-lg font-semibold">
+      <p
+        class="text-xs font-normal text-muted-foreground"
+        data-testid="passwords-history-saved-at"
+      >
         {{
           t('passwords.history.savedAt', { when: when(snapshot.modifiedAt) })
         }}
-      </h2>
+      </p>
       <UiButton
         :loading="restoring"
         data-testid="passwords-history-restore"

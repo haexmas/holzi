@@ -3,14 +3,24 @@
 use std::fs;
 use std::time::UNIX_EPOCH;
 
-use tauri::AppHandle;
+use tauri::{AppHandle, State};
 
 use crate::error::{HolziError, Result};
+use crate::state::AppState;
 
 use super::info::InstanceInfo;
 use super::paths::{
     get_instances_directory, INSTANCE_EXTENSION, PENDING_MARKER_EXTENSION, TRASH_DIRECTORY,
 };
+
+/// Returns the vault currently held by this app process, if any.
+///
+/// This is intentionally app-scoped: it reports lifecycle state without opening or touching a
+/// vault database, so a freshly reloaded frontend can return to the existing workspace.
+#[tauri::command]
+pub fn active_instance_name(state: State<'_, AppState>) -> Result<Option<String>> {
+    state.active_name()
+}
 
 /// Scans `<AppLocalData>/instances/` for `.db` files (excluding
 /// `.trash/`, hidden files, and pending Genesis files). Returns entries
