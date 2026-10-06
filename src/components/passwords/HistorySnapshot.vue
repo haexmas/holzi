@@ -2,8 +2,8 @@
 /**
  * One state of an entry, read only (spec 036, US2, FR-007; spec 034 FR-017): its time, the fields
  * with the secrets masked until asked (and hidden again when the state or the tab changes: the
- * parent changes `resetKey`), and "Restore". The restore button only asks; the parent confirms and
- * writes.
+ * parent changes `resetKey`), a copy button per value (a secret is copied by Rust without passing
+ * the webview), and "Restore". The restore button only asks; the parent confirms and writes.
  */
 import type { SnapshotView } from '@bindings/SnapshotView'
 
@@ -17,6 +17,7 @@ const emit = defineEmits<{ restore: [] }>()
 
 const { t, d } = useI18n()
 const { historyRevealAsync } = usePasswords()
+const { copyText, copyHistory } = usePasswordsCopy()
 
 function when(stamp: string | null): string {
   if (!stamp) return '–'
@@ -32,8 +33,8 @@ function when(stamp: string | null): string {
     class="flex min-w-0 flex-col gap-4"
     data-testid="passwords-history-snapshot"
   >
-    <div class="flex flex-wrap items-center gap-2">
-      <h2 class="min-w-0 flex-1 text-lg font-semibold">
+    <div class="flex flex-col items-start gap-2">
+      <h2 class="text-lg font-semibold">
         {{
           t('passwords.history.savedAt', { when: when(snapshot.modifiedAt) })
         }}
@@ -51,11 +52,28 @@ function when(stamp: string | null): string {
       <SettingsRow
         :title="t('passwords.fields.title')"
         :description="snapshot.title ?? t('passwords.noValue')"
-      />
+      >
+        <PasswordsCopyButton
+          v-if="snapshot.title"
+          :label="t('passwords.fields.title')"
+          @copy="copyText(snapshot.title, t('passwords.fields.title'))"
+        />
+      </SettingsRow>
       <SettingsRow
         :title="t('passwords.fields.username')"
         :description="snapshot.username ?? t('passwords.noValue')"
-      />
+      >
+        <PasswordsCopyButton
+          v-if="snapshot.username"
+          :label="t('passwords.fields.username')"
+          @copy="
+            copyText(snapshot.username, t('passwords.fields.username'), {
+              itemId: snapshot.itemId,
+              field: { kind: 'username' },
+            })
+          "
+        />
+      </SettingsRow>
       <SettingsRow :title="t('passwords.fields.password')">
         <PasswordsMaskedValue
           :fetch="
@@ -68,11 +86,33 @@ function when(stamp: string | null): string {
           :present="snapshot.hasPassword"
           :label="t('passwords.fields.password')"
         />
+        <PasswordsCopyButton
+          v-if="snapshot.hasPassword"
+          :label="t('passwords.fields.password')"
+          @copy="
+            copyHistory(
+              snapshot.id,
+              { kind: 'password' },
+              t('passwords.fields.password'),
+            )
+          "
+        />
       </SettingsRow>
       <SettingsRow
         :title="t('passwords.fields.url')"
         :description="snapshot.url ?? t('passwords.noValue')"
-      />
+      >
+        <PasswordsCopyButton
+          v-if="snapshot.url"
+          :label="t('passwords.fields.url')"
+          @copy="
+            copyText(snapshot.url, t('passwords.fields.url'), {
+              itemId: snapshot.itemId,
+              field: { kind: 'url' },
+            })
+          "
+        />
+      </SettingsRow>
       <SettingsRow
         v-if="snapshot.hasOtpSecret"
         :title="t('passwords.fields.totp')"
@@ -88,17 +128,37 @@ function when(stamp: string | null): string {
           :present="true"
           :label="t('passwords.fields.totp')"
         />
+        <PasswordsCopyButton
+          :label="t('passwords.history.fields.otpSecret')"
+          @copy="
+            copyHistory(
+              snapshot.id,
+              { kind: 'otpSecret' },
+              t('passwords.history.fields.otpSecret'),
+            )
+          "
+        />
       </SettingsRow>
       <SettingsRow
         v-if="snapshot.expiresAt"
         :title="t('passwords.fields.expires')"
         :description="snapshot.expiresAt"
-      />
+      >
+        <PasswordsCopyButton
+          :label="t('passwords.fields.expires')"
+          @copy="copyText(snapshot.expiresAt, t('passwords.fields.expires'))"
+        />
+      </SettingsRow>
       <SettingsRow
         v-if="snapshot.tags.length"
         :title="t('passwords.fields.tags')"
         :description="snapshot.tags.join(', ')"
-      />
+      >
+        <PasswordsCopyButton
+          :label="t('passwords.fields.tags')"
+          @copy="copyText(snapshot.tags.join(', '), t('passwords.fields.tags'))"
+        />
+      </SettingsRow>
       <SettingsRow
         v-for="(field, index) in snapshot.keyValues"
         :key="index"
@@ -119,6 +179,17 @@ function when(stamp: string | null): string {
           :present="field.hasValue"
           :label="field.key ?? ''"
         />
+        <PasswordsCopyButton
+          v-if="field.hasValue"
+          :label="field.key ?? ''"
+          @copy="
+            copyHistory(
+              snapshot.id,
+              { kind: 'keyValue', key: field.key ?? '' },
+              field.key ?? '',
+            )
+          "
+        />
       </SettingsRow>
       <SettingsRow
         v-for="attachment in snapshot.attachments"
@@ -132,11 +203,21 @@ function when(stamp: string | null): string {
         icon="lucide:paperclip"
       />
     </SettingsGroup>
-    <p
+    <div
       v-if="snapshot.note"
-      class="rounded-xl bg-muted px-4 py-3 text-sm whitespace-pre-wrap"
+      class="relative rounded-xl bg-muted px-4 py-3 pr-14 text-sm whitespace-pre-wrap"
     >
+      <PasswordsCopyButton
+        class="absolute top-1.5 right-2"
+        :label="t('passwords.fields.note')"
+        @copy="
+          copyText(snapshot.note, t('passwords.fields.note'), {
+            itemId: snapshot.itemId,
+            field: { kind: 'note' },
+          })
+        "
+      />
       {{ snapshot.note }}
-    </p>
+    </div>
   </div>
 </template>

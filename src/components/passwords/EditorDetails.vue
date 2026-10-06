@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
  * The tab Details of the editor (spec 036, FR-001, FR-004; fields from spec 034 FR-001..FR-003):
- * title, username, password, address, TOTP, note, expiry, tags, icon and colour. The password
- * shows `••••` with "Ersetzen" for a stored entry and is sent only when it was replaced; an
- * invalid TOTP value is refused at its field (`otpError`). The generator opens in a drawer. The
- * draft is the parent's object; this tab only edits it.
+ * title, username, password, address, TOTP, note, expiry, tags, icon and colour. The password is
+ * a plain field holding the stored value; every field copies and the text fields take references
+ * from buttons in the field. An invalid TOTP value is refused at its field (`otpError`). The
+ * generator opens in a drawer. The draft is the parent's object; this tab only edits it.
  */
 import type { ItemDetail } from '@bindings/ItemDetail'
 import type { Draft } from '~/lib/passwords/draft'
@@ -20,7 +20,7 @@ const draft = defineModel<Draft>({ required: true })
 
 const { t } = useI18n()
 const fieldLabels = useFieldLabels()
-const { revealAsync } = usePasswords()
+const { copyText } = usePasswordsCopy()
 
 const tagInput = ref('')
 const replacingOtp = ref(false)
@@ -40,10 +40,6 @@ function addTag() {
 
 function removeTag(name: string) {
   draft.value.tags = draft.value.tags.filter((tag) => tag !== name)
-}
-
-function startReplacingPassword() {
-  draft.value.password = { mode: 'set', value: '' }
 }
 
 function startReplacingOtp() {
@@ -78,14 +74,6 @@ function setOtpText(text: string) {
     }
 }
 
-const passwordValue = computed({
-  get: () =>
-    draft.value.password.mode === 'set' ? draft.value.password.value : '',
-  set: (value: string) => {
-    draft.value.password = { mode: 'set', value }
-  },
-})
-
 const showOtpInput = computed(
   () => isNew.value || !props.detail?.hasOtpSecret || replacingOtp.value,
 )
@@ -103,7 +91,14 @@ const showOtpInput = computed(
           :labels="fieldLabels.input.value"
           label-bg="var(--muted)"
           data-testid="passwords-field-title"
-        />
+        >
+          <template v-if="draft.title" #append>
+            <PasswordsCopyButton
+              :label="t('passwords.fields.title')"
+              @copy="copyText(draft.title, t('passwords.fields.title'))"
+            />
+          </template>
+        </UiInput>
       </li>
       <li class="px-4 py-3">
         <UiInput
@@ -113,58 +108,62 @@ const showOtpInput = computed(
           :labels="fieldLabels.input.value"
           label-bg="var(--muted)"
           autocomplete="off"
-          copyable
           data-testid="passwords-field-username"
-        />
+        >
+          <template #append>
+            <PasswordsCopyButton
+              v-if="draft.username"
+              :label="t('passwords.fields.username')"
+              @copy="
+                copyText(draft.username, t('passwords.fields.username'), {
+                  itemId,
+                  field: { kind: 'username' },
+                })
+              "
+            />
+            <PasswordsReferenceInsert
+              v-model:text="draft.username"
+              :item-id="itemId"
+              kind="username"
+            />
+          </template>
+        </UiInput>
         <PasswordsReferenceField
+          v-model:text="draft.username"
           class="mt-1.5"
-          :text="draft.username"
-          :item-id="itemId"
           kind="username"
-          @update:text="draft.username = $event"
         />
       </li>
       <li class="flex flex-col gap-1.5 px-4 py-3">
-        <ShadcnLabel v-if="draft.password.mode === 'keep'" for="pw-password">{{
-          t('passwords.fields.password')
-        }}</ShadcnLabel>
-        <div
-          v-if="draft.password.mode === 'keep'"
-          class="flex items-center gap-2"
-        >
-          <PasswordsMaskedValue
-            v-if="itemId"
-            :fetch="
-              async () =>
-                (await revealAsync(itemId!, { kind: 'password' })).value
-            "
-            :identity="`${itemId}:password`"
-            kind="password"
-            :present="detail?.hasPassword ?? false"
-            :label="t('passwords.fields.password')"
-            class="flex-1"
-          />
-          <UiButton
-            type="button"
-            variant="outline"
-            size="sm"
-            data-testid="passwords-replace-password"
-            @click="startReplacingPassword"
-          >
-            {{ t('passwords.editor.replace') }}
-          </UiButton>
-        </div>
-        <div v-else class="flex items-center gap-2">
+        <div class="flex items-center gap-2">
           <UiInputPassword
             id="pw-password"
-            v-model="passwordValue"
+            v-model="draft.password"
             :label="t('passwords.fields.password')"
             :labels="fieldLabels.password.value"
             label-bg="var(--muted)"
             autocomplete="new-password"
             class="flex-1"
             data-testid="passwords-field-password"
-          />
+          >
+            <template #append>
+              <PasswordsCopyButton
+                v-if="draft.password"
+                :label="t('passwords.fields.password')"
+                @copy="
+                  copyText(draft.password, t('passwords.fields.password'), {
+                    itemId,
+                    field: { kind: 'password' },
+                  })
+                "
+              />
+              <PasswordsReferenceInsert
+                v-model:text="draft.password"
+                :item-id="itemId"
+                kind="password"
+              />
+            </template>
+          </UiInputPassword>
           <UiButton
             type="button"
             variant="outline"
@@ -177,11 +176,8 @@ const showOtpInput = computed(
           </UiButton>
         </div>
         <PasswordsReferenceField
-          :text="draft.password.mode === 'set' ? draft.password.value : null"
-          :stored-marks="detail?.references.password"
-          :item-id="itemId"
+          v-model:text="draft.password"
           kind="password"
-          @update:text="draft.password = { mode: 'set', value: $event }"
         />
       </li>
       <li class="px-4 py-3">
@@ -193,15 +189,30 @@ const showOtpInput = computed(
           label-bg="var(--muted)"
           type="url"
           inputmode="url"
-          copyable
           data-testid="passwords-field-url"
-        />
+        >
+          <template #append>
+            <PasswordsCopyButton
+              v-if="draft.url"
+              :label="t('passwords.fields.url')"
+              @copy="
+                copyText(draft.url, t('passwords.fields.url'), {
+                  itemId,
+                  field: { kind: 'url' },
+                })
+              "
+            />
+            <PasswordsReferenceInsert
+              v-model:text="draft.url"
+              :item-id="itemId"
+              kind="url"
+            />
+          </template>
+        </UiInput>
         <PasswordsReferenceField
+          v-model:text="draft.url"
           class="mt-1.5"
-          :text="draft.url"
-          :item-id="itemId"
           kind="url"
-          @update:text="draft.url = $event"
         />
       </li>
     </SettingsGroup>
@@ -221,7 +232,16 @@ const showOtpInput = computed(
           :placeholder="t('passwords.editor.otpPlaceholder')"
           data-testid="passwords-field-otp"
           @update:model-value="setOtpText(String($event ?? ''))"
-        />
+        >
+          <template v-if="otpText()" #append>
+            <PasswordsCopyButton
+              :label="t('passwords.history.fields.otpSecret')"
+              @copy="
+                copyText(otpText(), t('passwords.history.fields.otpSecret'))
+              "
+            />
+          </template>
+        </UiInput>
         <div v-else class="flex flex-wrap items-center gap-2">
           <span
             class="min-w-0 flex-1 text-sm"
@@ -270,13 +290,29 @@ const showOtpInput = computed(
           label-bg="var(--muted)"
           rows="4"
           data-testid="passwords-field-note"
-        />
+        >
+          <template #actions>
+            <PasswordsCopyButton
+              v-if="draft.note"
+              :label="t('passwords.fields.note')"
+              @copy="
+                copyText(draft.note, t('passwords.fields.note'), {
+                  itemId,
+                  field: { kind: 'note' },
+                })
+              "
+            />
+            <PasswordsReferenceInsert
+              v-model:text="draft.note"
+              :item-id="itemId"
+              kind="note"
+            />
+          </template>
+        </UiTextarea>
         <PasswordsReferenceField
+          v-model:text="draft.note"
           class="mt-1.5"
-          :text="draft.note"
-          :item-id="itemId"
           kind="note"
-          @update:text="draft.note = $event"
         />
       </li>
       <li class="px-4 py-3">
@@ -289,7 +325,14 @@ const showOtpInput = computed(
             label-bg="var(--muted)"
             type="date"
             data-testid="passwords-field-expires"
-          />
+          >
+            <template v-if="draft.expiresAt" #append>
+              <PasswordsCopyButton
+                :label="t('passwords.fields.expires')"
+                @copy="copyText(draft.expiresAt, t('passwords.fields.expires'))"
+              />
+            </template>
+          </UiInput>
         </div>
       </li>
       <li class="flex flex-col gap-2 px-4 py-3">
@@ -382,7 +425,7 @@ const showOtpInput = computed(
           embedded
           @use="
             (password: string) => {
-              passwordValue = password
+              draft.password = password
               generatorOpen = false
             }
           "

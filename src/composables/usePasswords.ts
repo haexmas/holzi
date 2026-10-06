@@ -3,6 +3,8 @@ import type { CopyField } from '@bindings/CopyField'
 import type { CopyOptions } from '@bindings/CopyOptions'
 import type { CopyReport } from '@bindings/CopyReport'
 import type { CopyResult } from '@bindings/CopyResult'
+import type { CopyTextArgs } from '@bindings/CopyTextArgs'
+import type { TextField } from '@bindings/TextField'
 import type { CreateGroupResult } from '@bindings/CreateGroupResult'
 import type { CreateItemResult } from '@bindings/CreateItemResult'
 import type { GroupPatch } from '@bindings/GroupPatch'
@@ -41,6 +43,13 @@ import type { UpdateItemResult } from '@bindings/UpdateItemResult'
  * caller is, never the frontend. A secret comes back only from `revealAsync`; copying and the TOTP
  * code never hand it over.
  */
+/** Where a copied text comes from: its placeholders resolve as in this field of this entry. */
+export interface CopyTextSource {
+  /** `null` for a new entry. */
+  itemId: string | null
+  field: TextField
+}
+
 export function usePasswords() {
   const loadOverviewAsync = () => invoke<Overview>('passwords_load_overview')
 
@@ -55,6 +64,17 @@ export function usePasswords() {
 
   const copyFieldAsync = (itemId: string, field: CopyField) =>
     invoke<CopyResult>('passwords_copy_field', { args: { itemId, field } })
+
+  /** A text the window holds already (an editor value), with the clearing of every other copy.
+   * With `from`, Rust resolves its placeholders as in that field of the entry first (FR-045). */
+  const copyTextAsync = (text: string, from?: CopyTextSource) =>
+    invoke<CopyResult>('passwords_copy_text', {
+      args: {
+        text,
+        itemId: from?.itemId ?? undefined,
+        field: from?.field,
+      } satisfies CopyTextArgs,
+    })
 
   const createItemAsync = (input: ItemInput, groupId?: string) =>
     invoke<CreateItemResult>('passwords_create_item', {
@@ -213,6 +233,11 @@ export function usePasswords() {
       args: { snapshotId, field },
     })
 
+  const historyCopyAsync = (snapshotId: string, field: HistorySecret) =>
+    invoke<CopyResult>('passwords_history_copy', {
+      args: { snapshotId, field },
+    })
+
   const historyRestoreAsync = (
     itemId: string,
     snapshotId: string,
@@ -236,6 +261,7 @@ export function usePasswords() {
     historyListAsync,
     historyGetAsync,
     historyRevealAsync,
+    historyCopyAsync,
     historyRestoreAsync,
     presetListAsync,
     presetSaveAsync,
@@ -253,6 +279,7 @@ export function usePasswords() {
     revealAsync,
     totpCodeAsync,
     copyFieldAsync,
+    copyTextAsync,
     createItemAsync,
     updateItemAsync,
     renamePasskeyAsync,

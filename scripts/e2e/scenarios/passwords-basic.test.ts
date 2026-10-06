@@ -25,6 +25,7 @@ scenario('passwords-basic', {}, async (ctx) => {
 
   // The editor: title, user name, password and a TOTP secret, then save.
   await instance.click('passwords-new')
+  await instance.click('passwords-new-entry')
   await instance.waitForDisplayed('passwords-editor')
   await instance.type('passwords-field-title', 'GitHub')
   await instance.type('passwords-field-username', 'octo')

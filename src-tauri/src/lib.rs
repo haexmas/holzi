@@ -84,8 +84,8 @@ use passwords::commands::attachments::{
 };
 use passwords::commands::copy::passwords_copy;
 use passwords::commands::history::{
-    passwords_history_get, passwords_history_list, passwords_history_restore,
-    passwords_history_reveal,
+    passwords_history_copy, passwords_history_get, passwords_history_list,
+    passwords_history_restore, passwords_history_reveal,
 };
 use passwords::commands::import::{
     passwords_icon_preview, passwords_import_cancel, passwords_import_preview,
@@ -103,8 +103,8 @@ use passwords::commands::presets::{
     passwords_preset_delete, passwords_preset_list, passwords_preset_save,
 };
 use passwords::commands::read::{
-    passwords_copy_field, passwords_get_item, passwords_load_overview, passwords_reveal,
-    passwords_totp_code,
+    passwords_copy_field, passwords_copy_text, passwords_get_item, passwords_load_overview,
+    passwords_reveal, passwords_totp_code,
 };
 use passwords::commands::references::{
     passwords_item_key_names, passwords_reference_token, passwords_reference_usage,
@@ -352,6 +352,7 @@ pub fn run() {
             passwords_reveal,
             passwords_totp_code,
             passwords_copy_field,
+            passwords_copy_text,
             passwords_create_item,
             passwords_update_item,
             passwords_passkey_rename,
@@ -382,6 +383,7 @@ pub fn run() {
             passwords_history_list,
             passwords_history_get,
             passwords_history_reveal,
+            passwords_history_copy,
             passwords_history_restore,
             passwords_attachment_add,
             passwords_attachment_rename,

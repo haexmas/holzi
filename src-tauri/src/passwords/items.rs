@@ -207,7 +207,8 @@ struct OtpColumns {
     algorithm: Option<String>,
 }
 
-/// The entry with flags instead of secrets, or `None` when it does not exist.
+/// The entry with flags instead of secrets (the custom values excepted, see `KeyValueView`), or
+/// `None` when it does not exist.
 pub fn get_item(q: &mut impl Query, id: &str) -> Result<Option<ItemDetail>> {
     let Some(header) = load_headers(q, Some(id))?.into_iter().next() else {
         return Ok(None);
@@ -231,14 +232,15 @@ pub fn get_item(q: &mut impl Query, id: &str) -> Result<Option<ItemDetail>> {
         return Ok(None);
     };
     let key_values = q.query_map(
-        "SELECT id, key, CASE WHEN value IS NOT NULL AND value <> '' THEN 1 ELSE 0 END \
+        "SELECT id, key, value, CASE WHEN value IS NOT NULL AND value <> '' THEN 1 ELSE 0 END \
          FROM haex_passwords_item_key_values WHERE item_id = ?1 ORDER BY rowid",
         params![id],
         |r| {
             Ok(KeyValueView {
                 id: r.get(0)?,
                 key: r.get(1)?,
-                has_value: r.get::<_, i64>(2)? != 0,
+                value: r.get(2)?,
+                has_value: r.get::<_, i64>(3)? != 0,
             })
         },
     )?;

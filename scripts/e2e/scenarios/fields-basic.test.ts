@@ -13,6 +13,7 @@ scenario('fields-basic', {}, async (ctx) => {
   await createAndUnlock(instance, { name: 'e2e-fields' })
   await openPasswords(instance)
   await instance.click('passwords-new')
+  await instance.click('passwords-new-entry')
   await instance.waitForDisplayed('passwords-editor')
 
   assert.equal(await labelFloated(instance, 'pw-username'), false, 'rests')

@@ -1126,6 +1126,14 @@
     "expired": "Expired",
     "expiredOn": "Expired on {date}",
     "new": "New",
+    "newMenu": {
+      "entry": "Key",
+      "folder": "Folder"
+    },
+    "tagFilter": {
+      "label": "Filter by tag",
+      "all": "All tags"
+    },
     "back": "Back",
     "edit": "Edit",
     "save": "Save",
@@ -1183,7 +1191,6 @@
       "replace": "Replace",
       "fieldName": "Name",
       "fieldValue": "Value",
-      "keepValue": "(unchanged)",
       "addField": "Add field",
       "removeField": "Remove field",
       "otpLabel": "TOTP secret or otpauth address",
@@ -1295,7 +1302,6 @@
       "open": "Generate",
       "again": "Generate again",
       "copy": "Copy",
-      "copied": "Password copied.",
       "use": "Use",
       "preset": "Preset",
       "noPreset": "None (defaults)",
@@ -1510,7 +1516,8 @@
       "label": "Sections of the entry",
       "details": "Details",
       "extra": "Extra",
-      "history": "History"
+      "history": "History",
+      "detailsEmpty": "No details yet. Use the pencil to add a username, a password and more."
     },
     "breadcrumb": {
       "label": "Path",

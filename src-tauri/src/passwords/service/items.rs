@@ -4,6 +4,8 @@
 //! for the user alone (Z11). A caller that is not the user gets only what its grants cover, and
 //! never a secret in a list (Z4).
 
+use zeroize::Zeroizing;
+
 use super::{require_user, PasswordsService};
 use crate::error::{HolziError, Result};
 use crate::passwords::access::{
@@ -14,9 +16,9 @@ use crate::passwords::ids::fold_for_search;
 use crate::passwords::items;
 use crate::passwords::model::{
     AgentHeader, CopyField, ItemDetail, ItemHeader, ItemInput, ItemPatch, Overview, Patch,
-    RevealedSecret, SecretField, SecretItem, TotpCode,
+    RevealedSecret, SecretField, SecretItem, TextField, TotpCode,
 };
-use crate::passwords::references::contains_reference;
+use crate::passwords::references::{contains_reference, Field};
 use crate::passwords::references_db::{self, Reader};
 use crate::passwords::reveal::{self, Copied};
 
@@ -215,6 +217,41 @@ impl PasswordsService {
         require_user(caller)?;
         self.db()
             .read(move |q| reveal::copy_value(q, &item_id, &field).map_err(Into::into))
+            .await
+    }
+
+    /// A text the window holds (an editor value, a field of a history state) with its placeholders
+    /// resolved as in `field` of the entry `item_id` (none for a new entry); a placeholder that
+    /// does not resolve is the error, never the text (spec 036, FR-045).
+    pub async fn resolve_text(
+        &self,
+        caller: &Caller,
+        item_id: Option<String>,
+        field: TextField,
+        text: Zeroizing<String>,
+    ) -> Result<Zeroizing<String>> {
+        require_user(caller)?;
+        if !contains_reference(&text) {
+            return Ok(text);
+        }
+        let field = match field {
+            TextField::Username => Field::Username,
+            TextField::Password => Field::Password,
+            TextField::Url => Field::Url,
+            TextField::Note => Field::Note,
+            TextField::KeyValue { key } => Field::Extra(key),
+        };
+        self.db()
+            .read(move |q| {
+                references_db::resolve_or_error(
+                    q,
+                    Reader::user(),
+                    item_id.as_deref().unwrap_or_default(),
+                    field,
+                    &text,
+                )
+                .map_err(Into::into)
+            })
             .await
     }
 
