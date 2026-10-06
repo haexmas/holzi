@@ -13,6 +13,7 @@
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-stat",
+    "notification:allow-is-permission-granted",
     "opener:allow-open-url"
   ]
 }
