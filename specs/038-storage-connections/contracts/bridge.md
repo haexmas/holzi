@@ -29,12 +29,16 @@ holzi`, bevor ein Dialog erscheint. Keine Antwort und keine Fehlermeldung enthä
   `endpoint`, `region` oder `pathStyle`, antwortet holzi 3001, bevor ein Dialog erscheint. Ohne
   `sameProviderAs` ist `region` Pflicht (sonst 3001).
 - **Vorgeschlagener Endpunkt** (FR-009b, FR-017, R8, Betreiber 2026-10-06): braucht die Berechtigung
-  `remoteStorage`/`add` mit dem Host des Endpunkts (`host:port`, `host` oder `*`); ohne sie 1004 im
+  `remoteStorage`/`add` mit dem Host des Endpunkts (`host:port`, `host` oder `*`; eine IPv6-Adresse als
+  `[addr]:port` oder `[addr]`); ohne sie 1004 im
   Zustand „fragen“ (die Rückfrage nennt den Host), sonst 1002, jeweils vor dem Dialog. Mit ihr darf der
   Endpunkt lokal sein (Loopback, privat, auch `http`); Link-Local, unspezifizierte und Multicast-Adressen
   sowie `http` zu einem Host, der nicht lokal auflöst, → 3001 vor dem Dialog. Der Dialog zeigt einen
   lokalen oder unverschlüsselten Endpunkt als solchen. Die Verbindung bekommt `endpoint_scope` nach R8,
-  und jede aufgelöste Adresse wird vor jedem Aufruf dagegen geprüft.
+  und jede aufgelöste Adresse wird vor jedem Aufruf dagegen geprüft. Löst der Host beim Anlegen nach
+  dem Dialog in einen anderen Bereich auf als den, den der Dialog gezeigt hat, → 3001, bevor ein Test
+  die Zugangsdaten sendet; nichts wird angelegt. Eine vorhandene Verbindung steht nur zur Wahl, wenn
+  Endpunkt, Region und Bereich passen.
 - **Bereich** (FR-010, R4): jeder `key` und `prefix` wird nach R5 geprüft (sonst 3001) und mit
   `holzi-ext/<vault_id>/<extension_id>/` versehen; Schlüssel in Antworten ohne dieses Präfix.
 - **Unbekannter oder nicht gedeckter Speicher**: 1001 für einen unbekannten, 1004/1002 für einen nicht

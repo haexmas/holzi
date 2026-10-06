@@ -126,9 +126,11 @@ src-tauri/src/
 │   ├── probe.rs                        # Verbindungstest (R9) + _tests
 │   └── commands.rs                     # Tauri-Commands (contracts/tauri-commands.md)
 └── extensions/
-    ├── remote_storage.rs               # die neun Bridge-Methoden + _tests
+    ├── remote_storage.rs               # Liste und die vier Objekt-Methoden + _tests
+    ├── remote_storage_manage.rs        # Hinzufügen, Ändern, Testen, Entfernen (US3) + _tests
+    ├── remote_storage_endpoint.rs      # vorgeschlagener Endpunkt: Form, `add`, Bereich (FR-009b, R8)
     ├── remote_storage_keys.rs          # Bereich und Schlüsselprüfung (R4, R5) + _tests
-    ├── remote_storage_dialog.rs        # Dialog-Warten (R6) + _tests
+    ├── remote_storage_dialog.rs        # Dialog-Warten (R6), getestet in remote_storage_manage_tests.rs
     └── bridge/dispatch.rs              # Registrierung, LATER ohne remote_storage
 
 src/
