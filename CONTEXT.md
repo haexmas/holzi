@@ -319,7 +319,8 @@ _Avoid_: webview (holzi has no native extension webviews).
 **Berechtigung (vault-weit / Gerät)**:
 The permission of an extension to run one kind of host function on a target, in the state
 granted, denied or ask. A remembered one is vault data and holds **vault-wide** (all own devices)
-or for **one device** (ADR-0001); shell and file system default to the device. A temporary one
+or for **one device** (ADR-0001); only the shell holds on one device, every other kind on all,
+and nobody chooses. A temporary one
 lasts until the vault closes. Spec 034 calls the same thing "Freigabe".
 _Avoid_: grant for the stored row (use it only for the password manager's `Grant`).
 
