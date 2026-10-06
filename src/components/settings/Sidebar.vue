@@ -36,7 +36,7 @@ function iconOf(hit: SettingsSearchHit): string {
 }
 
 const ITEM =
-  'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-foreground/5'
+  'flex w-full items-center gap-3 rounded-md p-3 text-left text-base font-medium hover:bg-foreground/5'
 
 defineExpose({
   focusActive() {
@@ -67,7 +67,7 @@ defineExpose({
               :data-location="hit.location.id"
               @click="emit('select', hit.path)"
             >
-              <Icon :name="iconOf(hit)" class="size-5 shrink-0" />
+              <Icon :name="iconOf(hit)" class="size-6 shrink-0" />
               <span class="flex min-w-0 flex-col">
                 <span class="truncate">{{ hit.label }}</span>
                 <span
@@ -93,14 +93,14 @@ defineExpose({
             :class="[
               ITEM,
               active === category.id
-                ? 'bg-primary/10 font-medium text-primary hover:bg-primary/15'
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                 : '',
             ]"
             :aria-current="active === category.id ? 'page' : undefined"
             :data-testid="`settings-category-${category.id}`"
             @click="emit('select', category.path)"
           >
-            <Icon :name="category.icon" class="size-5 shrink-0" />
+            <Icon :name="category.icon" class="size-6 shrink-0" />
             <span class="truncate">{{ t(category.titleKey) }}</span>
           </button>
         </li>
