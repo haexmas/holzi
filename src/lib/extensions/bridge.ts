@@ -91,9 +91,15 @@ export function eventMessage(event: FrameEvent): {
   return { ...(event.data as Record<string, unknown>), ...message }
 }
 
+/** Events held for a frame whose SDK is not ready yet (8 KiB of shell output each at most). */
+export const MAX_HELD_EVENTS = 256
+
 /**
  * Events for one frame. Until the SDK confirms its port (`haexspace:port:ready`) they are held
- * (FR-042); a new port (the frame loaded again) starts holding again.
+ * (FR-042); a new port (the frame loaded again) starts holding again. At most
+ * {@link MAX_HELD_EVENTS} are held: beyond that the oldest `shell:output` goes (holzi does not
+ * wait for a frame that never acknowledged, so a frame that never gets ready would hold a
+ * flooding shell's whole output); only when none is held, the oldest event of any type goes.
  */
 export class FrameEventQueue {
   private held: FrameEvent[] = []
@@ -109,8 +115,19 @@ export class FrameEventQueue {
   /** Takes an event of any frame; events of other frames are dropped. */
   push(event: FrameEvent): void {
     if (event.frame !== this.frame) return
-    if (this.open) this.deliver(event)
-    else this.held.push(event)
+    if (this.open) {
+      this.deliver(event)
+      return
+    }
+    if (this.held.length >= MAX_HELD_EVENTS) {
+      const output = this.held.findIndex((e) => e.type === 'shell:output')
+      const dropped = this.held.splice(output === -1 ? 0 : output, 1)[0]
+      if (dropped && dropped.type !== 'shell:output')
+        console.warn(
+          `extension frame ${this.frame}: not ready, dropped ${dropped.type}`,
+        )
+    }
+    this.held.push(event)
   }
 
   /** The port is confirmed: everything held goes out in order. */

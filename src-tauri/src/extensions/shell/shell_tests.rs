@@ -18,6 +18,11 @@ use crate::passwords::test_support::open_test_vault;
 use crate::storage::known_devices;
 use crate::vault_gate::{VaultDb, VaultGate};
 
+#[path = "shell_flow_tests.rs"]
+mod flow;
+#[path = "shell_permissions_tests.rs"]
+mod permissions;
+
 /// Only a guard against a hanging test: every wait ends on an event the shell sends.
 const PATIENCE: Duration = Duration::from_secs(30);
 
@@ -213,66 +218,49 @@ fn a_granted_shell_runs_echo_resizes_and_reports_its_end() {
 }
 
 #[test]
-fn without_a_permission_holzi_asks_for_the_canonical_program() {
+fn a_shell_does_not_inherit_holzis_own_variables() {
+    // Names nobody else sets; the test process is holzi's process here.
+    std::env::set_var("WEBKIT_HOLZI_SHELL_PROBE", "leak");
+    std::env::set_var("LD_HOLZI_SHELL_PROBE", "leak");
     let s = setup();
-    let asked = call(
+    s.allow(&s.notes, &sh());
+    let session = s.start(&s.notes);
+    s.write(
         &s.notes,
-        "extension_shell_create",
-        &json!({ "options": { "shell": "sh" } }),
+        &session,
+        "echo \"gone=[$WEBKIT_HOLZI_SHELL_PROBE$LD_HOLZI_SHELL_PROBE] term=[$TERM] kept=[${HOME:+home}${PATH:+path}]\"\n",
     )
-    .unwrap_err();
-    assert_eq!(asked.code.as_u16(), 1004);
-    assert_eq!(
-        asked.details,
-        Some(json!({
-            "resourceType": "shell",
-            "action": "execute",
-            "target": resolve_program("sh").unwrap().to_string_lossy(),
-        }))
-    );
-    s.allow(&s.notes, Path::new("/bin/false-not-sh"));
-    assert_eq!(
-        code(call(
-            &s.notes,
-            "extension_shell_create",
-            &json!({ "options": { "shell": "/bin/sh" } })
-        )),
-        1004,
-        "another program's permission does not count"
-    );
-}
-
-#[test]
-fn a_missing_program_is_told_only_after_the_permission() {
-    let s = setup();
-    let create = |shell: &str| {
-        call(
-            &s.notes,
-            "extension_shell_create",
-            &json!({ "options": { "shell": shell } }),
-        )
-    };
-    // Without a permission a missing file answers like an existing one: with a question.
-    for named in ["/no/such/shell", "/no/such/../such/./shell"] {
-        let asked = create(named).unwrap_err();
-        assert_eq!(asked.code.as_u16(), 1004, "{named}");
-        assert_eq!(
-            asked.details.unwrap()["target"],
-            "/no/such/shell",
-            "{named}"
-        );
+    .unwrap();
+    // The terminal echoes the typed line too; only the printed one has the values.
+    s.recorded
+        .waited_for_output(&session, &format!("gone=[] term=[{TERM}] kept=[homepath]"));
+    for name in [
+        "LD_PRELOAD",
+        "gdk_backend",
+        "GIO_EXTRA_MODULES",
+        "__NV_PRIME_RENDER_OFFLOAD",
+        "RUST_LOG",
+    ] {
+        assert!(not_inherited(name), "{name}");
     }
-    // A bare name nobody can grant is refused without a question.
-    assert_eq!(code(create("no-such-program-holzi")), 1002);
-
-    s.allow(&s.notes, Path::new("/no/such/shell"));
-    assert_eq!(
-        code(create("/no/such/shell")),
-        2003,
-        "granted, then looked at"
-    );
-    s.allow(&s.notes, Path::new("*"));
-    assert_eq!(code(create("no-such-program-holzi")), 2003);
+    for name in [
+        "HOME",
+        "USER",
+        "PATH",
+        "LANG",
+        "LC_ALL",
+        "SHELL",
+        "DISPLAY",
+        "XDG_RUNTIME_DIR",
+    ] {
+        assert!(!not_inherited(name), "{name}");
+    }
+    call(
+        &s.notes,
+        "extension_shell_close",
+        &json!({ "sessionId": session }),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -369,6 +357,7 @@ fn malformed_options_are_refused() {
     s.allow(&s.notes, &sh());
     for options in [
         json!({ "shell": 7 }),
+        json!({ "shell": format!("/bin/{}sh", "/".repeat(MAX_PROGRAM_BYTES)) }),
         json!({ "cols": 0 }),
         json!({ "rows": 5000 }),
         json!({ "env": { "A=B": "x" } }),

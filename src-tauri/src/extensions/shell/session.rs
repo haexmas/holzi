@@ -6,7 +6,8 @@
 //! group, as from a closed terminal, then after [`HANGUP_GRACE`] a kill of every group in its
 //! session ([`kill_process_tree`]); not every shell passes the hangup on to its jobs (dash does
 //! not). When the shell's output ends, whatever is left in its session is killed before the
-//! shell is reaped, so no job outlives its session.
+//! shell is reaped, so no job outlives its session. The output is read only as fast as the
+//! frames hand it on ([`Flow`]).
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -17,9 +18,10 @@ use std::time::Duration;
 use serde_json::json;
 use uuid::Uuid;
 
+use super::flow::Flow;
 use super::{shell_error, EXIT, MAX_SESSIONS, OUTPUT};
-use crate::extensions::bridge::dispatch::{CallContext, Emit};
-use crate::extensions::bridge::events::emit_to_frames;
+use crate::extensions::bridge::dispatch::{is_enabled, CallContext, Emit};
+use crate::extensions::bridge::events::{emit_to_frames, emit_to_frames_counted};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
 use crate::vault_gate::{kill_process_tree, ChildGuard, ChildRegistry};
@@ -121,6 +123,7 @@ pub(super) struct Session {
     master: Box<dyn portable_pty::MasterPty + Send>,
     input: SyncSender<Vec<u8>>,
     leader: Leader,
+    flow: Arc<Flow>,
 }
 
 impl Session {
@@ -141,9 +144,21 @@ impl Session {
             .map_err(|_| shell_error("the shell has ended"))
     }
 
+    /// `frame` handed on `count` more output events.
+    pub(super) fn acknowledge(&self, frame: &str, count: u64) {
+        self.flow.acknowledge(frame, count);
+    }
+
+    /// The output events `frame` has open, if the reading waits for it.
+    #[cfg(test)]
+    pub(super) fn open_events(&self, frame: &str) -> Option<u64> {
+        self.flow.open_of(frame)
+    }
+
     /// Ends the shell: a hangup now, a kill of its whole session after [`HANGUP_GRACE`]. Never
     /// waits. The terminal and the input go with `self`; the output thread reports the end.
     pub(super) fn end(self) {
+        self.flow.end();
         let leader = self.leader;
         leader.hang_up();
         let later = leader.clone();
@@ -192,6 +207,14 @@ impl ShellState {
         }
     }
 
+    /// `frame` loaded a new page with a new SDK: the output events its old page had open are
+    /// lost, so no session waits for it until it acknowledges again.
+    pub fn frame_reloaded(&self, frame: &str) {
+        for session in self.lock().values() {
+            session.flow.forget(frame);
+        }
+    }
+
     /// How many shells `extension_id` has open.
     pub fn count(&self, extension_id: Uuid) -> usize {
         self.lock()
@@ -229,6 +252,7 @@ pub(super) fn start(
         _ => return abandon(shell_error("no terminal available")),
     };
     let (input, queued) = sync_channel(MAX_QUEUED_WRITES);
+    let flow = Arc::new(Flow::default());
     let fed = std::thread::Builder::new()
         .name("extension-shell-input".into())
         .spawn(move || feed(writer, queued));
@@ -260,6 +284,7 @@ pub(super) fn start(
                 master: pair.master,
                 input,
                 leader: leader.clone(),
+                flow: Arc::clone(&flow),
             },
         );
     }
@@ -275,6 +300,7 @@ pub(super) fn start(
         session_id: session_id.clone(),
         leader,
         registered: guard,
+        flow,
     };
     if std::thread::Builder::new()
         .name("extension-shell".into())
@@ -284,11 +310,16 @@ pub(super) fn start(
         ended(&ctx.host.shells);
         return Err(shell_error("the program did not start"));
     }
-    // The extension's last frame may have closed while the shell started; its `end_all` ran
-    // before the session was listed.
+    // The extension's last frame may have closed, or it may have been disabled or removed, while
+    // the shell started; its `end_all` ran before the session was listed. Each of those changes
+    // comes before its `end_all`, so one looked at after the listing is seen.
     if ctx.host.frames.of_extension(extension_id).is_empty() {
         ended(&ctx.host.shells);
         return Err(shell_error("the extension has no open frame"));
+    }
+    if !is_enabled(ctx).unwrap_or(false) {
+        ended(&ctx.host.shells);
+        return Err(BridgeError::disabled());
     }
     Ok(session_id)
 }
@@ -315,11 +346,21 @@ struct Pump {
     leader: Leader,
     /// Keeps the shell registered with the vault until it is killed for good.
     registered: Option<ChildGuard>,
+    flow: Arc<Flow>,
 }
 
 impl Pump {
     fn emit(&self, event: &str, data: serde_json::Value) {
         emit_to_frames(&*self.emitter, &self.host, self.extension_id, event, &data);
+    }
+
+    fn open_frames(&self) -> Vec<String> {
+        self.host
+            .frames
+            .of_extension(self.extension_id)
+            .iter()
+            .map(|session| session.frame.clone())
+            .collect()
     }
 
     fn run(
@@ -330,14 +371,20 @@ impl Pump {
         let mut stream = Utf8Stream::default();
         let mut buffer = [0u8; 8192];
         loop {
+            self.flow.wait_for_room(|| self.open_frames());
             match reader.read(&mut buffer) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
                     let data = stream.push(&buffer[..n]);
                     if !data.is_empty() {
-                        self.emit(
+                        // Counted before it goes out: an acknowledgement never comes first.
+                        emit_to_frames_counted(
+                            &*self.emitter,
+                            &self.host,
+                            self.extension_id,
                             OUTPUT,
-                            json!({ "sessionId": self.session_id, "data": data }),
+                            &json!({ "sessionId": self.session_id, "data": data }),
+                            |frame| self.flow.sent(frame),
                         );
                     }
                 }
