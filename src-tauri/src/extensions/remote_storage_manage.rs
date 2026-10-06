@@ -73,8 +73,8 @@ fn request(params: &Value) -> Result<&Map<String, Value>, BridgeError> {
 }
 
 /// `config`, refused when it carries credentials (FR-013a) or a field outside `allowed`.
-fn config<'a>(
-    request: &'a Map<String, Value>,
+fn config(
+    request: &Map<String, Value>,
     allowed: &[&str],
 ) -> Result<Map<String, Value>, BridgeError> {
     let config = match request.get("config") {
