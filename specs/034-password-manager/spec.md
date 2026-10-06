@@ -498,6 +498,9 @@ gleichzeitig ändern; beide Änderungen sind nach dem Abgleich auf beiden Gerät
   Notizen DÜRFEN nicht Gegenstand der Suche sein.
   _Erweitert 2026-10-06:_ Die Suche ist unscharf (Fuse.js): Jedes Wort muss in einem der vier
   Felder vorkommen, ab vier Buchstaben mit einem Tippfehler; Treffer erscheinen nach Güte.
+  _Erweitert 2026-10-06:_ Ein Wort trifft auch als Abkürzung: seine Buchstaben der Reihe nach
+  in einem Wort eines Feldes, beginnend mit dessen erstem Buchstaben („itms“ findet „itemis“).
+  Eine Suche durchsucht alle Ordner, nicht nur den geöffneten.
 - **FR-008**: Das System MUSS Einträge als abgelaufen kennzeichnen, wenn ihr Ablaufdatum
   überschritten ist.
 

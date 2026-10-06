@@ -58,10 +58,13 @@ const folders = computed(() => {
 
 const visible = computed(() => {
   const trash = trashGroupIds(store.groups)
+  // A search looks through every folder, not only the open one.
   const live = store.headers.filter(
     (header) =>
       !isInTrash(header.groupId, trash) &&
-      (folderId.value === null || header.groupId === folderId.value),
+      (searching.value ||
+        folderId.value === null ||
+        header.groupId === folderId.value),
   )
   // Sorted first, so hits that rank alike keep the title order.
   return filterHeaders(sortByTitle(live), {

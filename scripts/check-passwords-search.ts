@@ -192,3 +192,23 @@ test('with a query the best hits come first, ties keep the given order', () => {
     ['close', 'other', 'typo'],
   )
 })
+
+test('a word that leaves out letters finds the entry, if it starts like the word', () => {
+  const itemis = header({
+    id: 'itemis',
+    title: 'Firma',
+    username: 'alice@itemis.invalid',
+  })
+  const login = header({ id: 'login', url: 'https://login.itemis.de' })
+  const github = header({ id: 'github', title: 'GitHub' })
+  assert.ok(matchesQuery(header({ id: 't', title: 'itemis' }), 'itms'))
+  assert.ok(matchesQuery(itemis, 'itms'), 'in the username')
+  assert.ok(matchesQuery(login, 'itms'), 'in the URL')
+  assert.ok(matchesQuery(github, 'gthb'))
+  assert.ok(!matchesQuery(github, 'itms'), 'the letters in order, in one word')
+  assert.ok(!matchesQuery(github, 'thb'), 'from the first letter of the word')
+  assert.deepEqual(
+    filterHeaders([github, login, itemis], { query: 'itms' }).map((h) => h.id),
+    ['login', 'itemis'],
+  )
+})
