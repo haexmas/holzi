@@ -58,6 +58,20 @@ const openFolderId = computed(() =>
     ? (router.route.params.id ?? null)
     : null,
 )
+
+// After "Neu → Eintrag" the editor has the focus (or gets it with the first click); the menu would
+// hand it back to its button as it closes, taking it from the field just clicked.
+let toEditor = false
+
+function newEntry() {
+  toEditor = true
+  void router.push('/entry/new')
+}
+
+function keepEditorFocus(event: Event) {
+  if (toEditor) event.preventDefault()
+  toEditor = false
+}
 </script>
 
 <template>
@@ -112,11 +126,14 @@ const openFolderId = computed(() =>
             <span class="hidden @md:inline">{{ t('passwords.new') }}</span>
           </UiButton>
         </ShadcnDropdownMenuTrigger>
-        <ShadcnDropdownMenuContent align="end">
+        <ShadcnDropdownMenuContent
+          align="end"
+          @close-auto-focus="keepEditorFocus"
+        >
           <ShadcnDropdownMenuItem
             class="gap-2"
             data-testid="passwords-new-entry"
-            @select="router.push('/entry/new')"
+            @select="newEntry"
           >
             <Icon name="lucide:key-round" class="size-4" />
             {{ t('passwords.newMenu.entry') }}
