@@ -63,11 +63,11 @@ const visible = computed(() => {
       !isInTrash(header.groupId, trash) &&
       (folderId.value === null || header.groupId === folderId.value),
   )
-  const found = filterHeaders(live, {
+  // Sorted first, so hits that rank alike keep the title order.
+  return filterHeaders(sortByTitle(live), {
     query: router.route.query.q ?? '',
     ...(tagId.value ? { tagIds: store.tagIdsOf(tagId.value) } : {}),
   })
-  return sortByTitle(found)
 })
 
 // ponytail: the entries mount in pages of `PAGE` as the list scrolls near its end, so opening the

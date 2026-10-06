@@ -285,9 +285,11 @@ scenario('passwords-organize', { timeoutMs: 300_000 }, async (ctx) => {
   await instance.type(`passwords-entry-${mail}`, KEY.delete)
   await instance.waitForDisplayed('passwords-delete-confirm')
   await instance.typeToFocused(KEY.escape)
-  const toasts = await count(
-    instance,
-    '[data-sonner-toast][data-type="success"]',
+  // Earlier toasts are marked, so a new one counts even when an older one expires meanwhile
+  // (comparing the number of toasts failed then).
+  await instance.exec(
+    `document.querySelectorAll('[data-sonner-toast]').forEach((toast) => toast.setAttribute('data-e2e-seen', ''))`,
+    [],
   )
   await instance.type(
     `passwords-entry-${mail}`,
@@ -296,8 +298,10 @@ scenario('passwords-organize', { timeoutMs: 300_000 }, async (ctx) => {
   await ctx.waitFor(
     'the copy answer',
     async () =>
-      (await count(instance, '[data-sonner-toast][data-type="success"]')) >
-      toasts,
+      (await count(
+        instance,
+        '[data-sonner-toast][data-type="success"]:not([data-e2e-seen])',
+      )) > 0,
   )
   ctx.step('Delete asks, Ctrl+Shift+C copies the password')
 
