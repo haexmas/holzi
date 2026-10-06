@@ -20,6 +20,7 @@ import {
 } from '../src/lib/appearance/schema.ts'
 import {
   CONTROL_PAIRS,
+  SURFACES,
   TEXT_PAIRS,
   type Scheme,
   type TokenName,
@@ -128,6 +129,29 @@ test('all four tints at the extreme at once, for three hues, keep every pair rea
             scheme,
             `all ${tint} accent ${accent}`,
           ),
+        )
+      }
+    }
+  }
+  assert.deepEqual(failures, [])
+})
+
+// Spec 041-dark-mode-input-contrast (FR-001, FR-002): an input's border (`--input`) stands out from
+// every surface in the dark scheme at least as much as in the light scheme, which users read well.
+// Before the fix the dark border was 1.19:1 on the card and 1.00:1 on muted, under light's 1.22 and
+// 1.15. Neither scheme reaches the 3:1 of WCAG 1.4.11 yet; see the spec's research.md.
+test('the dark input border stands out from every surface at least as much as the light one', () => {
+  const failures: string[] = []
+  for (const choice of choicesFor('component').slice(0, TINT_PRESETS.length)) {
+    const appearance = { ...DEFAULT_APPEARANCE, component: choice }
+    const light = derive(appearance, 'light').tokens
+    const dark = derive(appearance, 'dark').tokens
+    for (const surface of SURFACES) {
+      const ratio = (tokens: Record<TokenName, string>) =>
+        contrast(parseOklch(tokens.input)!, parseOklch(tokens[surface])!)
+      if (ratio(dark) < ratio(light)) {
+        failures.push(
+          `component ${JSON.stringify(choice)}: --input on --${surface} is ${ratio(dark).toFixed(2)} dark, ${ratio(light).toFixed(2)} light`,
         )
       }
     }
