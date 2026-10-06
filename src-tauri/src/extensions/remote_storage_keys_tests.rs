@@ -39,7 +39,11 @@ fn two_vaults_and_a_development_version_get_disjoint_areas() {
         assert!(!x.prefix().starts_with(y.prefix()) && !y.prefix().starts_with(x.prefix()));
     }
     let theirs = a.key("photos/1.jpg").expect("key");
-    assert_eq!(b.strip(&theirs), None, "another vault's object is not in the area");
+    assert_eq!(
+        b.strip(&theirs),
+        None,
+        "another vault's object is not in the area"
+    );
     assert_eq!(
         dev.strip(&theirs),
         None,
@@ -74,7 +78,10 @@ fn escape_attempts_are_refused() {
         assert!(area.key(key).is_err(), "{key:?} must be refused");
     }
     let long = "k".repeat(MAX_KEY_BYTES - area.prefix().len() + 1);
-    assert!(area.key(&long).is_err(), "longer than 1024 bytes with the prefix");
+    assert!(
+        area.key(&long).is_err(),
+        "longer than 1024 bytes with the prefix"
+    );
     let fits = "k".repeat(MAX_KEY_BYTES - area.prefix().len());
     assert!(area.key(&fits).is_ok());
 }
@@ -82,7 +89,14 @@ fn escape_attempts_are_refused() {
 #[test]
 fn ordinary_keys_and_list_prefixes_pass() {
     let area = Area::new(storage_vault_id(&VAULT_A), installed(), false);
-    for key in ["a", "a/b.txt", "Fotos/2026/Urlaub am Meer.jpg", "x..y", ".hidden", "ä/ö"] {
+    for key in [
+        "a",
+        "a/b.txt",
+        "Fotos/2026/Urlaub am Meer.jpg",
+        "x..y",
+        ".hidden",
+        "ä/ö",
+    ] {
         assert_eq!(area.key(key).expect(key), format!("{}{key}", area.prefix()));
     }
     assert_eq!(area.list_prefix("").expect("whole area"), area.prefix());
@@ -99,6 +113,10 @@ fn ordinary_keys_and_list_prefixes_pass() {
 fn keys_of_the_provider_outside_the_area_are_dropped() {
     let area = Area::new(storage_vault_id(&VAULT_A), installed(), false);
     assert_eq!(area.strip("holzi-test/123"), None);
-    assert_eq!(area.strip(area.prefix()), None, "the area itself is no object");
+    assert_eq!(
+        area.strip(area.prefix()),
+        None,
+        "the area itself is no object"
+    );
     assert_eq!(area.strip("other/a"), None);
 }

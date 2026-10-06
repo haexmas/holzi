@@ -12,7 +12,9 @@ use super::frames::{FrameSession, FrameSource};
 use super::{database, methods, permissions};
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
 use crate::extensions::host::ExtensionHost;
-use crate::extensions::{fs, kv, logs, mail, notifications, passwords, shell, web};
+use crate::extensions::{
+    fs, kv, logs, mail, notifications, passwords, remote_storage, remote_storage_manage, shell, web,
+};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -349,14 +351,60 @@ pub static METHODS: &[Method] = &[
         module: shell::MODULE,
     },
     Method {
+        name: "extension_remote_storage_list_backends",
+        handler: remote_storage::list_backends,
+        module: remote_storage::MODULE,
+    },
+    Method {
+        name: "extension_remote_storage_add_backend",
+        handler: remote_storage_manage::add_backend,
+        module: remote_storage_manage::MODULE,
+    },
+    Method {
+        name: "extension_remote_storage_update_backend",
+        handler: remote_storage_manage::update_backend,
+        module: remote_storage_manage::MODULE,
+    },
+    Method {
+        name: "extension_remote_storage_remove_backend",
+        handler: remote_storage_manage::remove_backend,
+        module: remote_storage_manage::MODULE,
+    },
+    Method {
+        name: "extension_remote_storage_test_backend",
+        handler: remote_storage_manage::test_backend,
+        module: remote_storage_manage::MODULE,
+    },
+    Method {
+        name: "extension_remote_storage_upload",
+        handler: remote_storage::upload,
+        module: remote_storage::MODULE,
+    },
+    Method {
+        name: "extension_remote_storage_download",
+        handler: remote_storage::download,
+        module: remote_storage::MODULE,
+    },
+    Method {
+        name: "extension_remote_storage_list",
+        handler: remote_storage::list,
+        module: remote_storage::MODULE,
+    },
+    Method {
+        name: "extension_remote_storage_delete",
+        handler: remote_storage::delete,
+        module: remote_storage::MODULE,
+    },
+    Method {
         name: "extension_shell_close",
         handler: shell::close,
         module: shell::MODULE,
     },
 ];
 
-/// Methods of later deliveries (research R1): they answer 8001 until they land.
-const LATER: &[&str] = &["extension_remote_storage_"];
+/// Methods of later deliveries (research R1): they answer 8001 until they land. Remote storage
+/// landed with spec 038.
+const LATER: &[&str] = &[];
 
 /// Whether the caller may run host functions: an installed, enabled extension, or a development
 /// version while developer mode is on for this device (US12).

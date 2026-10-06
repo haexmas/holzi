@@ -161,7 +161,7 @@ impl StorageService {
     }
 
     /// Loads a connection by ID, returning `StorageNotFound` when it is absent.
-    async fn connection(&self, id: &str) -> Result<ConnectionRow> {
+    pub async fn connection(&self, id: &str) -> Result<ConnectionRow> {
         let id = id.to_owned();
         self.db
             .read(move |q| Ok(store::connection(q, &id)?))
@@ -169,8 +169,13 @@ impl StorageService {
             .ok_or(HolziError::StorageNotFound)
     }
 
+    /// Every connection, by name.
+    pub async fn connections(&self) -> Result<Vec<ConnectionRow>> {
+        self.db.read(|q| Ok(store::connections(q)?)).await
+    }
+
     /// Loads a storage by ID, returning `StorageNotFound` when it is absent.
-    async fn storage(&self, id: &str) -> Result<StorageRow> {
+    pub async fn storage(&self, id: &str) -> Result<StorageRow> {
         let id = id.to_owned();
         self.db
             .read(move |q| Ok(store::storage(q, &id)?))

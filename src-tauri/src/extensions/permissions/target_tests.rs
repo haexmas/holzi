@@ -254,10 +254,16 @@ fn the_host_of_a_proposed_storage_endpoint_matches_like_a_mail_server() {
         port: 9000,
     };
     for target in ["nas.local:9000", "nas.local", "*"] {
-        assert!(matches(PermissionKind::RemoteStorage, target, &endpoint), "{target}");
+        assert!(
+            matches(PermissionKind::RemoteStorage, target, &endpoint),
+            "{target}"
+        );
     }
     for target in ["nas.local:9001", "other.local", "evilnas.local"] {
-        assert!(!matches(PermissionKind::RemoteStorage, target, &endpoint), "{target}");
+        assert!(
+            !matches(PermissionKind::RemoteStorage, target, &endpoint),
+            "{target}"
+        );
     }
     assert!(
         !matches(
