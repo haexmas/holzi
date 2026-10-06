@@ -4,9 +4,16 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    # Rust toolchains with cross targets (Android, ...), which nixpkgs' own
+    # `rustc` cannot add: used only when a molecule delivers
+    # `.devshell/rust-toolchain.toml` (see `rustToolchainPath` below).
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         # Blanket allow, not a per-package predicate: `cudatoolkit` (pulled
@@ -19,6 +26,7 @@
         pkgs = import nixpkgs {
           inherit system;
           config.allowUnfree = true;
+          overlays = [ rust-overlay.overlays.default ];
         };
 
         # spaex regenerates this from every currently-adopted molecule's
@@ -50,7 +58,23 @@
           if builtins.pathExists extraPackagesPath
           then import extraPackagesPath pkgs
           else [ ];
-        packages = map resolvePackage packageNames ++ extraPackages;
+        # A Rust toolchain described like rustup's `rust-toolchain.toml`
+        # (channel, components, targets), delivered by a molecule as an
+        # exclusive atom under `.devshell/` so that rustup in CI, which reads
+        # a `rust-toolchain.toml` at the repo root, never picks it up. When
+        # present it replaces the nixpkgs Rust packages (`nix-rust`'s
+        # fragment): two `rustc` on PATH would decide by order which one
+        # builds. Read with the same guard as the files above.
+        rustToolchainPath = ./.devshell/rust-toolchain.toml;
+        hasRustToolchain = builtins.pathExists rustToolchainPath;
+        nixpkgsRust = [ "rustc" "cargo" "clippy" "rustfmt" ];
+        rustToolchain = pkgs.lib.optional hasRustToolchain
+          (pkgs.rust-bin.fromRustupToolchainFile rustToolchainPath);
+        resolvedNames =
+          if hasRustToolchain
+          then builtins.filter (name: !(builtins.elem name nixpkgsRust)) packageNames
+          else packageNames;
+        packages = map resolvePackage resolvedNames ++ rustToolchain ++ extraPackages;
       in
       {
         devShells.default = pkgs.mkShell {
