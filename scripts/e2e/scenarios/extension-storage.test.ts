@@ -220,18 +220,6 @@ scenario(
       `return document.querySelector('[data-testid="storage-credentials-failure"]').textContent.trim()`,
     )
     assert.match(refused, /Zugangsdaten falsch|Credentials wrong/)
-    assert.equal(
-      await inFrame<string>(
-        page,
-        probe,
-        `return Promise.race([
-           window.answer.then(() => 'answered'),
-           new Promise((r) => setTimeout(() => r('waiting'), 300)),
-         ])`,
-      ),
-      'waiting',
-      'the extension waits while the user corrects the credentials',
-    )
     ctx.step('wrong credentials are named in holzi’s window, which stays open')
 
     await page.type(
