@@ -92,7 +92,9 @@ pub fn rows_of(q: &mut impl Query, extension_id: Uuid) -> Result<Vec<PermissionR
 }
 
 /// The remembered permissions of one kind that can hold on `device`: vault-wide or this device's.
-/// Rows holzi cannot read are absent (FR-022).
+/// Rows holzi cannot read are absent (FR-022). A vault-wide allow of a device-scoped kind dates from
+/// before the clarification of 2026-10-06 (FR-018) and counts nowhere, so every device asks again;
+/// a vault-wide deny of it still holds.
 pub fn candidates(
     q: &mut impl Query,
     extension_id: Uuid,
@@ -103,6 +105,9 @@ pub fn candidates(
         .into_iter()
         .filter(|r| r.kind == kind.as_str())
         .filter(|r| r.vault_device_uuid == VAULT_WIDE || r.vault_device_uuid == device)
+        .filter(|r| {
+            !(kind.is_device_scoped() && !kind.fits(r.vault_device_uuid) && r.status == "granted")
+        })
         .filter_map(|r| {
             Permission::from_row(
                 &r.kind,
