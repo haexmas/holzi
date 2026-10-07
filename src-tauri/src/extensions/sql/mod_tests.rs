@@ -46,7 +46,14 @@ fn tables_are_own_foreign_or_core_by_their_exact_prefix() {
 
 #[test]
 fn only_listed_functions_are_allowed() {
-    for ok in ["lower", "COUNT", "json_each", "->>", "strftime"] {
+    for ok in [
+        "lower",
+        "COUNT",
+        "json_each",
+        "->>",
+        "strftime",
+        "CURRENT_TIMESTAMP",
+    ] {
         assert!(function_allowed(ok), "{ok}");
     }
     for no in [
