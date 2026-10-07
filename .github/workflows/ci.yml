@@ -79,6 +79,9 @@ jobs:
       - name: Check e2e helpers
         run: corepack pnpm check:e2e-lib
 
+      - name: Check Android versions against the devShell
+        run: corepack pnpm check:android-versions
+
       # Neither `typecheck` nor `lint` parses template expressions, so an
       # SFC the build cannot compile passes both — one did, and broke
       # `pnpm generate` on main unnoticed. This compiles every template
@@ -361,3 +364,128 @@ jobs:
           name: e2e-failure-material
           path: src-tauri/target/e2e
           if-no-files-found: ignore
+
+  # Spec 043 (research R15, contracts/ci.md): holzi for Android. The CI sets up its own Android
+  # environment instead of the Nix devShell; `pnpm check:android-versions` (job documentation)
+  # keeps the SDK packages, the NDK and the Rust toolchain below equal to the devShell's.
+  android-build:
+    name: Android build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.19.0
+
+      - name: Install frontend dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-36" "platforms;android-37.0" \
+            "build-tools;36.0.0" "build-tools;37.0.0" "ndk;28.2.13676358" > /dev/null
+          echo "NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      # bindgen (haex-crdt's SQLCipher hooks) needs libclang on the build host.
+      - name: Install Linux build dependencies
+        run: |
+          timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get update -o Acquire::Retries=3
+          timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends libclang-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.98.1
+          targets: aarch64-linux-android, x86_64-linux-android
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+          shared-key: android
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: Build the debug APK
+        run: corepack pnpm tauri android build --debug --apk --target aarch64 --target x86_64
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: holzi-android-debug
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  android-lint:
+    name: Android clippy (${{ matrix.features }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - features: default
+            flags: ''
+          - features: no-default
+            flags: '--no-default-features'
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Android NDK
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" > /dev/null
+          ndk="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          {
+            echo "CC_aarch64_linux_android=$ndk/aarch64-linux-android24-clang"
+            echo "CXX_aarch64_linux_android=$ndk/aarch64-linux-android24-clang++"
+            echo "AR_aarch64_linux_android=$ndk/llvm-ar"
+            echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ndk/aarch64-linux-android24-clang"
+          } >> "$GITHUB_ENV"
+
+      - name: Install Linux build dependencies
+        run: |
+          timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get update -o Acquire::Retries=3
+          timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends libclang-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.98.1
+          targets: aarch64-linux-android
+          components: clippy
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+          shared-key: android-lint-${{ matrix.features }}
+
+      - name: Run clippy for Android
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --target aarch64-linux-android ${{ matrix.flags }} -- -D warnings
