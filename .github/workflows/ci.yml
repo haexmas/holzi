@@ -173,6 +173,14 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
+          # The hosted runner's Azure mirror occasionally stalls for minutes. Use
+          # Ubuntu's public mirror so transient regional mirror outages do not
+          # fail the job before the build starts.
+          sudo sed -i \
+            -e 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+            -e 's|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+            /etc/apt/apt-mirrors.txt /etc/apt/sources.list \
+            /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
           timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get update \
             -o Acquire::Retries=3 \
             -o Acquire::http::Timeout=30 \
@@ -309,6 +317,14 @@ jobs:
       # virtual screen the suite needs (preflight.ts's REQUIRED_TOOLS).
       - name: Install Linux build dependencies
         run: |
+          # The hosted runner's Azure mirror occasionally stalls for minutes. Use
+          # Ubuntu's public mirror so transient regional mirror outages do not
+          # fail the job before the build starts.
+          sudo sed -i \
+            -e 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+            -e 's|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+            /etc/apt/apt-mirrors.txt /etc/apt/sources.list \
+            /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
           timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get update \
             -o Acquire::Retries=3 \
             -o Acquire::http::Timeout=30 \
@@ -418,6 +434,14 @@ jobs:
       # bindgen (haex-crdt's SQLCipher hooks) needs libclang on the build host.
       - name: Install Linux build dependencies
         run: |
+          # The hosted runner's Azure mirror occasionally stalls for minutes. Use
+          # Ubuntu's public mirror so transient regional mirror outages do not
+          # fail the job before the build starts.
+          sudo sed -i \
+            -e 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+            -e 's|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+            /etc/apt/apt-mirrors.txt /etc/apt/sources.list \
+            /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
           timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get update -o Acquire::Retries=3
           timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends libclang-dev
 
@@ -485,6 +509,14 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
+          # The hosted runner's Azure mirror occasionally stalls for minutes. Use
+          # Ubuntu's public mirror so transient regional mirror outages do not
+          # fail the job before the build starts.
+          sudo sed -i \
+            -e 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+            -e 's|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+            /etc/apt/apt-mirrors.txt /etc/apt/sources.list \
+            /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
           timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get update -o Acquire::Retries=3
           timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends libclang-dev
 
