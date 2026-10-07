@@ -229,11 +229,21 @@ export async function waitForEnd(
   deadlineMs: number,
   step: StepRecorder,
 ): Promise<number> {
+  return waitUntilGone(() => pidAlive(pid), `process ${pid}`, deadlineMs, step)
+}
+
+/** `waitForEnd` for a process only `alive` can see (an app on an Android device, spec 043). */
+export async function waitUntilGone(
+  alive: () => boolean,
+  label: string,
+  deadlineMs: number,
+  step: StepRecorder,
+): Promise<number> {
   const startedAt = Date.now()
   const end = startedAt + deadlineMs
-  while (pidAlive(pid)) {
+  while (alive()) {
     if (Date.now() >= end) {
-      throw new Error(`process ${pid} did not end within ${deadlineMs} ms`)
+      throw new Error(`${label} did not end within ${deadlineMs} ms`)
     }
     await sleep(50)
   }
@@ -294,19 +304,42 @@ export interface Page {
   frame(hook: string | null, deadlineMs?: number): Promise<void>
 }
 
-export interface PageOptions {
-  client: WebDriverClient
-  /** The application process this page's session started. */
-  appPid: number
-  marker: string
-  /** The application's real, resolved path (what `markedProcesses` matches on). */
-  executable: string
-  step: StepRecorder
+/** The application process as a platform sees it, where it is not a process on this machine. */
+export interface PageProcess {
+  alive(): boolean
+  marked(): MarkedProcess[]
 }
+
+export type PageOptions = {
+  client: WebDriverClient
+  step: StepRecorder
+  /** Maps a URL of the desktop app to the same page on this platform (Android: `http://tauri.localhost`). */
+  mapUrl?: (url: string) => string
+  /** Ends the window on this platform (Android: removes the task); default: the driver's own. */
+  closeWindow?: () => Promise<void>
+} & (
+  | {
+      /** The application process this page's session started. */
+      appPid: number
+      marker: string
+      /** The application's real, resolved path (what `markedProcesses` matches on). */
+      executable: string
+    }
+  | { process: PageProcess }
+)
 
 /** Binds the functions above to one instance's client, process and marker. */
 export function createPage(options: PageOptions): Page {
-  const { client, appPid, marker, executable, step } = options
+  const { client, step } = options
+  const processes: PageProcess & { label: string } =
+    'process' in options
+      ? { ...options.process, label: 'the application' }
+      : {
+          alive: () => pidAlive(options.appPid),
+          marked: () => markedProcesses(options.marker, options.executable),
+          label: `process ${options.appPid}`,
+        }
+  const mapUrl = options.mapUrl ?? ((url: string) => url)
   return {
     invoke: (command, args, invokeOptions) =>
       client.invoke(command, args, invokeOptions),
@@ -317,11 +350,12 @@ export function createPage(options: PageOptions): Page {
     typeToFocused: (text) => typeToFocused(client, text),
     press: (hook, pressOptions) =>
       press(client, hook, { ...pressOptions, step }),
-    closeWindow: () => client.closeWindow(),
-    navigate: (url) => client.navigate(url),
+    closeWindow: options.closeWindow ?? (() => client.closeWindow()),
+    navigate: (url) => client.navigate(mapUrl(url)),
     exec: (script, args) => client.execute(script, args),
-    waitForEnd: (deadlineMs) => waitForEnd(appPid, deadlineMs, step),
-    markedProcesses: () => markedProcesses(marker, executable),
+    waitForEnd: (deadlineMs) =>
+      waitUntilGone(processes.alive, processes.label, deadlineMs, step),
+    markedProcesses: () => processes.marked(),
     sampleUntilEnd: (script, intervalMs) =>
       sampleUntilEnd(client, script, intervalMs),
     frame: async (hook, deadlineMs = 5000) =>

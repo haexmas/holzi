@@ -4,6 +4,7 @@
 // (contracts/stand-in-provider.md).
 import http from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { reachFromDevice } from './platform/reach.ts'
 
 const MODEL_ID = 'stand-in-model'
 
@@ -241,6 +242,7 @@ export async function startProvider(
   if (address === null || typeof address === 'string') {
     throw new Error('the stand-in provider has no port')
   }
+  reachFromDevice(address.port)
 
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,

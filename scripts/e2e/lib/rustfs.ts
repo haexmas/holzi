@@ -5,6 +5,7 @@
 import { spawnSync } from 'node:child_process'
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { freePort } from './ports.ts'
+import { reachFromDevice } from './platform/reach.ts'
 
 export const RUSTFS_IMAGE = 'rustfs/rustfs:latest'
 const REGION = 'us-east-1'
@@ -74,6 +75,7 @@ export async function signedRequest(
 /** Starts RustFS and makes `buckets`; `stop` removes the container with its data. */
 export async function startRustfs(buckets: readonly string[]): Promise<Rustfs> {
   const port = await freePort()
+  reachFromDevice(port)
   const accessKeyId = `e2e${randomBytes(6).toString('hex')}`
   const secretAccessKey = randomBytes(18).toString('hex')
   const run = spawnSync(

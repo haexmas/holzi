@@ -29,6 +29,21 @@ describe('WebDriverClient', () => {
     assert.deepEqual(timeouts?.body, { script: 60000 })
   })
 
+  it('opens a session with the capabilities a platform gives instead of an application path', async () => {
+    const other = new WebDriverClient(driver.url)
+    const before = driver.requests.length
+    await other.newSession({
+      'goog:chromeOptions': { androidPackage: 'com.haex.holzi' },
+    })
+    assert.deepEqual(driver.requests[before]?.body, {
+      capabilities: {
+        alwaysMatch: {
+          'goog:chromeOptions': { androidPackage: 'com.haex.holzi' },
+        },
+      },
+    })
+  })
+
   it('reads an element id from the W3C element key and clicks and types by id', async () => {
     driver.onFind((using, value) => (value === '#two' ? ['a', 'b'] : ['only']))
     assert.deepEqual(await client.findElements('css selector', '#two'), [

@@ -23,6 +23,15 @@ export interface E2EEnv {
   marker: string
   /** Keep the material of passing scenarios too. */
   keep: boolean
+  /** Set when the run drives the app on an Android device instead of Linux (spec 043). */
+  android?: AndroidEnv
+}
+
+export interface AndroidEnv {
+  /** The adb serial of the device (an emulator in CI). */
+  serial: string
+  /** The chromedriver matching the device's web view. */
+  chromedriver: string
 }
 
 export interface Step {

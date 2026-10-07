@@ -1,5 +1,6 @@
 // A minimal W3C WebDriver client over fetch, for exactly the calls the suite needs. Not a general
-// client: it talks to the driver that starts the real application (tauri-driver).
+// client: it talks to the driver that starts the real application (tauri-driver on Linux, chromedriver
+// attached to the running app's web view on Android, spec 043).
 const ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf'
 
 export type InvokeResult =
@@ -106,12 +107,20 @@ export class WebDriverClient {
     return `/session/${this.id}${path}`
   }
 
+  /**
+   * Opens a session: for an application path through tauri-driver, or with the capabilities a
+   * platform gives (Android: chromedriver attached to the running app).
+   */
   async newSession(
-    application: string,
+    application: string | Record<string, unknown>,
     options: { scriptTimeoutMs?: number } = {},
   ): Promise<string> {
+    const alwaysMatch =
+      typeof application === 'string'
+        ? { 'tauri:options': { application } }
+        : application
     const created = (await this.call('POST', '/session', {
-      capabilities: { alwaysMatch: { 'tauri:options': { application } } },
+      capabilities: { alwaysMatch },
     })) as { sessionId: string }
     this.id = created.sessionId
     await this.call('POST', this.session('/timeouts'), {

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { targetDirectory } from './build.ts'
 import { freePort } from './ports.ts'
 import { spawnMarked, stopGroup } from './processes.ts'
+import { reachFromDevice } from './platform/reach.ts'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(HERE, '..', '..', '..')
@@ -149,7 +150,9 @@ export async function startNostrRelay(options: {
       await new Promise((resolveWait) => setTimeout(resolveWait, 100))
     }
   }
-  const relay = createRelay(await freePort(), launch)
+  const port = await freePort()
+  reachFromDevice(port)
+  const relay = createRelay(port, launch)
   await relay.start()
   return relay
 }
