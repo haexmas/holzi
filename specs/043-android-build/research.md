@@ -442,4 +442,6 @@ dauert das SDK-Laden bei jedem Lauf lange); ARM-Emulator (zu langsam ohne Hardwa
 ADR 0010 „Android: derselbe Kern, eine Plugin-Crate für die Plattform“ hält fest: gleicher Lader
 für lokale Modelle auf Android (ersetzt den MLC-Teil von ADR 0002), Zertifikatsprüfung über den
 Plattform-Verifier mit lettre-Patch, eine lokale Plugin-Crate für alles Plattformnahe,
-eingechecktes `gen/android`, Schließen beendet die App (ADR 0003 gilt unverändert).
+eingechecktes `gen/android`, Schließen beendet die App (ADR 0003 gilt unverändert). Geschrieben als
+[`docs/adr/0010-android-platform.md`](../../docs/adr/0010-android-platform.md); ADR 0002 trägt den
+Hinweis „superseded in part“.
