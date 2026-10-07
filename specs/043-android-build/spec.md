@@ -11,9 +11,10 @@ tragen einen eigenen Signaturschlüssel. Ein Prozess hält wie in Spec 013 genau
 Tresor-Sitzung; den Tresor schließen beendet die App. Die Build-Umgebung (Android SDK und NDK,
 JDK 17, Rust mit den Android-Zielen) kommt aus der Nix-devShell. Sie verwendet das atoms-Molekül
 `holzi` 0.8.0 aus [`haexmas/atoms` @ `b662c6205d6a1ebd7fac588291f82ea8e78c3d52`](https://github.com/haexmas/atoms/tree/b662c6205d6a1ebd7fac588291f82ea8e78c3d52),
-insbesondere `.devshell/packages.nix`, `.devshell/rust-toolchain.toml` und
-`.spaex/generated/nix-packages.json` (in holzi eingebracht mit PR #308), und ist nicht Teil dieser
-Spec.
+insbesondere `holzi/.devshell/packages.nix`, `holzi/.devshell/rust-toolchain.toml` und
+`holzi/nix-packages.json` (in holzi mit PR #308 als `.devshell/packages.nix`,
+`.devshell/rust-toolchain.toml` und `.spaex/generated/nix-packages.json` ausgeliefert), und ist
+nicht Teil dieser Spec.
 
 ## Beziehung zu bestehenden Specs
 
