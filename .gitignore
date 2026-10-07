@@ -34,7 +34,7 @@ dist
 
 # Tauri (Rust build output)
 src-tauri/target/
-src-tauri/gen/
+src-tauri/gen/schemas/
 
 # Generated ts-rs bindings (regenerated from Rust; CI check runs `pnpm generate:ts-types`)
 # Keeping them tracked lets the frontend import without a Rust build; the CI check

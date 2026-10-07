@@ -1,0 +1,61 @@
+use super::{capabilities, desktop, os_name, PlatformCapabilities, PlatformName, ANDROID};
+
+#[test]
+fn desktop_offers_every_desktop_facility() {
+    let table = desktop(PlatformName::Linux, true);
+    assert!(table.cli_delegates);
+    assert!(table.command_tool);
+    assert!(table.terminal);
+    assert!(table.folder_watch);
+    assert!(table.free_paths);
+    assert!(table.folder_pick);
+    assert!(table.gpu_detection);
+    assert!(table.relaunch_on_close);
+    assert!(!table.screen_capture);
+    assert!(!table.back_gesture);
+}
+
+#[test]
+fn only_a_desktop_release_build_relaunches_after_closing() {
+    assert!(desktop(PlatformName::Windows, true).relaunch_on_close);
+    assert!(!desktop(PlatformName::Windows, false).relaunch_on_close);
+}
+
+#[test]
+fn android_has_none_of_the_desktop_facilities() {
+    assert_eq!(
+        ANDROID,
+        PlatformCapabilities {
+            platform: PlatformName::Android,
+            cli_delegates: false,
+            command_tool: false,
+            terminal: false,
+            folder_watch: false,
+            free_paths: false,
+            folder_pick: false,
+            gpu_detection: false,
+            relaunch_on_close: false,
+            screen_capture: true,
+            back_gesture: true,
+        }
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn this_host_reads_the_linux_desktop_table() {
+    assert_eq!(
+        capabilities(),
+        desktop(PlatformName::Linux, !cfg!(debug_assertions))
+    );
+    assert_eq!(os_name(), Some("linux"));
+}
+
+#[test]
+fn the_table_reaches_the_interface_in_camel_case() {
+    let json = serde_json::to_value(ANDROID).unwrap();
+    assert_eq!(json["platform"], "android");
+    assert_eq!(json["cliDelegates"], false);
+    assert_eq!(json["screenCapture"], true);
+    assert_eq!(json["relaunchOnClose"], false);
+}

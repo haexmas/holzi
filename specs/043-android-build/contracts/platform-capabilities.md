@@ -11,7 +11,7 @@ platform_capabilities() -> PlatformCapabilities
 - Kein Tresor nötig; aufrufbar vor dem Entsperren (die Tresorauswahl braucht `folderPick`
   nicht, die Zurück-Geste aber `backGesture`).
 - Ergebnis ist für die Lebensdauer des Prozesses fest; die Oberfläche liest es einmal beim
-  Start (`usePlatform()`) und hält es im Speicher.
+  Start (`useDeviceCapabilities()`) und hält es im Speicher.
 - Felder und Werte: [data-model.md](../data-model.md#platformcapabilities-fr-016-fr-026-vertrag-platform-capabilitiesmd).
 
 ## Regeln im Kern

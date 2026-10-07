@@ -70,7 +70,7 @@ Linux (wie bisher) und auf Android im Emulator (neu, Pflicht-Check), Handprüfun
 echten Telefon nach [quickstart.md](./quickstart.md) für das, was der Emulator nicht kann
 (Gesten, Aussparung, Netzwechsel, System-Dateiauswahl, Mikrofon, Benachrichtigungen).
 
-**Target Platform**: Android 7.0+ (`minSdk` 24, `targetSdk` 37), `arm64-v8a` (Telefone) und
+**Target Platform**: Android 8.0+ (`minSdk` 26 wegen AAudio, research R1; `targetSdk` 37), `arm64-v8a` (Telefone) und
 `x86_64` (Emulator); Linux, macOS und Windows unverändert.
 
 **Project Type**: Desktop- und Mobil-App (Tauri) mit einer neuen lokalen Plugin-Crate.
@@ -97,7 +97,7 @@ _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 | II. Keine lokalen absoluten Pfade           | `gen/android` enthält nur relative Pfade (Gerüst); `local.properties` (SDK-Pfad) ist durch die `.gitignore` des Gerüsts ausgeschlossen; SDK-Pfade kommen aus `ANDROID_HOME`.                                                                                                       | erfüllt  |
 | III. Identität geräteunabhängig             | Tresor-Identität und Gerätekennung bleiben wie in Spec 024; die Tresordatei-Übernahme behält die Vault-Identität und erzeugt pro Installation eine neue Gerätekennung (R8).                                                                                                        | erfüllt  |
 | IV. Feste Revisionen                        | `lettre`-Fork und wry-Fork mit voller Commit-SHA in `[patch.crates-io]`; Gradle-Artefakt mit fester Version; GitHub-Actions mit festen Versionen wie die vorhandenen Jobs.                                                                                                         | erfüllt  |
-| V. Externe Quellen nur per Allowlist        | Keine neue Harness-Quelle; die Build-Umgebung kommt aus `haexmas/atoms` @ `b662c6205d6a1ebd7fac588291f82ea8e78c3d52`, Pfade `.devshell/packages.nix`, `.devshell/rust-toolchain.toml` und `.spaex/generated/nix-packages.json` (holzi PR #308).                                    | erfüllt  |
+| V. Externe Quellen nur per Allowlist        | Keine neue Harness-Quelle; die Build-Umgebung kommt aus `haexmas/atoms` @ `b662c6205d6a1ebd7fac588291f82ea8e78c3d52`, Pfade `holzi/.devshell/packages.nix`, `holzi/.devshell/rust-toolchain.toml` und `holzi/nix-packages.json` (in holzi mit PR #308 ausgeliefert).               | erfüllt  |
 | VI. Selbständernde Anweisungen per Review   | Keine Änderung an Constitution, Skills oder Berechtigungen; Branch-Schutz (neuer Pflicht-Check) ändert die Person, die das Repo betreut, selbst.                                                                                                                                   | erfüllt  |
 | VII. Relay-Ausfall blockiert nie lokal      | Tresor, Passwortmanager und lokale Modelle laufen ohne Netz (Edge Case „ohne Netz“); e2e-Dienste laufen lokal.                                                                                                                                                                     | erfüllt  |
 | VIII. Keine Verschleierung                  | nicht berührt                                                                                                                                                                                                                                                                      | erfüllt  |
@@ -173,7 +173,7 @@ src-tauri/
     ├── models/download_check.rs       # neu: Größe und freier Speicher
     └── sync/                          # Resumed/Netzwechsel → Wiederverbindung
 src/
-├── composables/usePlatform.ts         # neu: Fähigkeiten aus dem Kern
+├── composables/useDeviceCapabilities.ts # neu: Fähigkeiten aus dem Kern
 ├── composables/usePickedFile.ts       # neu: Dialog → gewählte Datei
 ├── plugins/actions.client.ts          # Zurück-Geste über Fähigkeiten statt User-Agent
 ├── components/wm/Desktop.vue          # Ränder über --holzi-inset-*

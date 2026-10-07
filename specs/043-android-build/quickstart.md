@@ -19,9 +19,9 @@ auf einem echten Telefon bleibt, was der Emulator nicht kann.
 ## §1 Bauen und starten (Stufe 1a)
 
 ```sh
-nix develop --command pnpm tauri android build --debug --apk --target aarch64   # Telefon
-nix develop --command pnpm tauri android build --debug --apk --target x86_64    # Emulator
-adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+nix develop --command pnpm tauri android build --debug --apk --split-per-abi --target aarch64 --target x86_64
+adb install -r src-tauri/gen/android/app/build/outputs/apk/arm64/debug/app-arm64-debug.apk     # Telefon
+adb install -r src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk   # Emulator
 ```
 
 Erwartet: Das APK installiert sich, holzi startet, die Tresorauswahl erscheint in ≤ 3 s

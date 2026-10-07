@@ -93,8 +93,8 @@ pub fn probe() -> HardwareInfo {
 
     let backend = Backend::from_features();
     let vram_bytes = match backend {
-        Backend::Cuda => probe_cuda_vram(),
-        Backend::Metal | Backend::Cpu => None,
+        Backend::Cuda if crate::platform::capabilities().gpu_detection => probe_cuda_vram(),
+        Backend::Cuda | Backend::Metal | Backend::Cpu => None,
     };
 
     HardwareInfo {

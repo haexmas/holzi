@@ -213,6 +213,7 @@ impl Watches {
 /// is replaced.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn watch(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
+    BridgeError::unless(crate::platform::capabilities().folder_watch)?;
     let rule = rule_id(params)?;
     let raw = params
         .get("path")
@@ -268,6 +269,8 @@ pub fn is_watching(ctx: &CallContext, params: &Value) -> Result<Value, BridgeErr
         .running(ctx.session.extension_id, &rule)))
 }
 
+// Mobile builds have no file watcher to compile (notify is a desktop-only dependency); the
+// capability table says `folder_watch: false` there, so these answer "not available".
 #[cfg(any(target_os = "android", target_os = "ios"))]
 pub fn watch(_ctx: &CallContext, _params: &Value) -> Result<Value, BridgeError> {
     Err(BridgeError::not_available())

@@ -3,7 +3,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier};
 
-use super::{VaultGate, VaultPhase};
+use super::{ClosePolicy, VaultGate, VaultPhase};
 use crate::error::HolziError;
 
 #[test]
@@ -213,4 +213,18 @@ fn app_state_install_publishes_and_begins_a_session_atomically_when_two_threads_
         assert_eq!(gate.phase(), VaultPhase::Active);
         assert!(state.active_name().unwrap().is_some());
     }
+}
+
+#[test]
+fn android_and_debug_builds_end_the_app_and_a_desktop_release_relaunches() {
+    use crate::platform::{desktop, PlatformName, ANDROID};
+    assert_eq!(super::close_policy_for(ANDROID), ClosePolicy::Exit);
+    assert_eq!(
+        super::close_policy_for(desktop(PlatformName::Linux, false)),
+        ClosePolicy::Exit
+    );
+    assert_eq!(
+        super::close_policy_for(desktop(PlatformName::Linux, true)),
+        ClosePolicy::Relaunch
+    );
 }

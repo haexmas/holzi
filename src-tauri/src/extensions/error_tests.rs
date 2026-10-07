@@ -57,3 +57,10 @@ fn the_fixed_answers_have_their_codes() {
     );
     assert_eq!(BridgeError::disabled().code, ExtensionErrorCode::Disabled);
 }
+
+#[test]
+fn a_missing_function_of_the_device_answers_not_available() {
+    assert!(BridgeError::unless(true).is_ok());
+    let error = BridgeError::unless(false).unwrap_err();
+    assert_eq!(error.code, ExtensionErrorCode::NotAvailable);
+}

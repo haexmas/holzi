@@ -18,8 +18,12 @@ export default defineNuxtConfig({
   // Nuxt/Nitro liest den Dev-Port aus `devServer`, NICHT aus `vite.server.port`
   // (letzteres greift nur beim Vite-Preview nach `nuxt build`). Muss mit
   // tauri.conf.json → build.devUrl und security.devCsp synchron bleiben.
+  // `tauri android dev` auf einem echten Telefon setzt TAURI_DEV_HOST auf die
+  // Adresse dieses Rechners im lokalen Netz (Spec 043 FR-034); im Emulator und
+  // am Desktop bleibt es bei localhost (der Emulator erreicht ihn per
+  // `adb reverse`).
   devServer: {
-    host: 'localhost',
+    host: process.env.TAURI_DEV_HOST || 'localhost',
     port: 3030,
   },
   alias: {
@@ -39,13 +43,6 @@ export default defineNuxtConfig({
     clearScreen: false,
     server: {
       strictPort: true,
-      hmr: process.env.TAURI_ENV_HOST
-        ? {
-            protocol: 'ws',
-            host: process.env.TAURI_ENV_HOST,
-            port: 1421,
-          }
-        : undefined,
       watch: {
         ignored: ['**/src-tauri/**'],
       },

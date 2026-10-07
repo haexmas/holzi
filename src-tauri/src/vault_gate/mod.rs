@@ -57,12 +57,18 @@ pub enum ClosePolicy {
 
 /// The policy for this build. Debug builds exit: under `pnpm tauri:dev`, a relaunch ends the whole
 /// dev session instead of the dev runner re-attaching (research R2, task T048, confirmed
-/// 2026-09-24). Release builds relaunch.
+/// 2026-09-24). Desktop release builds relaunch. Android always exits: the next start shows the
+/// vault picker in a new process (spec 043 FR-006).
 pub fn close_policy() -> ClosePolicy {
-    if cfg!(debug_assertions) {
-        ClosePolicy::Exit
-    } else {
+    close_policy_for(crate::platform::capabilities())
+}
+
+/// The policy the capability table asks for.
+pub fn close_policy_for(capabilities: crate::platform::PlatformCapabilities) -> ClosePolicy {
+    if capabilities.relaunch_on_close {
         ClosePolicy::Relaunch
+    } else {
+        ClosePolicy::Exit
     }
 }
 

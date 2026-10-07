@@ -11,9 +11,10 @@ tragen einen eigenen Signaturschlüssel. Ein Prozess hält wie in Spec 013 genau
 Tresor-Sitzung; den Tresor schließen beendet die App. Die Build-Umgebung (Android SDK und NDK,
 JDK 17, Rust mit den Android-Zielen) kommt aus der Nix-devShell. Sie verwendet das atoms-Molekül
 `holzi` 0.8.0 aus [`haexmas/atoms` @ `b662c6205d6a1ebd7fac588291f82ea8e78c3d52`](https://github.com/haexmas/atoms/tree/b662c6205d6a1ebd7fac588291f82ea8e78c3d52),
-insbesondere `.devshell/packages.nix`, `.devshell/rust-toolchain.toml` und
-`.spaex/generated/nix-packages.json` (in holzi eingebracht mit PR #308), und ist nicht Teil dieser
-Spec.
+insbesondere `holzi/.devshell/packages.nix`, `holzi/.devshell/rust-toolchain.toml` und
+`holzi/nix-packages.json` (in holzi mit PR #308 als `.devshell/packages.nix`,
+`.devshell/rust-toolchain.toml` und `.spaex/generated/nix-packages.json` ausgeliefert), und ist
+nicht Teil dieser Spec.
 
 ## Beziehung zu bestehenden Specs
 
@@ -489,8 +490,9 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
 
 ## Assumptions
 
-- Mindestversion ist die, die das Tauri-Android-Gerüst vorgibt (Android 7.0); geprüft wird auf
-  dem Telefon der Person und auf einem aktuellen Emulator.
+- Mindestversion ist Android 8.0 (API 26): Die Spracheingabe nimmt über AAudio auf, das es erst ab
+  Android 8.0 gibt (das Tauri-Gerüst gibt Android 7.0 vor). Geprüft wird auf dem Telefon der Person
+  und auf einem aktuellen Emulator.
 - Der Build läuft in der Nix-devShell mit den gepinnten atoms-Dateien
   ([`haexmas/atoms` @ `b662c6205d6a1ebd7fac588291f82ea8e78c3d52`](https://github.com/haexmas/atoms/tree/b662c6205d6a1ebd7fac588291f82ea8e78c3d52)); die CI darf eine eigene
   Android-Umgebung aufsetzen, solange sie dieselben Versionen von SDK, NDK und Rust benutzt.

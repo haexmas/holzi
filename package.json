@@ -22,6 +22,7 @@
     "check:vault-lifecycle": "node scripts/check-vault-lifecycle.ts",
     "check:vault-passphrase-lifetime": "node scripts/check-vault-passphrase-lifetime.ts",
     "check:templates": "node scripts/check-vue-templates.ts",
+    "check:android-versions": "node --test scripts/check-android-versions.ts",
     "check:e2e-lib": "node --test scripts/e2e/lib/*.test.ts scripts/e2e/lib/platform/*.test.ts",
     "test:e2e": "scripts/with-nix-host-bridge.sh node scripts/e2e/cli.ts",
     "typecheck:scripts": "tsc --project tsconfig.scripts.json",
@@ -40,6 +41,8 @@
     "tauri:build": "scripts/with-nix-host-bridge.sh tauri build",
     "tauri:build:cuda": "scripts/with-nix-host-bridge.sh tauri build -- --features llm-cuda",
     "tauri:build:metal": "tauri build -- --features llm-metal",
+    "tauri:android:dev": "tauri android dev",
+    "tauri:android:build": "tauri android build",
     "export:eval-tools": "node scripts/export-eval-tools.ts",
     "generate:ts-types": "scripts/with-nix-host-bridge.sh cargo test --manifest-path src-tauri/Cargo.toml export_bindings -- --nocapture && sed -i -E 's/[[:space:]]+$//' src/types/bindings/*.ts"
   },

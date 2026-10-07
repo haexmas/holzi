@@ -1,6 +1,6 @@
 # Qwen3 is the local model family, with platform-specific presets
 
-Status: accepted
+Status: accepted; superseded in part by [ADR-0010](0010-android-platform.md) (no native MLC backend on mobile)
 Date: 2026-09-13
 
 ## Decision
