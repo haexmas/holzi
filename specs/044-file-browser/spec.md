@@ -330,7 +330,7 @@ internen Speicher und die SD-Karte wie auf dem Desktop.
 - **Ein Ordner wird in sich selbst kopiert oder verschoben**: holzi lehnt vor dem Start ab.
 - **Zu wenig Platz am Ziel**: Ist der freie Platz bekannt (Gerät), prüft holzi vor dem Start;
   sonst scheitert der Transfer mit Grund und ohne halbe Datei.
-- **Netzfehler bei einem Speicher**: holzi versucht es einige Male mit Wartezeit erneut; danach
+- **Netzfehler bei einem Speicher**: holzi versucht es bis zu dreimal mit wachsender Wartezeit erneut; danach
   bietet die Transferleiste „Erneut versuchen“.
 - **Sehr große Textdatei** (über 5 MB): Der Viewer zeigt die ersten 5 MB mit Hinweis. Binärdateien
   mit Textendung zeigen die Info-Ansicht.
@@ -367,7 +367,8 @@ internen Speicher und die SD-Karte wie auf dem Desktop.
   laden, falls die Beobachtung ein Ereignis verpasst hat.
 - **FR-007**: Jeder Tab des Dateibrowsers MUSS seine eigene Quelle und seinen eigenen Ordner haben, und
   die Sitzung (Spec 022) MUSS beide wiederherstellen.
-- **FR-008**: Eine Ansicht MUSS auch mit 50 000 Einträgen in einem Ordner bedienbar bleiben.
+- **FR-008**: Eine Ansicht MUSS auch mit 50 000 Einträgen in einem Ordner bedienbar bleiben: Scrollen
+  bis ans Ende ohne Bild, das länger als 100 ms braucht.
 
 **Viewer**
 
@@ -412,8 +413,8 @@ internen Speicher und die SD-Karte wie auf dem Desktop.
   zieht, MUSS holzi dorthin kopieren.
 - **FR-025**: Netzfehler bei einem Speicher MUSS holzi bis zu dreimal mit wachsender Wartezeit
   wiederholen; danach MUSS der Transfer als gescheitert mit „Erneut versuchen“ erscheinen.
-- **FR-026**: Wird die Vault gesperrt, MÜSSEN laufende Transfers abbrechen (ohne halbe Datei) und
-  alle Freigabe-URLs verfallen.
+- **FR-026**: Wird die Vault gesperrt, MÜSSEN laufende Transfers abbrechen, ohne halbe Datei; für
+  Freigabe-URLs gilt FR-016.
 
 **Suche und Filter**
 
@@ -498,7 +499,7 @@ internen Speicher und die SD-Karte wie auf dem Desktop.
 ### Measurable Outcomes
 
 - **SC-001**: Ein Ordner mit 1 000 Einträgen auf dem Gerät ist in unter 1 Sekunde sichtbar; einer
-  mit 50 000 Einträgen lässt sich flüssig scrollen.
+  mit 50 000 Einträgen scrollt bis ans Ende ohne Bild, das länger als 100 ms braucht.
 - **SC-002**: Ein 4-GB-Video auf dem Gerät beginnt in unter 2 Sekunden zu spielen, und ein Sprung an
   eine beliebige Stelle ist in unter 2 Sekunden sichtbar. In einem Speicher mit guter Verbindung
   beginnt es in unter 5 Sekunden.
@@ -513,8 +514,8 @@ internen Speicher und die SD-Karte wie auf dem Desktop.
   fehlender Platz, Sperren der Vault) bleibt am Ziel keine halbe Datei zurück.
 - **SC-007**: Eine Freigabe-URL liefert nach dem Schließen ihres Tabs oder dem Sperren der Vault in
   100 % der Fälle nichts mehr aus.
-- **SC-008**: Wiedergabe von MP3 und MP4 mit Springen funktioniert nachweislich unter Linux, Windows
-  und Android.
+- **SC-008**: Wiedergabe von MP3 und MP4 mit Springen, PDF und Bilder funktionieren nachweislich unter
+  Linux, Windows, macOS und Android, geprüft in der CI bei jedem PR.
 
 ## Assumptions
 

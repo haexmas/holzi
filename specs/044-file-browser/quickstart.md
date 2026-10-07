@@ -30,7 +30,8 @@ ln -s /tmp/holzi-files /tmp/holzi-files/a/schleife
 2. Speicherbedarf von holzi beobachten (`ps -o rss`): wächst um weniger als 100 MB.
 3. `lied.mp3` öffnen: startet sofort.
 4. Tab schließen, die zuvor kopierte Freigabe-URL mit `curl -I` abfragen: `404`.
-5. **Windows und Android**: Schritte 1 und 3 wiederholen (Local-Network-Access-Risiko, research R4).
+5. Windows, macOS und Android prüft die CI mit der Plattform-Probe (tasks.md T007, T041); von Hand nur,
+   wenn ein Probe-Job rot ist.
 
 ## 3. Verwalten (US3)
 

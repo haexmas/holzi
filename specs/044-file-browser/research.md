@@ -78,7 +78,9 @@ Kompilieren, nicht Verhalten zur Laufzeit.
   `android:networkSecurityConfig` im Manifest.
 - **Risiko** [Guessing]: „Local Network Access“ in Chromium 142+ könnte Anfragen von
   `http://tauri.localhost` an `127.0.0.1` in WebView2/Android WebView sperren. Erste Aufgabe der
-  Umsetzung ist eine Probe auf Windows und Android; Ausweichweg: WebView2-Argument, das LNA abschaltet.
+  Umsetzung ist eine selbstprüfende Plattform-Probe in der CI auf Windows, macOS und Android (Feature
+  `platform-probe`, tasks.md T007; Android im Emulator wie haex-vault mit
+  `reactivecircus/android-emulator-runner`); Ausweichweg: WebView2-Argument, das LNA abschaltet.
 - **Alternatives**: eigenes URI-Schema (verworfen: WebKitGTK), `asset://` (verworfen: kein Range, Scope
   über das ganze Dateisystem), vorsignierte S3-URLs (verworfen: CSP für beliebige Endpunkte, Zugangsdaten
   indirekt in der Webview, Grundsatz aus 038).

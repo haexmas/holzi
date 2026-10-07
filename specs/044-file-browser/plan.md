@@ -38,7 +38,7 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](.
 
 **Primary Dependencies**: neu in Rust: `walkdir` 2.5, `frizbee` 0.13, `image` 0.25 (nur jpeg/png/webp/gif),
 `fast_image_resize` 6.1, `pdf-extract` 0.12, `calamine` 0.36, `zip` 8, `quick-xml` 0.41, `trash` 5.2
-(nicht Android). Vorhanden: `tokio` (net, fs, io-util), `rusty-s3`, `reqwest`, `notify-debouncer-full`
+(nicht Android, nicht iOS). Vorhanden: `tokio` (net, fs, io-util), `rusty-s3`, `reqwest`, `notify-debouncer-full`
 (bisher nur Desktop; für Android mit eingebunden, R11), `uuid`, `sha2`, `tempfile`. Neu im Fenster: `pdfjs-dist` 6.4. Vorhanden: `photoswipe`,
 `@vueuse/core` (`useVirtualList`), haex-ui (Shadcn-Kontextmenü, Dialoge).
 
@@ -48,7 +48,9 @@ Gerätepräferenzen `files.*`; Vorschaubilder unter `<AppCache>/files-thumbnails
 
 **Testing**: `cargo test` (Tests in `*_tests.rs`; Temp-Verzeichnisse, `FakeStore`, `wiremock` für S3),
 `pnpm check:files` (neu), `pnpm check:agent-actions`, `pnpm typecheck`, `pnpm lint`, `pnpm format:check`,
-E2E-Szene `files` (Spec 016), manuell nach [quickstart.md](./quickstart.md)
+E2E-Szene `files-basic` (Spec 016) unter Linux; Plattform-Probe in der CI unter Windows, macOS
+und Android (research R4); manuell nach [quickstart.md](./quickstart.md) nur noch SC-002/SC-003 mit
+einem 4-GB-Video
 
 **Target Platform**: Linux, Windows, macOS, Android (iOS ohne eigenen Aufwand; „Zugriff auf alle
 Dateien“ gibt es dort nicht)
@@ -115,13 +117,16 @@ src-tauri/src/
 │   ├── local/                      # aus extensions/fs gezogen + neu
 │   │   ├── resolve.rs, places.rs   # Auflösen, Sperrliste, bekannte Orte, Laufwerke
 │   │   ├── watch.rs                # notify (Desktop und Android)
-│   │   └── ops.rs                  # list, stat, mkdir, rename, Papierkorb
+│   │   ├── ops.rs                  # list, stat
+│   │   ├── edit.rs                 # Ordner anlegen, umbenennen
+│   │   └── text.rs                 # Text bis 5 MB, binär erkennen
 │   ├── storage_source.rs           # S3 als Quelle (Präfixe als Ordner)
 │   ├── media_server.rs             # Server, Tokens, Range + _tests
 │   ├── streaming.rs                # StreamingSource: Datei, S3
 │   ├── thumbnails.rs               # image + fast_image_resize, Cache
 │   ├── search.rs                   # walkdir + frizbee, S3-Suche
-│   ├── transfer/                   # TransferManager, lokal, S3-Multipart, Konflikte
+│   ├── transfer/                   # TransferManager; local.rs (inkl. Papierkorb), s3.rs (Multipart)
+│   ├── kind.rs                     # Art des Viewers aus MIME/Endung
 │   ├── extract/                    # pdf.rs, office.rs, image.rs (für Agents)
 │   ├── agent/                      # NativeActionTool-Ausführer, Rückfrage-Brücke
 │   ├── permissions.rs              # Tabelle agent_file_permissions
@@ -155,18 +160,25 @@ weil holzi ihn selbst nutzt und Erweiterungen und Agents nur Verbraucher sind (w
 Jeder PR ist für sich prüfbar und lauffähig; die Reihenfolge folgt den Prioritäten der Spec.
 
 1. **PR A (Docs)**: Spec, Plan, Research, Contracts, Tasks, ADR 0011.
-2. **PR B (Kern, US1 ohne Medien)**: `files/local` aus `extensions/fs` gezogen, `FilesService` mit
-   Auflisten, Angaben, Beobachten; App `system.files` mit Liste, Raster, Pfadleiste, Seitenleiste,
-   Sitzung, Präferenzen; Vorschaubilder; Viewer für Text und Bild; Info-Ansicht.
-3. **PR C (Medien, US2)**: zuerst die LNA-Probe auf Windows und Android; Medienserver, CSP, Android
-   `network_security_config`; Viewer für Video, Audio, PDF.
+2. **PR B (Kern, Medienserver, US1)**: zuerst die Plattform-Probe in der CI (Windows, macOS, Android),
+   dann `files/local` aus `extensions/fs` gezogen, Medienserver, CSP, Android
+   `network_security_config`, `FilesService` mit Auflisten, Angaben, Beobachten; App `system.files`
+   mit Liste, Raster, Pfadleiste, Seitenleiste, Sitzung, Präferenzen; Vorschaubilder; Viewer für Text
+   und Bild; Info-Ansicht.
+3. **PR C (US2)**: Viewer für Video, Audio und PDF; Probe auf alle Plattformen erweitert.
 4. **PR D (Verwalten, US3)**: Transfers, Konflikte, Papierkorb, Drag & Drop, eigene Daten nur lesen.
 5. **PR E (Suche, US4)**.
 6. **PR F (Speicher, US5)**: `RemoteStore`-Erweiterung, Speicher als Quelle, S3-Streaming und
    Multipart.
 7. **PR G (Agents, US6)**: ADR 0011 umgesetzt (`NativeActionTool`), Tabelle 0029, Rückfrage-Brücke,
    Textauszug, Bilder im `tool_result`, `files.show`.
-8. **PR H (Android, US7)**: Plugin-Befehle, Manifest, Erklärung im Dateibrowser.
+8. **PR H (Android, US7)**: Plugin-Befehle, Manifest, Erklärung im Dateibrowser; Probe mit erteilter
+   und fehlender Berechtigung.
+
+**Plattformen in der CI**: Linux mit den E2E-Szenarien; Windows, macOS und Android mit einer
+selbstprüfenden Plattform-Probe (Feature `platform-probe`, Jobs `platform-probe` und
+`platform-probe-android`), weil volles E2E dort noch nicht gebaut ist (`scripts/e2e/PLATFORMS.md`). Den
+Ausbau zu vollem E2E nach dem Vorbild von haex-vault führt `plans/README.md` als eigene Idee.
 
 ## Complexity Tracking
 
