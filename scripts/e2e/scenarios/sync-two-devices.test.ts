@@ -16,6 +16,8 @@ const SECOND = 'Noch ein Chat, während das Telefon aus war'
 async function showGeneralSettings(device: Device) {
   await showApp(device.page, 'system.settings')
   await waitForLocation(device.page, 'general')
+  await device.page.click('settings-row-general.basic')
+  await waitForLocation(device.page, 'general.basic')
   await device.page.waitForDisplayed('session-restore-switch')
 }
 
