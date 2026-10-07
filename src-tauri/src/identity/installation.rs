@@ -6,12 +6,9 @@
 //! that a copied `.db` reopened by the same installation can look up its
 //! existing `known_devices` row.
 
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
 
 use uuid::Uuid;
 
@@ -37,50 +34,34 @@ pub fn read_or_mint_installation_uuid(path: &Path) -> std::io::Result<Uuid> {
 }
 
 /// Creates and durably writes a new installation UUID at `path`.
+///
+/// The UUID is written to a temporary file beside `path` and published only when complete, never
+/// over an existing file: a second process minting at the same time keeps the first one's UUID.
+/// `persist_noclobber` publishes with `renameat2(RENAME_NOREPLACE)` on Linux and Android; Android
+/// forbids apps hard links (spec 043, found on the emulator), which the old way used.
 fn mint_and_fsync(path: &Path) -> std::io::Result<Uuid> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
+    let parent = match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    fs::create_dir_all(parent)?;
     let fresh = Uuid::new_v4();
-    let tmp = path.with_file_name(format!(
-        "{}.{}.tmp",
-        INSTALLATION_ID_FILENAME,
-        Uuid::new_v4()
-    ));
 
-    let mut opts = OpenOptions::new();
-    opts.create_new(true).write(true);
-    #[cfg(unix)]
-    opts.mode(0o600);
+    let mut tmp = tempfile::Builder::new()
+        .prefix(&format!("{INSTALLATION_ID_FILENAME}."))
+        .suffix(".tmp")
+        .tempfile_in(parent)?;
+    tmp.write_all(fresh.to_string().as_bytes())?;
+    tmp.as_file().sync_all()?;
 
-    let mut f = opts.open(&tmp)?;
-    if let Err(error) = f.write_all(fresh.to_string().as_bytes()) {
-        drop(f);
-        let _ = fs::remove_file(&tmp);
-        return Err(error);
-    }
-    if let Err(error) = f.sync_all() {
-        drop(f);
-        let _ = fs::remove_file(&tmp);
-        return Err(error);
-    }
-    drop(f);
-
-    match fs::hard_link(&tmp, path) {
-        Ok(()) => {
-            let _ = fs::remove_file(&tmp);
-            Ok(fresh)
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            let _ = fs::remove_file(&tmp);
+    match tmp.persist_noclobber(path) {
+        Ok(_) => Ok(fresh),
+        Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
             let existing = fs::read_to_string(path)?;
             Uuid::parse_str(existing.trim()).map_err(|parse_error| {
                 std::io::Error::new(std::io::ErrorKind::InvalidData, parse_error)
             })
         }
-        Err(error) => {
-            let _ = fs::remove_file(&tmp);
-            Err(error)
-        }
+        Err(error) => Err(error.error),
     }
 }
