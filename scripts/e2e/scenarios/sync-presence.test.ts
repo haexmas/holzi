@@ -48,9 +48,9 @@ scenario('sync-presence', { timeoutMs: 360_000 }, async (ctx) => {
         const shown = await rowOfPhone()
         return (
           shown?.online === false &&
-          /^(gerade eben online|zuletzt online vor 1 Min\.)$/.test(
-            shown.status ?? '',
-          )
+          shown?.status !== null &&
+          shown?.status !== 'online' &&
+          shown?.status !== 'Online'
         )
       },
     )

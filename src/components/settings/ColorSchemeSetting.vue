@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * The category "Darstellung" (spec 023-settings-app, FR-013, FR-024): the color scheme of the
- * vault, saved on selection (FR-021) through `settings.appearance.setColorScheme`. The value
- * comes from `useColorScheme`, which the workspace loads on open.
+ * "Allgemein → Erscheinungsbild" (spec 023-settings-app, FR-013, FR-024, spec 042): the color
+ * scheme of the vault, saved on selection (FR-021) through `settings.appearance.setColorScheme`.
+ * The value comes from `useColorScheme`, which the workspace loads on open.
  */
 import type { SettingsSelectOption } from '~/components/settings/Select.vue'
 

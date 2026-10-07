@@ -28,10 +28,6 @@ use super::paths::{
 };
 use super::vault_config::vault_config;
 
-/// Minimum passphrase length. Kept low for the MVP; can be tightened
-/// later without a wire-contract change.
-pub(super) const MIN_PASSPHRASE_LEN: usize = 8;
-
 #[derive(Debug, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(rename_all = "camelCase")]
@@ -64,11 +60,7 @@ pub async fn create_instance_core<R: Runtime>(
     state.gate().ensure_can_open()?;
     let _operation = chat.acquire_operation()?;
     validate_instance_name(name)?;
-    if passphrase.as_str().len() < MIN_PASSPHRASE_LEN {
-        return Err(HolziError::WeakPassphrase {
-            reason: format!("passphrase must be at least {MIN_PASSPHRASE_LEN} characters"),
-        });
-    }
+    passphrase.validate_new()?;
 
     let db_path = get_instance_path(app, name)?;
     let pending_marker = get_pending_marker_path(&db_path);

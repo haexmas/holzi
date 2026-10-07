@@ -10,6 +10,12 @@
 use serde::Deserialize;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
+use crate::error::{HolziError, Result};
+
+/// Minimum passphrase length in bytes. Kept low for the MVP; can be tightened
+/// later without a wire-contract change.
+pub(crate) const MIN_PASSPHRASE_LEN: usize = 8;
+
 /// A vault passphrase that erases its buffer on drop, has no `Clone` and never prints its value.
 #[derive(Deserialize)]
 #[serde(transparent)]
@@ -19,6 +25,17 @@ impl Passphrase {
     /// The passphrase text, for the one place that hands it to SQLCipher.
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// Checks a passphrase that is about to become a vault's key: on creation, on joining a link
+    /// and on a change (spec 042).
+    pub fn validate_new(&self) -> Result<()> {
+        if self.0.len() < MIN_PASSPHRASE_LEN {
+            return Err(HolziError::WeakPassphrase {
+                reason: format!("passphrase must be at least {MIN_PASSPHRASE_LEN} characters"),
+            });
+        }
+        Ok(())
     }
 }
 

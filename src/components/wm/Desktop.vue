@@ -12,8 +12,10 @@
  * handles the compact/normal display switch without this component's help.
  * The overlay open states live in the store (`wm.overlays`, spec 020) so
  * system back can close them and open the window overview.
+ *
+ * Behind every workspace lies the vault's background image, if one is set (spec 042, FR-017).
  */
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 
 const wm = useWindowManagerStore()
 const { t } = useI18n()
@@ -26,10 +28,26 @@ watch([width, height], ([newWidth, newHeight]) => {
 const openWorkspaces = useAction('wm.workspaces.overview')
 const openWindows = useAction('wm.windows.overview')
 const openLauncher = useAction('wm.launcher.open')
+
+const { background } = useWorkspaceBackground()
+// The value is a checked WebP data URL (`isBackgroundValue`): only base64 inside the quotes.
+const backgroundStyle = computed(() =>
+  background.value
+    ? {
+        backgroundImage: `url("${background.value}")`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }
+    : undefined,
+)
 </script>
 
 <template>
-  <div class="relative h-full min-h-0 w-full overflow-hidden bg-muted/10">
+  <div
+    class="relative h-full min-h-0 w-full overflow-hidden bg-muted/10"
+    :style="backgroundStyle"
+    data-testid="wm-desktop"
+  >
     <div class="absolute inset-0 isolate">
       <WmWindow
         v-for="win in wm.windowsInActiveWorkspace"

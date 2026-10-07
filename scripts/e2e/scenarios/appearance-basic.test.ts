@@ -30,8 +30,9 @@ scenario('appearance-basic', { timeoutMs: 300_000 }, async (ctx) => {
   let page = device.page
 
   await openSettings(page)
-  await page.click('settings-category-appearance')
-  await waitForLocation(page, 'appearance')
+  await page.click('settings-category-general')
+  await page.click('settings-row-general.appearance')
+  await waitForLocation(page, 'general.appearance')
   const sky = await themeHue(page, '--primary')
   assert.equal(sky, 237, 'the default accent is sky')
 
@@ -93,6 +94,7 @@ scenario('appearance-basic', { timeoutMs: 300_000 }, async (ctx) => {
   ctx.step('an adjusted custom colour says so')
 
   // A half-typed hex value changes nothing; a whole one applies.
+  await reveal(page, 'appearance-add-accent')
   await page.click('appearance-add-accent')
   await page.waitForDisplayed('appearance-hex-accent')
   await page.type('appearance-hex-accent', KEY.backspace.repeat(7) + '#12')
@@ -258,7 +260,8 @@ scenario('appearance-basic', { timeoutMs: 300_000 }, async (ctx) => {
     scheme: 'light',
   })
   await openSettings(page)
-  await page.click('settings-category-appearance')
+  await page.click('settings-category-general')
+  await page.click('settings-row-general.appearance')
   await reveal(page, 'appearance-reset')
   await page.click('appearance-reset')
   await page.click('appearance-reset-confirm')

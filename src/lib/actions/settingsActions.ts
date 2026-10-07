@@ -30,6 +30,16 @@ const COLOR_SCHEME_STATE: JsonSchema = {
   properties: { scheme: COLOR_SCHEME },
   required: ['scheme'],
 }
+const LANGUAGE: JsonSchema = {
+  type: 'string',
+  enum: ['de', 'en'],
+  description: 'Interface language: German (de) or English (en).',
+}
+const LANGUAGE_STATE: JsonSchema = {
+  type: 'object',
+  properties: { language: LANGUAGE },
+  required: ['language'],
+}
 const COLOR_CHOICE: JsonSchema = {
   type: 'object',
   description:
@@ -95,7 +105,7 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
   setting({
     id: 'settings.get',
     description:
-      'Read the current settings: device name, color scheme, appearance, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.',
+      'Read the current settings: device name, language, color scheme, appearance, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.',
     result: ANY_OBJECT,
     scope: 'settings.read',
     effect: 'read',
@@ -215,6 +225,19 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
     effect: 'write',
   }),
   setting({
+    id: 'settings.general.setLanguage',
+    description:
+      'Set the interface language (German or English) for the whole vault, on all its devices. It applies at once.',
+    input: {
+      type: 'object',
+      properties: { language: LANGUAGE },
+      required: ['language'],
+    },
+    result: LANGUAGE_STATE,
+    scope: 'settings.device',
+    effect: 'write',
+  }),
+  setting({
     id: 'settings.appearance.setColorScheme',
     description:
       'Set the color scheme (light, dark or following the system) for the whole vault. It applies at once.',
@@ -224,6 +247,13 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
       required: ['scheme'],
     },
     result: COLOR_SCHEME_STATE,
+    scope: 'settings.device',
+    effect: 'write',
+  }),
+  setting({
+    id: 'settings.appearance.removeBackground',
+    description:
+      'Remove the workspace background image for the whole vault; the default background shows again. Only the user can choose a new image, in Settings → General → Appearance.',
     scope: 'settings.device',
     effect: 'write',
   }),

@@ -27,8 +27,9 @@ scenario('settings-color-scheme', {}, async (ctx) => {
   await createAndUnlock(instance, { name })
   await openChat(instance)
   await openSettings(instance)
-  await instance.click('settings-category-appearance')
-  await waitForLocation(instance, 'appearance')
+  await instance.click('settings-category-general')
+  await instance.click('settings-row-general.appearance')
+  await waitForLocation(instance, 'general.appearance')
 
   // Non-text contrast of the off switch's track against its card, at least 3:1 (WCAG 1.4.11).
   const trackContrast = async () => {
@@ -84,18 +85,22 @@ scenario('settings-color-scheme', {}, async (ctx) => {
   }
   await instance.click('[role="option"][data-value="dark"]')
   await instance.click('settings-category-general')
-  await waitForLocation(instance, 'general')
+  await instance.click('settings-row-general.basic')
+  await waitForLocation(instance, 'general.basic')
   const alias = await textContrast(instance, '[data-testid="settings-alias"]')
   assert.ok(alias >= 4.5, `name field: contrast ${alias.toFixed(2)} < 4.5`)
   const track = await trackContrast()
   ctx.step(`S20 readable in dark mode (switch track ${track.toFixed(2)})`)
 
   // The off switch's track also stands out from its card in the light scheme.
-  await instance.click('settings-category-appearance')
+  await instance.click('settings-category-general')
+  await instance.click('settings-row-general.appearance')
+  await waitForLocation(instance, 'general.appearance')
   await choose(instance, 'settings-color-scheme', 'light')
   await ctx.waitFor('light again', async () => !(await scheme(instance)).dark)
   await instance.click('settings-category-general')
-  await waitForLocation(instance, 'general')
+  await instance.click('settings-row-general.basic')
+  await waitForLocation(instance, 'general.basic')
   const lightTrack = await trackContrast()
   ctx.step(`switch track in light mode ${lightTrack.toFixed(2)}`)
 

@@ -172,9 +172,11 @@ function fakeDom() {
 function loadIndexPage(
   dom: ReturnType<typeof fakeDom>,
   activeName: string | null = null,
+  languageLoad: () => Promise<void> = async () => {},
 ) {
   let synced = 0
   const navigations: string[] = []
+  const events: string[] = []
   const store = {
     instances: [] as unknown[],
     lastError: null as string | null,
@@ -185,23 +187,61 @@ function loadIndexPage(
     },
     setActiveInstance() {},
   }
-  const page = loadScriptSetup<{ onSelect: (name: string) => void }>(
-    'src/pages/index.vue',
-    ['onSelect'],
-    {
-      useInstancesStore: () => store,
-      useInstance: () => ({
-        activeNameAsync: async () => activeName,
-      }),
-      navigateTo: (path: string) => {
-        navigations.push(path)
+  const page = loadScriptSetup<{
+    onSelect: (name: string) => void
+    onUnlocked: (name: string) => Promise<void>
+    onCreated: (name: string) => Promise<void>
+  }>('src/pages/index.vue', ['onSelect', 'onUnlocked', 'onCreated'], {
+    useInstancesStore: () => store,
+    useInstance: () => ({
+      activeNameAsync: async () => activeName,
+    }),
+    useLanguage: () => ({
+      language: { value: 'en' },
+      options: [],
+      showAsync: async () => {},
+      loadAsync: async () => {
+        events.push('language')
+        await languageLoad()
       },
-      window: dom.window,
-      document: dom.document,
+    }),
+    navigateTo: (path: string) => {
+      navigations.push(path)
+      events.push(`navigate ${path}`)
     },
-  )
-  return { ...page, syncCount: () => synced, navigations }
+    window: dom.window,
+    document: dom.document,
+  })
+  return { ...page, syncCount: () => synced, navigations, events }
 }
+
+// Spec 042 (FR-009): the vault's language applies before its workspace (or the alias wizard the
+// workspace redirects to) is shown, and a failed read never keeps the vault from opening.
+test('pages/index.vue applies the vault language before opening an unlocked or created vault', async () => {
+  for (const open of ['onUnlocked', 'onCreated'] as const) {
+    const page = loadIndexPage(fakeDom())
+    await page[open]('vault-a')
+    assert.deepEqual(
+      page.events,
+      ['language', 'navigate /workspace/vault-a'],
+      open,
+    )
+  }
+})
+
+test('pages/index.vue opens the vault even when reading its language fails', async () => {
+  const page = loadIndexPage(fakeDom(), null, async () => {
+    throw new Error('get_pref failed')
+  })
+  const logged = console.error
+  console.error = () => {}
+  try {
+    await page.onUnlocked('vault-a')
+  } finally {
+    console.error = logged
+  }
+  assert.deepEqual(page.navigations, ['/workspace/vault-a'])
+})
 
 test('pages/index.vue recovers the active vault after a frontend reload', async () => {
   const page = loadIndexPage(fakeDom(), 'vault-a')

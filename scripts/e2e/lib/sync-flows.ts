@@ -65,6 +65,14 @@ export async function createVaultOnRelay(
       args: { name: vaultName, passphrase },
     }),
   )
+  // The existing scenarios assert German labels; seed the new vault explicitly so they do not
+  // depend on the runner's system locale.
+  unwrap(
+    'set_pref',
+    await page.invoke('set_pref', {
+      args: { scope: { kind: 'vault' }, key: 'general.language', value: 'de' },
+    }),
+  )
   unwrap(
     'sync_servers_set',
     await page.invoke('sync_servers_set', {

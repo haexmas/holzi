@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The switch "Akzentfarbe als Hinweis für das aktive Fenster" of "Darstellung" (spec
+ * The switch "Akzentfarbe als Hinweis für das aktive Fenster" of "Erscheinungsbild" (spec
  * 035-appearance-and-fields, FR-024): saved as soon as it flips, through `settings.appearance.set`.
  * Only the border of the active window changes; no token does.
  */

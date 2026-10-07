@@ -34,12 +34,12 @@ scenario('sync-identity', { timeoutMs: 240_000 }, async (ctx) => {
     )
   }
   await laptop.page.click('settings-identity-copy')
-  await ctx.waitFor(
-    'the copy button to say it copied',
-    async () =>
-      (await laptop.page.exec<string>(
+  await ctx.waitFor('the copy button to say it copied', async () =>
+    ['Kopiert', 'Copied'].includes(
+      await laptop.page.exec<string>(
         `return document.querySelector('[data-testid="settings-identity-copy"]').textContent.trim()`,
-      )) === 'Kopiert',
+      ),
+    ),
   )
   ctx.step('copied')
 

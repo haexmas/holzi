@@ -31,6 +31,11 @@ negativ aus: reine Funktion `systemLocale(languages: readonly string[]): 'de' | 
 Die Semantik von `detectBrowserLanguage` ohne Cookie und ohne Präfix ist nicht belegt `[Guessing]`, daher
 die Probe vor dem Festlegen (Memory „verify framework behavior empirically“).
 
+**Result T001 (2026-10-07)**: Probe positiv. `pnpm dev`, Chromium mit gestubbter Tauri-API: Locale `de-DE`
+→ „Willkommen bei Holzi“, `fr-FR` und `en-US` → „Welcome to Holzi“; weder Cookie noch localStorage-Eintrag.
+Kein Plugin, keine `systemLocale`-Funktion nötig. Nicht geprüft: dass WebKitGTK/WebView2 `navigator.language`
+aus der Systemsprache (`LANG`) ableiten — quickstart Schritt 2 deckt das in der App ab.
+
 **Alternatives considered**: Sprache gerätelokal merken — vom Operator abgelehnt.
 
 ## R3 — Sprache in der Vault

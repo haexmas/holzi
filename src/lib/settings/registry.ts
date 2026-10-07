@@ -6,13 +6,7 @@ import { normalizePath, type TabHistory } from '../wm/navigation.ts'
 import { matchRoute } from '../wm/routeMatch.ts'
 
 export type SettingsCategoryId =
-  | 'general'
-  | 'appearance'
-  | 'models'
-  | 'agents'
-  | 'storage'
-  | 'extensions'
-  | 'federation'
+  'general' | 'models' | 'agents' | 'storage' | 'extensions' | 'federation'
 
 export type SettingsCategory = {
   id: SettingsCategoryId
@@ -60,7 +54,6 @@ function category(
 /** In sidebar order (FR-005). */
 export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   category('general', '/', 'lucide:sliders-horizontal'),
-  category('appearance', '/appearance', 'lucide:palette'),
   category('models', '/models', 'lucide:box'),
   category('agents', '/agents', 'lucide:bot'),
   category('storage', '/storage', 'lucide:cloud'),
@@ -87,7 +80,12 @@ function subView(
   id: string,
   pattern: string,
   parent: string,
-  options: { icon?: string; overviewRow?: boolean; row?: boolean } = {},
+  options: {
+    icon?: string
+    overviewRow?: boolean
+    row?: boolean
+    settingKeys?: readonly string[]
+  } = {},
 ): SettingsLocation {
   const shownAsRow = (options.overviewRow ?? false) || (options.row ?? false)
   return {
@@ -104,24 +102,42 @@ function subView(
     keywordsKey: pattern.includes(':')
       ? undefined
       : `settings.locations.${id}.keywords`,
+    settingKeys: options.settingKeys,
   }
 }
 
 /** Overview rows appear in this order. */
 export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
-  categoryLocation('general', [
-    'settings.alias.label',
-    'settings.sessionRestore.title',
-  ]),
-  categoryLocation('appearance', [
-    'settings.colorScheme.label',
-    'settings.appearance.accent',
-    'settings.appearance.window',
-    'settings.appearance.container',
-    'settings.appearance.text',
-    'settings.appearance.component',
-    'settings.appearance.windowHint',
-  ]),
+  // Spec 042: "Allgemein" is an overview of "Grundeinstellung" and "Erscheinungsbild".
+  categoryLocation('general'),
+  subView('general.basic', 'general/basic', 'general', {
+    icon: 'lucide:settings-2',
+    overviewRow: true,
+    settingKeys: [
+      'settings.language.label',
+      'settings.alias.label',
+      'settings.sessionRestore.title',
+    ],
+  }),
+  // Reached from its row in "Grundeinstellung"; an agent opens it with `wm.app.open` (FR-014).
+  subView('general.basic.password', 'general/basic/password', 'general.basic', {
+    icon: 'lucide:key-round',
+    row: true,
+  }),
+  subView('general.appearance', 'general/appearance', 'general', {
+    icon: 'lucide:palette',
+    overviewRow: true,
+    settingKeys: [
+      'settings.colorScheme.label',
+      'settings.background.label',
+      'settings.appearance.accent',
+      'settings.appearance.window',
+      'settings.appearance.container',
+      'settings.appearance.text',
+      'settings.appearance.component',
+      'settings.appearance.windowHint',
+    ],
+  }),
   categoryLocation('models'),
   subView('models.default', 'models/default', 'models', {
     icon: 'lucide:star',

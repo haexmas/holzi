@@ -33,9 +33,15 @@ const PasswordsApp = defineAsyncComponent(
 /** The view of each settings location (spec 023-settings-app, contracts §1). */
 const SETTINGS_VIEWS: Record<string, Component> = {
   general: defineAsyncComponent(
-    () => import('~/components/settings/GeneralView.vue'),
+    () => import('~/components/settings/OverviewView.vue'),
   ),
-  appearance: defineAsyncComponent(
+  'general.basic': defineAsyncComponent(
+    () => import('~/components/settings/BasicView.vue'),
+  ),
+  'general.basic.password': defineAsyncComponent(
+    () => import('~/components/settings/PasswordChangeView.vue'),
+  ),
+  'general.appearance': defineAsyncComponent(
     () => import('~/components/settings/AppearanceView.vue'),
   ),
   models: defineAsyncComponent(

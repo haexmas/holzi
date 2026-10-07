@@ -703,7 +703,7 @@
   {
     "toolName": "settings_get",
     "actionId": "settings.get",
-    "description": "Read the current settings: device name, color scheme, appearance, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.",
+    "description": "Read the current settings: device name, language, color scheme, appearance, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.",
     "inputSchema": {
       "type": "object",
       "properties": {}
@@ -816,6 +816,28 @@
     }
   },
   {
+    "toolName": "settings_general_setLanguage",
+    "actionId": "settings.general.setLanguage",
+    "description": "Set the interface language (German or English) for the whole vault, on all its devices. It applies at once.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "language": {
+          "type": "string",
+          "enum": ["de", "en"],
+          "description": "Interface language: German (de) or English (en)."
+        }
+      },
+      "required": ["language"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Sprache festlegen",
+      "en": "Set the language"
+    }
+  },
+  {
     "toolName": "settings_appearance_setColorScheme",
     "actionId": "settings.appearance.setColorScheme",
     "description": "Set the color scheme (light, dark or following the system) for the whole vault. It applies at once.",
@@ -834,6 +856,21 @@
     "titles": {
       "de": "Farbschema festlegen",
       "en": "Set the color scheme"
+    }
+  },
+  {
+    "toolName": "settings_appearance_removeBackground",
+    "actionId": "settings.appearance.removeBackground",
+    "description": "Remove the workspace background image for the whole vault; the default background shows again. Only the user can choose a new image, in Settings → General → Appearance.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Workspace-Hintergrund entfernen",
+      "en": "Remove the workspace background"
     }
   },
   {

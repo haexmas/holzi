@@ -6,12 +6,15 @@ import {
 import { useColorScheme } from '~/composables/useColorScheme'
 import { useDevice } from '~/composables/useDevice'
 import { useHuggingFace } from '~/composables/useHuggingFace'
+import { useLanguage } from '~/composables/useLanguage'
 import { useModels } from '~/composables/useModels'
 import { usePreferences, type PrefScope } from '~/composables/usePreferences'
 import { useProviders, type DelegateVendor } from '~/composables/useProviders'
 import { useSync } from '~/composables/useSync'
 import { useSttModels } from '~/composables/useSttModels'
+import { useWorkspaceBackground } from '~/composables/useWorkspaceBackground'
 import { parseColorScheme } from '~/lib/settings/colorScheme'
+import { parseLanguage } from '~/lib/settings/language'
 import type { useWindowManagerStore } from '~/stores/windowManager'
 
 type WmStore = ReturnType<typeof useWindowManagerStore>
@@ -41,6 +44,8 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
   const sttModels = useSttModels()
   const colorScheme = useColorScheme()
   const appearance = useAppearance()
+  const language = useLanguage()
+  const background = useWorkspaceBackground()
   const sync = useSync()
   const done = { done: true }
   const on = wm.registerGlobalActionHandler
@@ -66,6 +71,7 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
       ])
     return {
       deviceAlias: device.alias,
+      language: language.language.value,
       colorScheme: colorScheme.scheme.value,
       appearance: appearance.appearance.value,
       ...(defaultModel ? { defaultModel } : {}),
@@ -127,10 +133,20 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
   on('settings.sessionRestore.set', async ({ input }) =>
     wm.setSessionRestore(input.enabled === true),
   )
+  on('settings.general.setLanguage', async ({ input }) => {
+    const next = parseLanguage(input.language)
+    if (!next) throw new Error(`unknown language ${String(input.language)}`)
+    return { language: await language.setAsync(next) }
+  })
   on('settings.appearance.setColorScheme', async ({ input }) => {
     const scheme = parseColorScheme(input.scheme)
     if (!scheme) throw new Error(`unknown color scheme ${String(input.scheme)}`)
     return { scheme: await colorScheme.setAsync(scheme) }
+  })
+
+  on('settings.appearance.removeBackground', async () => {
+    await background.removeAsync()
+    return done
   })
 
   /** What the appearance actions answer: the stored appearance and what had to be adjusted. */

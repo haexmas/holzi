@@ -25,7 +25,7 @@ scenario('settings-search', {}, async (ctx) => {
 
   const cases: Array<[string, string]> = [
     ['whisper', 'models.speech'],
-    ['gerätename', 'general'],
+    ['gerätename', 'general.basic'],
     ['huggingface suchen', 'models.download.search'],
   ]
   for (const [query, location] of cases) {

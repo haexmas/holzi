@@ -50,13 +50,13 @@ export default defineNuxtConfig({
   },
   i18n: {
     restructureDir: 'src/i18n',
-    defaultLocale: 'de',
+    defaultLocale: 'en',
     locales: [
       { code: 'de', file: 'de.json' },
       { code: 'en', file: 'en.json' },
     ],
     strategy: 'no_prefix',
-    detectBrowserLanguage: false,
+    detectBrowserLanguage: { useCookie: false, fallbackLocale: 'en' },
   },
   icon: {
     mode: 'svg',

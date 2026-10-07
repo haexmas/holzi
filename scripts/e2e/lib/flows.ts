@@ -135,6 +135,14 @@ export async function createAndUnlock(
       args: { name: options.name, passphrase },
     }),
   )
+  // Keep the command-based fixture deterministic now that the product defaults to the system
+  // language; the scenarios that exercise language selection change this preference explicitly.
+  unwrap(
+    'set_pref',
+    await instance.invoke('set_pref', {
+      args: { scope: { kind: 'vault' }, key: 'general.language', value: 'de' },
+    }),
+  )
   await instance.navigate(
     `tauri://localhost/workspace/${encodeURIComponent(options.name)}`,
   )

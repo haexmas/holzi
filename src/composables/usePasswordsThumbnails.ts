@@ -8,7 +8,7 @@
  */
 import type { AttachmentView } from '@bindings/AttachmentView'
 import { imageMime } from '~/lib/passwords/format'
-import { previewableSize } from '~/lib/passwords/imageSize'
+import { downscaleToWebp } from '~/lib/images/downscale'
 import {
   createThumbnailCache,
   ThumbnailNotNow,
@@ -25,40 +25,7 @@ const sources = new Map<string, { attachmentId: string; mime: string }>()
 let cache: ThumbnailCache | null = null
 
 async function scaledUrl(bytes: ArrayBuffer, mime: string): Promise<string> {
-  const size = previewableSize(bytes)
-  if (!size) throw new Error('no readable size or too many pixels')
-  // Only the width is given, so the engine keeps the aspect ratio, also of a turned (EXIF) photo.
-  const headerScale = THUMBNAIL_EDGE / Math.max(size.width, size.height)
-  const bitmap = await createImageBitmap(
-    new Blob([bytes], { type: mime }),
-    headerScale < 1
-      ? {
-          resizeWidth: Math.max(1, Math.round(size.width * headerScale)),
-          resizeQuality: 'medium',
-        }
-      : {},
-  )
-  try {
-    const scale = Math.min(
-      1,
-      THUMBNAIL_EDGE / Math.max(bitmap.width, bitmap.height),
-    )
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale))
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale))
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('no 2d context')
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-    // WebP keeps transparency and is much smaller than PNG for photos; an engine without it falls
-    // back to PNG.
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, 'image/webp', 0.8),
-    )
-    if (!blob) throw new Error('no thumbnail')
-    return URL.createObjectURL(blob)
-  } finally {
-    bitmap.close()
-  }
+  return URL.createObjectURL(await downscaleToWebp(bytes, mime, THUMBNAIL_EDGE))
 }
 
 function cacheWith(

@@ -1,7 +1,8 @@
 {
   "landing": {
     "welcome": "Welcome to Holzi",
-    "lastUsed": "Recently used"
+    "lastUsed": "Recently used",
+    "language": "Language"
   },
   "fields": {
     "show": "Show password",
@@ -331,6 +332,32 @@
     }
   },
   "settings": {
+    "background": {
+      "label": "Workspace background",
+      "description": "An image behind every workspace, on all devices of the vault.",
+      "choose": "Choose image …",
+      "remove": "Remove",
+      "failed": "Could not set the background",
+      "saved": "Saved."
+    },
+    "password": {
+      "current": "Current password",
+      "new": "New password",
+      "repeat": "Repeat new password",
+      "deviceOnly": "The change applies to this device only. Other linked devices keep opening the vault with their own password.",
+      "mismatch": "The two new passwords do not match.",
+      "same": "The new password must differ from the current one.",
+      "tooShort": "The new password needs at least 8 characters.",
+      "wrongCurrent": "The current password is wrong.",
+      "weak": "The new password is not allowed.",
+      "changed": "Password changed. From now on only the new password opens the vault.",
+      "submit": "Change password"
+    },
+    "language": {
+      "label": "Language",
+      "saved": "Saved.",
+      "failed": "Could not save the language"
+    },
     "alias": {
       "label": "Device name",
       "saved": "Saved.",
@@ -402,11 +429,7 @@
     "categories": {
       "general": {
         "title": "General",
-        "keywords": "device device name name session restore windows tabs"
-      },
-      "appearance": {
-        "title": "Appearance",
-        "keywords": "appearance color scheme light dark system theme look"
+        "keywords": "general basic settings appearance"
       },
       "models": {
         "title": "Models",
@@ -430,6 +453,23 @@
       }
     },
     "locations": {
+      "general": {
+        "basic": {
+          "title": "Basic settings",
+          "description": "Language, password, device and session.",
+          "keywords": "language Sprache German English device device name name session restore windows tabs",
+          "password": {
+            "title": "Change vault password",
+            "description": "The password this device opens the vault with.",
+            "keywords": "password passphrase vault unlock change"
+          }
+        },
+        "appearance": {
+          "title": "Appearance",
+          "description": "Color scheme, background and colors.",
+          "keywords": "appearance color scheme light dark system theme look background wallpaper image"
+        }
+      },
       "models": {
         "default": {
           "title": "Default model",
@@ -1157,10 +1197,14 @@
       "autonomy": {
         "setMode": "Set autonomy mode"
       },
+      "general": {
+        "setLanguage": "Set the language"
+      },
       "sessionRestore": {
         "set": "Turn session restore on or off"
       },
       "appearance": {
+        "removeBackground": "Remove the workspace background",
         "setColorScheme": "Set the color scheme",
         "set": "Set the appearance",
         "reset": "Reset the appearance",

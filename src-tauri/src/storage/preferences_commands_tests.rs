@@ -44,3 +44,21 @@ fn the_clipboard_setting_takes_only_its_choices() {
     // Other keys take any value.
     validate_value("chat.permission_mode", "whatever").expect("unrelated key");
 }
+
+#[test]
+fn the_background_takes_only_a_webp_data_url_within_the_limit() {
+    let key = "appearance.background";
+    validate_value(key, "data:image/webp;base64,UklGRg==").expect("a WebP data URL");
+    let too_large = format!("data:image/webp;base64,{}", "A".repeat(4 * 1024 * 1024));
+    for value in [
+        "",
+        "https://example.com/image.webp",
+        "data:image/png;base64,iVBORw0KGgo=",
+        "data:image/webp;base64,",
+        "data:image/webp;base64,UklGRg==\") ; color: red",
+        too_large.as_str(),
+    ] {
+        let err = validate_value(key, value).expect_err("not a background");
+        assert!(format!("{err:?}").contains("InvalidInput"));
+    }
+}

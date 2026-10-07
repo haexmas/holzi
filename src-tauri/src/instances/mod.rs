@@ -18,6 +18,7 @@ mod events;
 mod info;
 mod list;
 mod open;
+mod passphrase_change;
 
 pub use close::{close_instance, start_close, take_over_exit};
 pub use create::{create_instance, create_instance_core, CreateInstanceArgs, CreateInstanceResult};
@@ -25,6 +26,9 @@ pub use info::InstanceInfo;
 pub use list::{active_instance_name, list_instances};
 pub use lock_retry::retry_while_locked;
 pub use open::{open_instance, open_instance_core, OpenInstanceArgs};
+pub use passphrase_change::{
+    change_vault_passphrase, change_vault_passphrase_core, ChangePassphraseArgs,
+};
 pub use presence::ProcessPresence;
 pub use startup::cleanup_orphans_on_startup;
 

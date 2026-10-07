@@ -15,6 +15,8 @@ import {
   settingsRoutePatterns,
 } from '../src/lib/settings/registry.ts'
 import { isDark, parseColorScheme } from '../src/lib/settings/colorScheme.ts'
+import { parseLanguage } from '../src/lib/settings/language.ts'
+import { isBackgroundValue } from '../src/lib/settings/background.ts'
 import {
   canManageDevices,
   deviceStatus,
@@ -40,7 +42,9 @@ import { matchRoute } from '../src/lib/wm/routeMatch.ts'
 
 const LOCATION_PATHS: Record<string, string> = {
   general: '/',
-  appearance: '/appearance',
+  'general.basic': '/general/basic',
+  'general.basic.password': '/general/basic/password',
+  'general.appearance': '/general/appearance',
   models: '/models',
   'models.default': '/models/default',
   'models.installed': '/models/installed',
@@ -96,12 +100,11 @@ function germanT(): (key: string) => string {
   }
 }
 
-test('seven categories in the order of FR-005 (storage from spec 038, extensions from spec 017), each at its own location', () => {
+test('six categories in the order of FR-005 (storage from spec 038, extensions from spec 017, no appearance since spec 042), each at its own location', () => {
   assert.deepEqual(
     SETTINGS_CATEGORIES.map((category) => [category.id, category.path]),
     [
       ['general', '/'],
-      ['appearance', '/appearance'],
       ['models', '/models'],
       ['agents', '/agents'],
       ['storage', '/storage'],
@@ -141,7 +144,7 @@ test('locations have unique ids and patterns, a category, and titles', () => {
   }
 })
 
-test('overview rows of models and agents; general, appearance and federation have none', () => {
+test('overview rows of general (spec 042), models and agents; federation has none', () => {
   const rows = (id: Parameters<typeof overviewRows>[0]) =>
     overviewRows(id).map((location) => location.id)
   assert.deepEqual(rows('models'), [
@@ -155,8 +158,7 @@ test('overview rows of models and agents; general, appearance and federation hav
     'agents.autonomy',
     'agents.denyRules',
   ])
-  assert.deepEqual(rows('general'), [])
-  assert.deepEqual(rows('appearance'), [])
+  assert.deepEqual(rows('general'), ['general.basic', 'general.appearance'])
   assert.deepEqual(rows('federation'), [])
 })
 
@@ -298,12 +300,12 @@ test('the search finds locations by title, synonym and single setting (FR-023)',
 
   assert.equal(first('standard')?.path, '/models/default')
   assert.equal(first('whisper')?.path, '/models/speech')
-  assert.equal(first('dunkel')?.path, '/appearance')
+  assert.equal(first('dunkel')?.path, '/general/appearance')
 
   const alias = first('geratename')
   assert.equal(alias?.label, 'Gerätename')
-  assert.equal(alias?.path, '/')
-  assert.deepEqual(alias?.trail, ['Allgemein'])
+  assert.equal(alias?.path, '/general/basic')
+  assert.deepEqual(alias?.trail, ['Allgemein', 'Grundeinstellung'])
 
   const search = first('huggingface suchen')
   assert.equal(search?.path, '/models/download/search')
@@ -317,7 +319,10 @@ test('the search finds locations by title, synonym and single setting (FR-023)',
 test('a title match ranks above a synonym match', () => {
   const t = germanT()
   const labels = searchSettings('sitzung', t).map((hit) => hit.label)
-  assert.deepEqual(labels, [t('settings.sessionRestore.title'), 'Allgemein'])
+  assert.deepEqual(labels, [
+    t('settings.sessionRestore.title'),
+    'Grundeinstellung',
+  ])
   assert.equal(searchSettings('modelle', t)[0]?.path, '/models')
 })
 
@@ -327,6 +332,30 @@ test('color scheme: known values parse, anything else is unset', () => {
   assert.equal(parseColorScheme('system'), 'system')
   for (const value of ['Dark', '', null, undefined, 1]) {
     assert.equal(parseColorScheme(value), null, String(value))
+  }
+})
+
+test('language (spec 042): de and en parse, anything else is unset', () => {
+  assert.equal(parseLanguage('de'), 'de')
+  assert.equal(parseLanguage('en'), 'en')
+  for (const value of ['DE', 'fr', 'de-DE', '', null, undefined, 1]) {
+    assert.equal(parseLanguage(value), null, String(value))
+  }
+})
+
+test('background (spec 042): only a WebP data URL is shown', () => {
+  assert.equal(isBackgroundValue('data:image/webp;base64,UklGRg=='), true)
+  for (const value of [
+    'data:image/png;base64,iVBORw0KGgo=',
+    'data:image/webp;base64,',
+    'data:image/webp;base64,UklGRg==") ; color: red',
+    'https://example.com/a.webp',
+    'url(x)',
+    '',
+    null,
+    undefined,
+  ]) {
+    assert.equal(isBackgroundValue(value), false, String(value))
   }
 })
 
