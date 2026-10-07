@@ -129,8 +129,8 @@ das PNG hat ein Vorschaubild.
    Datei im Ordner wechseln.
 4. **Given** eine Datei, die holzi nicht anzeigen kann, **When** Anna sie öffnet, **Then** sieht sie
    die Info-Ansicht und kann die Datei mit der passenden App des Systems öffnen.
-5. **Given** ein offener Ordner, **When** eine andere App darin eine Datei anlegt oder löscht,
-   **Then** zeigt holzi das ohne manuelles Neuladen.
+5. **Given** ein offener Ordner auf dem Desktop, **When** eine andere App darin eine Datei anlegt oder
+   löscht, **Then** zeigt holzi das ohne manuelles Neuladen.
 6. **Given** zwei Tabs des Dateibrowsers in verschiedenen Ordnern, **When** Anna holzi neu startet und
    die Sitzung wiederherstellt, **Then** stehen beide Tabs wieder in ihren Ordnern.
 
@@ -361,9 +361,10 @@ internen Speicher und die SD-Karte wie auf dem Desktop.
 - **FR-005**: Vorschaubilder MÜSSEN verkleinert erzeugt und nur für sichtbare Einträge angefragt
   werden. Sie MÜSSEN auf dem Gerät zwischengespeichert und DÜRFEN nie synchronisiert werden; ändert
   sich die Datei, entsteht ein neues.
-- **FR-006**: Ein offener Ordner auf dem Gerät MUSS Änderungen durch andere Programme ohne manuelles
-  Neuladen zeigen. Ein Ordner in einem Speicher MUSS sich manuell und beim Zurückkehren in den Tab
-  neu laden.
+- **FR-006**: Ein offener Ordner auf dem Gerät MUSS auf dem Desktop Änderungen durch andere Programme
+  ohne manuelles Neuladen zeigen. Ein Ordner in einem Speicher und ein Ordner auf Android MÜSSEN sich
+  manuell und beim Zurückkehren in den Tab neu laden (auf Android beobachtet holzi keine Ordner,
+  research R11).
 - **FR-007**: Jeder Tab des Dateibrowsers MUSS seine eigene Quelle und seinen eigenen Ordner haben, und
   die Sitzung (Spec 022) MUSS beide wiederherstellen.
 - **FR-008**: Eine Ansicht MUSS auch mit 50 000 Einträgen in einem Ordner bedienbar bleiben.
