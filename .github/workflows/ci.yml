@@ -426,7 +426,7 @@ jobs:
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
       - name: Build the debug APK
-        run: corepack pnpm tauri android build --debug --apk --target aarch64 --target x86_64
+        run: corepack pnpm tauri android build --debug --apk --split-per-abi --target aarch64 --target x86_64
 
       - name: Upload the APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -463,10 +463,10 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" > /dev/null
           ndk="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin"
           {
-            echo "CC_aarch64_linux_android=$ndk/aarch64-linux-android24-clang"
-            echo "CXX_aarch64_linux_android=$ndk/aarch64-linux-android24-clang++"
+            echo "CC_aarch64_linux_android=$ndk/aarch64-linux-android26-clang"
+            echo "CXX_aarch64_linux_android=$ndk/aarch64-linux-android26-clang++"
             echo "AR_aarch64_linux_android=$ndk/llvm-ar"
-            echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ndk/aarch64-linux-android24-clang"
+            echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ndk/aarch64-linux-android26-clang"
           } >> "$GITHUB_ENV"
 
       - name: Install Linux build dependencies

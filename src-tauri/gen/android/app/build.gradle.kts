@@ -20,7 +20,7 @@ android {
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.haex.holzi"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 37
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
@@ -31,12 +31,9 @@ android {
             isDebuggable = true
             isJniDebuggable = true
             isMinifyEnabled = false
-            packaging {
-                jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
-                jniLibs.keepDebugSymbols.add("*/armeabi-v7a/*.so")
-                jniLibs.keepDebugSymbols.add("*/x86/*.so")
-                jniLibs.keepDebugSymbols.add("*/x86_64/*.so")
-            }
+            // holzi (spec 043): the template keeps the debug symbols of the Rust library, which
+            // makes it about 1.9 GB per ABI; stripped it is about 210 MB. Debug APKs go to phones
+            // and CI artifacts, so they are stripped like release APKs.
         }
         getByName("release") {
             optimization {
