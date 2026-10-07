@@ -87,6 +87,35 @@ describe('checkAndroidPreflight', () => {
     assert.match(release.messages.join(), /not a debug build/)
   })
 
+  it('reports package inspection failures instead of throwing', () => {
+    const packageFailure = checkAndroidPreflight(
+      { env: { E2E_CHROMEDRIVER: '/cd' } },
+      deps({
+        '-s emulator-5554 shell dumpsys package com.haex.holzi': new Error(
+          'device went away',
+        ),
+      }).deps,
+    )
+    assert.equal(packageFailure.ok, false)
+    assert.match(
+      packageFailure.messages.join(),
+      /could not inspect com.haex.holzi/,
+    )
+
+    const webviewFailure = checkAndroidPreflight(
+      { env: { E2E_CHROMEDRIVER: '/cd' } },
+      deps({
+        '-s emulator-5554 shell dumpsys package com.google.android.webview':
+          new Error('device went away'),
+      }).deps,
+    )
+    assert.equal(webviewFailure.ok, false)
+    assert.match(
+      webviewFailure.messages.join(),
+      /could not inspect com.google.android.webview/,
+    )
+  })
+
   it('replaces an app signed with another key when it installs --apk', () => {
     const { calls, deps: d } = deps({
       '-s emulator-5554 install -r app.apk': new Error(

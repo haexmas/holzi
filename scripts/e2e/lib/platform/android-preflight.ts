@@ -108,10 +108,18 @@ export function checkAndroidPreflight(
     messages.push(
       `${PACKAGE} is not installed on ${serial}; pass --apk with a debug APK (pnpm tauri android build --debug --apk --target x86_64)`,
     )
-  } else if (!adb.shell('dumpsys', 'package', PACKAGE).includes('DEBUGGABLE')) {
-    messages.push(
-      `${PACKAGE} on ${serial} is not a debug build; its web view cannot be driven`,
-    )
+  } else {
+    try {
+      if (!adb.shell('dumpsys', 'package', PACKAGE).includes('DEBUGGABLE')) {
+        messages.push(
+          `${PACKAGE} on ${serial} is not a debug build; its web view cannot be driven`,
+        )
+      }
+    } catch (error) {
+      messages.push(
+        `could not inspect ${PACKAGE} on ${serial}: ${(error as Error).message}`,
+      )
+    }
   }
 
   const chromedriver =
@@ -125,9 +133,19 @@ export function checkAndroidPreflight(
     )
   } else {
     versions.driver = deps.version(chromedriver)
-    const webview = /versionName=(\S+)/.exec(
-      adb.shell('dumpsys', 'package', 'com.google.android.webview'),
-    )?.[1]
+    let webviewInfo: string | undefined
+    try {
+      webviewInfo = adb.shell(
+        'dumpsys',
+        'package',
+        'com.google.android.webview',
+      )
+    } catch (error) {
+      messages.push(
+        `could not inspect com.google.android.webview on ${serial}: ${(error as Error).message}`,
+      )
+    }
+    const webview = /versionName=(\S+)/.exec(webviewInfo ?? '')?.[1]
     versions.webview = webview
     const driverMajor = majorOf(versions.driver)
     const webviewMajor = majorOf(webview)
