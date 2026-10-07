@@ -38,6 +38,8 @@ const GONE_CODES = new Set([
   'invalid session id',
   'no such window',
   'session not created',
+  // chromedriver once the Android app it was attached to has ended (spec 043).
+  'disconnected',
 ])
 
 export class WebDriverClient {

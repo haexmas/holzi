@@ -136,6 +136,22 @@ describe('WebDriverClient', () => {
     )
   })
 
+  it('reports an ended application when chromedriver lost the app it was attached to', async () => {
+    driver.onExecute(() => ({
+      status: 500,
+      body: {
+        value: {
+          error: 'disconnected',
+          message: 'disconnected: not connected to DevTools',
+        },
+      },
+    }))
+    assert.deepEqual(
+      await client.invoke('close_instance', {}, { expectEnd: true }),
+      { ended: true },
+    )
+  })
+
   it('throws an error that names the command when nothing was expected to end', async () => {
     driver.onExecute(() => 'drop')
     await assert.rejects(client.invoke('close_instance'), /close_instance/)

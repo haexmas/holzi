@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url'
 import { unwrap, type FlowInstance } from './flows.ts'
 import type { Page } from './page.ts'
 import { runAction } from './settings.ts'
+import { onDevice } from './platform/device-files.ts'
+import { reachFromDevice } from './platform/reach.ts'
+
+/** Makes a local server of a scenario reachable from the device under test at the same address. */
+export const reachableFromDevice = (port: number): void => reachFromDevice(port)
 
 /** A fixture bundle: `vectors/<name>.xt` from the shared vectors or `e2e/<name>.xt`. */
 export function fixture(kind: 'vectors' | 'e2e', name: string): string {
@@ -29,7 +34,7 @@ export async function install(
   return unwrap<InstalledExtension>(
     'extension_install',
     await page.invoke('extension_install', {
-      args: { path, accepted: [], confirmed: false },
+      args: { path: onDevice(path), accepted: [], confirmed: false },
     }),
   )
 }
@@ -37,7 +42,7 @@ export async function install(
 /** The refusal of a bundle: its install error's reason. */
 export async function refusal(page: Page, path: string): Promise<string> {
   const result = (await page.invoke('extension_install', {
-    args: { path, accepted: [], confirmed: false },
+    args: { path: onDevice(path), accepted: [], confirmed: false },
   })) as { ok: boolean; error?: { kind?: string; reason?: string } }
   if (result.ok) throw new Error(`${path} was installed`)
   return `${result.error?.kind}:${result.error?.reason}`

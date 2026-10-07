@@ -23,7 +23,9 @@ export interface Adb {
   /** Makes `port` on this machine reachable from the device as `127.0.0.1:port`. */
   reverse(port: number): void
   /** Runs `sh -c script` as the app (debug builds only) and returns its raw output. */
-  runAs(pkg: string, script: string, input?: Buffer): Buffer
+  runAs(pkg: string, script: string): Buffer
+  /** Copies a file of this machine to `remote` on the device (outside any app's storage). */
+  push(local: string, remote: string): void
 }
 
 export function createAdb(serial: string, run: AdbRunner = realAdbRunner): Adb {
@@ -54,13 +56,11 @@ export function createAdb(serial: string, run: AdbRunner = realAdbRunner): Adb {
     reverse(port) {
       adb(['reverse', `tcp:${port}`, `tcp:${port}`])
     },
-    runAs(pkg, script, input) {
-      return adb(
-        input === undefined
-          ? ['exec-out', 'run-as', pkg, 'sh', '-c', script]
-          : ['exec-in', 'run-as', pkg, 'sh', '-c', script],
-        input,
-      )
+    runAs(pkg, script) {
+      return adb(['exec-out', 'run-as', pkg, 'sh', '-c', script])
+    },
+    push(local, remote) {
+      adb(['push', local, remote])
     },
   }
 }
