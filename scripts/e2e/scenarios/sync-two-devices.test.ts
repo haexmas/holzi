@@ -19,8 +19,8 @@ async function showGeneralSettings(device: Device) {
   await waitForLocation(device.page, 'general')
   await device.page.click('settings-row-general.basic')
   await waitForLocation(device.page, 'general.basic')
-  await reveal(device.page, 'session-restore-switch')
   await device.page.waitForDisplayed('session-restore-switch')
+  await reveal(device.page, 'session-restore-switch')
 }
 
 async function showChat(device: Device) {
