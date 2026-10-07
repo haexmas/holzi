@@ -139,6 +139,7 @@ reviewed and merged before the next one starts on top of `main`.
 - [x] T044 Tick `specs/017-extension-host/tasks.md` T106 with a note pointing at PR D and this spec; update R21 if anything changed during implementation **Note**: ticked in 017 with PR D
 - [ ] T045 [P] Run quickstart §5 manually against RustFS (all steps) and record the result here (T029 covers §1–§4) **Note** (2026-10-06): not by hand yet; the e2e scenes `extension-storage` and `storage-two-devices` cover §5 steps 1–3 and 5 against RustFS, step 4 (passwords with `*`) is covered by `extensions/passwords_owner_tests.rs`
 - [x] T046 [P] Check every touched Rust file stays under 500 lines; split by responsibility where needed (constitution), not just for length **Note**: the bridge tests were split (`remote_storage_test_support.rs`); the check of a proposed endpoint moved to `remote_storage_endpoint.rs` in the review of PR D (`remote_storage_manage.rs` at 446 lines, `remote_storage/service.rs` at 496)
+- [x] T047 [US3] A failed test of credentials typed in holzi's window keeps that window open (FR-013b, operator 2026-10-07): `storage_dialog_resolve` answers `StorageTrial`; `remote_storage_dialog.rs` keeps the dialog open (`Dialog`), `remote_storage_manage.rs` retries add and update with corrected credentials (`with_credentials`); `StorageCredentialsModal.vue` shows the outcome text of the settings; tests in `remote_storage_credentials_tests.rs`, e2e `extension-storage` types a wrong secret first
 
 ---
 

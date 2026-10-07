@@ -1,6 +1,7 @@
 //! An extension proposes, changes, tests and removes storages (spec 038 US3, T038, T039): only
 //! through a confirmed dialog of holzi, credentials never through the bridge, a proposed endpoint
-//! only with the `add` permission for its host, and nothing created when the test fails.
+//! only with the `add` permission for its host. Credentials whose test fails:
+//! `remote_storage_credentials_tests.rs`.
 
 use std::io;
 use std::net::IpAddr;
@@ -272,35 +273,6 @@ fn an_aws_proposal_needs_the_add_permission_for_its_regional_host() {
         s.code("extension_remote_storage_add_backend", aws("us-east-1")),
         1002,
         "a grant for every host covers AWS too"
-    );
-}
-
-#[test]
-fn a_failed_test_creates_nothing() {
-    let s = setup();
-    s.permit("add", "*", "granted");
-    s.events.answer_with(with_credentials());
-    s.fake.fail(Op::Put, StorageError::AccessDenied);
-    let entries = s.count("SELECT COUNT(*) FROM haex_passwords_item_details");
-    let error = s
-        .call(
-            "extension_remote_storage_add_backend",
-            add(
-                json!({ "endpoint": "http://192.168.1.5:9000", "region": "eu", "bucket": "nas-b" }),
-            ),
-        )
-        .unwrap_err();
-    assert_eq!(
-        (error.code.as_u16(), error.details),
-        (2002, Some(json!({ "kind": "accessDenied" }))),
-        "{}",
-        error.message
-    );
-    assert_eq!(s.count("SELECT COUNT(*) FROM haex_storage_connections"), 1);
-    assert_eq!(
-        s.count("SELECT COUNT(*) FROM haex_passwords_item_details"),
-        entries,
-        "no credentials kept"
     );
 }
 

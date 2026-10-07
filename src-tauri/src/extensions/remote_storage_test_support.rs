@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
+use tokio::sync::oneshot;
 use zeroize::Zeroizing;
 
 use crate::extensions::bridge::blocking::block_on;
@@ -16,7 +17,7 @@ use crate::extensions::host::ExtensionHost;
 use crate::extensions::ids::storage_vault_id;
 use crate::extensions::registry::effective::effective_bundle;
 use crate::extensions::registry::install::install;
-use crate::extensions::remote_storage_dialog::StorageAnswer;
+use crate::extensions::remote_storage_dialog::{StorageAnswer, StorageTrial};
 use crate::passwords::service::PasswordsService;
 use crate::remote_storage::address::Resolver;
 use crate::remote_storage::model::{ConnectionInput, CredentialsInput, StorageInput};
@@ -32,11 +33,14 @@ pub(crate) const SECRET: &str = "secret-leak-marker-5f1e";
 pub(crate) const ENDPOINT: &str = "http://127.0.0.1:9000";
 pub(crate) const REGION: &str = "region-leak-marker";
 
-/// Records events and answers storage dialogs with the answer set for the test.
+/// Records events and answers storage dialogs with the answers set for the test, one after the
+/// other, as holzi's windows would after a failed test.
 pub(crate) struct Events {
     pub host: Arc<ExtensionHost>,
     pub seen: Mutex<Vec<(String, Value)>>,
-    pub answer: Mutex<Option<StorageAnswer>>,
+    pub answers: Mutex<Vec<StorageAnswer>>,
+    /// What holzi's window learned of each answer with credentials.
+    pub trials: Mutex<Vec<oneshot::Receiver<StorageTrial>>>,
     /// Close the frame instead of answering.
     pub close_frame: Mutex<bool>,
 }
@@ -56,13 +60,15 @@ impl Emit for Events {
                 .drop_dialogs_of(payload["frame"].as_str().unwrap_or_default());
             return;
         }
-        let answer = self
-            .answer
-            .lock()
-            .expect("lock")
-            .clone()
-            .unwrap_or(StorageAnswer::Cancel);
-        self.host.storage.resolve(&request_id, answer);
+        let mut answers = self.answers.lock().expect("lock").clone();
+        if answers.is_empty() {
+            answers.push(StorageAnswer::Cancel);
+        }
+        for answer in answers {
+            if let Some(trial) = self.host.storage.resolve(&request_id, answer) {
+                self.trials.lock().expect("lock").push(trial);
+            }
+        }
     }
 }
 
@@ -78,7 +84,21 @@ impl Events {
     }
 
     pub fn answer_with(&self, answer: StorageAnswer) {
-        *self.answer.lock().expect("lock") = Some(answer);
+        self.answer_in_turn(vec![answer]);
+    }
+
+    pub fn answer_in_turn(&self, answers: Vec<StorageAnswer>) {
+        *self.answers.lock().expect("lock") = answers;
+    }
+
+    /// What holzi's window learned of each answer with credentials so far.
+    pub fn trials(&self) -> Vec<Option<StorageTrial>> {
+        self.trials
+            .lock()
+            .expect("lock")
+            .drain(..)
+            .map(|mut trial| trial.try_recv().ok())
+            .collect()
     }
 }
 
@@ -135,7 +155,8 @@ pub(crate) fn setup_with(names: Arc<dyn Resolver>) -> Setup {
     let events = Arc::new(Events {
         host: Arc::clone(&host),
         seen: Mutex::new(Vec::new()),
-        answer: Mutex::new(None),
+        answers: Mutex::new(Vec::new()),
+        trials: Mutex::new(Vec::new()),
         close_frame: Mutex::new(false),
     });
     let service = StorageService::new(
