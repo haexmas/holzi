@@ -6,6 +6,7 @@ import { readlinkSync } from 'node:fs'
 import {
   click,
   createPage,
+  waitUntilGone,
   markedProcesses,
   press,
   sampleUntilEnd,
@@ -386,6 +387,30 @@ describe('sampleUntilEnd', () => {
   })
 })
 
+describe('waitUntilGone', () => {
+  it('resolves once alive() turns false and names the label at the deadline', async () => {
+    let checks = 0
+    const steps: string[] = []
+    const elapsed = await waitUntilGone(
+      () => ++checks < 3,
+      'the app',
+      2000,
+      (n) => steps.push(n),
+    )
+    assert.ok(elapsed >= 0)
+    assert.deepEqual(steps, ['process-ended'])
+    await assert.rejects(
+      waitUntilGone(
+        () => true,
+        'the app',
+        100,
+        () => {},
+      ),
+      /the app did not end within 100 ms/,
+    )
+  })
+})
+
 describe('createPage', () => {
   it('binds every helper to the given client, pid, marker and executable', async () => {
     driver.onExecute(() => ({ value: { ok: true, data: 'hi' } }))
@@ -403,5 +428,27 @@ describe('createPage', () => {
     await page.navigate('tauri://localhost/closing.html')
     const nav = driver.requests.filter((r) => r.path.endsWith('/url')).pop()
     assert.deepEqual(nav?.body, { url: 'tauri://localhost/closing.html' })
+  })
+
+  it('asks the process functions and URL mapping a platform gives', async () => {
+    let alive = true
+    const page = createPage({
+      client,
+      step: () => {},
+      process: {
+        alive: () => alive,
+        marked: () => [{ pid: 42, marker: 'm', exe: null }],
+      },
+      mapUrl: (url) =>
+        url.replace('tauri://localhost', 'http://tauri.localhost'),
+    })
+    assert.deepEqual(page.markedProcesses(), [
+      { pid: 42, marker: 'm', exe: null },
+    ])
+    await page.navigate('tauri://localhost/closing.html')
+    const nav = driver.requests.filter((r) => r.path.endsWith('/url')).pop()
+    assert.deepEqual(nav?.body, { url: 'http://tauri.localhost/closing.html' })
+    alive = false
+    assert.ok((await page.waitForEnd(500)) >= 0)
   })
 })

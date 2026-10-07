@@ -7,6 +7,7 @@ import {
   install,
   openFromLauncher,
   probeRequest,
+  reachableFromDevice,
 } from '../lib/extensions.ts'
 
 // Spec 017, US8, T097 (quickstart §8): network only through holzi. A request to a local server asks
@@ -27,6 +28,7 @@ async function listen(
   const server = createServer(handler)
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const { port } = server.address() as AddressInfo
+  reachableFromDevice(port)
   return { server, origin: `http://127.0.0.1:${port}` }
 }
 

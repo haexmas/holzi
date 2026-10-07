@@ -15,6 +15,9 @@ import { captureFailure } from './artifacts.ts'
 import { createGroup, maxDevicesFrom } from './group.ts'
 import type { CaptureDevice } from './group.ts'
 import { createLinuxHost } from './platform/linux.ts'
+import { createAdb } from './platform/adb.ts'
+import { createAndroidHost, startAndroidInstance } from './platform/android.ts'
+import type { Tools } from './preflight.ts'
 import { containerRuntimeAvailable } from './rustfs.ts'
 import type {
   E2EEnv,
@@ -368,6 +371,10 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): E2EEnv {
       `E2E_CLOSE_BEHAVIOR must be exit or relaunch, got ${closeBehavior}`,
     )
   }
+  const platform = source.E2E_PLATFORM ?? 'linux'
+  if (platform !== 'linux' && platform !== 'android') {
+    throw new Error(`E2E_PLATFORM must be linux or android, got ${platform}`)
+  }
   const timeScale = Number(source.E2E_TIME_SCALE ?? '1')
   if (!Number.isFinite(timeScale) || timeScale <= 0)
     throw new Error('E2E_TIME_SCALE must be a positive number')
@@ -375,12 +382,30 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): E2EEnv {
     runDir: need('E2E_RUN_DIR'),
     app: need('E2E_APP'),
     closeBehavior,
-    tools: toTools(JSON.parse(need('E2E_TOOLS'))),
+    // An Android run needs no Linux tools until a group mixes Linux devices in (stage 2).
+    tools:
+      platform === 'android'
+        ? NO_LINUX_TOOLS
+        : toTools(JSON.parse(need('E2E_TOOLS'))),
     scenarioTimeoutMs: Number(source.E2E_SCENARIO_TIMEOUT_MS ?? '60000'),
     timeScale,
     marker: need('HOLZI_E2E_RUN'),
     keep: source.E2E_KEEP === '1',
+    android:
+      platform === 'android'
+        ? {
+            serial: need('ANDROID_SERIAL'),
+            chromedriver: need('E2E_CHROMEDRIVER'),
+          }
+        : undefined,
   }
+}
+
+/** Linux tools an Android run does not have; a Linux device started with them fails at once. */
+const NO_LINUX_TOOLS: Tools = {
+  tauriDriver: 'tauri-driver (not available in an Android run)',
+  webKitWebDriver: 'WebKitWebDriver (not available in an Android run)',
+  xvfbRun: 'xvfb-run (not available in an Android run)',
 }
 
 /** Declare a scenario. The name is the file's base name; the command checks that they agree. */
@@ -391,21 +416,42 @@ export function scenario(
 ): void {
   registerName(name)
   test(name, async (t) => {
+    const env = readEnv()
+    const android = env.android
+    const adb = android === undefined ? undefined : createAdb(android.serial)
     const result = await runScenario(name, options, body, {
-      env: readEnv(),
+      env,
       startInstance: (request) =>
-        startInstance({
-          app: request.env.app,
-          tools: request.env.tools,
-          root: request.root,
-          marker: request.env.marker,
-          logFile: request.logFile,
-          colorScheme: request.colorScheme,
-          reuse: request.reuse,
-          step: request.step,
-          framebufferDir: request.framebufferDir,
-        }),
-      createHost: (request) => createLinuxHost(request),
+        android !== undefined && adb !== undefined
+          ? startAndroidInstance({
+              adb,
+              chromedriver: android.chromedriver,
+              marker: request.env.marker,
+              logFile: request.logFile,
+              colorScheme: request.colorScheme,
+              reuse: request.reuse,
+              step: request.step,
+            })
+          : startInstance({
+              app: request.env.app,
+              tools: request.env.tools,
+              root: request.root,
+              marker: request.env.marker,
+              logFile: request.logFile,
+              colorScheme: request.colorScheme,
+              reuse: request.reuse,
+              step: request.step,
+              framebufferDir: request.framebufferDir,
+            }),
+      createHost: (request) =>
+        android !== undefined && adb !== undefined
+          ? createAndroidHost({
+              adb,
+              chromedriver: android.chromedriver,
+              marker: request.env.marker,
+              logDir: join(request.env.runDir, request.scenario),
+            })
+          : createLinuxHost(request),
       onFailure: (info) =>
         captureFailure({
           runDir: info.env.runDir,

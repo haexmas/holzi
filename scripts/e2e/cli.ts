@@ -32,6 +32,10 @@ import {
 } from './lib/report.ts'
 import type { RunFacts } from './lib/report.ts'
 import type { CloseBehavior } from './lib/scenario.ts'
+import { checkAndroidPreflight } from './lib/platform/android-preflight.ts'
+import type { AndroidPreflight } from './lib/platform/android-preflight.ts'
+import { PACKAGE } from './lib/platform/android.ts'
+import { exclusionsFor } from './platform-exclusions.ts'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(HERE, '..', '..')
@@ -48,6 +52,12 @@ export interface CliOptions {
   app?: string
   closeBehavior?: CloseBehavior
   grep?: string
+  /** Where the app runs: Linux processes (default) or an Android device (spec 043). */
+  platform: 'linux' | 'android'
+  /** Android: a debug APK to install before the run. */
+  apk?: string
+  /** Runs only this part of the scenarios, for parallel CI jobs. */
+  shard?: { index: number; total: number }
   keep: boolean
   scenarioTimeoutSec: number
   runTimeoutSec: number
@@ -72,6 +82,9 @@ export function parseCliOptions(
     keep?: boolean
     'scenario-timeout'?: string
     'run-timeout'?: string
+    platform?: string
+    apk?: string
+    shard?: string
   }
   try {
     values = parseArgs({
@@ -83,6 +96,9 @@ export function parseCliOptions(
         keep: { type: 'boolean' },
         'scenario-timeout': { type: 'string' },
         'run-timeout': { type: 'string' },
+        platform: { type: 'string' },
+        apk: { type: 'string' },
+        shard: { type: 'string' },
       },
       strict: true,
       allowPositionals: false,
@@ -100,10 +116,20 @@ export function parseCliOptions(
       `--close-behavior must be exit or relaunch, got ${closeBehavior}`,
     )
   }
+  const platform = values.platform ?? 'linux'
+  if (platform !== 'linux' && platform !== 'android') {
+    throw new UsageError(`--platform must be linux or android, got ${platform}`)
+  }
+  if (values.apk !== undefined && platform !== 'android') {
+    throw new UsageError('--apk needs --platform android')
+  }
   return {
     app: values.app ?? (env.E2E_APP === '' ? undefined : env.E2E_APP),
     closeBehavior,
     grep: values.grep,
+    platform,
+    apk: values.apk,
+    shard: values.shard === undefined ? undefined : parseShard(values.shard),
     keep: values.keep === true,
     scenarioTimeoutSec: positive(
       '--scenario-timeout',
@@ -112,6 +138,28 @@ export function parseCliOptions(
     runTimeoutSec: positive('--run-timeout', values['run-timeout'] ?? '1800'),
     timeScale: positive('E2E_TIME_SCALE', env.E2E_TIME_SCALE ?? '1'),
   }
+}
+
+/** `i/n` with 1 ≤ i ≤ n. */
+export function parseShard(value: string): { index: number; total: number } {
+  const match = /^(\d+)\/(\d+)$/.exec(value)
+  const index = Number(match?.[1])
+  const total = Number(match?.[2])
+  if (match === null || index < 1 || total < 1 || index > total) {
+    throw new UsageError(`--shard must be i/n with 1 ≤ i ≤ n, got ${value}`)
+  }
+  return { index, total }
+}
+
+/** Every `total`-th scenario starting at `index`, so the shards split the run evenly. */
+export function selectShard(
+  names: string[],
+  shard: { index: number; total: number } | undefined,
+): string[] {
+  if (shard === undefined) return names
+  return names.filter(
+    (_, position) => position % shard.total === shard.index - 1,
+  )
 }
 
 /** The scenarios, by the base name of their files, in the order they run. */
@@ -152,6 +200,8 @@ export interface CliDeps {
   /** The run directory is `<artifactsRoot>/<run id>`. */
   artifactsRoot: string
   preflight(): Promise<PreflightOutcome>
+  /** The checks of an Android run; it installs `apk` first when given. */
+  androidPreflight?(apk?: string): AndroidPreflight
   scenarioNames(): string[]
   scenarioNameProblems(): string[]
   newMarker(): string
@@ -189,9 +239,17 @@ export async function runCli(
   const runId = deps.newRunId()
   const runDir = join(deps.artifactsRoot, runId)
   mkdirSync(runDir, { recursive: true })
-  const names = deps
-    .scenarioNames()
-    .filter((name) => options.grep === undefined || name.includes(options.grep))
+  const skippedHere =
+    options.platform === 'android' ? exclusionsFor('android') : new Map()
+  const names = selectShard(
+    deps
+      .scenarioNames()
+      .filter(
+        (name) => options.grep === undefined || name.includes(options.grep),
+      )
+      .filter((name) => !skippedHere.has(name)),
+    options.shard,
+  )
 
   const base = {
     runId,
@@ -220,21 +278,50 @@ export async function runCli(
       expected: [],
     })
   }
-  const preflight = await deps.preflight()
+  let preflight: PreflightOutcome
+  let platformEnv: Record<string, string> = {}
+  let application: ApplicationInfo | null = null
+  const messages: string[] = []
+  if (options.platform === 'android') {
+    const android = (deps.androidPreflight ?? defaultAndroidPreflight(env))(
+      options.apk,
+    )
+    preflight = {
+      ok: android.ok,
+      found: {},
+      tools: PLACEHOLDER_TOOLS,
+      versions: android.versions,
+      messages: android.messages,
+    }
+    platformEnv = { E2E_PLATFORM: 'android', ...android.env }
+    // The app on the device; closing its vault always ends it (spec 043 FR-006).
+    application = {
+      path: PACKAGE,
+      source: 'given',
+      closeBehavior: 'exit',
+      closeBehaviorFrom: 'flag',
+    }
+    for (const [name, entry] of skippedHere) {
+      deps.print(
+        `not on android: ${name} (${entry.kind === 'pending' ? `stage ${entry.stage}` : 'excluded'}: ${entry.reason})`,
+      )
+    }
+  } else {
+    preflight = await deps.preflight()
+    try {
+      application = resolveApplication({
+        repoRoot: deps.repoRoot,
+        env,
+        appPath: options.app,
+        closeBehaviorFlag: options.closeBehavior,
+      })
+    } catch (error) {
+      messages.push((error as Error).message)
+    }
+  }
   base.tools = preflight.tools
   base.versions = preflight.versions
-  let application: ApplicationInfo | null = null
-  const messages = [...preflight.messages]
-  try {
-    application = resolveApplication({
-      repoRoot: deps.repoRoot,
-      env,
-      appPath: options.app,
-      closeBehaviorFlag: options.closeBehavior,
-    })
-  } catch (error) {
-    messages.push((error as Error).message)
-  }
+  messages.unshift(...preflight.messages)
   if (!preflight.ok || application === null || messages.length > 0) {
     for (const message of messages) deps.print(message)
     return finish({ outcome: 'preflight-failed', application, expected: [] })
@@ -294,6 +381,7 @@ export async function runCli(
           E2E_TIME_SCALE: String(options.timeScale),
           E2E_KEEP: options.keep ? '1' : '0',
           HOLZI_E2E_RUN: marker,
+          ...platformEnv,
         },
       })
     } catch (error) {
@@ -315,6 +403,12 @@ export async function runCli(
     deps.signals.off('SIGINT', onInt)
     deps.signals.off('SIGTERM', onTerm)
   }
+}
+
+function defaultAndroidPreflight(
+  env: NodeJS.ProcessEnv,
+): (apk?: string) => AndroidPreflight {
+  return (apk) => checkAndroidPreflight({ env, apk })
 }
 
 function realDeps(env: NodeJS.ProcessEnv): CliDeps {

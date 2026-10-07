@@ -144,7 +144,7 @@ export function driverCommand(
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms))
 
-function portOpen(port: number): Promise<boolean> {
+export function portOpen(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = net.connect(port, '127.0.0.1')
     socket.once('connect', () => {
@@ -261,7 +261,7 @@ export const NEW_SESSION_ATTEMPTS = 8
 
 export async function newSessionWithRetry(
   client: WebDriverClient,
-  app: string,
+  app: string | Record<string, unknown>,
 ): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {

@@ -16,7 +16,9 @@ import {
   findNameProblems,
   listScenarioNames,
   parseCliOptions,
+  parseShard,
   runCli,
+  selectShard,
 } from '../cli.ts'
 import type { CliDeps } from '../cli.ts'
 import type { ScenarioResult } from './scenario.ts'
@@ -119,6 +121,9 @@ describe('parseCliOptions', () => {
       app: '/from/env',
       closeBehavior: 'relaunch',
       grep: 'lock',
+      platform: 'linux',
+      apk: undefined,
+      shard: undefined,
       keep: true,
       scenarioTimeoutSec: 30,
       runTimeoutSec: 90,
@@ -358,6 +363,82 @@ describe('runCli', () => {
     } finally {
       t.cleanup()
     }
+  })
+})
+
+describe('shards', () => {
+  it('reads i/n and refuses anything else', () => {
+    assert.deepEqual(parseShard('2/3'), { index: 2, total: 3 })
+    for (const bad of ['0/3', '4/3', '1/0', 'x', '1-3']) {
+      assert.throws(() => parseShard(bad), UsageError, bad)
+    }
+  })
+
+  it('splits the scenarios so every one runs in exactly one shard', () => {
+    const names = ['a', 'b', 'c', 'd', 'e']
+    const parts = [1, 2, 3].map((index) =>
+      selectShard(names, { index, total: 3 }),
+    )
+    assert.deepEqual(parts, [['a', 'd'], ['b', 'e'], ['c']])
+    assert.deepEqual(parts.flat().sort(), names)
+    assert.deepEqual(selectShard(names, undefined), names)
+  })
+})
+
+describe('runCli on Android', () => {
+  const androidPreflight = () => ({
+    ok: true,
+    messages: [],
+    versions: { driver: 'ChromeDriver 124.0.0.1', webview: '124.0.0.2' },
+    env: { ANDROID_SERIAL: 'emu', E2E_CHROMEDRIVER: '/cd' },
+  })
+
+  it('checks the device instead of the Linux tools, builds nothing and hands the scenarios the device', async () => {
+    const t = setup({
+      androidPreflight,
+      scenarioNames: () => ['a', 'extension-files', 'b'],
+    })
+    try {
+      assert.equal(await runCli(['--platform', 'android'], {}, t.deps), 0)
+      assert.deepEqual(t.calls, ['sweep', 'scenarios', 'stopRun'])
+      const input = t.inputs[0]!
+      assert.deepEqual(input.names, ['a', 'b'])
+      assert.equal(input.env.E2E_PLATFORM, 'android')
+      assert.equal(input.env.ANDROID_SERIAL, 'emu')
+      assert.equal(input.env.E2E_CHROMEDRIVER, '/cd')
+      assert.equal(input.env.E2E_APP, 'com.haex.holzi')
+      assert.equal(input.env.E2E_CLOSE_BEHAVIOR, 'exit')
+      assert.match(
+        t.lines.join('\n'),
+        /not on android: extension-files \(excluded/,
+      )
+    } finally {
+      t.cleanup()
+    }
+  })
+
+  it('stops before any scenario when the device check fails', async () => {
+    const t = setup({
+      androidPreflight: () => ({
+        ...androidPreflight(),
+        ok: false,
+        messages: ['adb sees no device'],
+      }),
+    })
+    try {
+      assert.equal(await runCli(['--platform', 'android'], {}, t.deps), 2)
+      assert.deepEqual(t.calls, [])
+      assert.match(t.lines.join('\n'), /adb sees no device/)
+    } finally {
+      t.cleanup()
+    }
+  })
+
+  it('refuses --apk without --platform android', () => {
+    assert.throws(
+      () => parseCliOptions(['--apk', 'x.apk'], {}),
+      /--apk needs --platform android/,
+    )
   })
 })
 

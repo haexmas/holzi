@@ -338,7 +338,8 @@ result names the scenario and keeps the material of the failure.
   identities rather than host paths and MUST report a failed copy without leaving a partial destination.
 - **FR-022**: The spec MUST be accompanied by a platform document that names, for Windows, macOS, Android
   and iOS, the driver, the runner or device type, how several devices would be connected there, and the
-  known limits. It MUST NOT implement any of them.
+  known limits. It MUST NOT implement any of them. (Since spec 043 the Android part is implemented;
+  `scripts/e2e/PLATFORMS.md` describes it.)
 - **FR-023**: The assumption of spec 016 that scenarios with two application processes are out of scope
   MUST be corrected as part of this work, since spec 024 added such scenarios.
 

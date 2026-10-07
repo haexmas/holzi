@@ -1,24 +1,9 @@
 // The device side of the files scene (spec 017, US9): a folder of the device the probe reads,
 // writes and watches, outside holzi's own places.
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { deviceFiles as platformDeviceFiles } from './platform/device-files.ts'
+import type { DeviceFiles } from './platform/device-files.ts'
 
-/** A fresh folder of the device with helpers to name, write and read files in it. */
-export function deviceFiles(prefix = 'holzi-ext-files-'): {
-  folder: string
-  path: (name: string) => string
-  write: (name: string, content: string | Uint8Array) => void
-  read: (name: string) => string
-  remove: () => void
-} {
-  const folder = mkdtempSync(join(tmpdir(), prefix))
-  const path = (name: string) => join(folder, name)
-  return {
-    folder,
-    path,
-    write: (name, content) => writeFileSync(path(name), content),
-    read: (name) => readFileSync(path(name), 'utf8'),
-    remove: () => rmSync(folder, { recursive: true, force: true }),
-  }
+/** A fresh folder of the device under test for files the app reads and writes (see `platform/device-files.ts`). */
+export function deviceFiles(prefix = 'holzi-ext-files-'): DeviceFiles {
+  return platformDeviceFiles(prefix)
 }

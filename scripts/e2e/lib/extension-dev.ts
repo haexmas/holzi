@@ -7,6 +7,7 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { reachFromDevice } from './platform/reach.ts'
 
 const FIXTURES = fileURLToPath(
   new URL('../../../src-tauri/tests/fixtures/extension_e2e/', import.meta.url),
@@ -42,7 +43,9 @@ export function devServer(): Promise<{
   })
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {
-      resolve({ server, port: (server.address() as AddressInfo).port, title })
+      const port = (server.address() as AddressInfo).port
+      reachFromDevice(port)
+      resolve({ server, port, title })
     })
   })
 }
