@@ -409,6 +409,11 @@ jobs:
             "build-tools;36.0.0" "build-tools;37.0.0" "ndk;28.2.13676358" > /dev/null
           echo "NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          # openssl-src (SQLCipher) runs ranlib by the target prefix unless told otherwise; the
+          # Tauri CLI sets only the compilers.
+          ndk="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "RANLIB_aarch64_linux_android=$ndk/llvm-ranlib" >> "$GITHUB_ENV"
+          echo "RANLIB_x86_64_linux_android=$ndk/llvm-ranlib" >> "$GITHUB_ENV"
 
       # bindgen (haex-crdt's SQLCipher hooks) needs libclang on the build host.
       - name: Install Linux build dependencies
