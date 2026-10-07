@@ -617,6 +617,12 @@ Steuerzeichen und Punkt oder Leerzeichen am Ende): sonst startete etwa unter Win
 Berechtigung, und eine Seite (`.html`, `.svg`) liefe mit Zugriff auf lokale Dateien. Kopien im Cache, die älter als
 ein Tag sind, entfernt holzi beim Start.
 
+**Nachtrag Spec 044 (2026-10-07)**: Auflösen, Sperrliste der eigenen Orte von holzi (FR-049) und der Kern des
+Beobachtens ziehen nach `src-tauri/src/files/local/`, weil der Dateibrowser und die Agents dieselben Regeln
+brauchen; `extensions/fs` ruft sie über dünne Adapter auf, das Verhalten für Erweiterungen bleibt gleich. `notify`
+wird mit 044 auch für Android gebaut; `watch` für Erweiterungen antwortet auf Android und iOS weiter „nicht
+verfügbar“ (8001).
+
 **Begründung**: FR-047/FR-049 verlangen das tatsächliche Ziel; HV prüft rein lexikalisch (Symlinks
 entkommen), Dialog-Auswahlen erzeugen dort keine Berechtigung, `unwatch` prüft den Besitzer nicht.
 

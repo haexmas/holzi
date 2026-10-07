@@ -57,3 +57,6 @@ that spec.
   and the frontend types; both are covered in the plan of spec 032.
 - A call needs a running webview. If none answers, the call fails with
   `action_timeout`, which the model sees as a tool error.
+
+A catalog action may run in Rust instead of the frontend; see
+[ADR 0011](0011-native-catalog-actions.md).

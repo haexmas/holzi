@@ -1,6 +1,6 @@
 # Catalog actions may run in Rust
 
-Status: proposed
+Status: accepted
 Date: 2026-10-07
 
 ## Context
