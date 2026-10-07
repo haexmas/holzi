@@ -146,9 +146,16 @@ Plugin-Crate.
 beendet die App“ entschieden); Neustart per Intent mit `FLAG_ACTIVITY_CLEAR_TASK` (unnötig,
 wenn die App endet).
 
-**Offen, im ersten Lauf auf dem Gerät zu prüfen**: dass `RunEvent::Exit` nach `finishAffinity`
-auf allen geprüften Android-Versionen kommt; sonst übernimmt die Plugin-Crate das Beenden in
-`onDestroy` mit `isFinishing`.
+**Geprüft im Emulator (2026-10-07, API 35)**: `RunEvent::Exit` kommt nach `finishAffinity`; nach
+`close_instance` ist der Prozess innerhalb von Sekunden weg, ein Neustart zeigt die Tresorauswahl,
+der Tresor lässt sich wieder entsperren. Kein Beenden in `onDestroy` nötig. Auf einem echten Telefon
+noch nicht geprüft.
+
+**Fund dabei**: SELinux verbietet Apps auf Android harte Links (`avc: denied { link }`). holzi legte
+die Installationskennung über eine temporäre Datei und `fs::hard_link` an, sodass auf Android kein
+Tresor angelegt werden konnte. Sie wird jetzt mit `tempfile::persist_noclobber` veröffentlicht, das
+auf Linux und Android `renameat2(RENAME_NOREPLACE)` benutzt (gleiche Garantie: erscheint nur
+vollständig, überschreibt nie). Sonst benutzt holzi keine harten Links.
 
 ## R5 — Hintergrund und Rückkehr (FR-018, FR-019)
 
