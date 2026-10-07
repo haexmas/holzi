@@ -107,9 +107,9 @@ and updated E2E scenarios. No new test framework.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T038 Search `src/` and `scripts/` for leftovers: `'/appearance'`, `settings-category-appearance`, `categories.appearance`, `GeneralView`; fix any hit
-- [ ] T039 Run the full check set from `quickstart.md` that works on this machine (`pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm check:settings`, `pnpm build`, `cd src-tauri && cargo fmt --check && cargo clippy && cargo test`); note that `pnpm test:e2e` needs the Arch host
-- [ ] T040 Diff the result against `docs/plans/2026-10-07-settings-general-restructure-design.md` decisions 1–10 and `research.md` R8 (memory: review drift); mark every task here `[x]`
+- [x] T038 Search `src/` and `scripts/` for leftovers: `'/appearance'`, `settings-category-appearance`, `categories.appearance`, `GeneralView`; fix any hit
+- [x] T039 Run the full check set from `quickstart.md` that works on this machine (`pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm check:settings`, `pnpm build`, `cd src-tauri && cargo fmt --check && cargo clippy && cargo test`); note that `pnpm test:e2e` needs the Arch host
+- [x] T040 Diff the result against `docs/plans/2026-10-07-settings-general-restructure-design.md` decisions 1–10 and `research.md` R8 (memory: review drift); mark every task here `[x]`
 
 ---
 

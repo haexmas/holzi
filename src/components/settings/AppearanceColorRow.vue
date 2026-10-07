@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * One colour row of "Darstellung" (spec 035-appearance-and-fields, FR-012, FR-013, FR-017): a title,
+ * One colour row of "Erscheinungsbild" (spec 035-appearance-and-fields, FR-012, FR-013, FR-017): a title,
  * the colour fields, and under it the note "angepasst" with its reason when the choice had to change
  * to stay readable. The choice is saved as soon as it is made (no save button) through
  * `settings.appearance.set`; the row says nothing on success, the view shows one status line.
