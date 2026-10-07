@@ -490,8 +490,9 @@ Spracheingabe einen Satz diktieren und ihn im Eingabefeld sehen.
 
 ## Assumptions
 
-- Mindestversion ist die, die das Tauri-Android-Gerüst vorgibt (Android 7.0); geprüft wird auf
-  dem Telefon der Person und auf einem aktuellen Emulator.
+- Mindestversion ist Android 8.0 (API 26): Die Spracheingabe nimmt über AAudio auf, das es erst ab
+  Android 8.0 gibt (das Tauri-Gerüst gibt Android 7.0 vor). Geprüft wird auf dem Telefon der Person
+  und auf einem aktuellen Emulator.
 - Der Build läuft in der Nix-devShell mit den gepinnten atoms-Dateien
   ([`haexmas/atoms` @ `b662c6205d6a1ebd7fac588291f82ea8e78c3d52`](https://github.com/haexmas/atoms/tree/b662c6205d6a1ebd7fac588291f82ea8e78c3d52)); die CI darf eine eigene
   Android-Umgebung aufsetzen, solange sie dieselben Versionen von SDK, NDK und Rust benutzt.

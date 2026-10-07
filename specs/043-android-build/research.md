@@ -6,7 +6,9 @@ Versionen aus `src-tauri/Cargo.lock` und dem Tauri-Gerüst: tauri 2.12.1, tauri-
 wry 0.57.0 (Fork `haexmas/wry@47037dd`), tao 0.37.1, tauri-plugin-dialog 2.8.1,
 tauri-plugin-fs 2.6.0, rustls-platform-verifier 0.7.1 (`-android` 0.2.0), lettre 0.11.23,
 reqwest 0.13.5, sysinfo 0.39.6, cpal 0.18.2; Tauri-CLI 2.12.0. Das Android-Gerüst von
-Tauri 2.12 setzt `compileSdk`/`targetSdk` 37, `minSdk` 24, NDK 28.2.13676358, AGP 9.3.1.
+Tauri 2.12 setzt `compileSdk`/`targetSdk` 37, `minSdk` 24, NDK 28.2.13676358, AGP 9.3.1. holzi hebt
+`minSdk` auf 26 (Android 8.0): cpal nimmt das Mikrofon über AAudio auf und bindet `libaaudio`
+fest ein, die das NDK erst ab API 26 hat; mit 24 scheitert der Link-Schritt (2026-10-07).
 
 Ausgangslage (`cargo check --target aarch64-linux-android`, 2026-10-07): Von gut 960 Crates
 bricht nur `lettre` (R2); in holzi brechen `FileDialogBuilder::blocking_pick_folder`
@@ -402,8 +404,11 @@ geprüft werden sollen; das bleibt Handprüfung im Quickstart. `10.0.2.2` statt 
   `Swatinem/rust-cache` mit eigenem Schlüssel `android`, `gradle/actions/setup-gradle`. Ein
   Prüfskript `pnpm check:android-versions` vergleicht die Versionen im Workflow mit
   `.devshell/packages.nix` und `.devshell/rust-toolchain.toml`.
-- **Job `android-build`**: `pnpm tauri android build --debug --apk --target x86_64 --target
-aarch64`; lädt das APK als Artefakt hoch (FR-032). Bricht der Bau, ist der PR rot (FR-031).
+- **Job `android-build`**: `pnpm tauri android build --debug --apk --split-per-abi --target aarch64
+--target x86_64` (ein APK je Architektur; die Debug-Bibliothek wird gestrippt, sonst wäre sie
+  1,9 GB statt etwa 210 MB je Architektur); lädt die APKs als Artefakt hoch (FR-032). Bricht der
+  Bau, ist der PR rot (FR-031). Ein zweiter Job `android-lint` lässt clippy für Android mit
+  beiden Feature-Sätzen laufen.
 - **Jobs `android-e2e` (3 Shards)**: KVM über die udev-Regel freischalten,
   `reactivecircus/android-emulator-runner@v2` (API 35, `google_apis`, x86_64, Snapshot im
   Cache, ein Skript statt mehrzeiligem `script:`), APK aus `android-build`, Linux-App für die

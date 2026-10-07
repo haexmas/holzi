@@ -70,7 +70,7 @@ Linux (wie bisher) und auf Android im Emulator (neu, Pflicht-Check), Handprüfun
 echten Telefon nach [quickstart.md](./quickstart.md) für das, was der Emulator nicht kann
 (Gesten, Aussparung, Netzwechsel, System-Dateiauswahl, Mikrofon, Benachrichtigungen).
 
-**Target Platform**: Android 7.0+ (`minSdk` 24, `targetSdk` 37), `arm64-v8a` (Telefone) und
+**Target Platform**: Android 8.0+ (`minSdk` 26 wegen AAudio, research R1; `targetSdk` 37), `arm64-v8a` (Telefone) und
 `x86_64` (Emulator); Linux, macOS und Windows unverändert.
 
 **Project Type**: Desktop- und Mobil-App (Tauri) mit einer neuen lokalen Plugin-Crate.
