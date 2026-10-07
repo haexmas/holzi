@@ -11,7 +11,7 @@ Typen werden mit `ts-rs` nach `src/types/bindings/` erzeugt.
 | `files_sources`            | –                                    | `{ device: { roots: Root[], known: Place[] }, storages: StorageSource[] }` |
 | `files_list`               | `source: SourceRef, path: string`    | `Entry[]` (alle Einträge; Sortieren im Fenster)                            |
 | `files_stat`               | `source, path`                       | `Entry`                                                                    |
-| `files_watch`              | `path, channel: Channel<WatchEvent>` | `watchId` (nur Desktop; auf Android `unsupported`)                         |
+| `files_watch`              | `path, channel: Channel<WatchEvent>` | `watchId` (Desktop und Android; iOS `unsupported`)                         |
 | `files_unwatch`            | `watchId`                            | –                                                                          |
 | `files_all_access`         | –                                    | `{ granted: bool, platform: 'android' \| 'other' }`                        |
 | `files_request_all_access` | –                                    | – (öffnet die Systemeinstellungen, nur Android)                            |

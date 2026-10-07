@@ -175,9 +175,14 @@ Kompilieren, nicht Verhalten zur Laufzeit.
 - **Quelle**: developer.android.com/training/data-storage/manage-all-files (Berechtigung,
   `isExternalStorageManager()`, `ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION`, Ausnahme `Android/data`,
   Play-Prüfung) [Certain]; die app-spezifische Action mit `package:`-URI [Likely].
-- **Beobachtung auf Android**: `notify` ist heute nur für Desktop eingebunden
-  (`PlatformCapabilities.folder_watch` aus). Der Dateibrowser lädt auf Android beim Fokus und manuell neu
-  (Abweichung von FR-006 für Android, in der Spec nachgetragen).
+- **Beobachtung auf Android**: `notify` 8 unterstützt Android über inotify (`Cargo.toml` von notify
+  8.2: `inotify` für `target_os = "android"`) [Certain]. holzi hat `notify` bisher nur für den Desktop
+  eingebunden, weil Erweiterungen auf Mobilgeräten nach 017 nur Dialog-Pfade bekommen; das ist eine
+  Produktentscheidung für Erweiterungen, keine Grenze der Plattform. Der Dateibrowser bindet `notify`
+  deshalb auch für Android ein (nicht iOS) und beobachtet nur den offenen Ordner, nicht rekursiv; die
+  Erweiterungen bleiben auf Mobilgeräten bei „nicht verfügbar“. Weil Ereignisse über FUSE unter
+  `/storage/emulated/0` nicht in jedem Fall ankommen müssen [Likely], lädt der Dateibrowser beim
+  Zurückkehren in den Tab zusätzlich neu.
 
 ## R12 PDF-Viewer im Fenster (FR-010)
 

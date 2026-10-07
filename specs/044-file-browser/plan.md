@@ -28,8 +28,8 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](.
   über `NativeActionTool` (ADR 0011); Text aus PDF (`pdf-extract`), xlsx/ods (`calamine`) und docx/odt
   (ZIP + XML); Bilder als Bildblöcke im `tool_result`, nur für Modelle, die Bilder annehmen; neue Tabelle
   `agent_file_permissions`.
-- **Android** (R11): `MANAGE_EXTERNAL_STORAGE` mit zwei Befehlen im Plugin `holzi-android`; Neuladen
-  statt Beobachten.
+- **Android** (R11): `MANAGE_EXTERNAL_STORAGE` mit zwei Befehlen im Plugin `holzi-android`; Beobachten wie
+  auf dem Desktop (`notify` über inotify), dazu Neuladen beim Zurückkehren.
 
 ## Technical Context
 
@@ -39,7 +39,7 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](.
 **Primary Dependencies**: neu in Rust: `walkdir` 2.5, `frizbee` 0.13, `image` 0.25 (nur jpeg/png/webp/gif),
 `fast_image_resize` 6.1, `pdf-extract` 0.12, `calamine` 0.36, `zip` 8, `quick-xml` 0.41, `trash` 5.2
 (nicht Android). Vorhanden: `tokio` (net, fs, io-util), `rusty-s3`, `reqwest`, `notify-debouncer-full`
-(Desktop), `uuid`, `sha2`, `tempfile`. Neu im Fenster: `pdfjs-dist` 6.4. Vorhanden: `photoswipe`,
+(bisher nur Desktop; für Android mit eingebunden, R11), `uuid`, `sha2`, `tempfile`. Neu im Fenster: `pdfjs-dist` 6.4. Vorhanden: `photoswipe`,
 `@vueuse/core` (`useVirtualList`), haex-ui (Shadcn-Kontextmenü, Dialoge).
 
 **Storage**: Vault-Datenbank: neue synchronisierte Tabelle `agent_file_permissions` (Migration 0029);
@@ -114,7 +114,7 @@ src-tauri/src/
 │   ├── access.rs                   # rein: Sperre, Berechtigungen der Agents auswerten + _tests
 │   ├── local/                      # aus extensions/fs gezogen + neu
 │   │   ├── resolve.rs, places.rs   # Auflösen, Sperrliste, bekannte Orte, Laufwerke
-│   │   ├── watch.rs                # notify (Desktop)
+│   │   ├── watch.rs                # notify (Desktop und Android)
 │   │   └── ops.rs                  # list, stat, mkdir, rename, Papierkorb
 │   ├── storage_source.rs           # S3 als Quelle (Präfixe als Ordner)
 │   ├── media_server.rs             # Server, Tokens, Range + _tests

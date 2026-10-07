@@ -21,7 +21,7 @@ ln -s /tmp/holzi-files /tmp/holzi-files/a/schleife
 1. Dateibrowser öffnen, `/tmp/holzi-files` ansteuern; Liste und Raster wechseln. Das Foto steht im
    Raster aufrecht.
 2. `notiz.txt`, `brief.pdf` (blättern, zoomen) und `foto.jpg` (zoomen, weiter) öffnen.
-3. In einem Terminal `touch /tmp/holzi-files/neu.txt`: erscheint ohne Neuladen (Desktop).
+3. In einem Terminal `touch /tmp/holzi-files/neu.txt`: erscheint ohne Neuladen.
 4. Zweiten Tab in `a/` öffnen, holzi beenden, mit Sitzung wieder öffnen: beide Tabs stehen richtig.
 
 ## 2. Abspielen (US2, SC-002, SC-003)
@@ -76,3 +76,4 @@ Im Chat mit einem Anthropic-Modell (nimmt Bilder an) und Freigabestufe „Auto�
 1. Frisch installieren, Dateibrowser öffnen: Erklärung und Knopf.
 2. Berechtigung erteilen, zurück: Speicher des Geräts erscheint ohne Neustart.
 3. Ein Video aus `DCIM/` abspielen und springen; eine Datei löschen: Rückfrage, endgültig.
+4. `DCIM/Camera` offen lassen und ein Foto aufnehmen: erscheint ohne Neuladen.
