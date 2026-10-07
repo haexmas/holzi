@@ -56,7 +56,7 @@ diese Anweisung schreiben darf.
 `lower`, `upper`, `ltrim`, `rtrim`, `trim`, `max`, `min`, `nullif`, `printf`, `format`, `quote`, `random`,
 `randomblob`, `replace`, `round`, `sign`, `substr`, `substring`, `typeof`, `unicode`, `char`, `hex`, `unhex`,
 `zeroblob`, `glob`, `like`, `likely`, `unlikely`, `changes`, `last_insert_rowid`, `total_changes`),
-Aggregate und Fensterfunktionen, Datum und Zeit, Mathefunktionen, JSON-Funktionen einschließlich
+Aggregate und Fensterfunktionen, Datum und Zeit (auch `CURRENT_DATE`, `CURRENT_TIME`, `CURRENT_TIMESTAMP`), Mathefunktionen, JSON-Funktionen einschließlich
 `json_each`/`json_tree` (Tabellenwertfunktionen nur, wenn der Test zeigt, dass sie nicht über Kerntabellen
 lesen können). Funktionen, die der CRDT-Transformer selbst in die Anweisung einsetzt, erlaubt der Authorizer
 nur, wenn sie aus dem Transformer stammen (Prüfaufgabe: ob der Transformer HLC-Werte als Literal oder als

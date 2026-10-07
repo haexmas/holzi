@@ -110,6 +110,11 @@ pub const FUNCTIONS: &[&str] = &[
     "unixepoch",
     "strftime",
     "timediff",
+    // The keywords `CURRENT_DATE`, `CURRENT_TIME` and `CURRENT_TIMESTAMP` (Drizzle writes the last
+    // as a column default); they mean `date('now')`, `time('now')` and `datetime('now')`.
+    "current_date",
+    "current_time",
+    "current_timestamp",
     // Math.
     "acos",
     "acosh",
