@@ -202,7 +202,8 @@ fokussiert.
   Instanz beim Öffnen aus dem Launcher (etwa wie ein Klick auf ein bereits
   offenes App-Symbol in einer Taskleiste) ist eine andere, hier bewusst
   nicht verfolgte Interaktion und könnte bei Bedarf eine eigene, spätere
-  Spec sein.
+  Spec sein. [`045-dock`](../045-dock/spec.md) setzt sie für das Dock um;
+  der Launcher bleibt dabei unverändert.
 - Künftige haextensions (Spec 017/018) legen ihre Instanzpolitik über
   dieselbe App-Definition fest wie die heutigen System-Apps; diese Spec
   ändert daran nichts, sie bestätigt nur, dass das bestehende Modell dafür
