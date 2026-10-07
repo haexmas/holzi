@@ -385,6 +385,11 @@ jobs:
         with:
           node-version: 22.19.0
 
+      # The Tauri CLI runs `beforeBuildCommand` (`pnpm generate`) and Gradle runs `pnpm tauri`
+      # by name, so `pnpm` itself has to be on PATH, as in the e2e job.
+      - name: Enable corepack
+        run: corepack enable
+
       - name: Install frontend dependencies
         run: corepack pnpm install --frozen-lockfile
 
