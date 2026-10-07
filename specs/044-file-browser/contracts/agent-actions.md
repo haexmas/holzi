@@ -36,5 +36,6 @@ Definitionen im TS-Katalog `src/lib/actions/filesActions.ts`, neue Scopes `files
 - **Agenten-Transfers** laufen ohne Rückfrage zum Namen; die Entscheidung steht in `onConflict`.
 - **Grenzen** (FR-035): Eingabedatei für Textauszug bis 50 MB; Bilder auf lange Kante 1568 px und
   höchstens 5 MB verkleinert.
-- **Ohne Fenster** (FR-034): alle Aktionen außer `files.show` arbeiten, sobald die Definitionen in
-  dieser Vault-Sitzung übergeben wurden.
+- **Ohne Fenster** (FR-034): alle Aktionen außer `files.show` arbeiten headless, sobald die Definitionen
+  in dieser Vault-Sitzung übergeben und die erforderlichen Berechtigungen bereits erteilt wurden;
+  andernfalls antworten sie mit `files_not_granted`.

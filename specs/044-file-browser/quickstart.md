@@ -12,7 +12,7 @@ printf 'Hallo\n' > /tmp/holzi-files/notiz.txt
 cp <ein PDF> /tmp/holzi-files/brief.pdf
 cp <ein PNG/JPEG mit EXIF-Drehung> /tmp/holzi-files/a/foto.jpg
 cp <ein MP3> /tmp/holzi-files/a/lied.mp3
-cp <ein MP4 über 1 GB> /tmp/holzi-files/b/film.mp4
+cp <ein MP4 mit mindestens 4 GB> /tmp/holzi-files/b/film.mp4
 ln -s /tmp/holzi-files /tmp/holzi-files/a/schleife
 ```
 
