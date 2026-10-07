@@ -68,13 +68,7 @@ scenario('settings-narrow-window', {}, async (ctx) => {
   ctx.step('narrow: open over the content, category and Escape close')
 
   await resizeSettingsWindow(instance, 360)
-  for (const id of [
-    'general',
-    'appearance',
-    'models',
-    'agents',
-    'federation',
-  ]) {
+  for (const id of ['general', 'models', 'agents', 'federation']) {
     await instance.click('settings-sidebar-toggle')
     await ctx.waitFor('the sidebar to finish opening', () =>
       sidebarShown(instance),

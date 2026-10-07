@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * The category "Allgemein" (spec 023-settings-app, FR-005): device name and session restore.
+ * "Allgemein → Grundeinstellung" (spec 023-settings-app FR-005, spec 042): device name and session
+ * restore.
  */
 import { useSettingsDevice } from '~/components/settings/deviceContext'
 

@@ -5,7 +5,6 @@ import { isShown, settingsLocation, waitForLocation } from '../lib/settings.ts'
 
 const CATEGORIES = [
   'general',
-  'appearance',
   'models',
   'agents',
   'storage',
@@ -53,6 +52,11 @@ scenario('settings-categories', {}, async (ctx) => {
   )
   assert.deepEqual(withoutIcon, [], 'category icons missing without network')
   assert.deepEqual(sidebar.current, ['settings-category-general'])
+  // Spec 042: "Allgemein" is an overview of "Grundeinstellung" and "Erscheinungsbild".
+  await instance.waitForDisplayed('settings-row-general.basic')
+  await instance.waitForDisplayed('settings-row-general.appearance')
+  await instance.click('settings-row-general.basic')
+  await waitForLocation(instance, 'general.basic')
   await instance.waitForDisplayed('settings-alias')
   await instance.waitForDisplayed('session-restore-switch')
   ctx.step('S1 first category')
@@ -83,8 +87,21 @@ scenario('settings-categories', {}, async (ctx) => {
 
   // S3: every setting from before the spec, as (clicks from the settings, hook that shows it).
   const reach: Array<[string[], string, string | null]> = [
-    [['settings-category-general'], 'general', 'settings-alias'],
-    [['settings-category-general'], 'general', 'session-restore-switch'],
+    [
+      ['settings-category-general', 'settings-row-general.basic'],
+      'general.basic',
+      'settings-alias',
+    ],
+    [
+      ['settings-category-general', 'settings-row-general.basic'],
+      'general.basic',
+      'session-restore-switch',
+    ],
+    [
+      ['settings-category-general', 'settings-row-general.appearance'],
+      'general.appearance',
+      'settings-color-scheme',
+    ],
     [
       ['settings-category-models', 'settings-row-models.default'],
       'models.default',

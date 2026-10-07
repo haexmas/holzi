@@ -30,8 +30,9 @@ scenario('appearance-basic', { timeoutMs: 300_000 }, async (ctx) => {
   let page = device.page
 
   await openSettings(page)
-  await page.click('settings-category-appearance')
-  await waitForLocation(page, 'appearance')
+  await page.click('settings-category-general')
+  await page.click('settings-row-general.appearance')
+  await waitForLocation(page, 'general.appearance')
   const sky = await themeHue(page, '--primary')
   assert.equal(sky, 237, 'the default accent is sky')
 
@@ -258,7 +259,8 @@ scenario('appearance-basic', { timeoutMs: 300_000 }, async (ctx) => {
     scheme: 'light',
   })
   await openSettings(page)
-  await page.click('settings-category-appearance')
+  await page.click('settings-category-general')
+  await page.click('settings-row-general.appearance')
   await reveal(page, 'appearance-reset')
   await page.click('appearance-reset')
   await page.click('appearance-reset-confirm')

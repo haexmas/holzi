@@ -402,11 +402,7 @@
     "categories": {
       "general": {
         "title": "Allgemein",
-        "keywords": "Gerät Gerätename Name Sitzung wiederherstellen Fenster Tabs"
-      },
-      "appearance": {
-        "title": "Darstellung",
-        "keywords": "Darstellung Farbschema hell dunkel System Theme Aussehen"
+        "keywords": "Allgemein Grundeinstellung Erscheinungsbild"
       },
       "models": {
         "title": "Modelle",
@@ -430,6 +426,18 @@
       }
     },
     "locations": {
+      "general": {
+        "basic": {
+          "title": "Grundeinstellung",
+          "description": "Sprache, Passwort, Gerät und Sitzung.",
+          "keywords": "Gerät Gerätename Name Sitzung wiederherstellen Fenster Tabs"
+        },
+        "appearance": {
+          "title": "Erscheinungsbild",
+          "description": "Farbschema, Hintergrund und Farben.",
+          "keywords": "Darstellung Farbschema hell dunkel System Theme Aussehen"
+        }
+      },
       "models": {
         "default": {
           "title": "Standard-Modell",

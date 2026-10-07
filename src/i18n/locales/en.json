@@ -402,11 +402,7 @@
     "categories": {
       "general": {
         "title": "General",
-        "keywords": "device device name name session restore windows tabs"
-      },
-      "appearance": {
-        "title": "Appearance",
-        "keywords": "appearance color scheme light dark system theme look"
+        "keywords": "general basic settings appearance"
       },
       "models": {
         "title": "Models",
@@ -430,6 +426,18 @@
       }
     },
     "locations": {
+      "general": {
+        "basic": {
+          "title": "Basic settings",
+          "description": "Language, password, device and session.",
+          "keywords": "device device name name session restore windows tabs"
+        },
+        "appearance": {
+          "title": "Appearance",
+          "description": "Color scheme, background and colors.",
+          "keywords": "appearance color scheme light dark system theme look"
+        }
+      },
       "models": {
         "default": {
           "title": "Default model",
