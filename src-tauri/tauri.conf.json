@@ -35,7 +35,7 @@
       },
       "devCsp": {
         "default-src": "'self' http://localhost:3030",
-        "connect-src": "ipc: http://ipc.localhost http://localhost:3030 ws://localhost:3030",
+        "connect-src": "ipc: http://ipc.localhost 'self' http://localhost:3030 ws://localhost:3030",
         "font-src": "'self' data: http://localhost:3030",
         "img-src": "'self' asset: http://asset.localhost blob: data: http://localhost:3030 holzi-ext://localhost http://holzi-ext.localhost",
         "frame-src": "holzi-ext://localhost http://holzi-ext.localhost",
