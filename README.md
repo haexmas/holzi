@@ -23,6 +23,114 @@ The design corpus lives under [docs/](docs/) and the numbered specs under [specs
 
 Etappe 1 (App und Instanzlebenszyklus) merged 2026-09-09. Etappe 2 (Anbieter und Modellkatalog) und Etappe 3 (Nutzbarer Chat) in Arbeit. Identity model settled on per-instance keys stored inside the encrypted SQLite (no federation-root, no paper-seed). External `haex-crdt` crate provides the SQLite + CRDT-sync foundation.
 
+## Building holzi
+
+holzi is a Tauri 2 app: a Nuxt frontend and a Rust backend. CI builds and
+tests it on Ubuntu 24.04 (`.github/workflows/ci.yml`). The other systems
+below follow the upstream requirements of Tauri and of holzi's native
+dependencies but are not built in CI.
+
+### Requirements on every system
+
+- **Rust** 1.95 or newer through [rustup](https://rustup.rs) (`rust-version`
+  in `src-tauri/Cargo.toml`; CI uses the current stable).
+- **Node.js** `^22.19.0`, `^24.11.0` or `>=26` and **pnpm** 9.15 through
+  Corepack: `corepack enable`.
+- Native build tools for these crates, all compiled from source during the
+  Rust build:
+  - SQLCipher with a vendored OpenSSL (`rusqlite` from `haex-crdt`) needs a C
+    compiler, **Perl**, **make** and **libclang** (its bindings are generated
+    with bindgen).
+  - `aws-lc-sys` (rustls) and the tokenizers of the local models
+    (`onig_sys`, `esaxx-rs`) need a C/C++ compiler.
+
+### Linux
+
+**Debian / Ubuntu** (what CI installs):
+
+```bash
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
+  libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+  libasound2-dev libclang-dev
+```
+
+**Arch**:
+
+```bash
+sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl \
+  appmenu-gtk-module libappindicator-gtk3 librsvg xdotool alsa-lib clang perl
+```
+
+**Fedora**:
+
+```bash
+sudo dnf install webkit2gtk4.1-devel openssl-devel curl wget file \
+  libappindicator-gtk3-devel librsvg2-devel libxdo-devel alsa-lib-devel \
+  clang-devel perl-FindBin perl-IPC-Cmd
+sudo dnf group install "c-development"
+```
+
+`libasound`/`alsa-lib` is for microphone input (the default `voice` feature).
+
+Build with the host's toolchain, outside any Nix shell. Alternatively, the
+repository's Nix devShell (`nix develop`, or `direnv` via `.envrc`) provides
+the toolchain. WebKitGTK still comes from the host, and
+`scripts/with-nix-host-bridge.sh` points the build at it. The script assumes
+Arch paths (`/usr/lib/pkgconfig`, `/usr/lib/gbm`), so on other distributions
+build without the devShell.
+
+### macOS
+
+- Xcode, or the Xcode Command Line Tools: `xcode-select --install`. They
+  bring the C compiler, make and Perl.
+- If bindgen cannot find libclang: `brew install llvm`, then set
+  `LIBCLANG_PATH` to its `lib` directory (`$(brew --prefix llvm)/lib`).
+
+### Windows
+
+- [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+  with the "Desktop development with C++" workload, and the MSVC Rust
+  toolchain (rustup's default on Windows).
+- WebView2 Runtime: part of Windows 10 (1803+) and 11. Otherwise install the
+  Evergreen Bootstrapper.
+- LLVM for libclang: `winget install LLVM.LLVM`, then set `LIBCLANG_PATH` to
+  its `bin` directory (for example `C:\Program Files\LLVM\bin`).
+- [Strawberry Perl](https://strawberryperl.com/) for the OpenSSL build.
+  [NASM](https://www.nasm.us/) is optional; without it OpenSSL builds without
+  assembly routines.
+
+### Build and run
+
+```bash
+pnpm install
+pnpm tauri:dev      # development build with hot reload
+pnpm tauri:build    # release bundle
+```
+
+On Windows run `pnpm tauri dev` and `pnpm tauri build` instead. The
+`tauri:*` scripts go through a Bash wrapper (`scripts/with-nix-host-bridge.sh`)
+that only matters inside the Linux Nix devShell.
+
+The first Rust build compiles the local-inference stack (mistralrs, candle)
+and takes several minutes. GPU builds: `pnpm tauri:dev:cuda` (NVIDIA, CUDA
+toolkit ≥ 12 with `nvcc`) and `pnpm tauri:dev:metal` (Apple). See
+[Local inference build](#local-inference-build).
+
+### End-to-end tests
+
+The end-to-end suite runs on Linux only. It drives the app through
+`tauri-driver` and WebKit's WebDriver on a virtual screen. Other platforms
+are planned in [scripts/e2e/PLATFORMS.md](scripts/e2e/PLATFORMS.md).
+
+```bash
+sudo apt install webkit2gtk-driver xvfb    # Debian / Ubuntu
+cargo install tauri-driver --locked --version 2.0.6
+pnpm test:e2e
+```
+
+`WebKitWebDriver` must be the same version as the host's WebKitGTK. The
+suite checks this before it starts.
+
 ## Development setup
 
 The repository uses the Claude speckit integration. After a fresh clone,
