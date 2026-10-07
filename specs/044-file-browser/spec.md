@@ -35,6 +35,10 @@ HTTP-Server mit Tokens (aus haex-vault), nie ganze Datei im RAM."
 - **Freigabestufe** (Approval-Modus, Spec 003, ADR 0006): bestimmt, welche Aktionen ein Agent ohne
   Rückfrage ausführt. Aktionen tragen die Stufe Safe (lesen), Change (ändern) oder Risky
   (zerstörend).
+- **Agent-Berechtigung**: was ein Agent mit Dateien darf, in zwei getrennten Arten.
+  **Dateien des Geräts**: eine Berechtigung je Agent; mit ihr liest, listet und durchsucht er das ganze
+  Dateisystem, Ändern läuft über die Freigabestufe. **Speicher**: eine Berechtigung je Agent und
+  Speicher, „Lesen“ oder „Lesen und Schreiben“.
 - **Eigene Daten von holzi**: das Datenverzeichnis der App, auch im portablen Modus (Spec 014):
   Vault-Dateien, Schlüssel, Konfiguration, Bundles und Daten von Erweiterungen, Zwischenspeicher.
 
@@ -45,7 +49,8 @@ HTTP-Server mit Tokens (aus haex-vault), nie ganze Datei im RAM."
   `https://github.com/haex-space/haex-vault`, Revision `fc4e84b6`). haex-files ist obsolet und kein
   Maßstab.
 - **Spec 038** (Speicherverbindungen): liefert die Speicher, die der Dateibrowser als Quelle zeigt.
-  Zugangsdaten bleiben wie dort in holzi; der Dateibrowser zeigt sie nie. Diese Spec erweitert den
+  Zugangsdaten bleiben wie dort in holzi; der Dateibrowser zeigt sie nie. Agents erreichen einen
+  Speicher wie Erweiterungen dort nur mit einer Berechtigung je Speicher (FR-031a). Diese Spec erweitert den
   Zugriff auf einen Speicher um das Lesen von Teilbereichen eines Objekts (für Video und Audio).
 - **Spec 017** (Erweiterungs-Host): Erweiterungen bekommen Dateizugriff weiterhin nur über ihre
   Berechtigungen dort (FR-046 bis FR-049). Diese Spec ändert daran nichts. Die Sperre der eigenen
@@ -84,6 +89,17 @@ HTTP-Server mit Tokens (aus haex-vault), nie ganze Datei im RAM."
   der späteren Spec zur Inhaltssuche.
 - Q: Was passiert mit Formaten, die holzi nicht anzeigen kann? → A: Info-Ansicht mit „Mit System-App
   öffnen“. holzi wandelt keine Formate um.
+- Q: Gilt „alles lesen“ für Agents auch für S3-Speicher? → A: Nein. Gerät und Speicher sind zwei
+  getrennte Berechtigungen: „Dateien des Geräts“ je Agent (der eingebaute Agent hat sie ab Werk,
+  externe Agents erst nach Erteilung) und je Speicher und Agent „Lesen“ oder „Lesen und Schreiben“,
+  ab Werk für keinen Agent (Betreiber).
+- Q: Was kann ein Agent aus Dateien lesen? → A: Text, den eingebetteten Text von PDFs, den Text von
+  Office-Dokumenten (docx, odt, xlsx, ods) und Bilder, diese nur an Modelle, die Bilder annehmen
+  (Spec 012). Keine Texterkennung in gescannten Dokumenten (Betreiber).
+- Q: Darf ein Agent dem Nutzer eine Datei zeigen? → A: Ja. Er kann den Dateibrowser in einem Ordner
+  oder mit einer Datei im Viewer öffnen, Wiedergabe eingeschlossen (Betreiber).
+- Q: Wie weit reicht die Suche über Laufwerksgrenzen? → A: Sie überspringt virtuelle Systemordner und
+  bleibt auf dem Laufwerk, auf dem sie startet; andere Laufwerke nur, wenn sie dort beginnt.
 - Q: Wie greift holzi auf Android zu? → A: Mit „Zugriff auf alle Dateien“; echte Pfade wie auf dem
   Desktop, kein Weg über einzeln gewählte Ordner.
 
@@ -229,28 +245,49 @@ wechseln, ein Video abspielen und springen, Dateien hoch- und herunterladen, ein
 ### User Story 6 - Ein Agent sucht und liest Dateien (Priority: P2)
 
 Anna fragt im Chat: „Finde meine Steuerunterlagen von 2025 und fasse das Schreiben vom Finanzamt
-zusammen.“ Der Agent sucht im Dateisystem, liest die Textdatei und antwortet. Als sie ihn bittet, die
+zusammen.“ Der Agent sucht im Dateisystem, liest das PDF und antwortet. Danach fragt sie, was auf
+einem Foto im selben Ordner zu sehen ist, und der Agent sieht es sich an. Auf „zeig es mir“ öffnet er
+das Foto im Viewer. Als sie ihn bittet, die
 Datei in einen anderen Ordner zu verschieben, fragt holzi nach ihrer Freigabestufe vorher.
 
 **Why this priority**: Ausdrücklich gewünscht; setzt den Dateizugriff von Story 1 und 4 voraus.
 
-**Independent Test**: Im Chat mit einem Testmodell eine Datei suchen und lesen lassen (keine
-Rückfrage), dann verschieben lassen (Rückfrage je nach Freigabestufe), dann die Vault-Datei lesen
+**Independent Test**: Im Chat mit einem Testmodell eine Datei suchen und ein PDF, ein docx und ein
+Bild lesen lassen (keine Rückfrage), dann verschieben lassen (Rückfrage je nach Freigabestufe), dann die Vault-Datei lesen
 lassen (abgelehnt).
 
 **Acceptance Scenarios**:
 
-1. **Given** eine Datei irgendwo im Dateisystem, **When** der Agent sucht, auflistet oder Angaben
-   abfragt, **Then** bekommt er die Ergebnisse ohne Rückfrage (Stufe Safe).
-2. **Given** eine Textdatei, **When** der Agent sie liest, **Then** bekommt er ihren Text bis zu einer
-   Größengrenze und den Hinweis, wenn sie abgeschnitten wurde.
-3. **Given** der Agent will einen Ordner anlegen, kopieren oder umbenennen, **When** er die Aktion
+1. **Given** eine Datei irgendwo im Dateisystem und der Agent hat „Dateien des Geräts“, **When** er
+   sucht, auflistet oder Angaben abfragt, **Then** bekommt er die Ergebnisse ohne Rückfrage (Stufe
+   Safe).
+2. **Given** eine Textdatei, ein PDF mit Textschicht oder ein Office-Dokument (docx, odt, xlsx, ods),
+   **When** der Agent sie liest, **Then** bekommt er ihren Text bis zu einer Größengrenze und den
+   Hinweis, wenn er abgeschnitten wurde; bei Tabellen mit Blattnamen.
+3. **Given** ein Bild und ein Modell, das Bilder annimmt (Spec 012), **When** der Agent es liest,
+   **Then** bekommt das Modell das Bild, verkleinert auf eine Größengrenze; nimmt das Modell keine
+   Bilder an, bekommt der Agent stattdessen Angaben zum Bild und den Hinweis, dass er es nicht sehen
+   kann.
+4. **Given** ein gescanntes PDF ohne Textschicht oder ein anderes Format, **When** der Agent es
+   liest, **Then** bekommt er die Angaben zur Datei und den Hinweis, dass holzi keinen Text daraus
+   gewinnen kann.
+5. **Given** der Agent will einen Ordner anlegen, kopieren oder umbenennen, **When** er die Aktion
    aufruft, **Then** gilt die Stufe Change; beim Verschieben oder Löschen gilt die Stufe Risky.
-4. **Given** eine Datei unter den eigenen Daten von holzi, **When** ein Agent sie lesen, auflisten,
+6. **Given** eine Datei unter den eigenen Daten von holzi, **When** ein Agent sie lesen, auflisten,
    ändern oder in Suchtreffern sehen würde, **Then** lehnt holzi mit einem Grund ab und gibt keinen
    Inhalt heraus; Suchtreffer enthalten sie nicht.
-5. **Given** eine Suche des Agents, die viele Treffer liefert oder lange läuft, **When** die Grenze
+7. **Given** eine Suche des Agents, die viele Treffer liefert oder lange läuft, **When** die Grenze
    erreicht ist, **Then** bekommt er das Teilergebnis mit dem Hinweis, dass es unvollständig ist.
+8. **Given** ein Speicher, für den der Agent keine Berechtigung hat, **When** er ihn auflisten, lesen
+   oder hineinkopieren will, **Then** fragt holzi den Nutzer (Lesen erlauben, Lesen und Schreiben
+   erlauben, Ablehnen); ohne Erlaubnis bekommt der Agent eine Ablehnung mit Grund, und die Liste der
+   Quellen des Agents nennt nur Speicher, die er erreichen darf.
+9. **Given** der Agent darf einen Speicher nur lesen, **When** er dorthin kopieren, verschieben,
+   umbenennen oder dort löschen will, **Then** lehnt holzi ab, unabhängig von der Freigabestufe.
+10. **Given** eine Datei, die der Agent erreichen darf, **When** er sie dem Nutzer zeigen will,
+    **Then** öffnet holzi den Dateibrowser mit der Datei im Viewer (Video und Audio spielen); bei
+    einem Ordner öffnet er den Dateibrowser in diesem Ordner. Das gilt als Stufe Change, wie andere
+    Aktionen, die Fenster öffnen.
 
 ---
 
@@ -288,6 +325,8 @@ internen Speicher und die SD-Karte wie auf dem Desktop.
   Grund ab.
 - **Symbolische Links**: Sie sind markiert; Öffnen folgt ihnen, die Suche nicht. Zeigt ein Link in die
   eigenen Daten von holzi, gilt für Agents die Sperre.
+- **Suche ab der Wurzel des Systems**: Sie bleibt auf dem Systemlaufwerk; eingehängte USB-, Zusatz-
+  und Netzlaufwerke durchsucht sie nicht, virtuelle Systemordner auch nicht.
 - **Ein Ordner wird in sich selbst kopiert oder verschoben**: holzi lehnt vor dem Start ab.
 - **Zu wenig Platz am Ziel**: Ist der freie Platz bekannt (Gerät), prüft holzi vor dem Start;
   sonst scheitert der Transfer mit Grund und ohne halbe Datei.
@@ -383,24 +422,48 @@ internen Speicher und die SD-Karte wie auf dem Desktop.
 - **FR-029**: Filter nach Typ (Bild, Video, Audio, Dokument, Text), Größe und Zeitraum MÜSSEN auf
   Suchtreffer und auf den offenen Ordner wirken.
 - **FR-030**: Die Suche DARF symbolischen Links nicht folgen und MUSS Ordner ohne Zugriff ohne
-  Fehlermeldung überspringen. In einem Speicher MUSS sie den Fortschritt zeigen.
+  Fehlermeldung überspringen. Sie MUSS auf dem Laufwerk bleiben, auf dem sie startet, und virtuelle
+  Systemordner (etwa `/proc`, `/sys`, `/dev` unter Linux) überspringen; ein anderes Laufwerk
+  durchsucht sie nur, wenn sie dort beginnt. Das gilt auch für Agents. In einem Speicher MUSS sie den Fortschritt zeigen.
 
 **Agents**
 
 - **FR-031**: holzi MUSS Agents Aktionen zum Auflisten, Abfragen von Angaben, Suchen und Lesen von
-  Text anbieten, für das ganze Dateisystem und jeden Speicher, mit der Stufe Safe.
+  Inhalten (FR-035a) anbieten, mit der Stufe Safe. Auf dem Gerät MÜSSEN sie das ganze Dateisystem
+  erreichen, sofern der Agent die Berechtigung „Dateien des Geräts“ hat. Der eingebaute Agent MUSS sie ab Werk
+  haben; externe Agents (Spec 021) MÜSSEN sie erst erteilt bekommen.
+- **FR-031a**: Einen Speicher DARF ein Agent nur mit einer eigenen Berechtigung für genau diesen
+  Speicher erreichen: „Lesen“ oder „Lesen und Schreiben“, ab Werk für keinen Agent. Fehlt sie, MUSS
+  holzi den Nutzer fragen (Lesen erlauben, Lesen und Schreiben erlauben, Ablehnen) und die Antwort
+  merken. Schreiben, Löschen und Kopieren in einen Speicher MÜSSEN „Lesen und Schreiben“ verlangen,
+  zusätzlich zur Freigabestufe. Speicher ohne Berechtigung DÜRFEN in keiner Antwort an den Agent
+  auftauchen.
+- **FR-031b**: Der Nutzer MUSS die Datei-Berechtigungen jedes Agents sehen und widerrufen können, für
+  das Gerät und je Speicher.
 - **FR-032**: holzi MUSS Agents Aktionen zum Anlegen von Ordnern, Kopieren und Umbenennen (Stufe
-  Change) und zum Verschieben und Löschen (Stufe Risky) anbieten.
+  Change) und zum Verschieben und Löschen (Stufe Risky) anbieten, im Rahmen ihrer Berechtigungen
+  (FR-031, FR-031a).
+- **FR-032a**: Ein Agent MUSS den Dateibrowser in einem Ordner oder mit einer Datei im Viewer öffnen
+  können, Wiedergabe eingeschlossen, mit der Stufe Change wie die übrigen Aktionen, die Fenster
+  öffnen. Er DARF dabei nur Dateien und Ordner nennen, die er nach FR-031, FR-031a und FR-033
+  erreichen darf.
 - **FR-033**: Die eigenen Daten von holzi MÜSSEN für Agents vollständig gesperrt sein: kein Lesen,
   kein Auflisten, keine Angaben, kein Ändern, keine Suchtreffer. Geprüft MUSS immer das tatsächliche
   Ziel werden, nach Auflösen von `..` und symbolischen Links. Eine Ablehnung MUSS den Grund nennen und
   DARF keinen Inhalt enthalten.
 - **FR-034**: Die Dateiaktionen für Agents MÜSSEN auch funktionieren, wenn kein Fenster von holzi
-  offen ist.
-- **FR-035**: Das Lesen von Text durch einen Agent MUSS eine Größengrenze haben und ein Abschneiden
+  offen ist; ausgenommen ist das Öffnen im Dateibrowser (FR-032a), das ein Fenster braucht.
+- **FR-035**: Das Lesen durch einen Agent MUSS eine Größengrenze haben und ein Abschneiden
   kennzeichnen. Die Suche eines Agents MUSS eine Grenze für Laufzeit und Trefferzahl haben und ein
   Teilergebnis als unvollständig kennzeichnen.
-- **FR-036**: Externe Agents (Spec 021) MÜSSEN dieselben Aktionen bekommen, mit ihren Grants dort.
+- **FR-035a**: Lesen durch einen Agent MUSS liefern: den Text von Textdateien, den eingebetteten Text
+  von PDFs, den Text von Office-Dokumenten (docx, odt, xlsx, ods; Tabellen mit Blattnamen) und Bilder.
+  Bilder MUSS holzi nur an Modelle geben, die laut Spec 012 Bilder annehmen, und vorher auf eine
+  Größengrenze verkleinern; sonst MUSS der Agent Angaben zum Bild und einen Hinweis bekommen. Für
+  andere Formate und PDFs ohne Textschicht MUSS er Angaben zur Datei und einen Hinweis bekommen.
+  holzi DARF dafür keine Texterkennung ausführen.
+- **FR-036**: Externe Agents (Spec 021) MÜSSEN dieselben Aktionen bekommen, mit ihren Grants dort und
+  den Berechtigungen aus FR-031 und FR-031a.
   Wer eine Aktion aufruft, MUSS sich aus dem Eingang ergeben, nie aus einer Angabe des Aufrufers
   (wie ADR 0007).
 
@@ -425,6 +488,8 @@ internen Speicher und die SD-Karte wie auf dem Desktop.
 - **Freigabe-URL**: genau eine Datei, ein Tab, verfällt mit Viewer, Tab oder Sperren der Vault.
 - **Transfer**: Art (kopieren, verschieben), Quelle und Ziel, Einträge, Fortschritt, Zustand
   (läuft, abgebrochen, gescheitert mit Grund, fertig).
+- **Agent-Berechtigung für Dateien**: Agent, Art (Dateien des Geräts oder ein Speicher), Stufe
+  (für Speicher: Lesen oder Lesen und Schreiben); widerrufbar.
 - **Einstellungen des Dateibrowsers**: Ansicht, Sortierung, versteckte Dateien; je Gerät.
 
 ## Success Criteria _(mandatory)_
@@ -441,7 +506,8 @@ internen Speicher und die SD-Karte wie auf dem Desktop.
 - **SC-004**: Die ersten Suchtreffer erscheinen in unter 1 Sekunde, wenn sie im aktuellen Ordner
   liegen; eine Suche über 10 000 Dateien ist in unter 10 Sekunden fertig.
 - **SC-005**: In 100 % der Fälle eines Prüfkatalogs (direkte Pfade, `..`, symbolische Links, Groß-
-  und Kleinschreibung, Suchtreffer) erreicht ein Agent nichts aus den eigenen Daten von holzi.
+  und Kleinschreibung, Suchtreffer) erreicht ein Agent nichts aus den eigenen Daten von holzi, und
+  ohne Berechtigung für einen Speicher erfährt er nicht einmal, dass es ihn gibt.
 - **SC-006**: In 100 % der geprüften Abbrüche und Fehler (Abbruch durch den Nutzer, Netzfehler,
   fehlender Platz, Sperren der Vault) bleibt am Ziel keine halbe Datei zurück.
 - **SC-007**: Eine Freigabe-URL liefert nach dem Schließen ihres Tabs oder dem Sperren der Vault in
@@ -469,6 +535,7 @@ internen Speicher und die SD-Karte wie auf dem Desktop.
 - Andere eigene Geräte als Quelle (etwa die Fotos des Telefons vom Desktop aus ansehen).
 - Inhaltssuche (etwa „Fotos vom Strand“), ein Suchindex und Embeddings; dafür kommt eine eigene Spec.
 - Umwandeln von Formaten (Video, Audio, HEIC) und Vorschaubilder für Videos.
+- Texterkennung (OCR) in gescannten PDFs und Bildern; Video und Audio für Agents.
 - Bearbeiten von Dateien in holzi, auch von Text.
 - Ziehen aus holzi heraus in andere Programme.
 - Sync-Regeln, Spaces und Freigaben an andere Personen (Specs 045, 027, 029); der Dateibrowser zeigt
