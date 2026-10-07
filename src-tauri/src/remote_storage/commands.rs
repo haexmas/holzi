@@ -15,6 +15,7 @@ use super::s3::S3Store;
 use super::service::StorageService;
 use super::RemoteStore;
 use crate::error::Result;
+use crate::extensions::remote_storage_dialog::{StorageAnswer, StorageTrial};
 use crate::passwords::service::PasswordsService;
 use crate::state::AppState;
 use crate::state_utils::active_database;
@@ -86,12 +87,17 @@ pub async fn storage_test(state: State<'_, AppState>, id: String) -> Result<Test
 }
 
 /// Answers a storage dialog of an extension (research R6). Credentials in the answer come from
-/// holzi's window over the whole app and stay in Rust.
+/// holzi's window over the whole app and stay in Rust; for them it waits for their test: a failed
+/// one keeps the dialog open for corrected credentials.
 #[tauri::command]
-pub fn storage_dialog_resolve(
+pub async fn storage_dialog_resolve(
     state: State<'_, AppState>,
     request_id: String,
-    answer: crate::extensions::remote_storage_dialog::StorageAnswer,
-) {
-    state.extensions().storage.resolve(&request_id, answer);
+    answer: StorageAnswer,
+) -> Result<StorageTrial> {
+    let trial = state.extensions().storage.resolve(&request_id, answer);
+    Ok(match trial {
+        Some(trial) => trial.await.unwrap_or(StorageTrial::Ended),
+        None => StorageTrial::Ended,
+    })
 }

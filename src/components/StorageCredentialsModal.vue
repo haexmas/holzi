@@ -4,7 +4,9 @@
  * research R6). Mounted in the desktop, not in an extension's frame, so it lies over the tab bar
  * and the toolbar, which no extension can draw. It is the only place besides Einstellungen →
  * Speicher with fields for credentials; they go to Rust (`storage_dialog_resolve`), are tested
- * there and stored in the password manager, and never reach the extension. Closing cancels.
+ * there and stored in the password manager, and never reach the extension. The window stays open
+ * while holzi tests them; a failed test shows why, as in the settings, and the user corrects them or
+ * cancels. Closing cancels.
  */
 import { reactive, ref, watch } from 'vue'
 import { useStorageCredentials } from '~/composables/useStorageRequests'
@@ -19,6 +21,7 @@ const draft = reactive({
   sessionToken: '',
 })
 const failure = ref<string | null>(null)
+const busy = ref(false)
 
 watch(
   () => request.value?.requestId,
@@ -27,22 +30,30 @@ watch(
     draft.secretAccessKey = ''
     draft.sessionToken = ''
     failure.value = null
+    busy.value = false
   },
 )
 
 async function confirm() {
+  if (busy.value) return
   if (!draft.accessKeyId.trim() || !draft.secretAccessKey) {
     failure.value = t('settings.storage.invalid.credentials')
     return
   }
-  const credentials = {
+  failure.value = null
+  busy.value = true
+  const trial = await confirmAsync({
     accessKeyId: draft.accessKeyId.trim(),
     secretAccessKey: draft.secretAccessKey,
     sessionToken: draft.sessionToken.trim() || undefined,
+  })
+  busy.value = false
+  if (trial.kind === 'failed') {
+    const text = t(`settings.storage.outcome.${trial.outcome}`)
+    failure.value = trial.leftoverKey
+      ? `${text}. ${t('settings.storage.leftover', { key: trial.leftoverKey })}`
+      : text
   }
-  draft.secretAccessKey = ''
-  draft.sessionToken = ''
-  await confirmAsync(credentials).catch(() => {})
 }
 
 function onUpdateOpen(open: boolean) {
@@ -105,7 +116,12 @@ function onUpdateOpen(open: boolean) {
           autocomplete="off"
           data-testid="storage-credentials-session-token"
         />
-        <p v-if="failure" class="text-sm text-destructive" role="alert">
+        <p
+          v-if="failure"
+          class="text-sm text-destructive"
+          role="alert"
+          data-testid="storage-credentials-failure"
+        >
           {{ failure }}
         </p>
       </form>
@@ -125,9 +141,14 @@ function onUpdateOpen(open: boolean) {
           type="submit"
           form="storage-credentials-form"
           size="sm"
+          :loading="busy"
           data-testid="storage-credentials-confirm"
         >
-          {{ t('extensions.storageCredentials.confirm') }}
+          {{
+            busy
+              ? t('settings.storage.testing')
+              : t('extensions.storageCredentials.confirm')
+          }}
         </UiButton>
       </div>
     </template>

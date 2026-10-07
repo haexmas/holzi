@@ -8,14 +8,19 @@
 //! holzi's own window over the whole app. The answer comes back through `storage_dialog_resolve`;
 //! credentials in it travel from holzi's window to Rust only and never reach the extension.
 //! Closing the frame or [`DIALOG_WAIT`] counts as cancel.
+//!
+//! holzi tests typed credentials while its window stays open: a failed test goes back to that
+//! window ([`StorageTrial::Failed`]), which lets the user correct them or cancel, and the call waits
+//! for the next answer. The extension learns only the end: the storage, or 1002.
 
 use std::collections::HashMap;
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Duration;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use tokio::sync::oneshot;
 use ts_rs::TS;
 
 use super::bridge::dispatch::CallContext;
@@ -23,7 +28,7 @@ use super::error::{BridgeError, ExtensionErrorCode};
 use super::protocol::token;
 use crate::remote_storage::address::{Resolver, SystemResolver};
 use crate::remote_storage::model::CredentialsInput;
-use crate::remote_storage::RemoteStore;
+use crate::remote_storage::{RemoteStore, TestOutcome};
 
 /// A storage dialog nobody answers ends as cancel, like a confirmation dialog.
 pub const DIALOG_WAIT: Duration = Duration::from_secs(300);
@@ -53,13 +58,49 @@ pub enum StorageAnswer {
     },
 }
 
+impl StorageAnswer {
+    fn has_credentials(&self) -> bool {
+        matches!(
+            self,
+            Self::Confirm {
+                credentials: Some(_),
+                ..
+            }
+        )
+    }
+}
+
+/// What holzi's window learns of the credentials it sent (`storage_dialog_resolve`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum StorageTrial {
+    /// The request ended; its window closes.
+    Ended,
+    /// The test of the credentials failed; the window shows why and waits for another answer.
+    Failed {
+        outcome: TestOutcome,
+        /// The test object holzi could not delete, if the failed probe left one behind.
+        #[serde(rename = "leftoverKey")]
+        leftover_key: Option<String>,
+    },
+}
+
+/// An answer and, for credentials, where the result of their test goes.
+struct Answered {
+    answer: StorageAnswer,
+    trial: Option<oneshot::Sender<StorageTrial>>,
+}
+
+type Dialogs = HashMap<String, (String, Sender<Answered>)>;
+
 /// The provider, the resolver and the open storage dialogs of this process.
 #[derive(Default)]
 pub struct StorageState {
     store: OnceLock<Arc<dyn RemoteStore>>,
     resolver: OnceLock<Arc<dyn Resolver>>,
     /// Open dialogs by request id: the frame that asked and where the answer goes.
-    dialogs: Mutex<HashMap<String, (String, Sender<StorageAnswer>)>>,
+    dialogs: Mutex<Dialogs>,
 }
 
 impl StorageState {
@@ -82,12 +123,12 @@ impl StorageState {
         Arc::clone(self.resolver.get_or_init(|| Arc::new(SystemResolver)))
     }
 
-    fn dialogs(&self) -> MutexGuard<'_, HashMap<String, (String, Sender<StorageAnswer>)>> {
+    fn dialogs(&self) -> MutexGuard<'_, Dialogs> {
         self.dialogs.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Registers a dialog of `frame`; `false` while that frame already has one open.
-    fn open(&self, request_id: &str, frame: &str, answer: Sender<StorageAnswer>) -> bool {
+    fn open(&self, request_id: &str, frame: &str, answer: Sender<Answered>) -> bool {
         let mut dialogs = self.dialogs();
         if dialogs.values().any(|(f, _)| f == frame) {
             return false;
@@ -96,12 +137,30 @@ impl StorageState {
         true
     }
 
-    /// Answers a dialog; an unknown or already answered one is ignored.
-    pub fn resolve(&self, request_id: &str, answer: StorageAnswer) {
-        if let Some((_, sender)) = self.dialogs().remove(request_id) {
-            // The waiting call may have given up already.
-            let _ = sender.send(answer);
-        }
+    /// Answers a dialog; an unknown or ended one is ignored. For credentials, the receiver of
+    /// their test's result: [`StorageTrial::Ended`] once the request ends.
+    pub fn resolve(
+        &self,
+        request_id: &str,
+        answer: StorageAnswer,
+    ) -> Option<oneshot::Receiver<StorageTrial>> {
+        let dialogs = self.dialogs();
+        let (_, sender) = dialogs.get(request_id)?;
+        let (trial, result) = match answer.has_credentials() {
+            true => {
+                let (trial, result) = oneshot::channel();
+                (Some(trial), Some(result))
+            }
+            false => (None, None),
+        };
+        // The waiting call may have given up already.
+        sender.send(Answered { answer, trial }).ok()?;
+        result
+    }
+
+    /// Ends a dialog: later answers reach nobody.
+    fn end(&self, request_id: &str) {
+        self.dialogs().remove(request_id);
     }
 
     /// Ends the dialogs of a closed frame: their calls are cancelled.
@@ -142,15 +201,72 @@ fn cancelled() -> BridgeError {
     )
 }
 
-/// Asks the user over the calling frame and waits for the answer; cancel, the frame's end or
-/// [`DIALOG_WAIT`] is 1002. `proposal` and `other_extensions` are shown, never credentials.
-pub fn ask(
-    ctx: &CallContext,
+/// A dialog over the calling frame, open until dropped: then holzi's windows for it close.
+pub struct Dialog<'a> {
+    ctx: &'a CallContext,
+    request_id: String,
+    waiting: Receiver<Answered>,
+    /// Where the result of the credentials of the last answer goes.
+    trial: Option<oneshot::Sender<StorageTrial>>,
+}
+
+impl Dialog<'_> {
+    /// The next answer; cancel, the frame's end or [`DIALOG_WAIT`] is 1002.
+    pub fn answer(&mut self) -> Result<StorageAnswer, BridgeError> {
+        self.end_trial(StorageTrial::Ended);
+        match self.waiting.recv_timeout(DIALOG_WAIT) {
+            Ok(Answered {
+                answer: answer @ StorageAnswer::Confirm { .. },
+                trial,
+            }) => {
+                self.trial = trial;
+                Ok(answer)
+            }
+            Ok(Answered {
+                answer: StorageAnswer::Cancel,
+                ..
+            })
+            | Err(_) => Err(cancelled()),
+        }
+    }
+
+    /// The test of the credentials of the last answer failed: holzi's window shows `outcome` and
+    /// the dialog waits for the next answer.
+    pub fn failed(&mut self, outcome: TestOutcome, leftover_key: Option<String>) {
+        self.end_trial(StorageTrial::Failed {
+            outcome,
+            leftover_key,
+        });
+    }
+
+    fn end_trial(&mut self, trial: StorageTrial) {
+        if let Some(sender) = self.trial.take() {
+            // holzi's window may be closed already.
+            let _ = sender.send(trial);
+        }
+    }
+}
+
+impl Drop for Dialog<'_> {
+    fn drop(&mut self) {
+        self.ctx.host.storage.end(&self.request_id);
+        self.end_trial(StorageTrial::Ended);
+        self.ctx.emitter.emit(
+            "extension-storage-request-ended",
+            json!({ "requestId": self.request_id }),
+        );
+    }
+}
+
+/// Opens a dialog over the calling frame: `proposal` and `other_extensions` are shown, never
+/// credentials. One dialog per frame at a time (7000).
+pub fn open<'a>(
+    ctx: &'a CallContext,
     kind: DialogKind,
     extension_name: &str,
     proposal: Value,
     other_extensions: &[String],
-) -> Result<StorageAnswer, BridgeError> {
+) -> Result<Dialog<'a>, BridgeError> {
     let request_id = token::mint();
     let frame = &ctx.session.frame;
     let (answer, waiting) = mpsc::channel();
@@ -171,16 +287,22 @@ pub fn ask(
             "otherExtensions": other_extensions,
         }),
     );
-    let answer = waiting.recv_timeout(DIALOG_WAIT);
-    // After a timeout the dialog is still registered; a later answer must reach nobody, and
-    // holzi's windows for it close.
-    ctx.host.storage.resolve(&request_id, StorageAnswer::Cancel);
-    ctx.emitter.emit(
-        "extension-storage-request-ended",
-        json!({ "requestId": request_id }),
-    );
-    match answer {
-        Ok(answer @ StorageAnswer::Confirm { .. }) => Ok(answer),
-        Ok(StorageAnswer::Cancel) | Err(_) => Err(cancelled()),
-    }
+    Ok(Dialog {
+        ctx,
+        request_id,
+        waiting,
+        trial: None,
+    })
+}
+
+/// Asks once and ends the dialog with the answer; cancel, the frame's end or [`DIALOG_WAIT`] is
+/// 1002.
+pub fn ask(
+    ctx: &CallContext,
+    kind: DialogKind,
+    extension_name: &str,
+    proposal: Value,
+    other_extensions: &[String],
+) -> Result<StorageAnswer, BridgeError> {
+    open(ctx, kind, extension_name, proposal, other_extensions)?.answer()
 }

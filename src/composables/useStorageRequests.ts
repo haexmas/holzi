@@ -4,13 +4,16 @@
  * confirmation; that dialog never has fields for credentials, because an extension could draw a
  * look-alike inside its frame. When the confirmation needs new credentials, holzi's own window over
  * the whole app asks for them (`StorageCredentialsModal.vue`, mounted in the desktop). Both answer
- * with `storage_dialog_resolve`; the credentials go from that window to Rust only.
+ * with `storage_dialog_resolve`; the credentials go from that window to Rust only. That window
+ * stays open while holzi tests them: a failed test comes back to it (`StorageTrial`), the user
+ * corrects the credentials or cancels, and the extension learns only the end.
  */
 import { computed, onBeforeUnmount, readonly, ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type { CredentialsInput } from '@bindings/CredentialsInput'
 import type { StorageAnswer } from '@bindings/StorageAnswer'
+import type { StorageTrial } from '@bindings/StorageTrial'
 
 export type StorageRequestKind = 'add' | 'update' | 'test' | 'remove'
 
@@ -44,22 +47,28 @@ const credentialsRequest = ref<StorageRequest | null>(null)
 export function resolveStorageAsync(
   requestId: string,
   answer: StorageAnswer,
-): Promise<void> {
-  return invoke('storage_dialog_resolve', { requestId, answer })
+): Promise<StorageTrial> {
+  return invoke<StorageTrial>('storage_dialog_resolve', { requestId, answer })
 }
 
 /** The window over the whole app: the request it asks credentials for, and its answers. */
 export function useStorageCredentials() {
   return {
     request: readonly(credentialsRequest),
-    async confirmAsync(credentials: CredentialsInput): Promise<void> {
+    /**
+     * Sends the credentials and waits for their test. The window closes when the request ends
+     * (`extension-storage-request-ended`); a failed test leaves it open.
+     */
+    async confirmAsync(credentials: CredentialsInput): Promise<StorageTrial> {
       const open = credentialsRequest.value
-      if (!open) return
-      credentialsRequest.value = null
-      await resolveStorageAsync(open.requestId, {
+      if (!open) return { kind: 'ended' }
+      const trial = await resolveStorageAsync(open.requestId, {
         kind: 'confirm',
         credentials,
-      })
+      }).catch((): StorageTrial => ({ kind: 'ended' }))
+      if (trial.kind === 'ended' && credentialsRequest.value === open)
+        credentialsRequest.value = null
+      return trial
     },
     cancel(): void {
       const open = credentialsRequest.value

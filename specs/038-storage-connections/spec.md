@@ -309,6 +309,11 @@ auf Gerät 2 testen und von einer Erweiterung dort hochladen lassen.
   Passwortmanager ablegen. Eine Erweiterung DARF beim Hinzufügen nur Name, Anbieter, Endpunkt, Region
   und Bucket vorschlagen, oder einen neuen Bucket auf einer vorhandenen Verbindung; ein Aufruf, der
   Zugangsdaten enthält, MUSS abgelehnt werden, bevor ein Dialog erscheint.
+- **FR-013b**: Scheitert der Test von Zugangsdaten, die der Nutzer im Fenster von holzi eingegeben hat,
+  MUSS dieses Fenster offen bleiben, den Grund so nennen wie die Einstellungen (FR-003) und Korrektur
+  oder Abbruch erlauben; gespeichert wird nichts. Die Erweiterung MUSS so lange warten und erfährt nur
+  das Ende: den Speicher oder den Abbruch (1002), nie den Grund eines gescheiterten Versuchs
+  (Betreiber 2026-10-07).
 - **FR-014**: Hoch- und Herunterladen MÜSSEN die Größen- und Zeitgrenzen der Erweiterung (Spec 017)
   einhalten; ein Verstoß ist ein eigener Fehler.
 - **FR-015**: Fehler beim Anbieter MÜSSEN als wenige verständliche Fehlerarten bei der Erweiterung
