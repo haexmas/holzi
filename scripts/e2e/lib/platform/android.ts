@@ -10,6 +10,7 @@ import type { StepRecorder } from '../page.ts'
 import { WebDriverClient } from '../webdriver.ts'
 import type { Adb } from './adb.ts'
 import { androidCapabilities, startChromedriver } from './chromedriver.ts'
+import type { Chromedriver } from './chromedriver.ts'
 import type { DataHandle, DeviceHost, RunningDevice } from './host.ts'
 
 export const PACKAGE = 'com.haex.holzi'
@@ -91,12 +92,6 @@ export async function startAndroidInstance(
   const { adb } = options
   prepareDevice(adb, options)
   const pid = await launchApp(adb)
-  const driver = await startChromedriver({
-    binary: options.chromedriver,
-    marker: options.marker,
-    logFile: options.logFile,
-  })
-  const client = new WebDriverClient(`http://127.0.0.1:${driver.port}`)
   const forceStop = () => {
     try {
       adb.shell('am', 'force-stop', PACKAGE)
@@ -104,6 +99,18 @@ export async function startAndroidInstance(
       // The device may be gone; there is nothing left to end then.
     }
   }
+  let driver: Chromedriver
+  try {
+    driver = await startChromedriver({
+      binary: options.chromedriver,
+      marker: options.marker,
+      logFile: options.logFile,
+    })
+  } catch (error) {
+    forceStop()
+    throw error
+  }
+  const client = new WebDriverClient(`http://127.0.0.1:${driver.port}`)
   const stop = async () => {
     try {
       // Frees the device for the next session; chromedriver refuses a second one otherwise.
@@ -111,8 +118,12 @@ export async function startAndroidInstance(
     } catch {
       // The app may already have ended.
     }
-    await driver.stop()
-    forceStop()
+    try {
+      await driver.stop()
+    } finally {
+      forceStop()
+      restoreDevice(adb)
+    }
   }
   try {
     await newSessionWithRetry(client, androidCapabilities(PACKAGE, adb.serial))
@@ -189,7 +200,11 @@ export class AndroidData implements DataHandle {
   }
 
   dispose(): void {
-    this.adb.shell('pm', 'clear', PACKAGE)
+    try {
+      restoreDevice(this.adb)
+    } finally {
+      this.adb.shell('pm', 'clear', PACKAGE)
+    }
   }
 }
 

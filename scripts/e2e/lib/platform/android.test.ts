@@ -128,7 +128,11 @@ describe('createAndroidHost', () => {
     assert.ok(data instanceof AndroidData)
     assert.throws(() => host.newData('anna-laptop'), /one Android device/)
     data.dispose()
-    assert.deepEqual(fake.calls, [`-s emu shell pm clear ${PACKAGE}`])
+    assert.deepEqual(fake.calls, [
+      '-s emu shell wm size reset',
+      '-s emu shell wm density reset',
+      `-s emu shell pm clear ${PACKAGE}`,
+    ])
   })
 })
 

@@ -44,9 +44,11 @@ export function majorOf(text: string | undefined): number | undefined {
 function findOnPath(
   name: string,
   pathEnv: string | undefined,
+  exists: (path: string) => boolean,
 ): string | undefined {
   for (const dir of (pathEnv ?? '').split(delimiter)) {
-    if (dir !== '' && existsSync(join(dir, name))) return join(dir, name)
+    const candidate = join(dir, name)
+    if (dir !== '' && exists(candidate)) return candidate
   }
   return undefined
 }
@@ -116,7 +118,7 @@ export function checkAndroidPreflight(
     options.env.E2E_CHROMEDRIVER !== undefined &&
     options.env.E2E_CHROMEDRIVER !== ''
       ? options.env.E2E_CHROMEDRIVER
-      : findOnPath('chromedriver', options.env.PATH)
+      : findOnPath('chromedriver', options.env.PATH, deps.exists)
   if (chromedriver === undefined) {
     messages.push(
       'no chromedriver: set E2E_CHROMEDRIVER or put chromedriver on PATH (Chrome for Testing, same major version as the device web view)',
