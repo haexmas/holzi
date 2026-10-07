@@ -33,7 +33,9 @@ Abgestimmter Entwurf: [`docs/plans/2026-10-07-dock-design.md`](../../docs/plans/
   Apps zeigt. Es erscheint als **Leiste** oder als **Rad**.
 - **Steuer-Eintrag**: einer der drei Einträge Launcher, Fensterübersicht, Arbeitsbereichs-Übersicht.
 - **Angeheftete App**: eine App, die der Nutzer dauerhaft ins Dock gelegt hat.
-- **Laufende App**: eine App mit mindestens einem offenen Fenster in irgendeinem Arbeitsbereich.
+- **Instanz**: ein geöffneter Tab einer App (siehe `CONTEXT.md`); ein Fenster kann Tabs verschiedener
+  Apps enthalten.
+- **Laufende App**: eine App mit mindestens einer Instanz in irgendeinem Arbeitsbereich.
 - **Platzierung**: Kante (oben, unten, links, rechts) plus Ausrichtung entlang der Kante (Anfang,
   Mitte, Ende). „Unten, Ende“ ist die Ecke unten rechts.
 
@@ -58,7 +60,7 @@ prüfen, dass sie im Dock erscheint und ein Klick sie öffnet; sie wieder lösen
    Reihenfolge, und es gibt keine weiteren schwebenden Schaltflächen.
 2. **Given** der Launcher ist offen, **When** der Nutzer eine App per Rechtsklick oder Langdruck
    „An Dock anheften“ wählt, **Then** erscheint die App als letzter angehefteter Eintrag im Dock.
-3. **Given** eine angeheftete App ohne offenes Fenster, **When** der Nutzer sie im Dock anklickt,
+3. **Given** eine angeheftete App ohne Instanz, **When** der Nutzer sie im Dock anklickt,
    **Then** öffnet sie sich wie aus dem Launcher.
 4. **Given** eine angeheftete App, **When** der Nutzer im Kontextmenü ihres Dock-Eintrags „Lösen“
    wählt, **Then** verschwindet sie aus dem Dock, sofern sie nicht läuft.
@@ -72,7 +74,7 @@ prüfen, dass sie im Dock erscheint und ein Klick sie öffnet; sie wieder lösen
 ### User Story 2 - Laufende Apps sehen und zu ihnen springen (Priority: P1)
 
 Als Nutzer sehe ich im Dock, welche Apps gerade offen sind, auch in anderen Arbeitsbereichen, und
-komme mit einem Klick zum Fenster, statt die Fensterübersicht zu durchsuchen.
+komme mit einem Klick zu ihr, statt die Fensterübersicht zu durchsuchen.
 
 **Why this priority**: Ohne diese Story ist das Dock nur ein zweiter Launcher; der Nutzer hat sich
 ausdrücklich für eine volle Taskleiste entschieden.
@@ -83,27 +85,28 @@ Auswahlfeld prüfen.
 
 **Acceptance Scenarios**:
 
-1. **Given** eine angeheftete App hat ein offenes Fenster, **When** der Nutzer das Dock ansieht,
+1. **Given** eine angeheftete App hat eine Instanz, **When** der Nutzer das Dock ansieht,
    **Then** trägt ihr Eintrag eine Markierung „läuft“.
-2. **Given** eine nicht angeheftete App hat ein offenes Fenster, **When** der Nutzer das Dock ansieht,
+2. **Given** eine nicht angeheftete App hat eine Instanz, **When** der Nutzer das Dock ansieht,
    **Then** steht sie, abgetrennt hinter den angehefteten Einträgen, mit Markierung „läuft“ im Dock;
-   schließt der Nutzer ihr letztes Fenster, verschwindet sie wieder.
-3. **Given** eine App hat genau ein offenes Fenster in einem anderen Arbeitsbereich, **When** der
-   Nutzer ihren Dock-Eintrag anklickt, **Then** wechselt holzi in diesen Arbeitsbereich, holt das
-   Fenster aus der Minimierung und fokussiert es; es entsteht kein neues Fenster.
-4. **Given** eine App hat mehrere offene Fenster, **When** der Nutzer ihren Dock-Eintrag anklickt,
-   **Then** öffnet sich ein Auswahlfeld mit allen Fenstern, nach Arbeitsbereich gruppiert, und dem
-   Punkt „Neues Fenster“; die Auswahl eines Fensters verhält sich wie Szenario 3.
-5. **Given** eine App hat mehrere offene Fenster, **When** der Nutzer das Dock ansieht, **Then** zeigt
-   ihr Eintrag die Anzahl der Fenster.
+   schließt der Nutzer ihre letzte Instanz, verschwindet sie wieder.
+3. **Given** eine App hat genau eine Instanz, in einem anderen Arbeitsbereich und in einem
+   minimierten Fenster hinter einem anderen Tab, **When** der Nutzer ihren Dock-Eintrag anklickt,
+   **Then** wechselt holzi in diesen Arbeitsbereich, holt das Fenster aus der Minimierung, macht den
+   Tab aktiv und fokussiert das Fenster; es entsteht keine neue Instanz.
+4. **Given** eine App hat mehrere Instanzen, **When** der Nutzer ihren Dock-Eintrag anklickt,
+   **Then** öffnet sich ein Auswahlfeld mit allen Instanzen, nach Arbeitsbereich gruppiert, und dem
+   Punkt „Neues Fenster“; die Auswahl einer Instanz verhält sich wie Szenario 3.
+5. **Given** eine App hat mehrere Instanzen, **When** der Nutzer das Dock ansieht, **Then** zeigt
+   ihr Eintrag deren Anzahl.
 6. **Given** eine Mehrfachinstanz-App läuft bereits, **When** der Nutzer ihren Dock-Eintrag mit der
    mittleren Maustaste anklickt oder im Kontextmenü „Neues Fenster“ wählt, **Then** öffnet sich eine
    weitere Instanz im aktuellen Arbeitsbereich.
 7. **Given** eine App verlangt Aufmerksamkeit, **When** der Nutzer das Dock ansieht, **Then** ist ihr
    Eintrag hervorgehoben, wie es heute andere Stellen für Aufmerksamkeit tun.
 8. **Given** eine laufende App, **When** der Nutzer im Kontextmenü ihres Dock-Eintrags „Alle
-   schließen“ wählt, **Then** schließen sich alle ihre Fenster, mit denselben Rückfragen wie beim
-   einzelnen Schließen.
+   schließen“ wählt, **Then** schließen sich alle ihre Instanzen (Tabs anderer Apps in denselben
+   Fenstern bleiben offen), mit denselben Rückfragen wie beim einzelnen Schließen.
 
 ---
 
@@ -235,7 +238,7 @@ Kompakt-Schwelle verkleinern und zurück; auf dem Telefon per Touch bedienen.
 - Eine App ist angeheftet und läuft: Sie erscheint einmal, an ihrer angehefteten Stelle, mit Markierung
   „läuft“.
 - Der Arbeitsbereich einer Instanz wird geschlossen, während das Auswahlfeld offen ist: Das Auswahlfeld
-  zeigt nur Fenster, die es noch gibt; ist keines mehr übrig, schließt es sich.
+  zeigt nur Instanzen, die es noch gibt; ist keine mehr übrig, schließt es sich.
 - holzi wechselt zwischen Kompakt- und Normalmodus, während das Rad aufgefächert oder ein Auswahlfeld
   offen ist: Beides schließt sich.
 - Zwei Geräte ändern die Reihenfolge gleichzeitig: Nach der Synchronisierung gilt die zuletzt
@@ -257,24 +260,25 @@ Kompakt-Schwelle verkleinern und zurück; auf dem Telefon per Touch bedienen.
   Fenster in dieser Reihenfolge zeigen, als Leiste unten mittig im Modus „Platz reservieren“.
 - **FR-004**: Jede App aus dem Launcher, ob System-App oder haextension, MUSS anheftbar sein.
 - **FR-005**: Hinter den Einträgen der Liste MUSS das Dock, optisch abgetrennt, jede laufende App aus
-  allen Arbeitsbereichen zeigen, die nicht angeheftet ist; sie verschwindet, sobald ihr letztes Fenster
+  allen Arbeitsbereichen zeigen, die nicht angeheftet ist; sie verschwindet, sobald ihre letzte Instanz
   geschlossen ist.
 - **FR-006**: Der Launcher-Eintrag MUSS immer im Dock stehen und DARF NICHT entfernbar sein.
 
 **Anzeige**
 
-- **FR-007**: Ein App-Eintrag MUSS zeigen, ob die App läuft, und ab zwei offenen Fenstern deren Anzahl.
+- **FR-007**: Ein App-Eintrag MUSS zeigen, ob die App läuft, und ab zwei Instanzen deren Anzahl.
 - **FR-008**: Ein App-Eintrag MUSS hervorgehoben sein, solange die App Aufmerksamkeit verlangt.
 - **FR-009**: Ein App-Eintrag MUSS das Symbol und den Namen der App tragen, wie der Launcher sie zeigt;
   der Name MUSS mindestens als Tooltip und für Screenreader verfügbar sein.
 
 **Aktivieren**
 
-- **FR-010**: Ein Klick auf eine App ohne offenes Fenster MUSS sie öffnen wie der Launcher.
-- **FR-011**: Ein Klick auf eine App mit genau einem offenen Fenster MUSS in dessen Arbeitsbereich
-  wechseln, es aus der Minimierung holen und fokussieren, ohne ein neues Fenster zu öffnen.
-- **FR-012**: Ein Klick auf eine App mit mehreren offenen Fenstern MUSS ein Auswahlfeld öffnen, das die
-  Fenster nach Arbeitsbereich gruppiert zeigt und „Neues Fenster“ anbietet.
+- **FR-010**: Ein Klick auf eine App ohne Instanz MUSS sie öffnen wie der Launcher.
+- **FR-011**: Ein Klick auf eine App mit genau einer Instanz MUSS in deren Arbeitsbereich wechseln,
+  ihr Fenster aus der Minimierung holen, ihren Tab aktiv machen und das Fenster fokussieren, ohne eine
+  neue Instanz zu öffnen.
+- **FR-012**: Ein Klick auf eine App mit mehreren Instanzen MUSS ein Auswahlfeld öffnen, das die
+  Instanzen nach Arbeitsbereich gruppiert zeigt und „Neues Fenster“ anbietet.
 - **FR-013**: Ein Klick mit der mittleren Maustaste MUSS bei Mehrfachinstanz-Apps ein neues Fenster im
   aktuellen Arbeitsbereich öffnen und sich bei Einzelinstanz-Apps wie FR-010/FR-011 verhalten.
 - **FR-014**: Ein Klick auf einen Steuer-Eintrag MUSS dieselbe Übersicht öffnen wie bisher die
@@ -285,8 +289,8 @@ Kompakt-Schwelle verkleinern und zurück; auf dem Telefon per Touch bedienen.
 - **FR-015**: Rechtsklick oder Langdruck auf einen App-Eintrag im Dock MUSS ein Kontextmenü öffnen mit
   „Anheften“ bzw. „Lösen“, „Neues Fenster“ (nur Mehrfachinstanz-Apps) und „Alle schließen“ (nur
   laufende Apps).
-- **FR-016**: „Alle schließen“ MUSS jedes Fenster der App so schließen, als hätte der Nutzer es einzeln
-  geschlossen, einschließlich vorhandener Rückfragen.
+- **FR-016**: „Alle schließen“ MUSS jede Instanz der App so schließen, als hätte der Nutzer ihren Tab
+  einzeln geschlossen; Tabs anderer Apps bleiben offen, einschließlich vorhandener Rückfragen.
 - **FR-017**: Rechtsklick oder Langdruck auf eine App im Launcher MUSS „An Dock anheften“ bzw. „Vom Dock
   lösen“ anbieten.
 - **FR-018**: Rechtsklick auf eine freie Stelle des Docks MUSS Kante, Ausrichtung, Stil und Modus zur
@@ -364,8 +368,9 @@ Kompakt-Schwelle verkleinern und zurück; auf dem Telefon per Touch bedienen.
   über deren Kennung. Gilt für alle eigenen Geräte.
 - **Dock-Platzierung (Gerät)**: Stil (Leiste oder Rad), Kante, Ausrichtung und, nur für die Leiste,
   Modus (Platz reservieren, Schweben, Automatisch ausblenden). Gilt nur für dieses Gerät.
-- **Laufende App**: keine gespeicherte Größe, sondern abgeleitet aus den offenen Fenstern aller
-  Arbeitsbereiche: App, Fenster, deren Arbeitsbereich und ob die App Aufmerksamkeit verlangt.
+- **Laufende App**: keine gespeicherte Größe, sondern abgeleitet aus den offenen Tabs aller
+  Arbeitsbereiche: App, ihre Instanzen mit Fenster und Arbeitsbereich, und ob die App Aufmerksamkeit
+  verlangt.
 
 ## Success Criteria _(mandatory)_
 
@@ -373,8 +378,8 @@ Kompakt-Schwelle verkleinern und zurück; auf dem Telefon per Touch bedienen.
 
 - **SC-001**: Eine angeheftete App öffnet sich mit einem einzigen Klick aus dem Arbeitsbereich, gegenüber
   heute mindestens zwei (Launcher öffnen, App wählen).
-- **SC-002**: Zu einem offenen Fenster einer App in einem anderen Arbeitsbereich kommt der Nutzer mit
-  höchstens zwei Klicks (Eintrag, bei mehreren Fenstern Auswahl).
+- **SC-002**: Zu einer Instanz einer App in einem anderen Arbeitsbereich kommt der Nutzer mit
+  höchstens zwei Klicks (Eintrag, bei mehreren Instanzen Auswahl).
 - **SC-003**: Alle zwölf Positionen, beide Stile und alle drei Modi der Leiste lassen sich ohne
   Neustart einstellen; die Wirkung ist sofort sichtbar.
 - **SC-004**: Ein maximiertes Fenster wird im Modus „Platz reservieren“ an keiner der zwölf Positionen
@@ -400,8 +405,7 @@ Kompakt-Schwelle verkleinern und zurück; auf dem Telefon per Touch bedienen.
   vollständig. Eine Zusammenführung pro Eintrag ist nicht vorgesehen.
 - Im Rad lässt sich nicht per Ziehen sortieren; dafür gibt es die Liste in den Einstellungen oder den
   Wechsel zur Leiste.
-- Fenster innerhalb des Dock-Auswahlfelds werden mit dem Titel ihres aktiven Tabs bezeichnet, wie in der
-  Fensterübersicht.
+- Instanzen im Dock-Auswahlfeld tragen den Titel ihres Tabs, wie in der Tableiste.
 - Größe der Dock-Einträge, Animationen und Abstände folgen dem bestehenden Erscheinungsbild; eine eigene
   Einstellung für die Größe des Docks ist nicht vorgesehen.
 - holzi hat noch keine Nutzer; die bisherigen drei Schaltflächen entfallen ersatzlos, ohne

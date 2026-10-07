@@ -47,7 +47,7 @@ windows)`, effektive Platzierung, Rad-Geometrie (Winkelbereich, Aufteilung auf R
   `onVaultTablesChanged(['preferences'])`, bietet `pin`, `unpin`, `move`, `setPlacement`.
 - `WmDock.vue` wählt `WmDockBar.vue` oder `WmDockWheel.vue`; beide rendern über `WmDockItem.vue`
   (Symbol, Instanz-Badge, Laufend-Punkt, Attention).
-- Aktivierung als Action `wm.dock.activate` in der bestehenden Registry.
+- Aktivierung über die bestehenden Actions `wm.app.open`, `wm.tab.activate`, `wm.tab.close` (Plan: keine neue Action, research R4).
 
 **Geometrie-Falle**
 
