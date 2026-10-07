@@ -1,7 +1,8 @@
 {
   "landing": {
     "welcome": "Welcome to Holzi",
-    "lastUsed": "Recently used"
+    "lastUsed": "Recently used",
+    "language": "Language"
   },
   "fields": {
     "show": "Show password",
@@ -331,6 +332,11 @@
     }
   },
   "settings": {
+    "language": {
+      "label": "Language",
+      "saved": "Saved.",
+      "failed": "Could not save the language"
+    },
     "alias": {
       "label": "Device name",
       "saved": "Saved.",
@@ -430,7 +436,7 @@
         "basic": {
           "title": "Basic settings",
           "description": "Language, password, device and session.",
-          "keywords": "device device name name session restore windows tabs"
+          "keywords": "language Sprache German English device device name name session restore windows tabs"
         },
         "appearance": {
           "title": "Appearance",
@@ -1164,6 +1170,9 @@
       },
       "autonomy": {
         "setMode": "Set autonomy mode"
+      },
+      "general": {
+        "setLanguage": "Set the language"
       },
       "sessionRestore": {
         "set": "Turn session restore on or off"

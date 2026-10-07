@@ -703,7 +703,7 @@
   {
     "toolName": "settings_get",
     "actionId": "settings.get",
-    "description": "Read the current settings: device name, color scheme, appearance, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.",
+    "description": "Read the current settings: device name, language, color scheme, appearance, default and speech models, session restore, autonomy mode and delegate deny rules. Never includes credentials.",
     "inputSchema": {
       "type": "object",
       "properties": {}
@@ -813,6 +813,28 @@
     "titles": {
       "de": "Sitzung wiederherstellen ein- oder ausschalten",
       "en": "Turn session restore on or off"
+    }
+  },
+  {
+    "toolName": "settings_general_setLanguage",
+    "actionId": "settings.general.setLanguage",
+    "description": "Set the interface language (German or English) for the whole vault, on all its devices. It applies at once.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "language": {
+          "type": "string",
+          "enum": ["de", "en"],
+          "description": "Interface language: German (de) or English (en)."
+        }
+      },
+      "required": ["language"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Sprache festlegen",
+      "en": "Set the language"
     }
   },
   {

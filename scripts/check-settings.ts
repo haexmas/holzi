@@ -15,6 +15,7 @@ import {
   settingsRoutePatterns,
 } from '../src/lib/settings/registry.ts'
 import { isDark, parseColorScheme } from '../src/lib/settings/colorScheme.ts'
+import { parseLanguage } from '../src/lib/settings/language.ts'
 import {
   canManageDevices,
   deviceStatus,
@@ -329,6 +330,14 @@ test('color scheme: known values parse, anything else is unset', () => {
   assert.equal(parseColorScheme('system'), 'system')
   for (const value of ['Dark', '', null, undefined, 1]) {
     assert.equal(parseColorScheme(value), null, String(value))
+  }
+})
+
+test('language (spec 042): de and en parse, anything else is unset', () => {
+  assert.equal(parseLanguage('de'), 'de')
+  assert.equal(parseLanguage('en'), 'en')
+  for (const value of ['DE', 'fr', 'de-DE', '', null, undefined, 1]) {
+    assert.equal(parseLanguage(value), null, String(value))
   }
 })
 

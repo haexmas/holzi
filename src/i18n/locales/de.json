@@ -1,7 +1,8 @@
 {
   "landing": {
     "welcome": "Willkommen bei Holzi",
-    "lastUsed": "Zuletzt verwendet"
+    "lastUsed": "Zuletzt verwendet",
+    "language": "Sprache"
   },
   "fields": {
     "show": "Passwort anzeigen",
@@ -331,6 +332,11 @@
     }
   },
   "settings": {
+    "language": {
+      "label": "Sprache",
+      "saved": "Gespeichert.",
+      "failed": "Sprache konnte nicht gespeichert werden"
+    },
     "alias": {
       "label": "Gerätename",
       "saved": "Gespeichert.",
@@ -430,7 +436,7 @@
         "basic": {
           "title": "Grundeinstellung",
           "description": "Sprache, Passwort, Gerät und Sitzung.",
-          "keywords": "Gerät Gerätename Name Sitzung wiederherstellen Fenster Tabs"
+          "keywords": "Sprache Language Deutsch Englisch Gerät Gerätename Name Sitzung wiederherstellen Fenster Tabs"
         },
         "appearance": {
           "title": "Erscheinungsbild",
@@ -1164,6 +1170,9 @@
       },
       "autonomy": {
         "setMode": "Autonomie-Modus setzen"
+      },
+      "general": {
+        "setLanguage": "Sprache festlegen"
       },
       "sessionRestore": {
         "set": "Sitzung wiederherstellen ein- oder ausschalten"

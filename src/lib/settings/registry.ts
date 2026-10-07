@@ -113,7 +113,11 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
   subView('general.basic', 'general/basic', 'general', {
     icon: 'lucide:settings-2',
     overviewRow: true,
-    settingKeys: ['settings.alias.label', 'settings.sessionRestore.title'],
+    settingKeys: [
+      'settings.language.label',
+      'settings.alias.label',
+      'settings.sessionRestore.title',
+    ],
   }),
   subView('general.appearance', 'general/appearance', 'general', {
     icon: 'lucide:palette',

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 const { t } = useI18n()
+const language = useLanguage()
+const { language: activeLanguage, options: languageOptions } = language
 const store = useInstancesStore()
 const { activeNameAsync } = useInstance()
 
@@ -61,9 +63,25 @@ function onSelect(name: string) {
   void store.syncAsync()
 }
 
+/** Spec 042 (FR-007): the start page's choice lasts until the app restarts; nothing is stored. */
+function chooseLanguage(value: string) {
+  void language.showAsync(value)
+}
+
+/** Spec 042 (FR-009): the vault's language wins, a vault without one stores the active one. A read
+ * error never keeps the vault from opening. */
+async function applyVaultLanguageAsync() {
+  try {
+    await language.loadAsync()
+  } catch (error) {
+    console.error('[settings] reading the language failed', error)
+  }
+}
+
 /** Activates a newly created instance and opens its workspace-landing. */
 async function onCreated(name: string) {
   store.setActiveInstance(name)
+  await applyVaultLanguageAsync()
   await navigateTo(`/workspace/${encodeURIComponent(name)}`, { replace: true })
 }
 
@@ -77,14 +95,23 @@ async function onLinked(name: string) {
 /** Activates an unlocked instance and opens its workspace-landing. */
 async function onUnlocked(name: string) {
   store.setActiveInstance(name)
+  await applyVaultLanguageAsync()
   await navigateTo(`/workspace/${encodeURIComponent(name)}`, { replace: true })
 }
 </script>
 
 <template>
   <main
-    class="min-h-screen flex flex-col items-center justify-center gap-6 p-8"
+    class="relative min-h-screen flex flex-col items-center justify-center gap-6 p-8"
   >
+    <SettingsSelect
+      class="absolute top-4 right-4 w-36"
+      :model-value="activeLanguage"
+      :options="languageOptions"
+      :aria-label="t('landing.language')"
+      data-testid="landing-language"
+      @update:model-value="chooseLanguage"
+    />
     <div class="flex flex-col items-center gap-2">
       <h1 class="text-3xl font-semibold">
         {{ t('landing.welcome') }}

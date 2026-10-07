@@ -30,11 +30,14 @@ const instancesStore = useInstancesStore()
 const wm = useWindowManagerStore()
 const colorScheme = useColorScheme()
 const appearance = useAppearance()
+const language = useLanguage()
 
 // The color scheme is a vault preference: another device or window can change it.
 onVaultTablesChanged(['preferences'], colorScheme.refreshAsync)
 // The appearance (spec 035) is a vault preference too.
 onVaultTablesChanged(['preferences'], appearance.refreshAsync)
+// And the language (spec 042, FR-010): changed on another device, it switches here too.
+onVaultTablesChanged(['preferences'], language.refreshAsync)
 // So is "Sitzung wiederherstellen" (spec 023 FR-024): turned on on another device, this one starts
 // saving its session at once.
 onVaultTablesChanged(['preferences'], wm.refreshSessionRestoreAsync)
@@ -92,6 +95,10 @@ onMounted(async () => {
   })
   void appearance.loadAsync().catch((error: unknown) => {
     console.error('[settings] reading the appearance failed', error)
+  })
+  // Spec 042: normally applied by the start page already; again for a direct or reloaded load.
+  void language.loadAsync().catch((error: unknown) => {
+    console.error('[settings] reading the language failed', error)
   })
   // The extension list first: a restored tab of an extension unknown at that moment is dropped.
   await extensionHost.startAsync().catch((error: unknown) => {
