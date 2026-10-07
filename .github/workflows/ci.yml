@@ -473,6 +473,8 @@ jobs:
             echo "CC_aarch64_linux_android=$ndk/aarch64-linux-android26-clang"
             echo "CXX_aarch64_linux_android=$ndk/aarch64-linux-android26-clang++"
             echo "AR_aarch64_linux_android=$ndk/llvm-ar"
+            # openssl-src (SQLCipher) runs ranlib by the target prefix unless told otherwise.
+            echo "RANLIB_aarch64_linux_android=$ndk/llvm-ranlib"
             echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ndk/aarch64-linux-android26-clang"
           } >> "$GITHUB_ENV"
 
