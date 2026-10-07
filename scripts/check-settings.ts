@@ -16,6 +16,7 @@ import {
 } from '../src/lib/settings/registry.ts'
 import { isDark, parseColorScheme } from '../src/lib/settings/colorScheme.ts'
 import { parseLanguage } from '../src/lib/settings/language.ts'
+import { isBackgroundValue } from '../src/lib/settings/background.ts'
 import {
   canManageDevices,
   deviceStatus,
@@ -339,6 +340,22 @@ test('language (spec 042): de and en parse, anything else is unset', () => {
   assert.equal(parseLanguage('en'), 'en')
   for (const value of ['DE', 'fr', 'de-DE', '', null, undefined, 1]) {
     assert.equal(parseLanguage(value), null, String(value))
+  }
+})
+
+test('background (spec 042): only a WebP data URL is shown', () => {
+  assert.equal(isBackgroundValue('data:image/webp;base64,UklGRg=='), true)
+  for (const value of [
+    'data:image/png;base64,iVBORw0KGgo=',
+    'data:image/webp;base64,',
+    'data:image/webp;base64,UklGRg==") ; color: red',
+    'https://example.com/a.webp',
+    'url(x)',
+    '',
+    null,
+    undefined,
+  ]) {
+    assert.equal(isBackgroundValue(value), false, String(value))
   }
 })
 

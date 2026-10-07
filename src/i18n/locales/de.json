@@ -332,6 +332,14 @@
     }
   },
   "settings": {
+    "background": {
+      "label": "Workspace-Hintergrund",
+      "description": "Ein Bild hinter allen Workspaces, auf allen Geräten der Vault.",
+      "choose": "Bild wählen …",
+      "remove": "Entfernen",
+      "failed": "Hintergrund konnte nicht gesetzt werden",
+      "saved": "Gespeichert."
+    },
     "password": {
       "current": "Aktuelles Passwort",
       "new": "Neues Passwort",
@@ -459,7 +467,7 @@
         "appearance": {
           "title": "Erscheinungsbild",
           "description": "Farbschema, Hintergrund und Farben.",
-          "keywords": "Darstellung Farbschema hell dunkel System Theme Aussehen"
+          "keywords": "Darstellung Farbschema hell dunkel System Theme Aussehen Hintergrund Hintergrundbild Wallpaper"
         }
       },
       "models": {
@@ -1196,6 +1204,7 @@
         "set": "Sitzung wiederherstellen ein- oder ausschalten"
       },
       "appearance": {
+        "removeBackground": "Workspace-Hintergrund entfernen",
         "setColorScheme": "Farbschema festlegen",
         "set": "Darstellung festlegen",
         "reset": "Darstellung zurücksetzen",

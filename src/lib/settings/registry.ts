@@ -129,6 +129,7 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
     overviewRow: true,
     settingKeys: [
       'settings.colorScheme.label',
+      'settings.background.label',
       'settings.appearance.accent',
       'settings.appearance.window',
       'settings.appearance.container',

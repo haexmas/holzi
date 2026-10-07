@@ -87,3 +87,7 @@ pub(crate) mod test_support;
 #[cfg(test)]
 #[path = "mod_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "large_preference_tests.rs"]
+mod large_preference_tests;

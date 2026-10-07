@@ -47,14 +47,39 @@ fn validate_key(key: &str) -> Result<()> {
     preferences::validate_key(key).map_err(pref_error_to_holzi)
 }
 
-/// Checks the value of a key that has a fixed set of choices; every other key takes any value.
-/// Spec 034: the clipboard clearing time of the password manager (0, 15, 30, 60 or 120 seconds).
+/// Spec 042: the workspace background, a WebP data URL scaled down in the frontend.
+pub(crate) const BACKGROUND_KEY: &str = "appearance.background";
+pub(crate) const BACKGROUND_PREFIX: &str = "data:image/webp;base64,";
+/// Far above a 2560-px WebP (a few hundred KB) and below one sync page (`sync/change.rs`).
+pub(crate) const BACKGROUND_MAX_BYTES: usize = 4 * 1024 * 1024;
+
+/// A WebP data URL with nothing but base64 after the prefix, within the size limit.
+fn is_background_value(value: &str) -> bool {
+    value.len() <= BACKGROUND_MAX_BYTES
+        && value.strip_prefix(BACKGROUND_PREFIX).is_some_and(|data| {
+            !data.is_empty()
+                && data
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'='))
+        })
+}
+
+/// Checks the value of a key that has a fixed set of choices or shape; every other key takes any
+/// value. Spec 034: the clipboard clearing time of the password manager (0, 15, 30, 60 or 120
+/// seconds). Spec 042: the workspace background.
 pub(crate) fn validate_value(key: &str, value: &str) -> Result<()> {
     if key == crate::passwords::settings::CLIPBOARD_CLEAR_KEY
         && !crate::passwords::settings::is_valid_clear_seconds(value)
     {
         return Err(HolziError::InvalidInput {
             reason: format!("{key} must be one of 0, 15, 30, 60, 120"),
+        });
+    }
+    if key == BACKGROUND_KEY && !is_background_value(value) {
+        return Err(HolziError::InvalidInput {
+            reason: format!(
+                "{key} must be a WebP data URL of at most {BACKGROUND_MAX_BYTES} bytes"
+            ),
         });
     }
     Ok(())

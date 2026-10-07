@@ -332,6 +332,14 @@
     }
   },
   "settings": {
+    "background": {
+      "label": "Workspace background",
+      "description": "An image behind every workspace, on all devices of the vault.",
+      "choose": "Choose image …",
+      "remove": "Remove",
+      "failed": "Could not set the background",
+      "saved": "Saved."
+    },
     "password": {
       "current": "Current password",
       "new": "New password",
@@ -459,7 +467,7 @@
         "appearance": {
           "title": "Appearance",
           "description": "Color scheme, background and colors.",
-          "keywords": "appearance color scheme light dark system theme look"
+          "keywords": "appearance color scheme light dark system theme look background wallpaper image"
         }
       },
       "models": {
@@ -1196,6 +1204,7 @@
         "set": "Turn session restore on or off"
       },
       "appearance": {
+        "removeBackground": "Remove the workspace background",
         "setColorScheme": "Set the color scheme",
         "set": "Set the appearance",
         "reset": "Reset the appearance",

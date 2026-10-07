@@ -251,6 +251,13 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
     effect: 'write',
   }),
   setting({
+    id: 'settings.appearance.removeBackground',
+    description:
+      'Remove the workspace background image for the whole vault; the default background shows again. Only the user can choose a new image, in Settings → General → Appearance.',
+    scope: 'settings.device',
+    effect: 'write',
+  }),
+  setting({
     id: 'settings.appearance.set',
     description:
       'Set one or more parts of the appearance (accent colour, window, container, text and component tints, window hint) for the whole vault. A choice that would make text or controls unreadable is adjusted to the nearest readable value. It applies at once.',

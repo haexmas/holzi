@@ -12,6 +12,7 @@ import { usePreferences, type PrefScope } from '~/composables/usePreferences'
 import { useProviders, type DelegateVendor } from '~/composables/useProviders'
 import { useSync } from '~/composables/useSync'
 import { useSttModels } from '~/composables/useSttModels'
+import { useWorkspaceBackground } from '~/composables/useWorkspaceBackground'
 import { parseColorScheme } from '~/lib/settings/colorScheme'
 import { parseLanguage } from '~/lib/settings/language'
 import type { useWindowManagerStore } from '~/stores/windowManager'
@@ -44,6 +45,7 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
   const colorScheme = useColorScheme()
   const appearance = useAppearance()
   const language = useLanguage()
+  const background = useWorkspaceBackground()
   const sync = useSync()
   const done = { done: true }
   const on = wm.registerGlobalActionHandler
@@ -140,6 +142,11 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
     const scheme = parseColorScheme(input.scheme)
     if (!scheme) throw new Error(`unknown color scheme ${String(input.scheme)}`)
     return { scheme: await colorScheme.setAsync(scheme) }
+  })
+
+  on('settings.appearance.removeBackground', async () => {
+    await background.removeAsync()
+    return done
   })
 
   /** What the appearance actions answer: the stored appearance and what had to be adjusted. */
