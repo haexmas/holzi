@@ -4,7 +4,7 @@ import type { LastTest } from "./LastTest";
 /**
  * A storage as the settings show it.
  */
-export type StorageView = { id: string, connectionId: string, name: string, bucket: string, lastTest: LastTest | null, 
+export type StorageView = { id: string, connectionId: string, name: string, bucket: string, lastTest: LastTest | null,
 /**
  * The extensions with a permission for this storage.
  */
