@@ -1,8 +1,8 @@
 # Implementation Plan: holzi für Android
 
-**Branch**: `042-android-build` | **Date**: 2026-10-07 | **Spec**: [spec.md](./spec.md)
+**Branch**: `043-android-build` | **Date**: 2026-10-07 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/042-android-build/spec.md`
+**Input**: Feature specification from `/specs/043-android-build/spec.md`
 
 ## Summary
 
@@ -130,7 +130,7 @@ und werden mit ihrer Stufe herausgenommen.
 ### Documentation (this feature)
 
 ```text
-specs/042-android-build/
+specs/043-android-build/
 ├── plan.md              # dieser Plan
 ├── research.md          # Phase 0: R1–R17
 ├── data-model.md        # Phase 1: Einstellung, Fähigkeiten, gewählte Datei, Übernahme, Ausnahmeliste

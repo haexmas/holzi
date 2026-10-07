@@ -1,6 +1,6 @@
 # Feature Specification: holzi für Android
 
-**Feature Branch**: `042-android-build`
+**Feature Branch**: `043-android-build`
 **Created**: 2026-10-07
 **Status**: Draft
 **Input**: holzi läuft als Android-App auf einem echten Telefon. Die Lieferung erfolgt in
@@ -61,7 +61,7 @@ holzi PR #308) und ist nicht Teil dieser Spec.
   → A: Ja, standardmäßig an, solange ein Tresor offen ist; die Person kann es in den
   Einstellungen ausschalten.
 - Q: Ist das Entsperren per Fingerabdruck oder Gesichtserkennung Teil dieser Spec? → A: Nein.
-  042 entsperrt nur per Passwort; biometrisches Entsperren bekommt eine eigene Spec.
+  043 entsperrt nur per Passwort; biometrisches Entsperren bekommt eine eigene Spec.
 - Q: Gibt es das Übernehmen einer Tresordatei auch am Desktop? → A: Ja. FR-002a gilt auf allen
   Plattformen; am Desktop wählt die Person die Datei im Dateidialog des Systems.
 - Q: Welcher Anteil der Desktop-e2e-Fälle muss auch auf Android laufen? → A: Mindestens 80 %,
