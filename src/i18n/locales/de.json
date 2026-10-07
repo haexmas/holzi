@@ -332,6 +332,19 @@
     }
   },
   "settings": {
+    "password": {
+      "current": "Aktuelles Passwort",
+      "new": "Neues Passwort",
+      "repeat": "Neues Passwort wiederholen",
+      "deviceOnly": "Die Änderung gilt nur auf diesem Gerät. Andere verknüpfte Geräte öffnen die Vault weiter mit ihrem eigenen Passwort.",
+      "mismatch": "Die beiden neuen Passwörter stimmen nicht überein.",
+      "same": "Das neue Passwort muss sich vom aktuellen unterscheiden.",
+      "tooShort": "Das neue Passwort braucht mindestens 8 Zeichen.",
+      "wrongCurrent": "Das aktuelle Passwort ist falsch.",
+      "weak": "Das neue Passwort ist nicht zulässig.",
+      "changed": "Passwort geändert. Ab jetzt öffnet nur noch das neue Passwort die Vault.",
+      "submit": "Passwort ändern"
+    },
     "language": {
       "label": "Sprache",
       "saved": "Gespeichert.",
@@ -436,7 +449,12 @@
         "basic": {
           "title": "Grundeinstellung",
           "description": "Sprache, Passwort, Gerät und Sitzung.",
-          "keywords": "Sprache Language Deutsch Englisch Gerät Gerätename Name Sitzung wiederherstellen Fenster Tabs"
+          "keywords": "Sprache Language Deutsch Englisch Gerät Gerätename Name Sitzung wiederherstellen Fenster Tabs",
+          "password": {
+            "title": "Vaultpasswort ändern",
+            "description": "Das Passwort, mit dem dieses Gerät die Vault öffnet.",
+            "keywords": "Passwort Passphrase Kennwort Vault entsperren ändern"
+          }
         },
         "appearance": {
           "title": "Erscheinungsbild",

@@ -38,6 +38,9 @@ const SETTINGS_VIEWS: Record<string, Component> = {
   'general.basic': defineAsyncComponent(
     () => import('~/components/settings/BasicView.vue'),
   ),
+  'general.basic.password': defineAsyncComponent(
+    () => import('~/components/settings/PasswordChangeView.vue'),
+  ),
   'general.appearance': defineAsyncComponent(
     () => import('~/components/settings/AppearanceView.vue'),
   ),

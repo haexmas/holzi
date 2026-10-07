@@ -42,6 +42,7 @@ import { matchRoute } from '../src/lib/wm/routeMatch.ts'
 const LOCATION_PATHS: Record<string, string> = {
   general: '/',
   'general.basic': '/general/basic',
+  'general.basic.password': '/general/basic/password',
   'general.appearance': '/general/appearance',
   models: '/models',
   'models.default': '/models/default',

@@ -81,3 +81,13 @@ fn passphrase_converts_from_str_and_string() {
     assert_eq!(Passphrase::from(SECRET).as_str(), SECRET);
     assert_eq!(Passphrase::from(SECRET.to_string()).as_str(), SECRET);
 }
+
+#[test]
+fn a_new_passphrase_needs_at_least_the_minimum_length() {
+    let short = Passphrase::from("1234567");
+    assert!(matches!(
+        short.validate_new(),
+        Err(crate::error::HolziError::WeakPassphrase { .. })
+    ));
+    assert!(Passphrase::from("12345678").validate_new().is_ok());
+}

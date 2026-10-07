@@ -16,7 +16,6 @@ use tauri::{AppHandle, Runtime};
 
 use crate::error::{HolziError, Result};
 use crate::identity::{installation_id_path, HolziBootstrap};
-use crate::instances::create::MIN_PASSPHRASE_LEN;
 use crate::instances::passphrase::Passphrase;
 use crate::instances::paths::{
     get_app_local_data, get_instance_path, get_pending_marker_path, validate_instance_name,
@@ -46,11 +45,7 @@ impl LinkVault {
         passphrase: Passphrase,
     ) -> Result<Self> {
         validate_instance_name(name)?;
-        if passphrase.as_str().len() < MIN_PASSPHRASE_LEN {
-            return Err(HolziError::WeakPassphrase {
-                reason: format!("passphrase must be at least {MIN_PASSPHRASE_LEN} characters"),
-            });
-        }
+        passphrase.validate_new()?;
         let db_path = get_instance_path(app, name)?;
         let pending_marker = get_pending_marker_path(&db_path);
         let installation_id_file = installation_id_path(&get_app_local_data(app)?);

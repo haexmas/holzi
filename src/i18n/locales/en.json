@@ -332,6 +332,19 @@
     }
   },
   "settings": {
+    "password": {
+      "current": "Current password",
+      "new": "New password",
+      "repeat": "Repeat new password",
+      "deviceOnly": "The change applies to this device only. Other linked devices keep opening the vault with their own password.",
+      "mismatch": "The two new passwords do not match.",
+      "same": "The new password must differ from the current one.",
+      "tooShort": "The new password needs at least 8 characters.",
+      "wrongCurrent": "The current password is wrong.",
+      "weak": "The new password is not allowed.",
+      "changed": "Password changed. From now on only the new password opens the vault.",
+      "submit": "Change password"
+    },
     "language": {
       "label": "Language",
       "saved": "Saved.",
@@ -436,7 +449,12 @@
         "basic": {
           "title": "Basic settings",
           "description": "Language, password, device and session.",
-          "keywords": "language Sprache German English device device name name session restore windows tabs"
+          "keywords": "language Sprache German English device device name name session restore windows tabs",
+          "password": {
+            "title": "Change vault password",
+            "description": "The password this device opens the vault with.",
+            "keywords": "password passphrase vault unlock change"
+          }
         },
         "appearance": {
           "title": "Appearance",

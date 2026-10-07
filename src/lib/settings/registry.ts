@@ -119,6 +119,11 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
       'settings.sessionRestore.title',
     ],
   }),
+  // Reached from its row in "Grundeinstellung"; an agent opens it with `wm.app.open` (FR-014).
+  subView('general.basic.password', 'general/basic/password', 'general.basic', {
+    icon: 'lucide:key-round',
+    row: true,
+  }),
   subView('general.appearance', 'general/appearance', 'general', {
     icon: 'lucide:palette',
     overviewRow: true,

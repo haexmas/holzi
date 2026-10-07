@@ -3,6 +3,7 @@ import type { InstanceInfo } from '@bindings/InstanceInfo'
 import type { CreateInstanceArgs } from '@bindings/CreateInstanceArgs'
 import type { CreateInstanceResult } from '@bindings/CreateInstanceResult'
 import type { OpenInstanceArgs } from '@bindings/OpenInstanceArgs'
+import type { ChangePassphraseArgs } from '@bindings/ChangePassphraseArgs'
 
 /**
  * Thin wrapper around the Tauri command surface. Each function is a
@@ -31,5 +32,19 @@ export function useInstance() {
     await invoke('close_instance')
   }
 
-  return { activeNameAsync, listAsync, createAsync, openAsync, closeAsync }
+  /** Spec 042: re-keys the active vault on this device; not an action, so no agent can call it. */
+  async function changePassphraseAsync(
+    args: ChangePassphraseArgs,
+  ): Promise<void> {
+    await invoke('change_vault_passphrase', { args })
+  }
+
+  return {
+    activeNameAsync,
+    listAsync,
+    createAsync,
+    openAsync,
+    closeAsync,
+    changePassphraseAsync,
+  }
 }
