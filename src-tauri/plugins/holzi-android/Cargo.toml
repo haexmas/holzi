@@ -1,0 +1,17 @@
+[package]
+name = "tauri-plugin-holzi-android"
+version = "0.1.0"
+description = "holzi's Android platform code (spec 043, ADR-0010)"
+authors = ["haexmas"]
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/haexmas/holzi"
+edition = "2021"
+rust-version = "1.95"
+publish = false
+links = "tauri-plugin-holzi-android"
+
+[dependencies]
+tauri = { version = "2.12.0", features = [] }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

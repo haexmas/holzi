@@ -13,6 +13,7 @@ pub mod llm;
 pub mod model_capabilities;
 pub mod models;
 pub mod passwords;
+pub mod platform;
 pub mod providers;
 pub mod remote_storage;
 pub mod state;
@@ -26,6 +27,7 @@ pub mod storage;
 // CoreAudio/WASAPI system dependency) at all.
 pub mod stt;
 pub mod sync;
+pub mod tls;
 pub mod vault_events;
 pub mod vault_gate;
 // Unconditional like `stt`, above — see `voice.rs`'s module doc for why
@@ -211,7 +213,12 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // Spec 017 US8: system notifications of extensions, with clicks (desktop: forked, Cargo.toml).
         .plugin(tauri_plugin_notification::init())
+        // Spec 043 (ADR-0010): Android platform code; does nothing elsewhere.
+        .plugin(tauri_plugin_holzi_android::init())
         .setup(|app| {
+            // Spec 043 (research R2): certificate checks need this on Android before any
+            // network service starts.
+            tls::init_platform_verifier()?;
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -288,6 +295,7 @@ pub fn run() {
         })
         .invoke_handler(gate.wrap(tauri::generate_handler![
             active_instance_name,
+            platform::commands::platform_capabilities,
             list_instances,
             create_instance,
             open_instance,
@@ -466,6 +474,10 @@ pub fn run() {
                     api.prevent_exit();
                 }
             }
+            // Spec 043 (research R4): Android keeps the process of a finished activity cached.
+            // End it, so the next start is a new process at the vault picker (ADR-0003).
+            #[cfg(target_os = "android")]
+            tauri::RunEvent::Exit => std::process::exit(0),
             _ => {}
         });
 }

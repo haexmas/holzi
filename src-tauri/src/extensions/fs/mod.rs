@@ -89,18 +89,22 @@ pub fn environment_for<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> FsEnviro
     .filter_map(Result::ok)
     .map(real)
     .collect();
-    let known = [
+    #[allow(unused_mut)]
+    let mut known = vec![
         ("home", paths.home_dir()),
         ("pictures", paths.picture_dir()),
         ("downloads", paths.download_dir()),
         ("documents", paths.document_dir()),
-        ("desktop", paths.desktop_dir()),
         ("videos", paths.video_dir()),
-    ]
-    .into_iter()
-    .filter_map(|(name, path)| Some((name, path.ok()?)))
-    .filter(|(_, path)| path.exists())
-    .collect();
+    ];
+    // Mobile systems have no desktop folder (spec 043 FR-016); same place in the list as before.
+    #[cfg(desktop)]
+    known.insert(4, ("desktop", paths.desktop_dir()));
+    let known = known
+        .into_iter()
+        .filter_map(|(name, path)| Some((name, path.ok()?)))
+        .filter(|(_, path)| path.exists())
+        .collect();
     let scratch = paths.app_cache_dir().map_or_else(
         |_| std::env::temp_dir().join("holzi-extension-files"),
         |dir| dir.join("extension-files"),
@@ -111,7 +115,7 @@ pub fn environment_for<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> FsEnviro
         known,
         dialogs: Arc::new(dialogs::TauriDialogs(app.clone())),
         scratch,
-        free_paths: cfg!(not(any(target_os = "android", target_os = "ios"))),
+        free_paths: crate::platform::capabilities().free_paths,
     }
 }
 

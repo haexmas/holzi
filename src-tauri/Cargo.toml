@@ -68,6 +68,8 @@ tauri-plugin-dialog = "2"
 # the appearance); only three permissions, no scope of its own (capabilities/default.json).
 tauri-plugin-fs = "2"
 tauri-plugin-opener = "2.5.4"
+# Spec 043 (ADR-0010): everything only Android has; a no-op on every other platform.
+tauri-plugin-holzi-android = { path = "plugins/holzi-android" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 thiserror = "2"
@@ -272,6 +274,12 @@ libc = "0.2"
 
 # Spec 017, US9 (research R19): extensions watch folders on desktops only; Android and iOS answer
 # "not available" (FR-066), so the watcher is not built there.
+# Spec 043 (research R2): rustls-platform-verifier needs the VM and the application context on
+# Android; tao publishes both through ndk-context.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.22"
+ndk-context = "0.1"
+
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 notify = "8"
 notify-debouncer-full = "0.5"
@@ -351,3 +359,9 @@ opt-level = 3
 [patch.crates-io]
 wry = { git = "https://github.com/haexmas/wry", rev = "47037ddc888b1576d0a558aa2a6d68346ce00735" }
 tauri-plugin-notification = { git = "https://github.com/haexmas/plugins-workspace", rev = "b38883e0e80889d411e3139881f01ea7a670c06e" }
+# Spec 043 (research R2): lettre 0.11.23 calls `Verifier::new_with_extra_roots`, which
+# rustls-platform-verifier does not offer on Android, so lettre does not compile there.
+# haexmas/lettre @ 993d98c (branch fix/android-platform-verifier, on tag v0.11.23) uses
+# `Verifier::new` without extra roots, like reqwest. Upstream: lettre/lettre#1167; drop this
+# entry once a release contains it.
+lettre = { git = "https://github.com/haexmas/lettre", rev = "993d98c5330ce5a3238e2f7fc37e9c9cf4a3f1c1" }

@@ -196,12 +196,9 @@ fn clean_environment(command: &mut portable_pty::CommandBuilder) {
     command.env("TERM", TERM);
 }
 
+/// The terminal exists only where the capability table says so (spec 043 FR-016).
 fn desktop_only() -> Result<(), BridgeError> {
-    if cfg!(desktop) {
-        Ok(())
-    } else {
-        Err(BridgeError::not_available())
-    }
+    BridgeError::unless(crate::platform::capabilities().terminal)
 }
 
 /// `extension_shell_list_available` → `[{name, path}]`; needs no permission.

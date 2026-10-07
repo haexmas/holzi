@@ -71,12 +71,20 @@ impl<R: Runtime> FileDialogs for TauriDialogs<R> {
         builder.blocking_save_file()?.into_path().ok()
     }
 
+    #[cfg(desktop)]
     fn pick_folder(&self, request: DialogRequest) -> Option<PathBuf> {
         let mut builder = self.builder(&request);
         if let Some(dir) = &request.default_path {
             builder = builder.set_directory(dir);
         }
         builder.blocking_pick_folder()?.into_path().ok()
+    }
+
+    /// Mobile systems have no folder picker (spec 043 FR-016); `select_folder` answers "not
+    /// available" before it gets here.
+    #[cfg(mobile)]
+    fn pick_folder(&self, _request: DialogRequest) -> Option<PathBuf> {
+        None
     }
 
     fn pick_files(&self, request: DialogRequest) -> Option<Vec<PathBuf>> {
@@ -307,6 +315,7 @@ pub fn show_image(ctx: &CallContext, params: &Value) -> Result<Value, BridgeErro
 
 /// `{title?, defaultPath?}` → the chosen folder or `null`; this frame may read in it.
 pub fn select_folder(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
+    BridgeError::unless(crate::platform::capabilities().folder_pick)?;
     let environment = ctx.host.fs.environment()?;
     let request = DialogRequest {
         title: text(params, "title"),

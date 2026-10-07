@@ -103,6 +103,16 @@ impl BridgeError {
         Self::new(ExtensionErrorCode::NotAvailable, "not available")
     }
 
+    /// `Ok` when this device has the function, else [`BridgeError::not_available`]; called with a
+    /// field of [`crate::platform::capabilities`] (spec 043 FR-016).
+    pub fn unless(available: bool) -> Result<(), Self> {
+        if available {
+            Ok(())
+        } else {
+            Err(Self::not_available())
+        }
+    }
+
     /// The answer for every request of a disabled extension.
     pub fn disabled() -> Self {
         Self::new(ExtensionErrorCode::Disabled, "extension disabled")

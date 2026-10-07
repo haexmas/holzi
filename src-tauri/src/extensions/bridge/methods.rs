@@ -16,22 +16,13 @@ use crate::storage::query::Query;
 
 pub const MODULE: &str = module_path!();
 
-/// The platform names of the SDK's `ApplicationContext`.
-fn platform() -> Option<&'static str> {
-    match std::env::consts::OS {
-        os @ ("linux" | "macos" | "ios" | "freebsd" | "dragonfly" | "netbsd" | "openbsd"
-        | "solaris" | "android" | "windows") => Some(os),
-        _ => None,
-    }
-}
-
 /// The SDK's `ApplicationContext` on `device`: `{theme, locale, platform, deviceId}`.
 pub fn context_of(host: &ExtensionHost, device: Uuid) -> Value {
     let context = host.context();
     json!({
         "theme": context.theme,
         "locale": context.locale,
-        "platform": platform(),
+        "platform": crate::platform::os_name(),
         "deviceId": device.to_string(),
     })
 }

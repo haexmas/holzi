@@ -4344,12 +4344,14 @@ dependencies = [
  "hmac",
  "imap-proto",
  "iroh",
+ "jni 0.22.4",
  "keepass",
  "lettre",
  "libc",
  "log",
  "mail-parser",
  "mistralrs",
+ "ndk-context",
  "nostr",
  "nostr-sdk",
  "notify",
@@ -4380,6 +4382,7 @@ dependencies = [
  "tauri-plugin-clipboard-manager",
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
+ "tauri-plugin-holzi-android",
  "tauri-plugin-log",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
@@ -5420,8 +5423,7 @@ checksum = "7a79a3332a6609480d7d0c9eab957bca6b455b91bb84e66d19f5ff66294b85b8"
 [[package]]
 name = "lettre"
 version = "0.11.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2c646bd5cc763b1087b15493e29a64be6147ba8f19342004fa52048ee596eae"
+source = "git+https://github.com/haexmas/lettre?rev=993d98c5330ce5a3238e2f7fc37e9c9cf4a3f1c1#993d98c5330ce5a3238e2f7fc37e9c9cf4a3f1c1"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -10560,6 +10562,14 @@ dependencies = [
  "thiserror 2.0.21",
  "toml 1.1.6+spec-1.1.0",
  "url",
+]
+
+[[package]]
+name = "tauri-plugin-holzi-android"
+version = "0.1.0"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]
