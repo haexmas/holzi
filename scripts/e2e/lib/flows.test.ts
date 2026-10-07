@@ -47,7 +47,9 @@ describe('createAndUnlock', () => {
   it('creates the instance by backend call, then navigates straight to its workspace, recording unlocked', async () => {
     driver.onExecute((kind, script) => {
       if (kind === 'async') {
-        assert.match(script, /create_instance/)
+        assert.match(script, /create_instance|set_pref/)
+        if (script.includes('set_pref'))
+          return { value: { ok: true, data: null } }
         assert.match(script, /"name":"test"/)
         return { value: { ok: true, data: { info: { name: 'test' } } } }
       }

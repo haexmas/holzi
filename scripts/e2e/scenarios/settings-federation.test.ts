@@ -27,6 +27,8 @@ scenario('settings-federation', {}, async (ctx) => {
   const instance = await ctx.startInstance()
   await createAndUnlock(instance, { name: 'e2e-settings-federation' })
   await openSettings(instance)
+  await instance.click('settings-row-general.basic')
+  await waitForLocation(instance, 'general.basic')
 
   const renamed = 'E2E Föderation'
   await clearAlias(instance)

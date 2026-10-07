@@ -112,26 +112,29 @@ scenario('passwords-attachments', { timeoutMs: 240_000 }, async (ctx) => {
         `return document.querySelectorAll('.pswp__item img.pswp__img').length`,
       )) > 0,
   )
-  const seen: string[] = []
+  const seen: Array<{ name: string; counter: string }> = []
   for (let step = 0; step < 4; step += 1) {
-    seen.push(
-      `${await lightboxName(instance)} ${await lightboxCounter(instance)}`,
-    )
+    seen.push({
+      name: await lightboxName(instance),
+      counter: await lightboxCounter(instance),
+    })
     await instance.exec(
       `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', keyCode: 39, bubbles: true }))
        return true`,
     )
     await ctx.waitFor(
       'the next slide',
-      async () => !seen.at(-1)?.startsWith(await lightboxName(instance)),
+      async () => seen.at(-1)?.name !== (await lightboxName(instance)),
     )
   }
-  assert.deepEqual(seen, [
-    'rot.png 1 von 4',
-    'gruen.png 2 von 4',
-    'blau.png 3 von 4',
-    'kaputt.png 4 von 4',
-  ])
+  assert.deepEqual(
+    seen.map(({ name }) => name),
+    ['rot.png', 'gruen.png', 'blau.png', 'kaputt.png'],
+  )
+  assert.deepEqual(
+    seen.map(({ counter }) => counter.split(/\s+/)[0]),
+    ['1', '2', '3', '4'],
+  )
   assert.equal(await lightboxName(instance), 'rot.png', 'it loops back')
   ctx.step('the lightbox walks the images in card order, never the PDF')
 

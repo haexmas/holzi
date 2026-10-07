@@ -24,6 +24,8 @@ scenario('settings-save-on-selection', {}, async (ctx) => {
   const instance = await ctx.startInstance()
   await createAndUnlock(instance, { name: 'e2e-settings-save' })
   await openSettings(instance)
+  await instance.click('settings-row-general.basic')
+  await waitForLocation(instance, 'general.basic')
   const vaultPref = async (key: string) =>
     data<string | null>(
       await instance.invoke('get_pref', {

@@ -64,8 +64,12 @@ function onSelect(name: string) {
 }
 
 /** Spec 042 (FR-007): the start page's choice lasts until the app restarts; nothing is stored. */
-function chooseLanguage(value: string) {
-  void language.showAsync(value)
+async function chooseLanguage(value: string) {
+  try {
+    await language.showAsync(value)
+  } catch (error) {
+    console.error('[settings] changing the language failed', error)
+  }
 }
 
 /** Spec 042 (FR-009): the vault's language wins, a vault without one stores the active one. A read
