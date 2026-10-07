@@ -68,8 +68,11 @@ fn with_credentials<T>(
 ) -> Result<T, BridgeError> {
     loop {
         match save(credentials) {
-            Err(HolziError::StorageTestFailed { outcome, .. }) => {
-                dialog.failed(outcome);
+            Err(HolziError::StorageTestFailed {
+                outcome,
+                leftover_key,
+            }) => {
+                dialog.failed(outcome, leftover_key);
                 credentials = confirmed(dialog.answer()?)?
                     .credentials
                     .ok_or_else(cancelled)?;

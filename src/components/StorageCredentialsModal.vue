@@ -48,8 +48,12 @@ async function confirm() {
     sessionToken: draft.sessionToken.trim() || undefined,
   })
   busy.value = false
-  if (trial.kind === 'failed')
-    failure.value = t(`settings.storage.outcome.${trial.outcome}`)
+  if (trial.kind === 'failed') {
+    const text = t(`settings.storage.outcome.${trial.outcome}`)
+    failure.value = trial.leftoverKey
+      ? `${text}. ${t('settings.storage.leftover', { key: trial.leftoverKey })}`
+      : text
+  }
 }
 
 function onUpdateOpen(open: boolean) {

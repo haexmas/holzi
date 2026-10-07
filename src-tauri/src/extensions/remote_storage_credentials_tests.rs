@@ -26,6 +26,7 @@ fn local_proposal() -> Value {
 
 const DENIED: StorageTrial = StorageTrial::Failed {
     outcome: TestOutcome::AccessDenied,
+    leftover_key: None,
 };
 
 #[test]
@@ -101,4 +102,26 @@ fn new_credentials_of_a_storage_can_be_corrected_after_a_failed_test() {
         entries,
         "the old entry is replaced, the failed try kept nothing"
     );
+}
+
+#[test]
+fn a_leftover_test_object_is_reported_to_holzis_window() {
+    let s = setup();
+    s.permit("add", "*", "granted");
+    s.fake.fail_once(Op::Delete, StorageError::MissingRight);
+    s.events
+        .answer_in_turn(vec![with_credentials(), StorageAnswer::Cancel]);
+
+    let error = s
+        .call("extension_remote_storage_add_backend", local_proposal())
+        .unwrap_err();
+
+    assert_eq!(error.code.as_u16(), 1002, "{}", error.message);
+    assert!(matches!(
+        s.events.trials().as_slice(),
+        [Some(StorageTrial::Failed {
+            outcome: TestOutcome::MissingRight,
+            leftover_key: Some(_),
+        })]
+    ));
 }

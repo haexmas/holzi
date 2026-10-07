@@ -136,7 +136,8 @@ gibt der Erweiterung nur Kennung oder Fehler. Schließen des Rahmens oder Ablauf
 
 Die Antwort mit Zugangsdaten wartet auf deren Test (FR-013b, Betreiber 2026-10-07):
 `storage_dialog_resolve` liefert `StorageTrial` zurück. Scheitert der Test, bekommt das Fenster
-`failed { outcome }`, zeigt den Text der Einstellungen und bleibt offen; der Aufruf der Erweiterung
+`failed { outcome, leftoverKey }`, zeigt den Text der Einstellungen einschließlich eines möglichen
+Bereinigungshinweises und bleibt offen; der Aufruf der Erweiterung
 wartet im selben Dialog (`Dialog::failed`, `Dialog::answer`) auf korrigierte Zugangsdaten oder den
 Abbruch, mit neuer Frist von 300 s je Antwort. Endet die Anfrage, bekommt das Fenster `ended`.
 

@@ -71,14 +71,19 @@ impl StorageAnswer {
 }
 
 /// What holzi's window learns of the credentials it sent (`storage_dialog_resolve`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum StorageTrial {
     /// The request ended; its window closes.
     Ended,
     /// The test of the credentials failed; the window shows why and waits for another answer.
-    Failed { outcome: TestOutcome },
+    Failed {
+        outcome: TestOutcome,
+        /// The test object holzi could not delete, if the failed probe left one behind.
+        #[serde(rename = "leftoverKey")]
+        leftover_key: Option<String>,
+    },
 }
 
 /// An answer and, for credentials, where the result of their test goes.
@@ -227,8 +232,11 @@ impl Dialog<'_> {
 
     /// The test of the credentials of the last answer failed: holzi's window shows `outcome` and
     /// the dialog waits for the next answer.
-    pub fn failed(&mut self, outcome: TestOutcome) {
-        self.end_trial(StorageTrial::Failed { outcome });
+    pub fn failed(&mut self, outcome: TestOutcome, leftover_key: Option<String>) {
+        self.end_trial(StorageTrial::Failed {
+            outcome,
+            leftover_key,
+        });
     }
 
     fn end_trial(&mut self, trial: StorageTrial) {
