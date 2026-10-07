@@ -1,0 +1,71 @@
+# Contract: Plugin-Crate `holzi-android`
+
+**Anforderungen**: FR-006, FR-011, FR-011a, FR-012, FR-019, FR-023, FR-029, FR-017 (Gerätename)
+| **Research**: R1, R4–R7, R10, R12
+
+Lage: `src-tauri/plugins/holzi-android/` (Crate `tauri-plugin-holzi-android`, Pfad-Abhängigkeit
+von `src-tauri`). Kotlin unter `android/src/main/java/space/haex/holzi/android/`. Am Desktop
+übersetzt die Crate und meldet sich an, jede Funktion ist dort ein No-op bzw. liefert `None`.
+
+## Rust-Schnittstelle (vom Kern benutzt, keine Commands für die Oberfläche)
+
+```text
+HolziAndroidExt::holzi_android(&self) -> &HolziAndroid
+  set_secure(enabled: bool) -> Result<()>            // FLAG_SECURE + setRecentsScreenshotEnabled(!enabled) auf API 33+
+  device_name() -> Result<Option<String>>            // Settings.Global.DEVICE_NAME, sonst Build.MODEL
+  request_permission(p: Permission) -> Result<PermissionState>   // Permission::Microphone
+  check_permission(p: Permission) -> Result<PermissionState>     // granted | denied | prompt
+```
+
+Benachrichtigungen fragt der Kern über den vorhandenen Fork von `tauri-plugin-notification` an
+(`request_permission()`), nicht über diese Crate.
+
+## Ereignisse (Kotlin → Kern)
+
+| Ereignis          | Nutzlast                             | Auslöser                                             | Verbraucher                         |
+| ----------------- | ------------------------------------ | ---------------------------------------------------- | ----------------------------------- |
+| `network-changed` | `{ available: bool, metered: bool }` | `ConnectivityManager.registerDefaultNetworkCallback` | Sync: `network_change()`, Neuaufbau |
+
+Rückkehr in den Vordergrund meldet Tauri selbst (`RunEvent::Resumed`); die Crate meldet sie
+nicht doppelt.
+
+## Seite (Kotlin → WebView)
+
+In `load(webView)` setzt die Crate einen `OnApplyWindowInsetsListener` und schreibt bei jeder
+Änderung per `evaluateJavascript` auf `document.documentElement`:
+
+| CSS-Variable             | Inhalt                                                 |
+| ------------------------ | ------------------------------------------------------ |
+| `--holzi-inset-top`      | Statusleiste und Aussparung oben, in CSS-Pixeln (`px`) |
+| `--holzi-inset-right`    | Systemleisten/Aussparung rechts                        |
+| `--holzi-inset-bottom`   | Navigationsleiste unten (ohne Tastatur)                |
+| `--holzi-inset-left`     | Systemleisten/Aussparung links                         |
+| `--holzi-inset-keyboard` | Höhe der Bildschirmtastatur, `0px` wenn geschlossen    |
+
+Die Seite benutzt `var(--holzi-inset-*, 0px)`; am Desktop fehlen die Variablen.
+
+## Lebenszyklus
+
+- Kein eigenes Beenden in der Crate, solange `RunEvent::Exit` nach `finishAffinity`
+  zuverlässig kommt (R4); sonst ergänzt die Crate in `onDestroy` bei `isFinishing`
+  `Process.killProcess(Process.myPid())`. Die Entscheidung fällt im ersten Gerätelauf und steht
+  dann in research.md.
+
+## Manifest und Build der Crate
+
+- `AndroidManifest.xml`: `<uses-permission android:name="android.permission.RECORD_AUDIO"/>`,
+  `ACCESS_NETWORK_STATE`.
+- `@TauriPlugin(permissions = [Permission(strings = [RECORD_AUDIO], alias = "microphone")])`.
+- `build.gradle.kts`: Maven-Repo von rustls-platform-verifier, Abhängigkeit
+  `org.rustls:rustls-platform-verifier:<Version aus Cargo.lock>`, `androidx.core`.
+- `proguard-rules.pro` (als `consumerProguardFiles`):
+  `-keep, includedescriptorclasses class org.rustls.platformverifier.** { *; }`.
+
+## Zertifikatsprüfung (nicht in der Crate)
+
+Die Initialisierung von `rustls-platform-verifier` liegt im Kern (`src/tls/android.rs`): in
+`setup` vor dem ersten Netzaufruf `ndk_context::android_context()` → `JavaVM` anhängen →
+`rustls_platform_verifier::android::init_with_env(env, context)`. Die Crate liefert nur die
+Gradle-Abhängigkeit und die Keep-Regel. Test: Der Android-e2e-Lauf macht HTTPS-Aufrufe
+(Anbieter-Attrappe über HTTPS mit Test-CA ist **nicht** vertrauenswürdig → Fehlerfall; ein
+öffentlicher Endpunkt → Erfolg) und `extension-isolation` ruft `example.org`.
