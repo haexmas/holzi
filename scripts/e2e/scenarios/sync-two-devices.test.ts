@@ -2,6 +2,7 @@ import { scenario } from '../lib/scenario.ts'
 import { connectProvider, unwrap } from '../lib/flows.ts'
 import { waitForLocation } from '../lib/settings.ts'
 import { expectThreads } from '../lib/sync-flows.ts'
+import { reveal } from '../lib/appearance.ts'
 import type { Device } from '../lib/group.ts'
 import {
   chatTitles,
@@ -18,6 +19,7 @@ async function showGeneralSettings(device: Device) {
   await waitForLocation(device.page, 'general')
   await device.page.click('settings-row-general.basic')
   await waitForLocation(device.page, 'general.basic')
+  await reveal(device.page, 'session-restore-switch')
   await device.page.waitForDisplayed('session-restore-switch')
 }
 
