@@ -8,7 +8,9 @@ auf einem echten Telefon bleibt, was der Emulator nicht kann.
 
 ## §0 Voraussetzungen
 
-- Nix-devShell mit der Android-Umgebung (atoms `holzi` 0.8.0, holzi PR #308):
+- Nix-devShell mit der Android-Umgebung aus den gepinnten atoms-Dateien
+  ([`haexmas/atoms` @ `b662c6205d6a1ebd7fac588291f82ea8e78c3d52`](https://github.com/haexmas/atoms/tree/b662c6205d6a1ebd7fac588291f82ea8e78c3d52),
+  holzi PR #308):
   `nix develop` setzt `ANDROID_HOME`, `NDK_HOME`, `ANDROID_NDK_ROOT` und `JAVA_HOME`; die
   Rust-Toolchain bringt die Android-Ziele mit, `rustup` ist nicht nötig.
 - Ein Telefon mit Entwickleroptionen und USB-Debugging, oder ein Emulator (API 35, x86_64).
