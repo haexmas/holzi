@@ -1,0 +1,248 @@
+---
+description: 'Task list for spec 044-file-browser'
+---
+
+# Tasks: Dateibrowser und Viewer
+
+**Input**: Design documents from `/specs/044-file-browser/`
+
+**Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md),
+[data-model.md](./data-model.md), [contracts/tauri-commands.md](./contracts/tauri-commands.md),
+[contracts/agent-actions.md](./contracts/agent-actions.md), [contracts/media-server.md](./contracts/media-server.md),
+[quickstart.md](./quickstart.md), design [`docs/plans/2026-10-07-file-browser-design.md`](../../docs/plans/2026-10-07-file-browser-design.md),
+[ADR 0011](../../docs/adr/0011-native-catalog-actions.md)
+
+**Tests**: Included. The constitution requires a runnable check for non-trivial logic, and SC-005,
+SC-006 and SC-007 need case corpora. Rust tests live in `*_tests.rs` next to the file
+(`#[cfg(test)] #[path = "…_tests.rs"] mod tests;`), never inline. No network services in `cargo test`:
+`wiremock` for S3, `FakeStore` (`src-tauri/src/remote_storage/test_support.rs`) for the storage source.
+Frontend logic that can run without a DOM lives in `src/lib/files/` and is checked by
+`scripts/check-files-*.ts` (`node --test`).
+
+**haex-vault references** use repository `https://github.com/haex-space/haex-vault` at revision
+`fc4e84b61a050576ba42e0dc832d04064a8605a3` (constitution IV).
+
+**Organization**: Grouped by user story in priority order (P1: US1, US2; P2: US3, US4, US5, US6; P3: US7).
+
+**Shipping note** (plan.md, Lieferungen): PR A = Phase 1 (docs); PR B = Phase 2 + US1; PR C = US2;
+PR D = US3; PR E = US4; PR F = US5 (needs US3 for transfers); PR G = US6 (storage permissions need
+US5); PR H = US7. Each PR is reviewed and merged before the next one starts on top of `main`, in its own
+worktree under `.worktrees/`.
+
+**Every commit**: `cargo test` rewrites `src/types/bindings/InstanceInfo.ts` with trailing whitespace;
+revert that file before committing unless the PR changes it on purpose.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: Can run in parallel (different files, no dependency on an incomplete task)
+- **[Story]**: User story from spec.md (US1–US7)
+
+---
+
+## Phase 1: Setup (PR A, docs)
+
+- [ ] T001 [P] Add a row for 044 to `plans/README.md` (priority P2, effort L, status "Spezifiziert und geplant 2026-10-07; Lieferungen PR A–H", gate: 038 in use; US6 needs the chat tool loop of 032). Add idea rows (status "Idee, Design-Entscheidungen 2026-10-07, noch nicht spezifiziert") for 045 Sync-Regeln (replaces 025), 046 Hintergrunddienst (Android, Desktop-Tray), and the rework of 027/029 (Space als Rahmen mit Einträgen). In the rows "Passwortmanager: Folgearbeiten" and "Passwortmanager-Redesign: Folgearbeiten" note that PDF-Vorschau and Vorschaubilder in Rust can reuse the viewer and `files/thumbnails.rs` from 044
+- [ ] T002 [P] ADR status: set `docs/adr/0011-native-catalog-actions.md` to `Status: accepted` (operator chose option A on 2026-10-07) and add one line at the end of `docs/adr/0006-actions-as-builtin-agent-tools.md`: "A catalog action may run in Rust instead of the frontend; see ADR 0011."
+- [ ] T003 [P] Align spec 017 in `specs/017-extension-host/research.md` (R19, files of the device): the path resolution, the list of holzi's own places (FR-049) and the watcher core move to `src-tauri/src/files/local/` with spec 044; extensions keep their behavior, and on Android and iOS `watch` keeps answering "nicht verfügbar" (8001) even though `notify` is now compiled for Android
+- [ ] T004 Run `pnpm format:check`, commit, push `044-file-browser`, open PR A against `main` (use `gh api -X POST …/pulls` if `gh pr create` hits the GraphQL bug)
+
+---
+
+## Phase 2: Foundational (PR B, start)
+
+**Purpose**: Shared Rust core, the loopback media server and the app shell. Blocks every story.
+
+- [ ] T005 Prepare `.worktrees/044-b-core` from `main` after PR A: run `df -h` first and delete `target/` of merged worktrees if space is short; real `pnpm install`; `cargo check --manifest-path src-tauri/Cargo.toml`
+- [ ] T006 [P] Before the first new name, run bounded `graphify query … --budget 1200` for "extension filesystem resolve denied places watch", "passwords attachment preview thumbnail downscale", "action bridge register_agent_actions ActionTool", "wm app registry routes location"; note the candidates checked in the PR description (warn and continue if graphify fails)
+- [ ] T007 **Spike, before any media code**: a throwaway branch with a 40-line loopback server (`tokio::net::TcpListener` on `127.0.0.1:0`, Range on one MP4) and a page with `<video src="http://127.0.0.1:PORT/x">`; build for Windows (WebView2) and Android (release, with `network_security_config.xml` allowing cleartext for `127.0.0.1` only); confirm playback and seeking (Local Network Access risk, research R4). Record the result in research.md R4; if blocked, stop and escalate to the operator before T014
+- [ ] T008 Dependencies in `src-tauri/Cargo.toml`: add `walkdir = "2.5"`, `image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }`, `fast_image_resize = { version = "6.1", features = ["image"] }`; move `notify` and `notify-debouncer-full` from `cfg(not(any(android, ios)))` to `cfg(not(target_os = "ios"))`; `cargo check` for the host and `--target aarch64-linux-android`
+- [ ] T009 [P] Tests first in `src-tauri/src/files/local/resolve_tests.rs` and `src-tauri/src/files/local/places_tests.rs`: move the cases of `src-tauri/src/extensions/fs/resolve_tests.rs`; add: a symlink into a denied place resolves to the denied place; `..` out of a known place; on Windows and macOS a denied path in different letter case is still denied (`#[cfg]`-gated cases); known places exist only if the directory exists
+- [ ] T010 Move the pure file core out of `src-tauri/src/extensions/fs/`: `resolve.rs` → `src-tauri/src/files/local/resolve.rs` (error type `FilesError`, the extension adapter maps it to `BridgeError`); the denied list and known places of `FsEnvironment` (`mod.rs:81-107`) → `src-tauri/src/files/local/places.rs` (`OwnPlaces::from_app(&AppHandle)`, `is_own(&Path) -> bool`, `known() -> Vec<Place>`); `extensions/fs` uses both; all extension tests stay green (`cargo test extensions::fs`)
+- [ ] T011 Move the watcher core of `src-tauri/src/extensions/fs/watch.rs` into `src-tauri/src/files/local/watch.rs` (debounced `notify` watcher for one directory, non-recursive option, callback with created/removed/changed paths, `#[cfg(not(target_os = "ios"))]`); the extension adapter keeps its API and keeps answering 8001 on Android and iOS (it checks `PlatformCapabilities.folder_watch`, unchanged)
+- [ ] T012 Types in `src-tauri/src/files/mod.rs`: `SourceRef { Device, Storage { storage_id } }`, `Entry` (fields of data-model.md), `FilesError` with the codes of contracts/tauri-commands.md (`exists`, `intoItself`, `noSpace`, `holziOwned`, `noAccess`, `notFound`, `binary`, `broken`, `tooLarge`, `blocked`, `notGranted`, `unsupported`), all `ts-rs` exported to `src/types/bindings/`; `Caller` is `crate::passwords::access::Caller` (no second enum)
+- [ ] T013 [P] Pure access rules, tests first in `src-tauri/src/files/access_tests.rs`, then `src-tauri/src/files/access.rs`: `check(caller, target_kind, real_path, own_places, grants) -> Result<AccessView, FilesError>` where `User` gets everything and own places as read-only (`holzi_owned`), `BuiltinAgent`/`ExternalAgent` get `blocked` for own places and `notGranted` without the `device` grant; storage grants `read`/`readWrite`/`denied`/absent (absent → `Ask`); writing to a storage needs `readWrite`. Corpus for SC-005: direct path, `..`, symlink, letter case (Windows/macOS), a search hit inside an own place
+- [ ] T014 Media server, tests first in `src-tauri/src/files/media_server_tests.rs`: copy the range-parser cases of haex-vault `src-tauri/src/remote_storage/streaming/protocol.rs:300-350`; unknown token → 404, `/` → 404; `release` and `release_tab` → 404 afterwards; `OPTIONS` → 204 with the CORS headers of contracts/media-server.md; `HEAD` without body; a 1 GiB sparse temp file read through one `GET` keeps the server's buffer at ≤ 256 KiB (count the largest chunk handed to the writer)
+- [ ] T015 Implement `src-tauri/src/files/streaming.rs` (`StreamingSource { size, read_range, content_type }`, `LocalFileSource`) and `src-tauri/src/files/media_server.rs` after haex-vault `src-tauri/src/media_server/mod.rs` (hand-written HTTP/1.1 on `TcpStream`, `127.0.0.1:0`, UUIDv4 tokens with `tab_id`), plus `release`, `release_tab`, `OPTIONS`, CORS headers, no `Content-Encoding`; started in `setup()` and stopped by `gate.token()`; kept in `AppState`
+- [ ] T016 CSP and Android: in `src-tauri/tauri.conf.json` add `media-src 'self' http://127.0.0.1:*` and `http://127.0.0.1:*` to `img-src` and `connect-src` (both `csp` and `devCsp`); add `src-tauri/gen/android/app/src/main/res/xml/network_security_config.xml` (cleartext only for `127.0.0.1`) and `android:networkSecurityConfig` in `src-tauri/gen/android/app/src/main/AndroidManifest.xml`
+- [ ] T017 `FilesService` skeleton in `src-tauri/src/files/service.rs` (`FilesService::new(state)`, every method takes `&Caller` first) and `src-tauri/src/files/commands.rs`; register every command of this PR in `lib.rs` and in the vault gate's allow list (`src-tauri/src/vault_gate/invoke.rs`, default deny); commands fix `Caller::User`
+- [ ] T018 [P] App shell: `system.files` in `src/lib/wm/apps.ts` (`icon: 'lucide:folder'`, `multiInstance: true`, `tabTitle: 'location'`); `src/lib/files/registry.ts` with the locations of data-model.md (`/device`, `/storage/:id`, query `p`, `open`, `q`, `t`, `s`, `d`); routes in `src/components/wm/appRoutes.ts`; `src/components/apps/FilesApp.vue` (toolbar, sidebar via `useSidebarFrame`, `<WmRouterView/>`); i18n keys `wm.apps.files`, `wm.files.*`, `files.*` in `src/i18n/locales/{de,en}.json`
+- [ ] T019 [P] `scripts/check-files-registry.ts` (locations parse and round-trip, unknown query keys dropped) and `"check:files": "node --test scripts/check-files-*.ts"` in `package.json`
+
+**Checkpoint**: The app opens as an empty shell; the media server answers 404; extension tests green.
+
+---
+
+## Phase 3: User Story 1 - Dateien durchsuchen und ansehen (Priority: P1) 🎯 MVP (PR B)
+
+**Goal**: Browse the device, list/grid with thumbnails, breadcrumbs, open text and images, info view, live updates, restore per tab.
+
+**Independent Test**: spec.md US1; quickstart.md §1.
+
+- [ ] T020 [P] [US1] Tests first in `src-tauri/src/files/local/ops_tests.rs`: `list` returns name, kind, size, mtime, mime (`extensions/mime.rs::for_path`), `hidden` (dot files; Windows attribute under `cfg(windows)`), `symlink`, `no_access` (chmod 000 dir under `cfg(unix)`), `holzi_owned`; `stat` of a missing path → `notFound`
+- [ ] T021 [US1] Implement `src-tauri/src/files/local/ops.rs` (`list`, `stat`) and `files_list`, `files_stat` in `src-tauri/src/files/commands.rs` (blocking thread)
+- [ ] T022 [P] [US1] Drives and places in `src-tauri/src/files/local/places.rs`: Linux/Android roots from `/proc/self/mountinfo` skipping the virtual types of research R6 (and `/` always), macOS `/Volumes/*`, Windows drive letters (`GetLogicalDrives`); Android `/storage/emulated/0` plus `/storage/<XXXX-XXXX>`; free/total space where known (`statvfs`/`GetDiskFreeSpaceExW`, a small own function, reused by T046); tests for the mountinfo parser in `places_tests.rs` (octal escapes, fstype after `-`); command `files_sources` (storages come in US5)
+- [ ] T023 [P] [US1] Pure browser state in `src/lib/files/state.ts`: navigation history (back/forward/up), sort by name/size/modified/type asc/desc (folders first), hidden filter, selection (single, ctrl, shift range); tests in `scripts/check-files-state.ts`
+- [ ] T024 [US1] Components in `src/components/files/`: `Toolbar.vue` (back, forward, up, `ShadcnBreadcrumb`, view toggle, sort menu, hidden toggle, refresh), `Sidebar.vue` (known places, drives), `List.vue` (`useVirtualList` from `@vueuse/core`, columns name/size/modified/type), `Grid.vue` (virtual rows of tiles); lock icon for `no_access`, link marker for `symlink`, read-only badge for `holzi_owned`; empty and loading states
+- [ ] T025 [US1] Device preferences `files.view`, `files.sort`, `files.hidden` through `usePreferences` with device scope (`src/composables/useFilesPrefs.ts`, scope from `useDevice().currentDeviceInfoAsync()`); add their validation to `src-tauri/src/storage/preferences_commands.rs` `validate_value`
+- [ ] T026 [US1] Live updates: `files_watch(path, channel)`/`files_unwatch` in `commands.rs` using `files::local::watch` (desktop and Android); the frontend watches only the open folder, reloads on events (debounced) and on tab activation/window focus (`src/composables/useFilesFolder.ts`)
+- [ ] T027 [P] [US1] Thumbnails, tests first in `src-tauri/src/files/thumbnails_tests.rs`: cache key changes with size/mtime; a JPEG with EXIF orientation 6 comes out rotated; a corrupt file writes `.broken` and is not decoded again; a 30 000 × 30 000 header is refused by `Limits`; longest edge 320 px
+- [ ] T028 [US1] Implement `src-tauri/src/files/thumbnails.rs` (`image` + `fast_image_resize`, cache `<AppCache>/files-thumbnails/`, JPEG quality 80) and `files_thumbnail` returning `tauri::ipc::Response` bytes
+- [ ] T029 [US1] Share the thumbnail queue: move `src/lib/passwords/thumbnails.ts` to `src/lib/images/thumbnailQueue.ts` (unchanged behavior, passwords import the new path, `check:passwords` green); `src/composables/useFilesThumbnails.ts` requests only visible entries and revokes object URLs when the tab closes
+- [ ] T030 [P] [US1] Viewer dispatch in `src/lib/files/viewerKind.ts` (MIME/extension → `text | pdf | image | video | audio | info`) with tests in `scripts/check-files-viewer.ts`
+- [ ] T031 [P] [US1] Text: tests in `src-tauri/src/files/local/text_tests.rs` (≤ 5 MB returned whole, larger cut at 5 MB with `truncated`, NUL bytes in the first 8 KiB → `binary`, invalid UTF-8 replaced), then `src-tauri/src/files/local/text.rs` and `files_read_text`
+- [ ] T032 [US1] `files_open(source, path, tabId)` in `commands.rs`: kind from T030's table mirrored in Rust (`files/kind.rs`), registers a `LocalFileSource` with the media server for `image|video|audio|pdf`, returns `{ kind, url?, entry }`; `files_release`, `files_release_tab`; the tab-close path in `src/stores/windowManager.ts` calls `files_release_tab` for `system.files` tabs
+- [ ] T033 [US1] Viewer components in `src/components/files/viewer/`: `ViewerFrame.vue` (overlay inside the tab, close, prev/next within the folder), `TextViewer.vue`, `ImageViewer.vue` (photoswipe like `src/components/passwords/AttachmentLightbox.vue`, zoom), `InfoView.vue` (name, type, size, mtime, "Mit System-App öffnen" → `files_open_system` via the opener plugin)
+- [ ] T034 [US1] Session restore: the tab location carries `p` and `open`; on restore `FilesApp` re-opens the file through `files_open` (share URLs are never stored); check in `scripts/check-files-registry.ts`
+- [ ] T035 [US1] E2E scenario `scripts/e2e/scenarios/files-basic.test.ts` part 1: temp folder with sub folders, `notiz.txt`, `foto.png`; list and grid, thumbnail present, open text and image, `touch` a file → appears, two tabs restored after restart
+- [ ] T036 [US1] Run `cargo fmt --check`, `pnpm lint:rust`, `cargo test files:: extensions::fs`, `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm check:files`, `pnpm check:passwords`; revert `InstanceInfo.ts`; commit, open PR B
+
+**Checkpoint**: US1 complete and shippable (MVP).
+
+---
+
+## Phase 4: User Story 2 - Video und Audio abspielen (Priority: P1) (PR C)
+
+**Goal**: Video, audio and PDF stream through the media server with seeking; flat memory.
+
+**Independent Test**: spec.md US2; quickstart.md §2.
+
+- [ ] T037 [P] [US2] `src/components/files/viewer/MediaViewer.vue`: `<video>`/`<audio>` with native controls and the share URL; the element's `error` event switches to `InfoView`
+- [ ] T038 [P] [US2] PDF: add `pdfjs-dist` (`^6.4`) to `package.json`; `src/components/files/viewer/PdfViewer.vue` after haex-vault `src/components/haex/system/files/PdfViewer.vue` (page navigation, zoom), loaded lazily, worker via `pdfjs-dist/build/pdf.worker.min.mjs?url`, `rangeChunkSize` 1 MiB; copy `cmaps/` and `standard_fonts/` into `public/pdfjs/` at build time (Nuxt/Vite config) and pass `cMapUrl`, `standardFontDataUrl`; no `'wasm-unsafe-eval'`
+- [ ] T039 [US2] Range logging: `tracing::debug!` per request in `media_server.rs` (method, token prefix, range), used by the E2E check
+- [ ] T040 [US2] E2E `scripts/e2e/scenarios/files-basic.test.ts` part 2: an MP3 plays; an MP4 (generated small fixture) plays, seek to the middle, the log shows a `Range` request with a non-zero start; a PDF opens and page 2 renders; close the tab, the URL answers 404
+- [ ] T041 [US2] Manual quickstart §2 on Linux, Windows and Android (SC-002, SC-003, SC-008); record results in the PR description
+- [ ] T042 [US2] Checks as T036; commit, open PR C
+
+---
+
+## Phase 5: User Story 3 - Dateien verwalten (Priority: P2) (PR D)
+
+**Goal**: Create, rename, copy, move, delete, conflicts, transfers without half files, drop from the OS.
+
+**Independent Test**: spec.md US3; quickstart.md §3.
+
+- [ ] T043 [US3] Dependency: `trash = "5.2"` under `[target.'cfg(not(target_os = "android"))'.dependencies]` in `src-tauri/Cargo.toml`
+- [ ] T044 [P] [US3] Tests first in `src-tauri/src/files/local/edit_tests.rs`: create folder (name exists → `exists`), rename (exists → `exists`, invalid characters), changing anything in an own place → `holziOwned`
+- [ ] T045 [US3] Implement `src-tauri/src/files/local/edit.rs` and `files_create_folder`, `files_rename`
+- [ ] T046 [P] [US3] Transfer tests first in `src-tauri/src/files/transfer/local_tests.rs`: copy writes `.<name>.holzi-part-<uuid>` and renames at the end; cancel mid-file leaves no part file; conflict `replace`/`keepBoth` (name "x (2).txt")/`skip` and "for all"; copy a folder into itself or a sub folder → `intoItself` before start; move on the same filesystem is a `rename`; move across filesystems is copy + delete; not enough free space → `noSpace` before start; delete on desktop goes to the trash (`cfg(not(target_os = "android"))`), on Android permanent
+- [ ] T047 [US3] `src-tauri/src/files/transfer/mod.rs` (`TransferManager`: ids, state machine of data-model.md, events over `tauri::ipc::Channel<TransferEvent>`, `gate.spawn`, per-transfer `CancellationToken` child of `gate.token()`, conflict wait) and `src-tauri/src/files/transfer/local.rs`; commands `files_transfer_start`, `files_transfer_answer`, `files_transfer_cancel`, `files_transfer_retry`
+- [ ] T048 [US3] Vault close while a transfer runs: test in `transfer/local_tests.rs` that cancelling the gate token removes the part file
+- [ ] T049 [P] [US3] Pure clipboard and selection actions in `src/lib/files/clipboard.ts` (cut/copy/paste within holzi, paste target rules) with tests in `scripts/check-files-clipboard.ts`
+- [ ] T050 [US3] UI: context menu (`ShadcnContextMenu`, model in `src/lib/files/menus.ts`), new folder and rename dialogs, delete confirmation (always on Android and storages, with count), conflict dialog (`ShadcnAlertDialog`, "für alle übernehmen"), `TransferBar.vue` (progress, cancel, retry), drag within holzi (HTML5, pattern of `src/lib/passwords/dnd.ts`); mutations disabled for `holzi_owned`
+- [ ] T051 [US3] Drop from the OS: `onDragDropEvent` in `src/components/files/DropTarget.vue` (pattern `src/components/passwords/Attachments.vue:108-140`, position check per `devicePixelRatio`) → `files_import_dropped` (a copy transfer)
+- [ ] T052 [US3] E2E `files-basic.test.ts` part 3: create, rename (clash refused), copy with conflict "keep both", cancel a large copy (no part file), copy into itself refused, delete (desktop: gone from the folder)
+- [ ] T053 [US3] Checks as T036; commit, open PR D
+
+---
+
+## Phase 6: User Story 4 - Suchen und filtern (Priority: P2) (PR E)
+
+**Goal**: Live fuzzy search from the current folder with type/size/date filters.
+
+**Independent Test**: spec.md US4; quickstart.md §4.
+
+- [ ] T054 [US4] Dependency: `frizbee = "0.13"` in `src-tauri/Cargo.toml`
+- [ ] T055 [P] [US4] Tests first in `src-tauri/src/files/search_tests.rs`: `noitz` finds `notiz.txt` (one typo), `max_typos` 1 up to 5 characters else 2; a new search cancels the old one (token); a symlink loop is not followed; directories without access are skipped silently; the walk does not leave the starting device (test the decision function with fake `dev` values); agent limits produce `truncated: true` at 500 hits; filters by type/size/date
+- [ ] T056 [US4] Implement `src-tauri/src/files/search.rs` (`walkdir` with `same_file_system(true)`, `follow_links(false)`, hidden entries per preference, own places omitted for agent callers, top-K by score, hits batched over `Channel<SearchEvent>` every 100 ms) and `files_search_start`, `files_search_cancel`
+- [ ] T057 [P] [US4] Pure filters for the open folder in `src/lib/files/filters.ts` (same categories as Rust: image, video, audio, document, text) with tests in `scripts/check-files-filters.ts`
+- [ ] T058 [US4] UI: search field in `Toolbar.vue` (debounced 200 ms, cancels the previous search), filter popover, results list with relative path and "im Ordner zeigen"; location query `q`, `t`, `s`, `d`
+- [ ] T059 [US4] E2E `files-basic.test.ts` part 4: typo search, type filter, symlink loop terminates
+- [ ] T060 [US4] Checks as T036; commit, open PR E
+
+---
+
+## Phase 7: User Story 5 - Einen S3-Speicher durchsuchen (Priority: P2) (PR F)
+
+**Goal**: Storages from 038 as sources: browse, stream, upload, download.
+
+**Independent Test**: spec.md US5; quickstart.md §5.
+
+- [ ] T061 [P] [US5] `wiremock` tests first in `src-tauri/src/remote_storage/s3_tests.rs` (or a new `s3_ext_tests.rs` if the file passes 500 lines): `head` returns size; `get_range` sends `Range: bytes=N-M`; `get_to_writer` streams without buffering the body; `list_dir` sends `delimiter=/` and parses `CommonPrefixes` across pages; multipart create/upload part/complete and `abort`; `copy` sends `x-amz-copy-source`; DNS pinning and "no redirects" unchanged
+- [ ] T062 [US5] Extend `RemoteStore` in `src-tauri/src/remote_storage/mod.rs` and implement in `src-tauri/src/remote_storage/s3.rs` plus new `s3_multipart.rs`/`s3_list.rs` (keep each file < 500 lines); extend `FakeStore` in `remote_storage/test_support.rs` with the same methods; confirm rusty-s3 0.10 supports each action (research R5) and record deviations
+- [ ] T063 [P] [US5] Tests first in `src-tauri/src/files/storage_source_tests.rs` against `FakeStore`: prefixes appear as folders, create folder writes `name/`, rename a file is copy + delete, rename a folder copies every object under the prefix, stat via `head`; credentials never appear in an error (FR-038)
+- [ ] T064 [US5] `src-tauri/src/files/storage_source.rs` (access via `StorageService::access_of`, `Caller::Internal { feature: "storage" }` stays inside `remote_storage`), `S3StreamingSource` in `streaming.rs` (`get_range` per request), `files_sources` lists storages, `files_open`/`files_thumbnail` for storages (thumbnail: download to a temp file up to 50 MB, else `tooLarge`)
+- [ ] T065 [US5] Transfers across sources in `src-tauri/src/files/transfer/s3.rs`: upload < 8 MiB as one `put`, larger as multipart with 8 MiB parts, `abort` on cancel or failure; download streamed into the part file; same connection → server-side `copy`; retries 1 s/2 s/4 s on network errors then `failed`; tests in `transfer/s3_tests.rs` with `FakeStore` (`fail_once`)
+- [ ] T066 [US5] Search on storages in `search.rs`: prefix walk via `list_dir` with progress events; tests in `search_tests.rs`
+- [ ] T067 [US5] UI: storages in `Sidebar.vue`, route `/storage/:id`, refresh button and reload on tab activation, error view for `AccessDenied`/credentials with a link to the storage settings (`wm.app.open` of settings at the storage location of 038)
+- [ ] T068 [US5] Manual quickstart §5 against RustFS (or an E2E scene if the rig runs RustFS, as `scripts/e2e/scenarios/extension-storage.test.ts` does); record results in the PR
+- [ ] T069 [US5] Checks as T036 plus `cargo test remote_storage::`; commit, open PR F
+
+---
+
+## Phase 8: User Story 6 - Ein Agent sucht und liest Dateien (Priority: P2) (PR G)
+
+**Goal**: `files.*` actions in Rust (ADR 0011), agent permissions, readable formats, images to models, `files.show`.
+
+**Independent Test**: spec.md US6; quickstart.md §6.
+
+- [ ] T070 [US6] Dependencies: `pdf-extract = "0.12"`, `calamine = "0.36"`, `zip = "8"`, `quick-xml = "0.41"` in `src-tauri/Cargo.toml`; `cargo check` host and Android
+- [ ] T071 [P] [US6] ADR 0011 in the catalog: `runner?: 'native'` on `ActionDefinition` in `src/lib/actions/types.ts`, passed through `toAgentActionDef` (`src/lib/actions/agentTools.ts`) to `set_agent_actions`; in `src-tauri/src/chat/action_commands.rs` native definitions become `NativeActionTool` (new `src-tauri/src/chat/tools/native_action.rs`, source `action`, risk class from `effect` like `ActionTool`), executors looked up by id in a registry filled at startup; a native id without executor or an executor without definition is a registration error; tests in `action_commands_tests.rs`
+- [ ] T072 [P] [US6] `scripts/check-agent-actions.ts`: stub native `read` actions in the harness instead of `catalogRunner`; `files.*` are not in `CORE_AGENT_TOOLS`; update the eval tool snapshot `src-tauri/src/chat/eval/tools.json`
+- [ ] T073 [US6] Catalog `src/lib/actions/filesActions.ts` with the actions of contracts/agent-actions.md (descriptions written for the model, JSON schemas, `runner: 'native'` except `files.show`); scopes `files.read`, `files.write` in `src/lib/actions/scopes.ts`; titles `actions.files.*` and `actions.scopes.files*` in `src/i18n/locales/{de,en}.json`
+- [ ] T074 [P] [US6] Migration `0029_agent_file_permissions` in `src-tauri/src/identity/migrations_agent_files.rs` (data-model.md), registered in `migrations.rs`, `HOLZI_TRIGGER_VERSION` raised; test in `migrations_agent_files_tests.rs`
+- [ ] T075 [US6] `src-tauri/src/files/permissions.rs` (read/write rows, deterministic ids, evaluation through `files::access`); `remote_storage::store::remove_storage` also deletes `kind='storage'` rows of that storage; tests in `permissions_tests.rs`
+- [ ] T076 [US6] Permission prompt bridge in `src-tauri/src/files/agent/prompt.rs` (pattern `chat/action_bridge.rs`): event `files-agent-permission-request`, answer via `files_agent_permission_answer`, 60 s timeout or no window → deny for this call (not stored); answers `read`/`readWrite`/`deny` are stored; frontend dialog `src/components/files/AgentPermissionDialog.vue` mounted at app level; tests for timeout and stored answers
+- [ ] T077 [US6] Settings view for agent file permissions (FR-031b): category or row in the settings app (`src/lib/settings/registry.ts`, `src/components/settings/`) listing per agent "Dateien des Geräts" and each storage with its status, revoke and change; commands `files_agent_permissions`, `files_agent_permission_set`
+- [ ] T078 [P] [US6] Text extraction, tests first in `src-tauri/src/files/extract/pdf_tests.rs`, `office_tests.rs` with small fixtures committed under `src-tauri/tests/fixtures/files/` (a text PDF, an image-only PDF, a password-less encrypted PDF, docx, odt, xlsx with two sheets, ods): text found, sheet names present, scanned PDF → hint, panicking input caught, 50 MB input limit, 200 000 character output limit with `truncated`
+- [ ] T079 [US6] Implement `src-tauri/src/files/extract/{pdf,office}.rs` (`pdf-extract` in `catch_unwind` on a blocking thread, scanned heuristic of research R8; `calamine::open_workbook_auto`; docx `word/document.xml` and odt `content.xml` with `zip` + `quick-xml`)
+- [ ] T080 [P] [US6] Images in tool results, tests first: `ToolResult.images` in `src-tauri/src/chat/tools/mod.rs` (default empty); in `src-tauri/src/adapters/request.rs` a tool result with images becomes a content array of text and `image` blocks when `capabilities.accepted_attachment_kinds` contains images, else the text plus a hint; persisted message keeps text plus the placeholder only (`chat/turn/tool_round.rs`); local adapter drops images with the hint; tests in `request_tests.rs` and the tool-round tests
+- [ ] T081 [US6] Image for agents in `src-tauri/src/files/extract/image.rs`: decode with orientation, longest edge 1568 px, re-encode JPEG until ≤ 5 MB; tests in `image_tests.rs`
+- [ ] T082 [US6] Executors in `src-tauri/src/files/agent/exec.rs` for `files.sources`, `list`, `stat`, `search`, `read`, `folder.create`, `copy`, `rename`, `move`, `delete` with `Caller::BuiltinAgent` (contracts/agent-actions.md: own places blocked and omitted, storages without grant omitted, `onConflict`, limits, `files_blocked`/`files_not_granted` errors); tests in `exec_tests.rs` including the SC-005 corpus end to end
+- [ ] T083 [US6] `files.show`: frontend handler in `src/stores/filesActionHandlers.ts` calls `files_agent_check` then `wm.openApp('system.files', at)` with `p` and `open`; registered with the other action handlers
+- [ ] T084 [US6] E2E or manual: if the E2E rig has a scripted model for chat scenarios (see `scripts/e2e/lib`), add `scripts/e2e/scenarios/files-agent.test.ts` (search, read PDF, read vault file → blocked, storage prompt); otherwise run quickstart §6 by hand with an Anthropic and a local model and record it in the PR
+- [ ] T085 [US6] Checks as T036 plus `pnpm check:agent-actions`, `cargo test chat::`; commit, open PR G
+
+---
+
+## Phase 9: User Story 7 - Alle Dateien auf Android (Priority: P3) (PR H)
+
+**Goal**: "Zugriff auf alle Dateien" with explanation and recheck.
+
+**Independent Test**: spec.md US7; quickstart.md §7.
+
+- [ ] T086 [P] [US7] Manifest `src-tauri/gen/android/app/src/main/AndroidManifest.xml`: `MANAGE_EXTERNAL_STORAGE`, `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE` with `android:maxSdkVersion="29"`
+- [ ] T087 [US7] Plugin `src-tauri/plugins/holzi-android`: Kotlin commands `allFilesAccessStatus` (`Environment.isExternalStorageManager()` on API 30+, runtime permission on 26–29) and `requestAllFilesAccess` (`ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION` with `package:` URI, fallback `ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION` on `ActivityNotFoundException`; runtime request on 26–29); `build.rs` `COMMANDS`, plugin permissions, Rust wrappers in `src/android.rs`; app capability allows them
+- [ ] T088 [US7] Commands `files_all_access`, `files_request_all_access` (desktop: always granted, request is a no-op)
+- [ ] T089 [US7] UI `src/components/files/AllFilesAccess.vue`: explanation and button instead of the list when not granted; recheck on window focus/visibility change
+- [ ] T090 [US7] `pnpm check:android-versions`; build an Android release; manual quickstart §7; commit, open PR H
+
+---
+
+## Phase 10: Polish & Cross-Cutting Concerns
+
+- [ ] T091 [P] Every new Rust and Vue file under 500 lines (`wc -l`), split where needed
+- [ ] T092 [P] Update `plans/README.md` row 044 status after each merged PR
+- [ ] T093 Full quickstart run on Linux; §2 and §7 on Windows and Android; note results in the last PR
+- [ ] T094 [P] Spec bookkeeping: mark the checklist and spec status after PR H; open questions found during implementation go back to `/speckit-clarify`, not into code
+
+---
+
+## Dependencies & Execution Order
+
+- **Phase 1** → **Phase 2** → stories. T007 (spike) gates T014–T016.
+- **US1** (P1) needs Phase 2 only. **US2** needs US1 (viewer frame, `files_open`).
+- **US3** needs US1. **US4** needs US1. **US5** needs US3 (transfers) and US4 (search on storages).
+- **US6** needs US4 (search); its storage part needs US5. **US7** needs US1.
+- Within a story: tests first, then Rust core, then commands, then UI, then E2E, then checks.
+
+### Parallel Opportunities
+
+- Phase 1: T001–T003 together.
+- Phase 2: T009, T013, T018, T019 alongside the moves T010–T011; T014 after T007.
+- US1: T020, T022, T023, T027, T030, T031 together.
+- US3: T044, T046, T049 together. US4: T055, T057 together. US5: T061, T063 together.
+- US6: T071, T072, T074, T078, T080 together; T082 after T075, T079, T081.
+
+### Parallel Example: User Story 1
+
+```text
+T020 ops tests (Rust)      T022 drives/places (Rust)   T023 browser state (TS)
+T027 thumbnail tests (Rust) T030 viewer dispatch (TS)  T031 text tests (Rust)
+```
+
+## Implementation Strategy
+
+1. **MVP**: Phase 1, Phase 2, US1 → PR B: browse the device, thumbnails, text and images. Demo.
+2. **P1 complete**: US2 → PR C: video, audio, PDF.
+3. **P2**: US3 → US4 → US5 → US6, each its own PR, each demoable.
+4. **P3**: US7 → PR H.
