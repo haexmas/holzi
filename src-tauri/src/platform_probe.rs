@@ -37,6 +37,14 @@ const LOOPBACK_SOURCE: &str = "http://127.0.0.1:*";
 
 static REPORTED: AtomicBool = AtomicBool::new(false);
 
+/// Every request line the health server received, so a failed fetch shows whether the web view
+/// reached the server at all (and whether it sent a preflight).
+static SEEN: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+fn seen() -> Vec<String> {
+    SEEN.lock().map(|lines| lines.clone()).unwrap_or_default()
+}
+
 /// Whether this run was asked to probe.
 pub fn requested() -> bool {
     #[cfg(target_os = "android")]
@@ -74,6 +82,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) -> std::io::Result<u16> {
             let line = result_line(&json!({
                 "ok": false,
                 "steps": [{ "name": "report", "ok": false, "detail": "no report from the window" }],
+                "serverSaw": seen(),
             }));
             emit(&app, &line);
             app.exit(2);
@@ -184,6 +193,7 @@ pub fn platform_probe_report<R: Runtime>(app: AppHandle<R>, report: Report) {
         "steps": steps,
         "userAgent": report.user_agent,
         "platform": std::env::consts::OS,
+        "serverSaw": seen(),
     }));
     emit(&app, &line);
     app.exit(code);
@@ -219,6 +229,9 @@ fn serve(mut stream: TcpStream) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut request_line = String::new();
     reader.read_line(&mut request_line)?;
+    if let Ok(mut lines) = SEEN.lock() {
+        lines.push(request_line.trim_end().to_owned());
+    }
     // Drain the headers; the probe needs none of them.
     loop {
         let mut header = String::new();
