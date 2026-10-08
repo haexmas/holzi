@@ -24,5 +24,5 @@ haex-files installiert.
     deaktiviert mit Grund.
 13. **Allgemeine Rückfrage (US3)**: „mach das dunkler“ → Rückfrage mit Möglichkeiten (z. B.
     dunkles Farbschema); wählen → wird umgesetzt. Kleines Modell darf hier scheitern (SC-006: 7/10).
-14. **Modellprüfung (FR-017)**: `cargo test --test model_tool_eval` gegen Qwen3-4B; Quoten für
+14. **Modellprüfung (FR-017)**: `cargo test --manifest-path src-tauri/Cargo.toml --test model_tool_eval -- --ignored --nocapture` gegen Qwen3-4B; Quoten für
     `change` (Tippfehler) und `clarify` notieren.
