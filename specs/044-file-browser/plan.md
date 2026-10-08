@@ -111,7 +111,7 @@ docs/adr/0011-native-catalog-actions.md
 
 ```text
 src-tauri/src/
-├── files/                          # neu
+├── files/                          # besteht seit Spec 043 (gewählte Dateien); 044 ergänzt
 │   ├── mod.rs                      # FilesService, Caller, SourceRef, Entry
 │   ├── access.rs                   # rein: Sperre, Berechtigungen der Agents auswerten + _tests
 │   ├── local/                      # aus extensions/fs gezogen + neu
@@ -130,7 +130,7 @@ src-tauri/src/
 │   ├── extract/                    # pdf.rs, office.rs, image.rs (für Agents)
 │   ├── agent/                      # NativeActionTool-Ausführer, Rückfrage-Brücke
 │   ├── permissions.rs              # Tabelle agent_file_permissions
-│   └── commands.rs                 # Tauri-Commands (contracts/tauri-commands.md)
+│   └── browser_commands.rs         # Tauri-Commands (contracts/tauri-commands.md); `commands.rs` und `picked.rs` gehören Spec 043
 ├── extensions/fs/                  # nutzt files::local
 ├── remote_storage/{mod,s3}.rs      # head, Range, Stream, list_dir, Multipart, copy
 ├── chat/tools/{mod,native_action}.rs, chat/action_commands.rs   # ToolResult.images, NativeActionTool
