@@ -37,6 +37,8 @@ impl Recorded {
 struct FakeDesktop {
     shown: Mutex<Vec<(NotificationSpec, Option<Respond>)>>,
     closed: Arc<Mutex<Vec<usize>>>,
+    /// The person refused the system's notification permission.
+    refused: std::sync::atomic::AtomicBool,
 }
 
 struct FakeShown {
@@ -53,6 +55,10 @@ impl ShownNotification for FakeShown {
 impl Desktop for FakeDesktop {
     fn open_url(&self, _url: &str) -> Result<(), String> {
         Ok(())
+    }
+
+    fn notifications_allowed(&self) -> bool {
+        !self.refused.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     fn show_notification(
@@ -385,6 +391,37 @@ fn malformed_notifications_are_refused_before_anything_shows() {
     assert_eq!(
         s.desktop.shown.lock().unwrap()[0].0.icon,
         Some((b"png".to_vec(), "png"))
+    );
+}
+
+#[test]
+fn a_refused_system_permission_keeps_the_message_inside_holzi() {
+    let s = setup();
+    s.allow(&s.notes);
+    s.desktop
+        .refused
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+
+    let answer = show_call(
+        &s.notes,
+        json!({ "title": "Standup", "body": "in 5 Minuten" }),
+    );
+
+    assert!(
+        answer.unwrap()["id"].is_string(),
+        "the extension is not told off"
+    );
+    assert!(
+        s.desktop.shown.lock().unwrap().is_empty(),
+        "the system shows nothing"
+    );
+    assert_eq!(
+        s.recorded.named(IN_APP),
+        vec![json!({
+            "extensionId": s.notes.session.extension_id.to_string(),
+            "title": "Standup",
+            "body": "in 5 Minuten",
+        })]
     );
 }
 

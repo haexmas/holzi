@@ -1835,6 +1835,9 @@
     }
   },
   "extensions": {
+    "notification": {
+      "open": "Öffnen"
+    },
     "install": {
       "errors": {
         "archive_too_large": "Die Datei ist zu groß.",

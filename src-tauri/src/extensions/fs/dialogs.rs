@@ -3,6 +3,11 @@
 //! when opening and reading and writing when saving, until the frame closes. `save_file` writes in
 //! the same call; `open_file` and `show_image` hand a copy in holzi's scratch folder, named only
 //! by its file name, to the system's viewer.
+//!
+//! The open and save dialogs hand over a chosen file ([`PickedFile`], spec 043 FR-022): a path on a
+//! desktop, a `content://` address of a document provider on Android. The frame gets what the
+//! system named; for an address it reads and writes exactly that document through the file plugin
+//! and never learns a path.
 
 use std::path::{Path, PathBuf};
 
@@ -11,9 +16,10 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_dialog::DialogExt;
 
-use super::{resolve, touches_denied, Access, Reach};
+use super::{resolve, touches_denied, Access, FsEnvironment, Reach};
 use crate::extensions::bridge::dispatch::CallContext;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
+use crate::files::picked::{self, PickedFile};
 
 pub const MODULE: &str = module_path!();
 
@@ -30,9 +36,9 @@ pub struct DialogRequest {
 
 /// The system's file dialogs and viewer. holzi's own is [`TauriDialogs`]; tests use a fake.
 pub trait FileDialogs: Send + Sync {
-    fn save(&self, request: DialogRequest) -> Option<PathBuf>;
+    fn save(&self, request: DialogRequest) -> Option<PickedFile>;
     fn pick_folder(&self, request: DialogRequest) -> Option<PathBuf>;
-    fn pick_files(&self, request: DialogRequest) -> Option<Vec<PathBuf>>;
+    fn pick_files(&self, request: DialogRequest) -> Option<Vec<PickedFile>>;
     /// Opens `path` with the system's default program.
     fn open(&self, path: &Path) -> Result<(), String>;
 }
@@ -55,7 +61,7 @@ impl<R: Runtime> TauriDialogs<R> {
 }
 
 impl<R: Runtime> FileDialogs for TauriDialogs<R> {
-    fn save(&self, request: DialogRequest) -> Option<PathBuf> {
+    fn save(&self, request: DialogRequest) -> Option<PickedFile> {
         let mut builder = self.builder(&request);
         if let Some(default) = &request.default_path {
             let default = Path::new(default);
@@ -68,7 +74,7 @@ impl<R: Runtime> FileDialogs for TauriDialogs<R> {
                 _ => builder = builder.set_file_name(default.to_string_lossy()),
             }
         }
-        builder.blocking_save_file()?.into_path().ok()
+        Some(PickedFile(builder.blocking_save_file()?.to_string()))
     }
 
     #[cfg(desktop)]
@@ -87,7 +93,7 @@ impl<R: Runtime> FileDialogs for TauriDialogs<R> {
         None
     }
 
-    fn pick_files(&self, request: DialogRequest) -> Option<Vec<PathBuf>> {
+    fn pick_files(&self, request: DialogRequest) -> Option<Vec<PickedFile>> {
         let mut builder = self.builder(&request);
         if let Some(dir) = &request.default_path {
             builder = builder.set_directory(dir);
@@ -97,7 +103,12 @@ impl<R: Runtime> FileDialogs for TauriDialogs<R> {
         } else {
             vec![builder.blocking_pick_file()?]
         };
-        chosen.into_iter().map(|p| p.into_path().ok()).collect()
+        Some(
+            chosen
+                .into_iter()
+                .map(|p| PickedFile(p.to_string()))
+                .collect(),
+        )
     }
 
     #[cfg(desktop)]
@@ -149,6 +160,25 @@ fn bytes(params: &Value, max: usize) -> Result<Vec<u8>, BridgeError> {
         .collect()
 }
 
+/// A chosen file as the system named it: a path, or a document of a provider that has none.
+enum Chosen {
+    Path(PathBuf),
+    Document(PickedFile),
+}
+
+fn classify(environment: &FsEnvironment, file: PickedFile) -> Result<Chosen, BridgeError> {
+    match picked::resolve(environment.opener.as_ref(), &file) {
+        Ok(tauri_plugin_fs::FilePath::Path(path)) => Ok(Chosen::Path(path)),
+        Ok(tauri_plugin_fs::FilePath::Url(_)) => Ok(Chosen::Document(file)),
+        Err(error) => Err(invalid(&error.to_string())),
+    }
+}
+
+/// The error of reading or writing a chosen document, for the frame.
+pub(super) fn document_failed(error: crate::error::HolziError) -> BridgeError {
+    failed(error.to_string())
+}
+
 /// The largest answer of the caller, which also bounds what it may hand over.
 fn max_bytes(ctx: &CallContext) -> Result<usize, BridgeError> {
     let id = ctx.session.extension_id;
@@ -190,6 +220,16 @@ pub fn save_file(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError
     };
     let Some(chosen) = environment.dialogs.save(request) else {
         return Ok(Value::Null);
+    };
+    let chosen = match classify(&environment, chosen)? {
+        Chosen::Path(path) => path,
+        Chosen::Document(file) => {
+            picked::write(environment.opener.as_ref(), &file, &data).map_err(document_failed)?;
+            ctx.host
+                .fs
+                .grant_document(&ctx.session.frame, file.clone(), Access::Write);
+            return Ok(json!({ "path": file.0, "success": true }));
+        }
     };
     let path = resolve(&chosen.to_string_lossy())?;
     if touches_denied(&environment, &path, Reach::Path) {
@@ -369,6 +409,16 @@ pub fn select_file(ctx: &CallContext, params: &Value) -> Result<Value, BridgeErr
     };
     let mut paths = Vec::with_capacity(chosen.len());
     for file in chosen {
+        let file = match classify(&environment, file)? {
+            Chosen::Path(path) => path,
+            Chosen::Document(file) => {
+                ctx.host
+                    .fs
+                    .grant_document(&ctx.session.frame, file.clone(), Access::Read);
+                paths.push(file.0);
+                continue;
+            }
+        };
         let path = resolve(&file.to_string_lossy())?;
         if touches_denied(&environment, &path, Reach::Path) {
             return Err(super::protected());
@@ -380,3 +430,7 @@ pub fn select_file(ctx: &CallContext, params: &Value) -> Result<Value, BridgeErr
     }
     Ok(json!(paths))
 }
+
+#[cfg(test)]
+#[path = "dialogs_tests.rs"]
+mod tests;

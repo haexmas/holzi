@@ -8,16 +8,27 @@ use tauri_plugin_fs::FilePath;
 
 use super::picked::{Opener, PickedFile};
 
-/// Opens paths with `std::fs`; `roots` stands in for a device without free paths.
+/// Opens paths with `std::fs`; `roots` stands in for a device without free paths. With
+/// `documents`, an address `content://…/<name>` stands for the file `<name>` in that folder, as a
+/// document provider would hand it over.
 #[derive(Clone, Default)]
 pub struct PathOpener {
     pub roots: Option<Vec<PathBuf>>,
+    pub documents: Option<PathBuf>,
 }
 
 impl Opener for PathOpener {
     fn open(&self, file: FilePath, write: bool) -> io::Result<File> {
-        let FilePath::Path(path) = file else {
-            return Err(io::Error::other("no document provider in tests"));
+        let path = match (file, &self.documents) {
+            (FilePath::Path(path), _) => path,
+            (FilePath::Url(url), Some(folder)) if url.scheme() == "content" => {
+                let name = url
+                    .path_segments()
+                    .and_then(|mut s| s.next_back())
+                    .unwrap_or("");
+                folder.join(name)
+            }
+            _ => return Err(io::Error::other("no document provider in tests")),
         };
         if write {
             File::create(path)

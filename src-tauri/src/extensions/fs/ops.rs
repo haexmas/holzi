@@ -9,9 +9,11 @@ use std::time::UNIX_EPOCH;
 use base64::Engine;
 use serde_json::{json, Map, Value};
 
+use super::dialogs::document_failed;
 use super::{authorize, Access, Reach};
 use crate::extensions::bridge::dispatch::CallContext;
 use crate::extensions::error::{BridgeError, ExtensionErrorCode};
+use crate::files::picked;
 
 pub const MODULE: &str = module_path!();
 
@@ -55,7 +57,18 @@ fn too_large() -> BridgeError {
 /// device or a pipe has no size and might never end. The read stops past the limit, so a file that
 /// grows after the size check cannot get through either.
 pub fn read_file(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
-    let path = authorize(ctx, path_param(params, "path")?, Access::Read, Reach::Path)?;
+    let raw = path_param(params, "path")?;
+    if let Some(file) = ctx.host.fs.document(&ctx.session.frame, raw, Access::Read) {
+        // A chosen document without a path (spec 043 FR-022); the provider's size is not trusted.
+        let opener = ctx.host.fs.environment()?.opener.clone();
+        let max = max_bytes(ctx)?;
+        let data = picked::read(opener.as_ref(), &file, max).map_err(document_failed)?;
+        if u64::try_from(data.len()).unwrap_or(u64::MAX) > max {
+            return Err(too_large());
+        }
+        return Ok(json!(base64::engine::general_purpose::STANDARD.encode(data)));
+    }
+    let path = authorize(ctx, raw, Access::Read, Reach::Path)?;
     let metadata = std::fs::metadata(&path).map_err(|e| failed("read", e))?;
     if !metadata.is_file() {
         return Err(invalid("path is not a file"));
@@ -76,7 +89,12 @@ pub fn read_file(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError
 
 /// `{path, data}` with base64 contents.
 pub fn write_file(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
-    let path = authorize(ctx, path_param(params, "path")?, Access::Write, Reach::Path)?;
+    let raw = path_param(params, "path")?;
+    let document = ctx.host.fs.document(&ctx.session.frame, raw, Access::Write);
+    let path = match document {
+        Some(_) => None,
+        None => Some(authorize(ctx, raw, Access::Write, Reach::Path)?),
+    };
     let data = params
         .get("data")
         .and_then(Value::as_str)
@@ -84,7 +102,12 @@ pub fn write_file(ctx: &CallContext, params: &Value) -> Result<Value, BridgeErro
     let data = base64::engine::general_purpose::STANDARD
         .decode(data)
         .map_err(|_| invalid("data must be base64"))?;
-    std::fs::write(&path, data).map_err(|e| failed("write", e))?;
+    if let Some(file) = document {
+        let opener = ctx.host.fs.environment()?.opener.clone();
+        picked::write(opener.as_ref(), &file, &data).map_err(document_failed)?;
+    } else if let Some(path) = path {
+        std::fs::write(&path, data).map_err(|e| failed("write", e))?;
+    }
     Ok(Value::Null)
 }
 
@@ -133,7 +156,16 @@ pub fn remove(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
 
 /// `{path}` → whether it exists.
 pub fn exists(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
-    let path = authorize(ctx, path_param(params, "path")?, Access::Read, Reach::Path)?;
+    let raw = path_param(params, "path")?;
+    if ctx
+        .host
+        .fs
+        .document(&ctx.session.frame, raw, Access::Read)
+        .is_some()
+    {
+        return Ok(json!(true));
+    }
+    let path = authorize(ctx, raw, Access::Read, Reach::Path)?;
     Ok(json!(path.exists()))
 }
 

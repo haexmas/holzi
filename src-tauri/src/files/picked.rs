@@ -103,7 +103,7 @@ fn resolve_existing(path: &Path) -> Option<PathBuf> {
 
 /// The chosen file as the file plugin takes it. Only provider addresses (`content:`) and paths
 /// are accepted; a `file:` address counts as its path, so it cannot pass the path check.
-pub fn resolve(opener: &impl Opener, file: &PickedFile) -> Result<FilePath> {
+pub fn resolve(opener: &(impl Opener + ?Sized), file: &PickedFile) -> Result<FilePath> {
     let parsed = match FilePath::from_str(&file.0) {
         Ok(parsed) => parsed,
         Err(never) => match never {},
@@ -147,14 +147,14 @@ fn write_failed(error: io::Error) -> HolziError {
 }
 
 /// Opens the chosen file for reading; large files (a vault, a model) are read from this.
-pub fn open_read(opener: &impl Opener, file: &PickedFile) -> Result<File> {
+pub fn open_read(opener: &(impl Opener + ?Sized), file: &PickedFile) -> Result<File> {
     let path = resolve(opener, file)?;
     opener.open(path, false).map_err(unreadable)
 }
 
 /// Reads at most `limit + 1` bytes, so the caller sees whether the file is larger than its limit
 /// without reading all of it. The size a provider reports is not trusted.
-pub fn read(opener: &impl Opener, file: &PickedFile, limit: u64) -> Result<Vec<u8>> {
+pub fn read(opener: &(impl Opener + ?Sized), file: &PickedFile, limit: u64) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     open_read(opener, file)?
         .take(limit.saturating_add(1))
@@ -166,7 +166,7 @@ pub fn read(opener: &impl Opener, file: &PickedFile, limit: u64) -> Result<Vec<u
 /// Copies the chosen file to `target` through a temporary file beside it, renamed over `target`
 /// at the end; a failure leaves nothing behind and an existing `target` untouched. Returns the
 /// bytes copied.
-pub fn copy_into(opener: &impl Opener, file: &PickedFile, target: &Path) -> Result<u64> {
+pub fn copy_into(opener: &(impl Opener + ?Sized), file: &PickedFile, target: &Path) -> Result<u64> {
     let mut source = open_read(opener, file)?;
     let folder = target.parent().ok_or_else(|| HolziError::Io {
         reason: "copy target has no folder".to_string(),
@@ -200,7 +200,7 @@ pub fn copy_into(opener: &impl Opener, file: &PickedFile, target: &Path) -> Resu
 }
 
 /// Writes `bytes` to the file chosen in the save dialog, replacing what was there.
-pub fn write(opener: &impl Opener, file: &PickedFile, bytes: &[u8]) -> Result<()> {
+pub fn write(opener: &(impl Opener + ?Sized), file: &PickedFile, bytes: &[u8]) -> Result<()> {
     let path = resolve(opener, file)?;
     let mut target = opener.open(path, true).map_err(write_failed)?;
     target.write_all(bytes).map_err(write_failed)?;
@@ -209,7 +209,7 @@ pub fn write(opener: &impl Opener, file: &PickedFile, bytes: &[u8]) -> Result<()
 
 /// The name to show for the chosen file: its file name, or for an address the name its provider
 /// shows (the last part of the address if the provider names none).
-pub fn display_name(opener: &impl Opener, file: &PickedFile) -> String {
+pub fn display_name(opener: &(impl Opener + ?Sized), file: &PickedFile) -> String {
     match FilePath::from_str(&file.0) {
         Ok(FilePath::Url(url)) if url.scheme() == "content" => opener
             .provider_name(url.as_str())

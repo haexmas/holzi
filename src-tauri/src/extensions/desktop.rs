@@ -126,6 +126,27 @@ impl<R: Runtime> ShownNotification for PluginNotification<R> {
 }
 
 impl<R: Runtime> Desktop for AppDesktop<R> {
+    /// Android 13 and later ask the person once (spec 043 FR-023, research R12); a refusal holds
+    /// until they change it in the system's settings.
+    #[cfg(mobile)]
+    fn notifications_allowed(&self) -> bool {
+        use tauri_plugin_notification::PermissionState;
+        let notifications = self.app.notification();
+        let state = match notifications.permission_state() {
+            Ok(PermissionState::Prompt | PermissionState::PromptWithRationale) => {
+                notifications.request_permission()
+            }
+            other => other,
+        };
+        match state {
+            Ok(state) => state == PermissionState::Granted,
+            Err(error) => {
+                log::warn!("extensions: the notification permission is unknown: {error}");
+                false
+            }
+        }
+    }
+
     fn open_url(&self, url: &str) -> Result<(), String> {
         self.app
             .opener()

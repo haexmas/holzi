@@ -45,6 +45,13 @@ pub trait Desktop: Send + Sync {
     ) -> Result<Box<dyn ShownNotification>, String> {
         Err("notifications are not available".to_owned())
     }
+
+    /// Whether the system lets holzi show notifications; asks the person the first time where the
+    /// system wants that (Android's `POST_NOTIFICATIONS`, spec 043 FR-023). Blocking: the bridge
+    /// calls it on a worker thread.
+    fn notifications_allowed(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Default)]
