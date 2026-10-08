@@ -16,7 +16,7 @@ use crate::passwords::import::apply::{self, Control, OnDuplicate, Progress};
 use crate::passwords::import::haex_vault::{self, WARNING_CLOSE_FIRST, WARNING_HAEX_PASS_TABLES};
 use crate::passwords::import::{self, Credentials, ExistingKeys, ImportModel, ImportSource};
 use crate::passwords::model::{ImportPreview, ImportReport};
-use crate::passwords::TRASH_GROUP_ID;
+use crate::passwords::{IMPORT_INPUT_LIMIT_BYTES, TRASH_GROUP_ID};
 use crate::storage::query::Query;
 
 fn failed(reason: &str) -> HolziError {
@@ -42,11 +42,20 @@ struct ReadFile {
 
 /// Reads all of a chosen file; an unreadable one is `unreadable`.
 fn read_all(opener: &impl Opener, file: &PickedFile) -> Result<Zeroizing<Vec<u8>>> {
+    let reader = picked::open_read(opener, file).map_err(|_| failed("unreadable"))?;
+    read_all_limited(reader, IMPORT_INPUT_LIMIT_BYTES)
+}
+
+/// Reads at most one byte beyond the import limit, so provider streams cannot exhaust memory.
+fn read_all_limited(reader: impl Read, limit: u64) -> Result<Zeroizing<Vec<u8>>> {
     let mut bytes = Zeroizing::new(Vec::new());
-    picked::open_read(opener, file)
-        .map_err(|_| failed("unreadable"))?
+    reader
+        .take(limit.saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|_| failed("unreadable"))?;
+    if bytes.len() as u64 > limit {
+        return Err(failed("too_large"));
+    }
     Ok(bytes)
 }
 
@@ -99,6 +108,25 @@ async fn read_model(
     })
     .await
     .map_err(|_| failed("unreadable"))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bounded_reads_accept_the_limit_and_reject_the_next_byte() {
+        assert_eq!(
+            read_all_limited(std::io::Cursor::new(b"abc"), 3)
+                .unwrap()
+                .as_slice(),
+            b"abc"
+        );
+        assert!(matches!(
+            read_all_limited(std::io::Cursor::new(b"abcd"), 3),
+            Err(HolziError::PasswordsImportFailed { reason }) if reason == "too_large"
+        ));
+    }
 }
 
 impl PasswordsService {

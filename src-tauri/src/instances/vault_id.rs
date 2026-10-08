@@ -39,19 +39,21 @@ pub fn fingerprint(db: &Database) -> Option<String> {
     }
 }
 
-/// Writes the fingerprint beside the vault; a failure is logged (the file only helps to detect a
-/// second copy and comes back with the next open).
-pub fn write(db_path: &Path, db: &Database) {
+/// Writes the fingerprint beside the vault. A missing sidecar would make duplicate-vault detection
+/// unreliable, so callers must handle a write failure before publishing the vault.
+pub fn write(db_path: &Path, db: &Database) -> std::io::Result<()> {
     let Some(fingerprint) = fingerprint(db) else {
-        return;
+        return Ok(());
     };
     let path = vault_id_path(db_path);
     if fs::read_to_string(&path).is_ok_and(|text| text.trim() == fingerprint) {
-        return;
+        return Ok(());
     }
     if let Err(error) = fs::write(&path, format!("{fingerprint}\n")) {
         log::warn!("vault id: writing {path:?} failed: {error}");
+        return Err(error);
     }
+    Ok(())
 }
 
 /// The vault in `dir`, other than `except`, whose fingerprint file says `fingerprint`.

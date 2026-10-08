@@ -159,7 +159,7 @@ pub async fn import_instance_core<R: Runtime>(
         if let Some(other) = vault_id::owner_of(&open_dir, &fingerprint, &own_name) {
             return Err(HolziError::AlreadyOnThisDevice { name: other });
         }
-        vault_id::write(&copy_path, &db);
+        vault_id::write(&copy_path, &db)?;
         Ok(db)
     })
     .await

@@ -1075,6 +1075,7 @@
       "importFailed": "The import failed.",
       "importReason": {
         "unreadable": "The file cannot be read.",
+        "too_large": "The import file or key file is too large.",
         "wrong_credentials": "The password or key file is wrong.",
         "corrupt": "The file is damaged.",
         "unsupported_format": "The format is not supported.",

@@ -108,7 +108,11 @@ pub async fn create_instance_core<R: Runtime>(
 
     match open_result {
         Ok(db_arc) => {
-            vault_id::write(&db_path, &db_arc);
+            if let Err(error) = vault_id::write(&db_path, &db_arc) {
+                drop(db_arc);
+                remove_vault_files(&db_path);
+                return Err(error.into());
+            }
             match publish_active(state, name, &db_arc, &pending_marker) {
                 Ok(result) => Ok(result),
                 Err(e) => {
