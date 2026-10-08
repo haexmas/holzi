@@ -9,7 +9,9 @@ export const WM = `document.querySelector('#__nuxt').__vue_app__.config.globalPr
 /**
  * The workspace can remount while a vault is being reopened. The mount check and the following
  * window-manager call are separate WebDriver requests, so the app may disappear between them on a
- * slow runner. Retry only that transient condition; all other script failures remain real failures.
+ * slow runner. A window activation can also detach the element while WebKit is dispatching the
+ * preceding request. Retry only those transient conditions; all other script failures remain real
+ * failures.
  */
 async function withMounted<T>(
   instance: FlowInstance,
@@ -22,7 +24,8 @@ async function withMounted<T>(
     } catch (error) {
       if (
         !(error instanceof Error) ||
-        !error.message.includes('__vue_app__') ||
+        (!error.message.includes('__vue_app__') &&
+          !error.message.includes('el.dispatchEvent')) ||
         Date.now() >= end
       ) {
         throw error
