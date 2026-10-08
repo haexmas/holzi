@@ -79,6 +79,9 @@ jobs:
       - name: Check e2e helpers
         run: corepack pnpm check:e2e-lib
 
+      - name: Check the platform probe
+        run: corepack pnpm check:platform-probe
+
       - name: Check Android versions against the devShell
         run: corepack pnpm check:android-versions
 
@@ -466,8 +469,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
+      # Spec 044 (T007): with the platform probe, which stays inert unless `debug.holzi.probe` is 1.
       - name: Build the debug APK
-        run: corepack pnpm tauri android build --debug --apk --split-per-abi --target aarch64 --target x86_64
+        run: corepack pnpm tauri android build --debug --apk --split-per-abi --target aarch64 --target x86_64 --features platform-probe
 
       - name: Upload the APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -645,6 +649,109 @@ jobs:
           name: android-e2e-failure-material-${{ matrix.shard }}
           path: src-tauri/target/e2e
           if-no-files-found: ignore
+
+  # Spec 044 (T007, research R4): may holzi's web view fetch from a server on 127.0.0.1 on Windows
+  # and macOS? Local Network Access in WebView2 could forbid it. The probe build reports one line and
+  # exits; `scripts/run-platform-probe.ts` judges it. Not a required check until it has run green.
+  platform-probe:
+    name: Platform probe (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.19.0
+
+      # The Tauri CLI runs `beforeBuildCommand` (`pnpm generate`), so `pnpm` has to be on PATH.
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install frontend dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.98.1
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+          shared-key: platform-probe-${{ matrix.os }}
+
+      # Without local inference and voice: the probe needs neither, and the build stays short. The
+      # runner's default shell on purpose: under Git Bash, `perl` is Git's MSYS Perl, which lacks
+      # modules openssl-src (SQLCipher) needs; PowerShell finds Strawberry Perl.
+      - name: Build holzi with the probe
+        run: corepack pnpm tauri build --no-bundle --features platform-probe -- --no-default-features
+
+      - name: Run the probe
+        shell: bash
+        run: |
+          binary=src-tauri/target/release/holzi
+          if [ "$RUNNER_OS" = Windows ]; then binary="$binary.exe"; fi
+          node scripts/run-platform-probe.ts "$binary"
+
+  # Spec 044 (T007, research R4): the same probe in Android's web view, on the emulator of
+  # `android-e2e`. The web view's version is in the job log and in the probe's user agent.
+  platform-probe-android:
+    name: Platform probe (android)
+    needs: android-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.19.0
+
+      - name: Download the APK
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: holzi-android-debug
+          path: ${{ runner.temp }}/apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Restore the emulator snapshot
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-35-google_apis-x86_64-v1
+
+      - name: Run the probe on the emulator
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: scripts/ci/android-platform-probe.sh ${{ runner.temp }}/apk/x86_64/debug/app-x86_64-debug.apk
 
   # The one required check for Android (contracts/ci.md): green only when the APK builds, clippy
   # passes for Android and every e2e shard passes.

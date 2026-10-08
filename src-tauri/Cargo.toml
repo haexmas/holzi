@@ -59,6 +59,10 @@ voice = ["dep:cpal"]
 # `MockRelay` as a process the two application processes of a scenario share.
 # Not part of any default build.
 e2e = ["nostr-sdk/local-relay"]
+# Spec 044 (T007, research R4): a self-checking probe for the CI on Windows, macOS and Android. It
+# does nothing unless `HOLZI_PROBE=1` (desktop) or `debug.holzi.probe=1` (Android) asks for it, and
+# release bundles never enable it.
+platform-probe = []
 
 [dependencies]
 tauri = { version = "2.12.0", features = [] }

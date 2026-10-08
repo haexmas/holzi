@@ -15,6 +15,8 @@ pub mod model_capabilities;
 pub mod models;
 pub mod passwords;
 pub mod platform;
+#[cfg(feature = "platform-probe")]
+pub mod platform_probe;
 pub mod privacy;
 pub mod providers;
 pub mod remote_storage;
@@ -276,13 +278,29 @@ pub fn run() {
                 .cloned()
                 .ok_or("tauri.conf.json defines no window")?;
             let host = app.state::<AppState>().extensions();
-            tauri::WebviewWindowBuilder::from_config(app.handle(), &window)?
+            // Spec 044 (T007): the CI's platform probe, only in builds with the feature.
+            #[cfg(feature = "platform-probe")]
+            let probe_port = if platform_probe::requested() {
+                Some(platform_probe::start(app.handle())?)
+            } else {
+                None
+            };
+            let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), &window)?
                 // The frame shim for development pages, which holzi does not serve (R16).
                 .initialization_script_for_all_frames(extensions::protocol::shim::dev_init_script())
                 .on_web_resource_request(move |request, response| {
                     extensions::dev_csp::adjust(&host, request, response);
-                })
-                .build()?;
+                    #[cfg(feature = "platform-probe")]
+                    if probe_port.is_some() {
+                        platform_probe::allow_loopback(response);
+                    }
+                });
+            #[cfg(feature = "platform-probe")]
+            let builder = match probe_port {
+                Some(port) => builder.initialization_script(platform_probe::init_script(port)),
+                None => builder,
+            };
+            builder.build()?;
             // Spec 032: actions of a model's tool call go out as events; `ChatState` is managed
             // without an `AppHandle`, so the emitter is set here.
             // Spec 017, US9: holzi's protected places, known places and dialogs for extensions.
@@ -299,6 +317,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(gate.wrap(tauri::generate_handler![
+            #[cfg(feature = "platform-probe")]
+            platform_probe::platform_probe_report,
             active_instance_name,
             platform::commands::platform_capabilities,
             files::commands::picked_file_name,
