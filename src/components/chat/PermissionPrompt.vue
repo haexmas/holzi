@@ -1,17 +1,8 @@
 <script setup lang="ts">
-import type { RiskClass } from '~/composables/useChat'
+import type { PendingPrompt } from '~/composables/useChat'
 import { describeToolCall, type ResolveTarget } from '~/lib/actions/agentTools'
 import { ALL_ACTIONS } from '~/lib/actions/catalog'
 import { useWindowManagerStore } from '~/stores/windowManager'
-
-export interface PendingApproval {
-  requestId: string
-  toolName: string
-  toolInput: unknown
-  riskClass: RiskClass
-  /** `action` tools are worded in plain language; others keep the raw layout. */
-  toolSource?: 'mcp' | 'cli' | 'action'
-}
 
 const { t } = useI18n()
 
@@ -21,8 +12,14 @@ const props = defineProps<{
   /** Oldest-first queue — only the first is shown; more than one can be
    * pending at once (spec.md Edge Case: independent tool calls each get
    * their own request). */
-  pendingApprovals: PendingApproval[]
+  pendingPrompts: PendingPrompt[]
 }>()
+
+/** The approval shown now: the oldest prompt, when it asks for one. */
+const approval = computed(() => {
+  const first = props.pendingPrompts[0]
+  return first?.kind === 'approval' ? first : undefined
+})
 
 const wm = useWindowManagerStore()
 
@@ -55,11 +52,11 @@ const resolveTarget: ResolveTarget = (kind, id) => {
 }
 
 const description = computed(() => {
-  const approval = props.pendingApprovals[0]
-  if (!approval || approval.toolSource !== 'action') return undefined
+  const shown = approval.value
+  if (!shown || shown.toolSource !== 'action') return undefined
   return describeToolCall(
-    approval.toolName,
-    approval.toolInput,
+    shown.toolName,
+    shown.toolInput,
     ALL_ACTIONS,
     resolveTarget,
   )
@@ -75,11 +72,11 @@ const emit = defineEmits<{
 }>()
 
 /**
- * The dialog is controlled purely by `pendingApprovals` (owned by the
+ * The dialog is controlled purely by `pendingPrompts` (owned by the
  * parent), so `open` is always `true` while it is mounted. Reka UI's Dialog
  * respects that as a controlled prop — the built-in close button, Escape,
  * and outside-click can request a close via `update:open`, but nothing
- * visually closes until `pendingApprovals[0]` itself disappears. Treat that
+ * visually closes until the approval itself disappears. Treat that
  * request the same as the explicit "stop generating" button: it must never
  * silently drop a still-pending approval (matches the existing
  * cancel-not-deny semantics tested on the backend).
@@ -106,13 +103,11 @@ function onUpdateOpen(open: boolean) {
   />
 
   <UiDrawerModal
-    v-if="pendingApprovals[0]"
+    v-if="approval"
     :open="true"
     :title="
       t('chat.permission.requestTitle', {
-        name: description
-          ? t(description.titleKey)
-          : pendingApprovals[0].toolName,
+        name: description ? t(description.titleKey) : approval.toolName,
       })
     "
     @update:open="onUpdateOpen"
@@ -122,12 +117,12 @@ function onUpdateOpen(open: boolean) {
         <div
           class="text-xs"
           :class="
-            pendingApprovals[0].riskClass === 'risky'
+            approval.riskClass === 'risky'
               ? 'text-destructive'
               : 'text-muted-foreground'
           "
         >
-          {{ t(`chat.permission.${pendingApprovals[0].riskClass}`) }}
+          {{ t(`chat.permission.${approval.riskClass}`) }}
         </div>
         <dl v-if="description" class="space-y-1 text-sm">
           <div v-if="description.target" class="flex gap-2">
@@ -148,7 +143,7 @@ function onUpdateOpen(open: boolean) {
         <pre
           v-else
           class="text-xs bg-muted/30 rounded p-2 overflow-x-auto whitespace-pre-wrap"
-          >{{ JSON.stringify(pendingApprovals[0].toolInput, null, 2) }}</pre>
+          >{{ JSON.stringify(approval.toolInput, null, 2) }}</pre>
       </div>
     </template>
     <template #footer>
@@ -159,14 +154,11 @@ function onUpdateOpen(open: boolean) {
         <UiButton
           size="sm"
           variant="outline"
-          @click="emit('deny', pendingApprovals[0].requestId)"
+          @click="emit('deny', approval.requestId)"
         >
           {{ t('chat.permission.deny') }}
         </UiButton>
-        <UiButton
-          size="sm"
-          @click="emit('allow', pendingApprovals[0].requestId)"
-        >
+        <UiButton size="sm" @click="emit('allow', approval.requestId)">
           {{ t('chat.permission.allow') }}
         </UiButton>
       </div>

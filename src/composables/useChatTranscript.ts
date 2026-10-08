@@ -10,8 +10,8 @@ import type {
   ToolResultEvent,
   TurnCompleteEvent,
   useChat,
+  PendingPrompt,
 } from '~/composables/useChat'
-import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 
 type PendingStreamEvents = {
   tokens: string
@@ -50,8 +50,8 @@ export function useChatTranscript(
   busy: Ref<boolean>,
   turnSetupPending: Ref<boolean>,
   lastError: Ref<string | null>,
-  pendingApprovals: Ref<PendingApproval[]>,
-  pendingApprovalsByThread: Map<string, PendingApproval[]>,
+  pendingPrompts: Ref<PendingPrompt[]>,
+  pendingPromptsByThread: Map<string, PendingPrompt[]>,
   refreshThreads: () => Promise<void>,
   scrollToBottom: () => Promise<void>,
   errString: (e: unknown) => string,
@@ -68,8 +68,8 @@ export function useChatTranscript(
     return (
       streamingThreadId.value === threadId ||
       (turnSetupPending.value && activeThreadId.value === threadId) ||
-      pendingApprovalsByThread.has(threadId) ||
-      (activeThreadId.value === threadId && pendingApprovals.value.length > 0)
+      pendingPromptsByThread.has(threadId) ||
+      (activeThreadId.value === threadId && pendingPrompts.value.length > 0)
     )
   }
 
@@ -295,8 +295,8 @@ export function useChatTranscript(
   // span several steps, so only its one terminal event may signal "done"
   // (contracts/tauri-commands.md).
   async function applyTurnComplete(e: TurnCompleteEvent) {
-    pendingApprovalsByThread.delete(e.threadId)
-    if (activeThreadId.value === e.threadId) pendingApprovals.value = []
+    pendingPromptsByThread.delete(e.threadId)
+    if (activeThreadId.value === e.threadId) pendingPrompts.value = []
     const list = messagesByThread.value[e.threadId] ?? []
     const idx = list.findIndex((m) => m.id === e.assistantMessageId)
     const existing = list[idx]
@@ -325,7 +325,8 @@ export function useChatTranscript(
   }
 
   function handleToolPermissionRequest(e: ToolPermissionRequestEvent) {
-    const approval: PendingApproval = {
+    const approval: PendingPrompt = {
+      kind: 'approval',
       requestId: e.requestId,
       toolName: e.toolName,
       toolInput: e.toolInput,
@@ -333,14 +334,12 @@ export function useChatTranscript(
       toolSource: e.toolSource,
     }
     if (e.threadId !== activeThreadId.value) {
-      const queued = pendingApprovalsByThread.get(e.threadId) ?? []
-      pendingApprovalsByThread.set(e.threadId, [...queued, approval])
+      const queued = pendingPromptsByThread.get(e.threadId) ?? []
+      pendingPromptsByThread.set(e.threadId, [...queued, approval])
       return
     }
-    if (
-      !pendingApprovals.value.some((item) => item.requestId === e.requestId)
-    ) {
-      pendingApprovals.value = [...pendingApprovals.value, approval]
+    if (!pendingPrompts.value.some((item) => item.requestId === e.requestId)) {
+      pendingPrompts.value = [...pendingPrompts.value, approval]
     }
   }
 

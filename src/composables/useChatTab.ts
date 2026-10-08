@@ -1,6 +1,10 @@
 import type { Ref } from 'vue'
-import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
-import type { Message, Thread, useChat } from '~/composables/useChat'
+import type {
+  PendingPrompt,
+  Message,
+  Thread,
+  useChat,
+} from '~/composables/useChat'
 import { useChatNavigation } from '~/composables/useChatNavigation'
 import type { WmTabApi } from '~/composables/useWmTab'
 import type { TabRouter } from '~/composables/useTabRouter'
@@ -36,7 +40,7 @@ export function useChatTab(deps: {
     activeThreadId: Ref<string | null>
     threads: Ref<Thread[]>
     input: Ref<string>
-    pendingApprovals: Ref<PendingApproval[]>
+    pendingPrompts: Ref<PendingPrompt[]>
     lastError: Ref<string | null>
     streamingMessageId: Ref<string | null>
     turnSetupPending: Ref<boolean>
@@ -77,10 +81,10 @@ export function useChatTab(deps: {
   ) {
     try {
       await deps.chat.respondToolPermissionAsync(requestId, decision)
-      state.pendingApprovals.value = state.pendingApprovals.value.filter(
+      state.pendingPrompts.value = state.pendingPrompts.value.filter(
         (a) => a.requestId !== requestId,
       )
-      if (state.pendingApprovals.value.length === 0) wmTab.clearAttention()
+      if (state.pendingPrompts.value.length === 0) wmTab.clearAttention()
     } catch (e: unknown) {
       state.lastError.value = deps.errString(e)
     }
@@ -92,7 +96,7 @@ export function useChatTab(deps: {
     const hasActiveReply =
       state.streamingMessageId.value !== null ||
       state.turnSetupPending.value ||
-      state.pendingApprovals.value.length > 0
+      state.pendingPrompts.value.length > 0
     if (!hasActiveReply) return null
     return {
       reasonKey: 'wm.close.activeReply',

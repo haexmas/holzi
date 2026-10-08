@@ -10,7 +10,7 @@
  * already uses) rather than threading its fields through as props.
  */
 import type { ComposerAttachment } from '~/components/chat/ComposerAttachments.vue'
-import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
+import type { PendingPrompt } from '~/composables/useChat'
 
 defineProps<{
   composerInputDisabled: boolean
@@ -22,7 +22,7 @@ defineProps<{
   activeAgentCount: number
   lastAgentBatchSize: number | null
   permissionMode: 'manual' | 'auto' | 'plan'
-  pendingApprovals: PendingApproval[]
+  pendingPrompts: PendingPrompt[]
   permissionDisabled: boolean
 }>()
 
@@ -144,7 +144,7 @@ defineExpose({ reset })
 
             <ChatPermissionPrompt
               :mode="permissionMode"
-              :pending-approvals="pendingApprovals"
+              :pending-prompts="pendingPrompts"
               :disabled="permissionDisabled"
               @update:mode="emit('updatePermissionMode', $event)"
               @allow="emit('respondApproval', $event, 'allow')"

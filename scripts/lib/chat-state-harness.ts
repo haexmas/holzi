@@ -191,7 +191,7 @@ const RETURN_STATEMENT = `
       handleToolPermissionRequest, threads, messagesByThread, activeThreadId,
       input, busy, activeModel, loadingPhase, modelLoadPending, draftTitle,
       editingThreadId, editTitleError, deleteCandidate, deleteError,
-      composerInputDisabled, sendDisabled, pendingApprovals, streamingMessageId,
+      composerInputDisabled, sendDisabled, pendingPrompts, streamingMessageId,
       streamingThreadId, lastError,
       updatePermissionMode, permissionMode, permissionModeSaving, syncFromLocation,
       addAttachments, attachments };

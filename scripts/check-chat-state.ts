@@ -438,7 +438,7 @@ test('turn completion restores persisted step order and removes cancelled approv
     finishReason: 'cancelled',
   })
   assert.deepEqual(state.messagesByThread.value.a, persisted)
-  assert.deepEqual(state.pendingApprovals.value, [])
+  assert.deepEqual(state.pendingPrompts.value, [])
   assert.equal(state.busy.value, false)
   assert.equal(state.streamingMessageId.value, null)
 })
@@ -459,7 +459,7 @@ test('completion clears approvals queued on a background conversation', async ()
     finishReason: 'cancelled',
   })
   await state.selectThread('a')
-  assert.deepEqual(state.pendingApprovals.value, [])
+  assert.deepEqual(state.pendingPrompts.value, [])
 })
 
 test('a slower thread selection cannot restore approvals after a newer selection', async () => {
@@ -474,8 +474,9 @@ test('a slower thread selection cannot restore approvals after a newer selection
     },
   })
   state.activeThreadId.value = 'a'
-  state.pendingApprovals.value = [
+  state.pendingPrompts.value = [
     {
+      kind: 'approval',
       requestId: 'approval-a',
       toolName: 'run_command',
       toolInput: {},
@@ -488,7 +489,7 @@ test('a slower thread selection cannot restore approvals after a newer selection
   await state.selectThread('a')
   assert.equal(state.activeThreadId.value, 'a')
   assert.deepEqual(
-    state.pendingApprovals.value.map((approval) => approval.requestId),
+    state.pendingPrompts.value.map((approval) => approval.requestId),
     ['approval-a'],
   )
 
@@ -496,7 +497,7 @@ test('a slower thread selection cannot restore approvals after a newer selection
   await selectingB
   assert.equal(state.activeThreadId.value, 'a')
   assert.deepEqual(
-    state.pendingApprovals.value.map((approval) => approval.requestId),
+    state.pendingPrompts.value.map((approval) => approval.requestId),
     ['approval-a'],
   )
 })

@@ -5,9 +5,9 @@ import type {
   Message,
   SendMessageArgs,
   useChat,
+  PendingPrompt,
 } from '~/composables/useChat'
 import type { useChatTranscript } from '~/composables/useChatTranscript'
-import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 import type { ComposerAttachment } from '~/components/chat/ComposerAttachments.vue'
 
 /**
@@ -47,8 +47,8 @@ export function useComposer(
   retryingMessageId: Ref<string | null>,
   expandedReasoning: Ref<Set<string>>,
   attachments: Ref<ComposerAttachment[]>,
-  pendingApprovals: Ref<PendingApproval[]>,
-  pendingApprovalsByThread: Map<string, PendingApproval[]>,
+  pendingPrompts: Ref<PendingPrompt[]>,
+  pendingPromptsByThread: Map<string, PendingPrompt[]>,
 ) {
   // Live sub-agent activity for the Claude Code delegate (spec
   // 011-composer-toolbar-parity Story 2) — reset at the start of every send
@@ -103,11 +103,11 @@ export function useComposer(
     try {
       const result = await chat.sendMessageAsync(request)
       activeThreadId.value = result.threadId
-      const queuedApprovals = pendingApprovalsByThread.get(result.threadId)
+      const queuedApprovals = pendingPromptsByThread.get(result.threadId)
       if (queuedApprovals) {
         // Merge, don't overwrite: see the matching comment in `selectThread`.
-        pendingApprovals.value = [...queuedApprovals, ...pendingApprovals.value]
-        pendingApprovalsByThread.delete(result.threadId)
+        pendingPrompts.value = [...queuedApprovals, ...pendingPrompts.value]
+        pendingPromptsByThread.delete(result.threadId)
       }
       if (retry) {
         // A replay returns the original IDs without emitting another turn.
@@ -256,13 +256,13 @@ export function useComposer(
   /** Clears the active conversation so the next send creates a new thread. */
   async function newChat() {
     if (busy.value || modelLoadPending.value) return
-    if (activeThreadId.value && pendingApprovals.value.length > 0) {
-      const queued = pendingApprovalsByThread.get(activeThreadId.value) ?? []
-      pendingApprovalsByThread.set(activeThreadId.value, [
+    if (activeThreadId.value && pendingPrompts.value.length > 0) {
+      const queued = pendingPromptsByThread.get(activeThreadId.value) ?? []
+      pendingPromptsByThread.set(activeThreadId.value, [
         ...queued,
-        ...pendingApprovals.value,
+        ...pendingPrompts.value,
       ])
-      pendingApprovals.value = []
+      pendingPrompts.value = []
     }
     activeThreadId.value = null
     input.value = ''

@@ -20,8 +20,11 @@ import {
   useTemplateRef,
 } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import type { Message, SendMessageArgs } from '~/composables/useChat'
-import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
+import type {
+  Message,
+  SendMessageArgs,
+  PendingPrompt,
+} from '~/composables/useChat'
 
 const instancesStore = useInstancesStore()
 const wm = useWindowManagerStore()
@@ -53,7 +56,7 @@ const { onIntegrityDialogOpenChange } = modelStore
 const retryLoad = useAction('chat.model.retryLoad')
 const decideIntegrity = useAction('chat.modelIntegrity.decide')
 
-const pendingApprovals = ref<PendingApproval[]>([])
+const pendingPrompts = ref<PendingPrompt[]>([])
 const unlisteners: UnlistenFn[] = []
 let unmounted = false
 
@@ -70,7 +73,7 @@ const reasoningByMessage = ref<Record<string, string>>({})
 const retryingMessageId = ref<string | null>(null)
 const expandedReasoning = ref<Set<string>>(new Set())
 
-const pendingApprovalsByThread = new Map<string, PendingApproval[]>()
+const pendingPromptsByThread = new Map<string, PendingPrompt[]>()
 
 const input = ref('')
 /** True while the voice control is recording: it then provides the send button. */
@@ -119,8 +122,8 @@ const chatTranscript = useChatTranscript(
   busy,
   turnSetupPending,
   lastError,
-  pendingApprovals,
-  pendingApprovalsByThread,
+  pendingPrompts,
+  pendingPromptsByThread,
   () => refreshThreadsForTranscript(),
   scrollToBottom,
   errString,
@@ -137,8 +140,8 @@ const threadSidebar = useThreadSidebar(
   streamingBuffer,
   reasoningByMessage,
   expandedReasoning,
-  pendingApprovals,
-  pendingApprovalsByThread,
+  pendingPrompts,
+  pendingPromptsByThread,
   resetTextarea,
   scrollToBottom,
 )
@@ -271,8 +274,8 @@ const {
   retryingMessageId,
   expandedReasoning,
   attachments,
-  pendingApprovals,
-  pendingApprovalsByThread,
+  pendingPrompts,
+  pendingPromptsByThread,
 )
 
 // Spec 032 US4: the once-per-conversation notice about a model's tool use.
@@ -291,7 +294,7 @@ const { syncFromLocation, ui } = useChatTab({
     activeThreadId,
     threads,
     input,
-    pendingApprovals,
+    pendingPrompts,
     lastError,
     streamingMessageId,
     turnSetupPending,
@@ -463,7 +466,7 @@ onBeforeUnmount(() => {
           :active-agent-count="activeAgentCount"
           :last-agent-batch-size="lastAgentBatchSize"
           :permission-mode="permissionMode"
-          :pending-approvals="pendingApprovals"
+          :pending-prompts="pendingPrompts"
           :permission-disabled="!deviceUuid || permissionModeSaving"
           @send="ui.send"
           @abort="ui.abort"

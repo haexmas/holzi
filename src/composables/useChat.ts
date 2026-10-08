@@ -184,6 +184,20 @@ export interface ToolPermissionRequestEvent {
   toolSource: 'mcp' | 'cli' | 'action'
 }
 
+/** A tool call waiting for the user's approval. */
+export interface PendingApproval {
+  kind: 'approval'
+  requestId: string
+  toolName: string
+  toolInput: unknown
+  riskClass: RiskClass
+  /** `action` tools are worded in plain language; others keep the raw layout. */
+  toolSource?: 'mcp' | 'cli' | 'action'
+}
+
+/** What a turn waits on the user for, oldest first; the chat shows only the first. */
+export type PendingPrompt = PendingApproval
+
 /** Fires once per `send_message` call: whether the model got tools (spec 032 US4). */
 export interface ToolAvailabilityEvent {
   threadId: string
