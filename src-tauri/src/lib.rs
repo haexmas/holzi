@@ -303,6 +303,8 @@ pub fn run() {
             builder.build()?;
             // Spec 032: actions of a model's tool call go out as events; `ChatState` is managed
             // without an `AppHandle`, so the emitter is set here.
+            // Spec 044: the file browser's places, thumbnail cache and folder watches.
+            app.manage(files::state::FilesState::from_app(app.handle()));
             // Spec 017, US9: holzi's protected places, known places and dialogs for extensions.
             app.state::<AppState>()
                 .extensions()
@@ -322,6 +324,15 @@ pub fn run() {
             active_instance_name,
             platform::commands::platform_capabilities,
             files::commands::picked_file_name,
+            files::browser_commands::files_sources,
+            files::browser_commands::files_list,
+            files::browser_commands::files_stat,
+            files::browser_commands::files_read_text,
+            files::browser_commands::files_read_image,
+            files::browser_commands::files_thumbnail,
+            files::browser_commands::files_watch,
+            files::browser_commands::files_unwatch,
+            files::browser_commands::files_open_system,
             platform::insets::device_insets,
             privacy::screen_capture::screen_capture_protection_get,
             privacy::screen_capture::screen_capture_protection_set,

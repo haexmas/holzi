@@ -4,9 +4,13 @@
 //! (`local`, [`FilesError`]).
 
 pub mod access;
+pub mod browser_commands;
 pub mod commands;
+pub mod kind;
 pub mod local;
 pub mod picked;
+pub mod state;
+pub mod thumbnails;
 
 pub use picked::PickedFile;
 
