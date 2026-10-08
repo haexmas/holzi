@@ -316,7 +316,7 @@ export async function runCli(
       )
     }
     // The other devices of a group run on Linux, from the same debug build a Linux run makes. Without
-    // the Linux tools here the run goes on; such a device then fails at its start with what is missing.
+    // the Linux tools here, stop before scenarios so the missing desktop setup is reported as a preflight failure.
     const linux = android.ok ? await deps.preflight() : undefined
     if (linux === undefined) {
       // The device check failed; the run stops below.
