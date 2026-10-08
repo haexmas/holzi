@@ -29,15 +29,16 @@ pub struct TextContent {
 /// The text of the file at `path`, at most `limit` bytes; invalid UTF-8 is replaced.
 pub fn read_text(path: &Path, limit: u64) -> Result<TextContent, FilesError> {
     let file = std::fs::File::open(path).map_err(|error| io_error(error, path))?;
+    let limit = usize::try_from(limit).unwrap_or(usize::MAX);
     let mut bytes = Vec::new();
-    file.take(limit + 1)
+    file.take(limit.saturating_add(1) as u64)
         .read_to_end(&mut bytes)
         .map_err(|error| io_error(error, path))?;
     if bytes[..bytes.len().min(SNIFF)].contains(&0) {
         return Err(FilesError::new(FilesErrorCode::Binary, "not a text file"));
     }
-    let truncated = bytes.len() as u64 > limit;
-    bytes.truncate(limit as usize);
+    let truncated = bytes.len() > limit;
+    bytes.truncate(limit);
     Ok(TextContent {
         text: String::from_utf8_lossy(&bytes).into_owned(),
         truncated,

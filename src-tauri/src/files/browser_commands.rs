@@ -2,6 +2,7 @@
 //! command acts as [`Caller::User`]; paths are resolved and checked in Rust before anything is
 //! read. Storages (US5) answer `unsupported` until their source is built.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -147,7 +148,9 @@ pub async fn files_read_image(
 ) -> Result<Response, FilesError> {
     let real = device_path(&files, &source, &path, Want::Read)?;
     let bytes = blocking(move || {
-        let size = std::fs::metadata(&real)
+        let mut file = std::fs::File::open(&real).map_err(|error| ops::io_error(error, &real))?;
+        let size = file
+            .metadata()
             .map_err(|error| ops::io_error(error, &real))?
             .len();
         if size > IMAGE_LIMIT {
@@ -156,7 +159,17 @@ pub async fn files_read_image(
                 "image too large for the viewer",
             ));
         }
-        std::fs::read(&real).map_err(|error| ops::io_error(error, &real))
+        let mut bytes = Vec::new();
+        file.take(IMAGE_LIMIT.saturating_add(1))
+            .read_to_end(&mut bytes)
+            .map_err(|error| ops::io_error(error, &real))?;
+        if bytes.len() as u64 > IMAGE_LIMIT {
+            return Err(FilesError::new(
+                FilesErrorCode::TooLarge,
+                "image too large for the viewer",
+            ));
+        }
+        Ok(bytes)
     })
     .await?;
     Ok(Response::new(bytes))

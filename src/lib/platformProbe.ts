@@ -22,6 +22,8 @@ interface ProbeImage {
   src: string
 }
 
+const IMAGE_PROBE_TIMEOUT_MS = 2_000
+
 /** The answer of holzi's health route (`platform_probe::HEALTH_BODY`). */
 export const HEALTH_BODY = 'ok'
 
@@ -122,8 +124,19 @@ async function probeVariants(
       () =>
         new Promise<void>((resolve, reject) => {
           const image = new ImageCtor()
-          image.onload = () => resolve()
-          image.onerror = () => reject(new Error('image error'))
+          const finish = (error?: Error) => {
+            clearTimeout(timeout)
+            image.onload = null
+            image.onerror = null
+            if (error) reject(error)
+            else resolve()
+          }
+          const timeout = setTimeout(
+            () => finish(new Error('image timeout')),
+            IMAGE_PROBE_TIMEOUT_MS,
+          )
+          image.onload = () => finish()
+          image.onerror = () => finish(new Error('image error'))
           image.src = `http://127.0.0.1:${port}/__probe?v=img`
         }),
     )

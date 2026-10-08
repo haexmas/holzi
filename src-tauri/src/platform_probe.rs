@@ -34,6 +34,7 @@ pub const HEALTH_BODY: &str = "ok";
 pub const REPORT_TIMEOUT: Duration = Duration::from_secs(90);
 
 const LOOPBACK_SOURCE: &str = "http://127.0.0.1:*";
+const MAX_SEEN: usize = 200;
 
 static REPORTED: AtomicBool = AtomicBool::new(false);
 
@@ -43,6 +44,9 @@ static SEEN: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
 
 fn note_seen(line: String) {
     if let Ok(mut lines) = SEEN.lock() {
+        if lines.len() == MAX_SEEN {
+            lines.remove(0);
+        }
         lines.push(line);
     }
 }

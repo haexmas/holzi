@@ -17,6 +17,7 @@ export function useFilesFolder(
   const loading = ref(false)
   const error = ref<FilesError | null>(null)
   let generation = 0
+  let watchGeneration = 0
   let watchId: number | null = null
   let reloadTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -57,14 +58,28 @@ export function useFilesFolder(
   }
 
   async function startWatching() {
+    const mine = ++watchGeneration
     await stopWatching()
     const current = path.value
-    if (current === null || source.value.kind !== 'device') return
+    if (
+      mine !== watchGeneration ||
+      current === null ||
+      source.value.kind !== 'device'
+    )
+      return
     try {
       const id = await watchAsync(current, reloadSoon)
-      // The folder changed while the watch was starting: keep only the newest.
-      if (path.value === current) watchId = id
-      else await unwatchAsync(id).catch(() => {})
+      // The folder changed or the component unmounted while the watch was starting: keep only the
+      // newest watch and clean up this stale result.
+      if (
+        mine === watchGeneration &&
+        path.value === current &&
+        source.value.kind === 'device'
+      ) {
+        watchId = id
+      } else {
+        await unwatchAsync(id).catch(() => {})
+      }
     } catch {
       // No watch here (a folder the system cannot watch): focus reloads still keep it current.
     }
@@ -91,6 +106,7 @@ export function useFilesFolder(
     document.removeEventListener('visibilitychange', onFocus)
     if (reloadTimer) clearTimeout(reloadTimer)
     generation++
+    watchGeneration++
     void stopWatching()
   })
 

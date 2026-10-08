@@ -82,7 +82,7 @@ const openEntry = computed(
     const name = place.value?.open
     if (!name || !path.value) return null
     return (
-      shown.value.find((entry) => entry.name === name) ?? {
+      folder.entries.value.find((entry) => entry.name === name) ?? {
         name,
         path: childPath(path.value, name),
       }
