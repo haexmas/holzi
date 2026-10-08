@@ -1,13 +1,13 @@
 # Research: Agent-Rückfrage mit Auswahl
 
-Alle Pfadangaben beziehen sich auf `main` @ `25c7a763` plus PR #336 (`fix/agent-unknown-app`:
-`ActionInputError`, `unknownAppMessage`). Die Umsetzung beginnt erst, wenn #336 gemergt ist, oder setzt
-auf dessen Branch auf.
+Alle Pfadangaben beziehen sich auf `main` @ `25c7a763` plus PR #337 (`refactor/radio-group`:
+`ShadcnRadioGroup`, `SettingsGroup radio`) plus PR #336 (`fix/agent-unknown-app`:
+`ActionInputError`, `unknownAppMessage`). Die Umsetzung beginnt erst, wenn #336 und #337 gemergt sind.
 
 Graphify-Abfrage („agent asks user pending approval prompt oneshot“, „fuzzy search fuse threshold“):
 Der Graph stammt vom 2026-09-15 und liefert nur Fremdtreffer (CLI-Delegates, Anthropic-Tests). Die
 Kandidaten wurden per Code-Suche geprüft: `pending_tool_approvals` (Muster), `ActionBridge` (Muster),
-`PermissionPrompt.vue` (Muster), `SettingsOptionRow` / `StorageDialog.vue` (native Radios),
+`PermissionPrompt.vue` (Muster), `ShadcnRadioGroup` (haex-ui, PR #337),
 `src/lib/passwords/search.ts` (`fold`, Fuse-Optionen). Nachprüfung mit frischem Graphen vor
 `/speckit-implement`.
 
@@ -174,9 +174,9 @@ existiert schon einmal; eine zweite Liste müsste sie an fünf Stellen duplizier
 ## R10 — UI-Bausteine
 
 **Decision**: `src/components/chat/ChoicePrompt.vue` nach `PermissionPrompt.vue`: `UiDrawerModal`,
-Frage, `<fieldset>` mit nativen Radios (`input type="radio" class="size-4 accent-primary"` wie
-`StorageDialog.vue:143-178`; haex-ui hat keine RadioGroup, `OptionRow.vue:4-5`), Option „Etwas anderes …“
-mit `UiInput`, Footer mit `UiButton` „Abbrechen“ (outline) und „Bestätigen“. Schließen des Dialogs =
+Frage, `ShadcnRadioGroup` mit `ShadcnRadioGroupItem` je Kandidat (haex-ui, eingeführt mit
+haex-space/haextension#75; holzi stellt in PR #337 alle Radio-Stellen darauf um), Option „Etwas anderes …“
+als weiteres Item mit `UiInput`, Footer mit `UiButton` „Abbrechen“ (outline) und „Bestätigen“. Schließen des Dialogs =
 Abbrechen der Rückfrage (nicht des Turns). Antwort über die Aktion `chat.choice.answer`
 (`chatActions.ts`, Scope `guardrails` wie `chat.approval.decide`) → `invoke('respond_choice', ...)`.
 i18n unter `chat.choice.*`.

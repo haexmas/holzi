@@ -23,7 +23,7 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
   in `wmActionHandlers.ts`, `t` für Titel der System-Apps.
 - **`ask_user`** (R6): eingebautes Werkzeug, immer angeboten, nie freigabepflichtig, Satz im Systemprompt.
 - **UI** (R9, R10): eine Warteschlange `pendingPrompts` für Freigaben und Rückfragen; neue Komponente
-  `ChoicePrompt.vue` mit nativen Radios.
+  `ChoicePrompt.vue` mit `ShadcnRadioGroup` aus haex-ui (PR #337).
 - **Prüfung** (R11): Eval-Set v3 mit `Kind::Clarify`, `ask_user` im Eval-Angebot und in der Schema-Suche.
 
 ## Technical Context
@@ -85,7 +85,8 @@ _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 **Post-Design Re-Check**: ✅ bestanden. Eine dokumentierte Abweichung vom Spec: nicht verfügbare Apps
 sind als Kandidat nicht wählbar statt „führen zum selben Fehler“ (R8, Spec angepasst). Abhängigkeit:
-PR #336 (`ActionInputError`) muss vor der Umsetzung gemergt sein.
+PR #336 (`ActionInputError`) und PR #337 (`ShadcnRadioGroup`, haex-ui-Pin) müssen vor der Umsetzung
+gemergt sein.
 
 ## Project Structure
 
