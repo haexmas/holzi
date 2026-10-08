@@ -26,12 +26,13 @@ const entryNames = (instance: FlowInstance) =>
 scenario('files-basic', { timeoutMs: 180_000 }, async (ctx) => {
   const files = deviceFiles('holzi-files-')
   try {
+    const instance = await ctx.startInstance()
+    await createAndUnlock(instance, { name: 'e2e-files-basic' })
+
+    // After the start: on Android it clears the app's data, where the folder lives.
     files.write('notiz.txt', 'Hallo aus der Datei')
     files.write('foto.png', solidPng(64, 48, [220, 40, 40]))
     const folderName = files.folder.split('/').at(-1) ?? ''
-
-    const instance = await ctx.startInstance()
-    await createAndUnlock(instance, { name: 'e2e-files-basic' })
     await runAction(instance, 'wm.app.open', {
       appId: 'system.files',
       at: `/device?p=${encodeURIComponent(files.folder)}`,
