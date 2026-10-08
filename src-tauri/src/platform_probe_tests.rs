@@ -1,3 +1,5 @@
+use tokio::io::AsyncReadExt;
+
 use super::*;
 
 #[test]
@@ -126,9 +128,7 @@ fn the_init_script_names_the_port_and_the_media() {
 }
 
 #[tokio::test]
-async fn the_fixtures_are_served_with_their_ranges() {
-    use tokio::io::AsyncReadExt;
-
+async fn the_fixtures_get_server_urls_and_are_read_in_ranges() {
     let media = MediaServer::start(tokio_util::sync::CancellationToken::new())
         .await
         .unwrap();

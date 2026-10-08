@@ -13,7 +13,8 @@ export interface ProbeMedia {
   pdf: string
 }
 
-const STEP_TIMEOUT_MS = 20_000
+/** The five steps together stay well inside the probe's own limit (`REPORT_TIMEOUT`, 90 s). */
+const STEP_TIMEOUT_MS = 12_000
 
 /** Runs `check` as one step; a rejection or a timeout fails it with the reason. */
 async function step(
