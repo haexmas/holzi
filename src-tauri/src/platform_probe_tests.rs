@@ -43,6 +43,11 @@ fn the_preflight_is_answered() {
 }
 
 #[test]
+fn a_query_does_not_change_the_route() {
+    assert!(response_for("GET /__probe?v=localhost HTTP/1.1").starts_with("HTTP/1.1 200 OK"));
+}
+
+#[test]
 fn anything_else_is_not_found() {
     for line in [
         "GET / HTTP/1.1",

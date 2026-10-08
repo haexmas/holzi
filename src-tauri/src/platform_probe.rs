@@ -41,6 +41,12 @@ static REPORTED: AtomicBool = AtomicBool::new(false);
 /// reached the server at all (and whether it sent a preflight).
 static SEEN: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
 
+fn note_seen(line: String) {
+    if let Ok(mut lines) = SEEN.lock() {
+        lines.push(line);
+    }
+}
+
 fn seen() -> Vec<String> {
     SEEN.lock().map(|lines| lines.clone()).unwrap_or_default()
 }
@@ -68,11 +74,26 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) -> std::io::Result<u16> {
     note(app, STARTED_FILE, &format!("port {port}"));
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
+            note_seen(format!(
+                "connect from {}",
+                stream
+                    .peer_addr()
+                    .map_or_else(|_| "?".to_owned(), |a| a.to_string())
+            ));
             std::thread::spawn(move || {
                 if let Err(error) = serve(stream) {
                     log::warn!("platform probe: health request failed: {error}");
                 }
             });
+        }
+    });
+    // Whether the server is reachable in this process at all, apart from the web view.
+    std::thread::spawn(move || {
+        let reached = TcpStream::connect(("127.0.0.1", port)).and_then(|mut stream| {
+            stream.write_all(b"GET /__probe?v=rust HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        });
+        if let Err(error) = reached {
+            note_seen(format!("rust self-connect failed: {error}"));
         }
     });
     let app = app.clone();
@@ -132,6 +153,7 @@ pub fn with_loopback_connect(csp: &str) -> String {
 
 /// The hook on holzi's web resources while probing: the document may fetch from the loopback.
 pub fn allow_loopback(response: &mut tauri::http::Response<std::borrow::Cow<'static, [u8]>>) {
+    // The diagnosis variants also load an image from the loopback (`img-src`).
     let headers = response.headers_mut();
     let Some(policy) = headers.get_mut("Content-Security-Policy") else {
         return;
@@ -139,7 +161,9 @@ pub fn allow_loopback(response: &mut tauri::http::Response<std::borrow::Cow<'sta
     let Ok(text) = policy.to_str() else {
         return;
     };
-    if let Ok(value) = tauri::http::HeaderValue::from_str(&with_loopback_connect(text)) {
+    let patched =
+        with_loopback_connect(text).replacen("img-src ", &format!("img-src {LOOPBACK_SOURCE} "), 1);
+    if let Ok(value) = tauri::http::HeaderValue::from_str(&patched) {
         *policy = value;
     }
 }
@@ -229,9 +253,7 @@ fn serve(mut stream: TcpStream) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut request_line = String::new();
     reader.read_line(&mut request_line)?;
-    if let Ok(mut lines) = SEEN.lock() {
-        lines.push(request_line.trim_end().to_owned());
-    }
+    note_seen(request_line.trim_end().to_owned());
     // Drain the headers; the probe needs none of them.
     loop {
         let mut header = String::new();
@@ -247,7 +269,12 @@ fn serve(mut stream: TcpStream) -> std::io::Result<()> {
 pub fn response_for(request_line: &str) -> String {
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or_default();
-    let path = parts.next().unwrap_or_default();
+    let path = parts
+        .next()
+        .unwrap_or_default()
+        .split('?')
+        .next()
+        .unwrap_or_default();
     let cors = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS\r\nAccess-Control-Allow-Private-Network: true\r\n";
     match (method, path) {
         ("OPTIONS", HEALTH_PATH) => {

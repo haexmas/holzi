@@ -69,5 +69,55 @@ export async function runPlatformProbe(
       detail: `${String(error)}${blocked()}`,
     })
   }
+  if (!steps.at(-1)?.ok) {
+    steps.push({
+      name: 'variants',
+      ok: true,
+      detail: await probeVariants(port, fetchFn),
+    })
+  }
   return { steps, userAgent }
+}
+
+/**
+ * Other ways to reach the loopback server, for diagnosis only (they never fail the probe): the
+ * server lists what reached it, so a variant that arrives narrows down what the web view blocks.
+ */
+async function probeVariants(
+  port: number,
+  fetchFn: typeof fetch,
+): Promise<string> {
+  const results: string[] = []
+  const attempt = async (name: string, run: () => Promise<unknown>) => {
+    try {
+      await run()
+      results.push(`${name}: resolved`)
+    } catch (error) {
+      results.push(`${name}: ${String(error)}`)
+    }
+  }
+  await attempt('localhost', () =>
+    fetchFn(`http://localhost:${port}/__probe?v=localhost`, {
+      cache: 'no-store',
+    }),
+  )
+  await attempt('no-cors', () =>
+    fetchFn(`http://127.0.0.1:${port}/__probe?v=no-cors`, {
+      cache: 'no-store',
+      mode: 'no-cors',
+    }),
+  )
+  if (typeof Image !== 'undefined') {
+    await attempt(
+      'img',
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const image = new Image()
+          image.onload = () => resolve()
+          image.onerror = () => reject(new Error('image error'))
+          image.src = `http://127.0.0.1:${port}/__probe?v=img`
+        }),
+    )
+  }
+  return results.join('; ')
 }
