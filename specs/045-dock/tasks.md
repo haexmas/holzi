@@ -148,9 +148,9 @@ click, close all.
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T045 [P] Add a **Dock** entry to the window-manager glossary in `CONTEXT.md` (Dock, Leiste, Rad, Steuer-Eintrag, angeheftete/laufende App, Instanz = Tab; `dock.*` preference keys; avoid "Taskleiste" in UI text)
-- [ ] T046 Check every new or changed file stays under 500 lines (`wc -l src/lib/wm/dock.ts src/components/wm/Dock*.vue src/components/settings/DockView.vue src/composables/useDock.ts`); split `wheelLayout` into `src/lib/wm/dockWheel.ts` if `dock.ts` exceeds it
-- [ ] T047 Run `pnpm check:wm-state`, `pnpm check:wm-navigation`, `pnpm check:settings`, `pnpm check:agent-actions` (must stay unchanged — no new actions), `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`; fix until green
+- [x] T045 [P] Add a **Dock** entry to the window-manager glossary in `CONTEXT.md` (Dock, Leiste, Rad, Steuer-Eintrag, angeheftete/laufende App, Instanz = Tab; `dock.*` preference keys; avoid "Taskleiste" in UI text)
+- [x] T046 Check every new or changed file stays under 500 lines (`wc -l src/lib/wm/dock.ts src/components/wm/Dock*.vue src/components/settings/DockView.vue src/composables/useDock.ts`); split `wheelLayout` into `src/lib/wm/dockWheel.ts` if `dock.ts` exceeds it
+- [x] T047 Run `pnpm check:wm-state`, `pnpm check:wm-navigation`, `pnpm check:settings`, `pnpm check:agent-actions` (must stay unchanged — no new actions), `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`; fix until green
 - [ ] T048 Walk through `specs/045-dock/quickstart.md` steps 1–11 in `pnpm tauri:dev` (steps 9 on a real Android device if available, step 10 with two devices); record skipped steps in the PR description
 - [ ] T049 Run `pnpm test:e2e --grep dock` plus the scenarios using `open-launcher` (`--grep settings`, `--grep chat-multi-instance`) on Arch, or confirm via `gh pr checks` (E2E job) on Pop!\_OS
 
