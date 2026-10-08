@@ -690,9 +690,10 @@ jobs:
           workspaces: src-tauri
           shared-key: platform-probe-${{ matrix.os }}
 
-      # Without local inference and voice: the probe needs neither, and the build stays short.
+      # Without local inference and voice: the probe needs neither, and the build stays short. The
+      # runner's default shell on purpose: under Git Bash, `perl` is Git's MSYS Perl, which lacks
+      # modules openssl-src (SQLCipher) needs; PowerShell finds Strawberry Perl.
       - name: Build holzi with the probe
-        shell: bash
         run: corepack pnpm tauri build --no-bundle --features platform-probe -- --no-default-features
 
       - name: Run the probe
