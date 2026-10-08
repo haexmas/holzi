@@ -12,6 +12,7 @@
 //! with [`RESULT_MARKER`] and ends the process: 0 when every step passed, 1 when one failed, 2 when
 //! no report came within [`REPORT_TIMEOUT`].
 
+use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,19 +41,21 @@ static REPORTED: AtomicBool = AtomicBool::new(false);
 
 /// Every request line the health server received, so a failed fetch shows whether the web view
 /// reached the server at all (and whether it sent a preflight).
-static SEEN: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+static SEEN: std::sync::Mutex<VecDeque<String>> = std::sync::Mutex::new(VecDeque::new());
 
 fn note_seen(line: String) {
     if let Ok(mut lines) = SEEN.lock() {
         if lines.len() == MAX_SEEN {
-            lines.remove(0);
+            lines.pop_front();
         }
-        lines.push(line);
+        lines.push_back(line);
     }
 }
 
 fn seen() -> Vec<String> {
-    SEEN.lock().map(|lines| lines.clone()).unwrap_or_default()
+    SEEN.lock()
+        .map(|lines| lines.iter().cloned().collect())
+        .unwrap_or_default()
 }
 
 /// Whether this run was asked to probe.
