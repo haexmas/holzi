@@ -8,7 +8,7 @@ import type {
   PDFDocumentLoadingTask,
   PDFDocumentProxy,
   RenderTask,
-} from 'pdfjs-dist'
+} from 'pdfjs-dist/legacy/build/pdf.mjs'
 
 import { loadPdf, renderPdfPage } from '~/lib/files/pdf'
 

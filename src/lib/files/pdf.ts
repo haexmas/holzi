@@ -4,7 +4,9 @@
  * media server in ranges of 1 MiB and fetches only what a page needs. No wasm (the CSP has no
  * `wasm-unsafe-eval`; pdf.js tests for eval itself); CMaps and standard fonts come from `/pdfjs/`
  * (copied there by `nuxt.config.ts`) and are fetched by the page, not the worker. Imported only
- * lazily, so pdf.js stays out of the main bundle.
+ * lazily, so pdf.js stays out of the main bundle. The legacy build: Android System WebView 124
+ * (the CI emulator, and phones that update their web view late) has no `URL.parse`, which pdf.js 6
+ * calls; the legacy build brings it along (platform probe, PR #341).
  */
 import {
   getDocument,
@@ -12,8 +14,8 @@ import {
   type PDFDocumentLoadingTask,
   type PDFDocumentProxy,
   type RenderTask,
-} from 'pdfjs-dist'
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+} from 'pdfjs-dist/legacy/build/pdf.mjs'
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
