@@ -1,7 +1,6 @@
 import type { Translate } from '~/composables/useModelInventory'
-import { ActionInputError } from '~/lib/actions/runner'
+import { ActionChoiceError } from '~/lib/actions/runner'
 import { matchApp } from '~/lib/wm/appMatch'
-import { unknownAppMessage } from '~/lib/wm/apps'
 import type { useWindowManagerStore } from '~/stores/windowManager'
 
 type WmStore = ReturnType<typeof useWindowManagerStore>
@@ -34,7 +33,8 @@ export function registerWmActionHandlers(wm: WmStore, t: Translate): void {
 
   /** The app and start location to open: `appId` may be an id, a replaced id (spec 023 research
    * R11) or a name with typos (spec 046, FR-001); an `at` from the input wins over the alias's. An
-   * input that names no app clearly fails loudly: `openApp` itself silently ignores unknown ids. */
+   * input that names no app clearly asks to choose (FR-004): `openApp` itself silently ignores
+   * unknown ids. */
   function target(input: Record<string, unknown>): {
     appId: string
     at: string | null
@@ -47,7 +47,17 @@ export function registerWmActionHandlers(wm: WmStore, t: Translate): void {
       (app) => app.title ?? t(app.titleKey),
     )
     if (match.kind === 'choice') {
-      throw new ActionInputError(unknownAppMessage(requested, apps), 'appId')
+      throw new ActionChoiceError(
+        `no app matches ${requested} unambiguously`,
+        'appId',
+        match.candidates.map((candidate) => ({
+          value: candidate.appId,
+          label: candidate.title,
+          ...(candidate.unavailableKey
+            ? { unavailable: t(candidate.unavailableKey) }
+            : {}),
+        })),
+      )
     }
     return {
       appId: match.appId,

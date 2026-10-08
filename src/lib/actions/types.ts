@@ -66,7 +66,17 @@ export type ActionErrorCode =
   | 'target_not_found'
   | 'forbidden_for_agents'
   | 'app_unavailable'
+  | 'needs_choice'
   | 'failed'
+
+/** A candidate of a `needs_choice` outcome (spec 046): what the user sees and what the action is
+ * run with again when the user picks it. */
+export type ChoiceOption = {
+  value: string
+  label: string
+  /** Why it cannot be picked right now; the choice shows it disabled. */
+  unavailable?: string
+}
 
 export type ActionOutcome =
   | { ok: true; result: unknown }
@@ -75,6 +85,8 @@ export type ActionOutcome =
       code: ActionErrorCode
       message: string
       field?: string
+      /** The candidates of a `needs_choice` outcome. */
+      options?: ChoiceOption[]
       /** The raw error a handler threw (`failed` only), for in-process callers that parse
        * structured backend errors; never meant for display or for agents. */
       error?: unknown

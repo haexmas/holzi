@@ -170,6 +170,33 @@ test('toOutcomeWire never carries the raw error of a failed handler (FR-006)', (
   })
 })
 
+test('toOutcomeWire passes the candidates of needs_choice on to Rust', () => {
+  const options = [
+    { value: 'extension.mail', label: 'haex-mail' },
+    {
+      value: 'extension.files',
+      label: 'haex-files',
+      unavailable: 'Wird übertragen',
+    },
+  ]
+  assert.deepEqual(
+    toOutcomeWire({
+      ok: false,
+      code: 'needs_choice',
+      message: 'no app matches haex unambiguously',
+      field: 'appId',
+      options,
+    }),
+    {
+      ok: false,
+      code: 'needs_choice',
+      field: 'appId',
+      message: 'no app matches haex unambiguously',
+      options,
+    },
+  )
+})
+
 test('every guardrail action is refused for the built-in agent before its handler runs (FR-003, SC-003)', async () => {
   const guardrails = ALL_ACTIONS.filter((a) => a.scope === 'guardrails')
   assert.ok(guardrails.length > 0)

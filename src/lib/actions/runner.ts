@@ -4,6 +4,7 @@
 import { validate } from './schema.ts'
 import type {
   ActionCaller,
+  ChoiceOption,
   ActionOutcome,
   ActionTarget,
   ActionTargetIds,
@@ -62,6 +63,21 @@ export class ActionInputError extends Error {
     super(message)
     this.name = 'ActionInputError'
     this.field = field
+  }
+}
+
+/** Thrown by a handler whose input fits several things, or none well enough (an ambiguous app
+ * name, spec 046). Becomes `needs_choice` with the candidates; the built-in agent's tool round then
+ * asks the user and runs the action again with the chosen value in `field`. */
+export class ActionChoiceError extends Error {
+  readonly field: string
+  readonly options: ChoiceOption[]
+
+  constructor(message: string, field: string, options: ChoiceOption[]) {
+    super(message)
+    this.name = 'ActionChoiceError'
+    this.field = field
+    this.options = options
   }
 }
 
@@ -168,6 +184,14 @@ export function createActionRunner(deps: ActionRunnerDeps) {
     } catch (error) {
       if (error instanceof ActionInputError)
         return failure('invalid_input', error.message, error.field)
+      if (error instanceof ActionChoiceError)
+        return {
+          ok: false,
+          code: 'needs_choice',
+          message: error.message,
+          field: error.field,
+          options: error.options,
+        }
       return {
         ok: false,
         code: 'failed',

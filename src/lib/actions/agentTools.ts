@@ -7,6 +7,7 @@ import type {
   ActionDefinition,
   ActionOutcome,
   ActionTarget,
+  ChoiceOption,
   JsonSchema,
 } from './types.ts'
 
@@ -102,7 +103,13 @@ export function listAgentActions(
 /** What travels back to Rust after an action ran (`respond_action_call`, contracts/tauri-commands.md). */
 export type ActionOutcomeWire =
   | { ok: true; result: unknown }
-  | { ok: false; code: string; field?: string; message: string }
+  | {
+      ok: false
+      code: string
+      field?: string
+      message: string
+      options?: ChoiceOption[]
+    }
 
 /**
  * The runner's outcome without the raw error a handler threw: that is for in-process callers and
@@ -115,6 +122,7 @@ export function toOutcomeWire(outcome: ActionOutcome): ActionOutcomeWire {
     code: outcome.code,
     ...(outcome.field === undefined ? {} : { field: outcome.field }),
     message: outcome.message,
+    ...(outcome.options === undefined ? {} : { options: outcome.options }),
   }
 }
 
