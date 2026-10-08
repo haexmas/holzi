@@ -33,8 +33,9 @@ Abgestimmter Entwurf: [`docs/plans/2026-10-07-dock-design.md`](../../docs/plans/
   Apps zeigt. Es erscheint als **Leiste** oder als **Rad**.
 - **Steuer-Eintrag**: einer der drei Einträge Launcher, Fensterübersicht, Arbeitsbereichs-Übersicht.
 - **Angeheftete App**: eine App, die der Nutzer dauerhaft ins Dock gelegt hat.
-- **Instanz**: ein geöffneter Tab einer App (siehe `CONTEXT.md`); ein Fenster kann Tabs verschiedener
-  Apps enthalten.
+- **Instanz**: eine geöffnete App, entweder in einem eigenen Fenster oder als Tab neben anderen Tabs in
+  einem Fenster. Technisch ist jede Instanz ein Tab (siehe `CONTEXT.md`); ein eigenes Fenster ist ein
+  Fenster mit genau diesem einen Tab.
 - **Laufende App**: eine App mit mindestens einer Instanz in irgendeinem Arbeitsbereich.
 - **Platzierung**: Kante (oben, unten, links, rechts) plus Ausrichtung entlang der Kante (Anfang,
   Mitte, Ende). „Unten, Ende“ ist die Ecke unten rechts.
