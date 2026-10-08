@@ -118,7 +118,7 @@ answer (FR-004–FR-012).
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [X] T035 Check every new or changed file stays under 500 lines (`wc -l` on all files from the plan's structure tree); files already above 500 must not grow by more than their minimal hook
-- [ ] T036 Run `cargo fmt --check`, `pnpm lint:rust` (both feature sets), `cargo test --manifest-path src-tauri/Cargo.toml`, `pnpm check:wm-navigation`, `pnpm check:agent-actions`, `pnpm check:chat-state`, `pnpm check:passwords`, `pnpm check:templates`, `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`; fix until green
+- [X] T036 Run `cargo fmt --check`, `pnpm lint:rust` (both feature sets), `cargo test --manifest-path src-tauri/Cargo.toml`, `pnpm check:wm-navigation`, `pnpm check:agent-actions`, `pnpm check:chat-state`, `pnpm check:passwords`, `pnpm check:templates`, `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`; fix until green
 - [ ] T037 Walk through `specs/046-agent-choice-prompt/quickstart.md` steps 1–13 in `pnpm tauri:dev:cuda` with Qwen3-4B; record skipped steps in the PR description
 - [ ] T038 Run the model evaluation (`cargo test --manifest-path src-tauri/Cargo.toml --test model_tool_eval -- --ignored --nocapture`, setup as in `specs/032-model-operates-holzi/quickstart.md:76`) against Qwen3-4B; record overall, `change` and `clarify` quotas and the SC-005/SC-006 verdict in new `specs/046-agent-choice-prompt/eval-results.md`
 - [X] T039 Add **Rückfrage** and **Kandidat** to the "Chat runtime" section of `CONTEXT.md` (`:89`)
