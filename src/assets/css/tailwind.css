@@ -155,15 +155,22 @@
 
 @layer components {
   /* Spec 043 (FR-011, FR-012): on a phone the window is drawn edge to edge; the root of a page keeps
-   * clear of the system bars, the display cutout and the keyboard. The variables come from
-   * `plugins/deviceInsets.client.ts`; without them (a desktop) nothing changes. */
+   * clear of the system bars and the display cutout, and with `holzi-keyboard-room` of the keyboard
+   * too. The variables come from `plugins/deviceInsets.client.ts`; without them (a desktop) nothing
+   * changes. */
   .holzi-safe-area {
     padding-top: var(--holzi-inset-top, 0px);
     padding-right: var(--holzi-inset-right, 0px);
+    padding-bottom: var(--holzi-inset-bottom, 0px);
+    padding-left: var(--holzi-inset-left, 0px);
+  }
+
+  /* Only where the content can follow (one column, windows filling the screen): floating windows on
+   * a wide screen would only be cut off by a shorter workspace. */
+  .holzi-keyboard-room {
     padding-bottom: calc(
       var(--holzi-inset-bottom, 0px) + var(--holzi-inset-keyboard, 0px)
     );
-    padding-left: var(--holzi-inset-left, 0px);
   }
 
   .chat-markdown {

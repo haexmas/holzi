@@ -440,10 +440,7 @@ impl ChatState {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
-        let host_only = host_tools(
-            &self.children,
-            crate::platform::capabilities().command_tool,
-        );
+        let host_only = host_tools(&self.children, crate::platform::capabilities().command_tool);
         let tools = std::mem::replace(
             &mut *self.tool_registry.lock().unwrap_or_else(|e| e.into_inner()),
             host_only,

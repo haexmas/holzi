@@ -92,7 +92,8 @@ export function useModelInventory(deps: ModelInventoryDeps) {
     const remoteGroups = providerList.value
       .filter(
         (p) =>
-          p.kind === 'api_key' || (p.kind === 'cli_delegate' && delegatesHere()),
+          p.kind === 'api_key' ||
+          (p.kind === 'cli_delegate' && delegatesHere()),
       )
       .map<ModelGroup>((p) => ({
         providerId: p.id,

@@ -56,6 +56,14 @@ export const EXCLUSIONS: PlatformExclusion[] = [
     counterCase: 'lock-twice',
   },
   {
+    scenario: 'passwords-organize',
+    platform: 'android',
+    kind: 'pending',
+    stage: '2',
+    reason:
+      'drops a selection on the breadcrumbs, which hide while a selection is active (spec 036); on Linux the drop lands while they fade out, on the emulator they are already gone. To be settled in spec 036 before stage 2',
+  },
+  {
     scenario: 'appearance-sync-two-devices',
     platform: 'android',
     kind: 'pending',
@@ -180,29 +188,6 @@ export const EXCLUSIONS: PlatformExclusion[] = [
     kind: 'pending',
     stage: '2',
     reason: 'needs a group that mixes the Android device with Linux devices',
-  },
-  {
-    scenario: 'passwords-organize',
-    platform: 'android',
-    kind: 'pending',
-    stage: '1c',
-    reason:
-      'after the second window closes, the selection bar hides the breadcrumbs on the emulator; to be found with the phone layout',
-  },
-  {
-    scenario: 'tab-content-isolation',
-    platform: 'android',
-    kind: 'pending',
-    stage: '1c',
-    reason:
-      'history.back() in the web view closes the chat window on Android; belongs to the back gesture (FR-013)',
-  },
-  {
-    scenario: 'window-close-while-streaming',
-    platform: 'android',
-    kind: 'pending',
-    stage: '1c',
-    reason: 'closing the window has no Android mapping yet (removing the task)',
   },
 ]
 

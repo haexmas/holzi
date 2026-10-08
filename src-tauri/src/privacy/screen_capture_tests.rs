@@ -40,7 +40,10 @@ fn the_choice_is_kept_and_counts_for_this_device_only() {
     let (_dir, vault, device) = vault();
     set(&vault, device, false);
     assert!(!read(&vault, device));
-    assert!(read(&vault, Uuid::new_v4()), "another device keeps the default");
+    assert!(
+        read(&vault, Uuid::new_v4()),
+        "another device keeps the default"
+    );
     set(&vault, device, true);
     assert!(read(&vault, device));
 }

@@ -3,7 +3,7 @@
 // its web view. One device holds one app's data, so a scenario has at most one Android device.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ColorScheme, Instance } from '../instance.ts'
+import type { ColorScheme, Instance, PhoneControls } from '../instance.ts'
 import { newSessionWithRetry } from '../instance.ts'
 import { createPage } from '../page.ts'
 import type { StepRecorder } from '../page.ts'
@@ -34,21 +34,70 @@ export function mapAndroidUrl(url: string): string {
 /**
  * Brings the device into the state a scenario expects before the app starts: its data cleared unless
  * the scenario reuses it, a desktop-sized display (about 1280×800 dp, like the Linux virtual screen)
- * and the requested colour scheme.
+ * or a phone-sized one (360×800 dp), and the requested colour scheme. The size is set before the
+ * start: the web view does not take a new density over while it runs.
  */
 export function prepareDevice(
   adb: Adb,
-  options: { reuse?: boolean; colorScheme?: ColorScheme },
+  options: {
+    reuse?: boolean
+    colorScheme?: ColorScheme
+    phoneScreen?: boolean
+  },
 ): void {
   if (options.reuse !== true) adb.shell('pm', 'clear', PACKAGE)
-  adb.shell('wm', 'size', '2560x1600')
-  adb.shell('wm', 'density', '320')
+  if (options.phoneScreen === true) {
+    adb.shell('wm', 'size', '1080x2400')
+    adb.shell('wm', 'density', '480')
+  } else {
+    adb.shell('wm', 'size', '2560x1600')
+    adb.shell('wm', 'density', '320')
+  }
   adb.shell(
     'cmd',
     'uimode',
     'night',
     options.colorScheme === 'dark' ? 'yes' : 'no',
   )
+}
+
+/** The phone's own controls for the Android scenarios (spec 043, contract e2e-android.md). */
+export function phoneControls(adb: Adb): PhoneControls {
+  return {
+    back: () => void adb.shell('input', 'keyevent', 'KEYCODE_BACK'),
+    // As the system does under memory pressure: no shutdown of the app's own. `am kill` does not
+    // end a process that has only just gone to the background, so the app's own user ends it.
+    killInBackground: () => {
+      adb.shell('input', 'keyevent', 'KEYCODE_HOME')
+      const pid = adb.pidof(PACKAGE)
+      if (pid !== undefined) adb.runAs(PACKAGE, `kill -9 ${pid}`)
+    },
+    screenProtected: () => windowFlags(adb).includes('SECURE'),
+  }
+}
+
+/**
+ * What closing the window is on a phone: the person swipes the app away among the recent apps, which
+ * removes its task (`cmd activity stack remove`).
+ */
+export function removeTask(adb: Adb): void {
+  const list = adb.shell('cmd', 'activity', 'stack', 'list')
+  const task = new RegExp(
+    `taskId=(\\d+): ${PACKAGE.replaceAll('.', '\\.')}/`,
+  ).exec(list)?.[1]
+  if (task === undefined) throw new Error(`no task of ${PACKAGE} to remove`)
+  adb.shell('cmd', 'activity', 'stack', 'remove', task)
+}
+
+/** The flags of the app's window, as `dumpsys window` lists them (`fl=… SECURE …`). */
+function windowFlags(adb: Adb): string {
+  const dump = adb.shell('dumpsys', 'window', 'windows')
+  const start = dump.search(new RegExp(`Window\\{[^}]*${PACKAGE}`))
+  if (start === -1) return ''
+  const rest = dump.slice(start)
+  const next = rest.slice(1).search(/\n\s*Window #/)
+  const block = next === -1 ? rest : rest.slice(0, next + 1)
+  return block.match(/fl=[^\n]*/)?.[0] ?? ''
 }
 
 /** Puts the device's display back the way it was. */
@@ -82,6 +131,8 @@ export interface AndroidStartOptions {
   colorScheme?: ColorScheme
   /** The app's data stays from the instance before. */
   reuse?: boolean
+  /** A phone-sized screen instead of the desktop-sized one. */
+  phoneScreen?: boolean
   step?: StepRecorder
 }
 
@@ -149,10 +200,8 @@ export async function startAndroidInstance(
       },
     },
     mapUrl: mapAndroidUrl,
-    closeWindow: () =>
-      Promise.reject(
-        new Error('closing the window has no Android mapping yet (stage 1c)'),
-      ),
+    replaceOnNavigate: true,
+    closeWindow: () => Promise.resolve(removeTask(adb)),
   })
   return {
     ...page,
@@ -166,6 +215,7 @@ export async function startAndroidInstance(
     alive,
     stop,
     step,
+    phone: phoneControls(adb),
   }
 }
 
