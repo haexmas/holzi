@@ -95,7 +95,7 @@ defineExpose({ reset })
   >
     <div class="mx-auto max-w-3xl">
       <div
-        class="rounded-2xl border border-border bg-background shadow-sm transition-shadow focus-within:border-foreground/30 focus-within:shadow-md"
+        class="@container/composer rounded-2xl border border-border bg-background shadow-sm transition-shadow focus-within:border-foreground/30 focus-within:shadow-md"
       >
         <textarea
           ref="textareaRef"

@@ -253,12 +253,22 @@ onBeforeUnmount(() => {
       :disabled="disabled"
       @click="togglePopover"
     >
-      <span class="max-w-[8rem] truncate sm:max-w-[11rem] lg:max-w-[15rem]">{{
-        truncatedModelName
-      }}</span>
+      <!-- Too narrow a composer (`composer` container in Composer.vue)
+           shows an icon instead of the model and effort text. -->
+      <Icon
+        name="lucide:sparkles"
+        class="h-3.5 w-3.5 shrink-0 @lg/composer:hidden"
+        :aria-hidden="true"
+      />
+      <span
+        class="hidden max-w-[8rem] truncate @lg/composer:inline @xl/composer:max-w-[11rem] @2xl/composer:max-w-[15rem]"
+        >{{ truncatedModelName }}</span
+      >
       <template v-if="effortLabel">
-        <span aria-hidden="true">·</span>
-        <span class="shrink-0">{{ effortLabel }}</span>
+        <span class="hidden @lg/composer:inline" aria-hidden="true">·</span>
+        <span class="hidden shrink-0 @lg/composer:inline">{{
+          effortLabel
+        }}</span>
       </template>
       <Icon
         name="lucide:chevron-down"
