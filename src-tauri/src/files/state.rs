@@ -1,0 +1,69 @@
+//! What the file browser keeps for the running app (spec 044): holzi's own places, the known places,
+//! the thumbnail cache and the open folder watches of the window.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, MutexGuard, PoisonError};
+
+use crate::files::local::{known_places, OwnPlaces, Place};
+use crate::files::thumbnails::CACHE_FOLDER;
+
+/// The file browser's state, managed by Tauri.
+pub struct FilesState {
+    pub own: OwnPlaces,
+    pub known: Vec<Place>,
+    pub thumbnails: PathBuf,
+    #[cfg(not(target_os = "ios"))]
+    watches: Mutex<HashMap<u64, crate::files::local::watch::FolderWatch>>,
+    #[cfg(target_os = "ios")]
+    watches: Mutex<HashMap<u64, ()>>,
+    next_watch: AtomicU64,
+}
+
+impl FilesState {
+    pub fn from_app<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Self {
+        use tauri::Manager;
+        let thumbnails = app.path().app_cache_dir().map_or_else(
+            |_| std::env::temp_dir().join("holzi-files-thumbnails"),
+            |dir| dir.join(CACHE_FOLDER),
+        );
+        Self::new(OwnPlaces::from_app(app), known_places(app), thumbnails)
+    }
+
+    pub fn new(own: OwnPlaces, known: Vec<Place>, thumbnails: PathBuf) -> Self {
+        Self {
+            own,
+            known,
+            thumbnails,
+            watches: Mutex::new(HashMap::new()),
+            next_watch: AtomicU64::new(1),
+        }
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    fn watches(&self) -> MutexGuard<'_, HashMap<u64, crate::files::local::watch::FolderWatch>> {
+        self.watches.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Keeps `watch` until [`FilesState::unwatch`]; returns its id.
+    #[cfg(not(target_os = "ios"))]
+    pub fn keep_watch(&self, watch: crate::files::local::watch::FolderWatch) -> u64 {
+        let id = self.next_watch.fetch_add(1, Ordering::SeqCst);
+        self.watches().insert(id, watch);
+        id
+    }
+
+    /// Ends the watch `id`; true when there was one.
+    pub fn unwatch(&self, id: u64) -> bool {
+        #[cfg(not(target_os = "ios"))]
+        {
+            self.watches().remove(&id).is_some()
+        }
+        #[cfg(target_os = "ios")]
+        {
+            let _ = id;
+            false
+        }
+    }
+}

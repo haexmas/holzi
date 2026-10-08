@@ -41,4 +41,10 @@ if ! grep -q HOLZI_PROBE_RESULT "$result"; then
   adb logcat -d -b all | grep -iE "holzi|tauri|rust|chromium|AndroidRuntime" | tail -n 200 || true
 fi
 cat "$result"
-node scripts/run-platform-probe.ts --judge "$result"
+if ! node scripts/run-platform-probe.ts --judge "$result"; then
+  # The web view's own reasons (policy, cleartext, network access) are only in logcat.
+  adb logcat -d -s chromium:* cr_*:* | tail -n 100 || true
+  # Console messages of the web view reach logcat under Tauri's own tags.
+  adb logcat -d | grep -iE "127\.0\.0\.1|fetch|cors|private network|console|cleartext" | tail -n 100 || true
+  exit 1
+fi

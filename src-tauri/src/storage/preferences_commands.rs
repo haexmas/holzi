@@ -64,6 +64,19 @@ fn is_background_value(value: &str) -> bool {
         })
 }
 
+/// Spec 044 (data-model.md): the file browser's device preferences.
+fn is_valid_files_value(key: &str, value: &str) -> bool {
+    match key {
+        "files.view" => matches!(value, "list" | "grid"),
+        "files.hidden" => matches!(value, "true" | "false"),
+        "files.sort" => value.split_once(':').is_some_and(|(by, direction)| {
+            matches!(by, "name" | "size" | "modified" | "type")
+                && matches!(direction, "asc" | "desc")
+        }),
+        _ => true,
+    }
+}
+
 /// Checks the value of a key that has a fixed set of choices or shape; every other key takes any
 /// value. Spec 034: the clipboard clearing time of the password manager (0, 15, 30, 60 or 120
 /// seconds). Spec 042: the workspace background.
@@ -73,6 +86,11 @@ pub(crate) fn validate_value(key: &str, value: &str) -> Result<()> {
     {
         return Err(HolziError::InvalidInput {
             reason: format!("{key} must be one of 0, 15, 30, 60, 120"),
+        });
+    }
+    if !is_valid_files_value(key, value) {
+        return Err(HolziError::InvalidInput {
+            reason: format!("{key} has no such value"),
         });
     }
     if key == BACKGROUND_KEY && !is_background_value(value) {

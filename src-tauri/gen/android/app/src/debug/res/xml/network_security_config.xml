@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds (spec 043): `tauri android dev` loads the development server over cleartext, as the
+     debug manifest placeholder `usesCleartextTraffic` allowed before this file existed. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

@@ -1,0 +1,97 @@
+/**
+ * The file browser's commands (spec 044, contracts/tauri-commands.md). Every call acts as the
+ * user; paths are checked in Rust. Errors come back as `FilesError` (`{ code, message }`).
+ */
+import { Channel, invoke } from '@tauri-apps/api/core'
+import type { Entry } from '@bindings/Entry'
+import type { FilesError } from '@bindings/FilesError'
+import type { FolderChanged } from '@bindings/FolderChanged'
+import type { SourceRef } from '@bindings/SourceRef'
+import type { Sources } from '@bindings/Sources'
+import type { TextContent } from '@bindings/TextContent'
+
+/** A `FilesError` from a rejected command, or `undefined` for anything else. */
+export function asFilesError(error: unknown): FilesError | undefined {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    'message' in error
+  ) {
+    return error as FilesError
+  }
+  return undefined
+}
+
+export function useFiles() {
+  async function sourcesAsync(): Promise<Sources> {
+    return await invoke<Sources>('files_sources')
+  }
+
+  async function listAsync(source: SourceRef, path: string): Promise<Entry[]> {
+    return await invoke<Entry[]>('files_list', { source, path })
+  }
+
+  async function statAsync(source: SourceRef, path: string): Promise<Entry> {
+    return await invoke<Entry>('files_stat', { source, path })
+  }
+
+  async function readTextAsync(
+    source: SourceRef,
+    path: string,
+  ): Promise<TextContent> {
+    return await invoke<TextContent>('files_read_text', { source, path })
+  }
+
+  async function readImageAsync(
+    source: SourceRef,
+    path: string,
+  ): Promise<ArrayBuffer> {
+    return await invoke<ArrayBuffer>('files_read_image', { source, path })
+  }
+
+  async function thumbnailAsync(
+    source: SourceRef,
+    entry: Entry,
+  ): Promise<ArrayBuffer> {
+    return await invoke<ArrayBuffer>('files_thumbnail', {
+      source,
+      path: entry.path,
+      size: entry.size ?? 0,
+      modifiedMs: entry.modifiedMs ?? 0,
+    })
+  }
+
+  /** Watches `path`; `onChange` runs for every debounced batch. Resolves to the watch id. */
+  async function watchAsync(
+    path: string,
+    onChange: (change: FolderChanged) => void,
+  ): Promise<number> {
+    const channel = new Channel<FolderChanged>()
+    channel.onmessage = onChange
+    return await invoke<number>('files_watch', { path, channel })
+  }
+
+  async function unwatchAsync(id: number): Promise<void> {
+    await invoke('files_unwatch', { id })
+  }
+
+  async function openSystemAsync(
+    source: SourceRef,
+    path: string,
+  ): Promise<void> {
+    await invoke('files_open_system', { source, path })
+  }
+
+  return {
+    sourcesAsync,
+    listAsync,
+    statAsync,
+    readTextAsync,
+    readImageAsync,
+    thumbnailAsync,
+    watchAsync,
+    unwatchAsync,
+    openSystemAsync,
+  }
+}

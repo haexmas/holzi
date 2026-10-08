@@ -227,6 +227,11 @@ rmcp = { version = "=3.5.0", default-features = false, features = ["client", "tr
 # 007-cli-delegate FR-003) — was dev-dependency-only (tests used it for
 # fixtures); cli_delegate's production code needs it too.
 tempfile = "3"
+# Spec 044 (research R6, R7): the file browser's search walk (`same_file_system`, no links) and its
+# thumbnails (only the decoders it needs, SIMD downscaling).
+walkdir = "2.5"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+fast_image_resize = { version = "6.1", features = ["image"] }
 
 # `claude setup-token` is a raw-ANSI Ink TUI, not a line-oriented CLI — piped,
 # non-PTY stdio produces zero output (research.md §5, live-verified). Only
@@ -285,7 +290,9 @@ libc = "0.2"
 jni = "0.22"
 ndk-context = "0.1"
 
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+# Spec 044 (research R11): the file browser watches its open folder on Android too (inotify);
+# extensions keep answering "not available" there (spec 017).
+[target.'cfg(not(target_os = "ios"))'.dependencies]
 notify = "8"
 notify-debouncer-full = "0.5"
 

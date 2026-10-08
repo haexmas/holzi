@@ -1,10 +1,110 @@
-//! Files the person hands to holzi (spec 043): chosen in the system's dialog, read and written
-//! the same way on every platform.
+//! Files in holzi. Spec 043: files the person hands to holzi, chosen in the system's dialog, read
+//! and written the same way on every platform (`picked`, `commands`). Spec 044: the file browser's
+//! core, files of the device and of storages for the window, the built-in agent and extensions
+//! (`local`, [`FilesError`]).
 
+pub mod access;
+pub mod browser_commands;
 pub mod commands;
+pub mod kind;
+pub mod local;
 pub mod picked;
+pub mod state;
+pub mod thumbnails;
 
 pub use picked::PickedFile;
 
 #[cfg(test)]
 pub mod test_support;
+
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+/// Why a file operation was refused (contracts/tauri-commands.md). The message never holds
+/// credentials or file contents (FR-033, FR-038).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS, thiserror::Error)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+#[error("{message}")]
+pub struct FilesError {
+    pub code: FilesErrorCode,
+    pub message: String,
+}
+
+/// The kinds of [`FilesError`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub enum FilesErrorCode {
+    /// The path is not absolute, holds `.`/`..` after its existing part, or a broken link.
+    InvalidPath,
+    Exists,
+    IntoItself,
+    NoSpace,
+    HolziOwned,
+    NoAccess,
+    NotFound,
+    Binary,
+    Broken,
+    TooLarge,
+    Blocked,
+    NotGranted,
+    Unsupported,
+}
+
+impl FilesError {
+    pub fn new(code: FilesErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+
+    pub fn invalid_path(message: impl Into<String>) -> Self {
+        Self::new(FilesErrorCode::InvalidPath, message)
+    }
+}
+
+/// Where the file browser looks (spec 044 FR-002): the device, or a storage of spec 038.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub enum SourceRef {
+    Device,
+    Storage {
+        #[serde(rename = "storageId")]
+        storage_id: String,
+    },
+}
+
+/// A file or a folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub enum EntryKind {
+    File,
+    Dir,
+}
+
+/// One entry of a folder (data-model.md).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub struct Entry {
+    pub name: String,
+    /// Device: the absolute path; storage: the key, folders ending in `/`.
+    pub path: String,
+    pub kind: EntryKind,
+    /// Files only.
+    #[ts(type = "number | null")]
+    pub size: Option<u64>,
+    #[ts(type = "number | null")]
+    pub modified_ms: Option<i64>,
+    pub mime: Option<String>,
+    pub hidden: bool,
+    pub symlink: bool,
+    /// The system denies access.
+    pub no_access: bool,
+    /// In one of holzi's own places: read-only for the user (FR-037).
+    pub holzi_owned: bool,
+}

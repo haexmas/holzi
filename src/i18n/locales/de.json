@@ -148,7 +148,8 @@
       "chat": "Chat",
       "settings": "Einstellungen",
       "passwords": "Passwörter",
-      "extension": "Erweiterung"
+      "extension": "Erweiterung",
+      "files": "Dateien"
     },
     "launcher": {
       "lock": "Sperren",
@@ -199,6 +200,10 @@
       "trash": "Papierkorb",
       "generator": "Generator",
       "import": "Import"
+    },
+    "files": {
+      "device": "Dieses Gerät",
+      "storage": "Speicher"
     }
   },
   "chat": {
@@ -1349,7 +1354,31 @@
     "owners": {
       "storage": "Speicher"
     },
-    "menu": "Menü",
+    "menu": {
+      "button": "Aktionen für {name}",
+      "open": "Öffnen",
+      "edit": "Bearbeiten",
+      "newSubfolder": "Neuer Unterordner",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "copyUsername": "Benutzername kopieren",
+      "copyPassword": "Passwort kopieren",
+      "cut": "Ausschneiden",
+      "copy": "Kopieren",
+      "paste": "Einfügen",
+      "delete": "Löschen",
+      "restore": "Wiederherstellen",
+      "deleteForGood": "Endgültig löschen",
+      "newEntry": "Neuer Eintrag",
+      "newFolder": "Neuer Ordner",
+      "emptyTrash": "Papierkorb leeren",
+      "keys": {
+        "mod": "Strg",
+        "shift": "Umschalt",
+        "delete": "Entf",
+        "enter": "Eingabe"
+      }
+    },
     "new": "Neu",
     "newMenu": {
       "entry": "Schlüssel",
@@ -1767,31 +1796,6 @@
       "missingCount": "{count} nicht mehr vorhanden | {count} nicht mehr vorhanden",
       "movedSome": "{moved}, {missing}"
     },
-    "menu": {
-      "button": "Aktionen für {name}",
-      "open": "Öffnen",
-      "edit": "Bearbeiten",
-      "newSubfolder": "Neuer Unterordner",
-      "moveUp": "Nach oben",
-      "moveDown": "Nach unten",
-      "copyUsername": "Benutzername kopieren",
-      "copyPassword": "Passwort kopieren",
-      "cut": "Ausschneiden",
-      "copy": "Kopieren",
-      "paste": "Einfügen",
-      "delete": "Löschen",
-      "restore": "Wiederherstellen",
-      "deleteForGood": "Endgültig löschen",
-      "newEntry": "Neuer Eintrag",
-      "newFolder": "Neuer Ordner",
-      "emptyTrash": "Papierkorb leeren",
-      "keys": {
-        "mod": "Strg",
-        "shift": "Umschalt",
-        "delete": "Entf",
-        "enter": "Eingabe"
-      }
-    },
     "references": {
       "listMark": "Verweis",
       "kind": {
@@ -1968,6 +1972,75 @@
       "for": "„{name}“ möchte einen Speicher bei {provider} nutzen.",
       "onlyHere": "holzi fragt Zugangsdaten nur in diesem Fenster über der ganzen App, nie im Tab einer Erweiterung. Sie landen im Passwortmanager; die Erweiterung bekommt sie nie.",
       "confirm": "Testen und speichern"
+    }
+  },
+  "files": {
+    "back": "Zurück",
+    "forward": "Vor",
+    "up": "Übergeordneter Ordner",
+    "reload": "Neu laden",
+    "pathBar": "Pfad",
+    "menu": "Sortieren und anzeigen",
+    "empty": "Dieser Ordner ist leer.",
+    "symlink": "Verknüpfung",
+    "holziOwned": "Eigene Daten von holzi, nur lesen",
+    "view": {
+      "list": "Als Liste zeigen",
+      "grid": "Als Raster zeigen"
+    },
+    "sort": {
+      "name": "Name",
+      "size": "Größe",
+      "modified": "Geändert",
+      "type": "Typ"
+    },
+    "hidden": {
+      "show": "Versteckte Dateien zeigen",
+      "hide": "Versteckte Dateien ausblenden"
+    },
+    "sidebar": {
+      "label": "Orte und Laufwerke",
+      "show": "Seitenleiste zeigen",
+      "hide": "Seitenleiste ausblenden",
+      "places": "Orte",
+      "drives": "Laufwerke",
+      "free": "{size} frei"
+    },
+    "places": {
+      "home": "Persönlicher Ordner",
+      "pictures": "Bilder",
+      "downloads": "Downloads",
+      "documents": "Dokumente",
+      "desktop": "Schreibtisch",
+      "videos": "Videos"
+    },
+    "viewer": {
+      "close": "Schließen",
+      "previous": "Vorige Datei",
+      "next": "Nächste Datei",
+      "openSystem": "Mit System-App öffnen",
+      "truncated": "Nur die ersten 5 MB werden gezeigt."
+    },
+    "info": {
+      "name": "Name",
+      "type": "Typ",
+      "size": "Größe",
+      "modified": "Geändert"
+    },
+    "error": {
+      "invalidPath": "Dieser Pfad lässt sich nicht öffnen.",
+      "notFound": "Nicht gefunden.",
+      "noAccess": "Kein Zugriff: Das System verweigert ihn.",
+      "binary": "Das ist keine Textdatei.",
+      "tooLarge": "Zu groß, um sie hier zu zeigen.",
+      "broken": "Dieses Bild lässt sich nicht zeigen.",
+      "holziOwned": "Eigene Daten von holzi lassen sich nicht ändern.",
+      "blocked": "Nicht verfügbar.",
+      "notGranted": "Nicht freigegeben.",
+      "unsupported": "Hier noch nicht verfügbar.",
+      "exists": "Diesen Namen gibt es schon.",
+      "intoItself": "Ein Ordner kann nicht in sich selbst.",
+      "noSpace": "Nicht genug Platz."
     }
   }
 }

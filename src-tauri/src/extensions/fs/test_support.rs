@@ -92,7 +92,7 @@ pub(crate) fn setup() -> Setup {
     let dialogs = Arc::new(FakeDialogs::default());
     let host = Arc::new(ExtensionHost::default());
     host.fs.set_environment(FsEnvironment {
-        denied: vec![protected.clone()],
+        denied: crate::files::local::OwnPlaces::new(vec![protected.clone()]),
         known: vec![("home", base.clone())],
         dialogs: Arc::clone(&dialogs) as Arc<dyn FileDialogs>,
         scratch: scratch.clone(),

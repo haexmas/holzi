@@ -1,6 +1,6 @@
 /**
  * Thumbnails of image attachments (spec 036, FR-041, research R14). One cache for the whole window
- * (`lib/passwords/thumbnails.ts`), keyed by the checksum, so the same file in two entries is
+ * (`lib/images/thumbnailCache.ts`), keyed by the checksum, so the same file in two entries is
  * rendered once. A render fetches the bytes, reads the pixel size from the header (above
  * `MAX_PREVIEW_PIXELS` there is no thumbnail), lets the engine decode at the small size and keeps
  * only the small image as an object URL; the full bytes are dropped at once. The cache is cleared
@@ -14,7 +14,7 @@ import {
   ThumbnailNotNow,
   type Thumbnail,
   type ThumbnailCache,
-} from '~/lib/passwords/thumbnails'
+} from '~/lib/images/thumbnailCache'
 
 /** The longest edge of a thumbnail in pixels: twice the 160 CSS pixels of a card, for sharp
  * thumbnails on high-density screens. */

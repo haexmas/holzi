@@ -82,6 +82,9 @@ jobs:
       - name: Check the platform probe
         run: corepack pnpm check:platform-probe
 
+      - name: Check the file browser
+        run: corepack pnpm check:files
+
       - name: Check Android versions against the devShell
         run: corepack pnpm check:android-versions
 

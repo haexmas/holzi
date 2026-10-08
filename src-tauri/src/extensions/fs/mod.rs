@@ -26,6 +26,7 @@ use crate::extensions::permissions::store::candidates;
 use crate::extensions::permissions::{
     evaluate, Action, Decision, PermissionKind, PermissionRequest, RequestTarget,
 };
+use crate::files::local::{known_places, OwnPlaces};
 use crate::vault_gate::VaultDb;
 
 pub use dialogs::FileDialogs;
@@ -61,7 +62,7 @@ pub enum Reach {
 /// holzi's places and helpers on this device, set once at start.
 pub struct FsEnvironment {
     /// holzi's own data, vaults, configuration, cache and logs: never reachable (FR-049).
-    pub denied: Vec<PathBuf>,
+    pub denied: OwnPlaces,
     /// The SDK's known places (`home`, `documents`, …) that exist here.
     pub known: Vec<(&'static str, PathBuf)>,
     pub dialogs: Arc<dyn FileDialogs>,
@@ -77,33 +78,10 @@ pub struct FsEnvironment {
 pub fn environment_for<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> FsEnvironment {
     use tauri::Manager;
     let paths = app.path();
-    let real = |path: PathBuf| resolve(&path.to_string_lossy()).unwrap_or(path);
-    let denied = [
-        paths.app_config_dir(),
-        paths.app_data_dir(),
-        paths.app_local_data_dir(),
-        paths.app_cache_dir(),
-        paths.app_log_dir(),
-    ]
-    .into_iter()
-    .filter_map(Result::ok)
-    .map(real)
-    .collect();
-    #[allow(unused_mut)]
-    let mut known = vec![
-        ("home", paths.home_dir()),
-        ("pictures", paths.picture_dir()),
-        ("downloads", paths.download_dir()),
-        ("documents", paths.document_dir()),
-        ("videos", paths.video_dir()),
-    ];
-    // Mobile systems have no desktop folder (spec 043 FR-016); same place in the list as before.
-    #[cfg(desktop)]
-    known.insert(4, ("desktop", paths.desktop_dir()));
-    let known = known
+    let denied = OwnPlaces::from_app(app);
+    let known = known_places(app)
         .into_iter()
-        .filter_map(|(name, path)| Some((name, path.ok()?)))
-        .filter(|(_, path)| path.exists())
+        .map(|place| (place.name, place.path))
         .collect();
     let scratch = paths.app_cache_dir().map_or_else(
         |_| std::env::temp_dir().join("holzi-extension-files"),
@@ -203,10 +181,7 @@ fn protected() -> BridgeError {
 /// Whether `path` touches one of holzi's own places: lies in one, or, for a call that reaches the
 /// whole tree, holds one.
 fn touches_denied(environment: &FsEnvironment, path: &Path, reach: Reach) -> bool {
-    environment
-        .denied
-        .iter()
-        .any(|root| path.starts_with(root) || (reach == Reach::Tree && root.starts_with(path)))
+    environment.denied.touches(path, reach == Reach::Tree)
 }
 
 /// What the permissions of `extension_id` on `device` say about `path` (dialog choices aside).

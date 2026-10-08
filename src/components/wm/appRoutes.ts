@@ -1,4 +1,5 @@
 import { defineAsyncComponent, type Component } from 'vue'
+import { FILES_ROUTE_CHILDREN } from '~/lib/files/registry'
 import { passwordsRoutePatterns } from '~/lib/passwords/registry'
 import { settingsRoutePatterns } from '~/lib/settings/registry'
 import { getAppDefinition } from '~/lib/wm/apps'
@@ -28,6 +29,9 @@ const SettingsApp = defineAsyncComponent(
 )
 const PasswordsApp = defineAsyncComponent(
   () => import('~/components/apps/PasswordsApp.vue'),
+)
+const FilesApp = defineAsyncComponent(
+  () => import('~/components/apps/FilesApp.vue'),
 )
 
 /** The view of each settings location (spec 023-settings-app, contracts §1). */
@@ -179,6 +183,10 @@ const APP_ROUTES: Record<string, readonly AppRouteRecord[]> = {
   ],
   'system.settings': settingsRoutes(),
   'system.passwords': passwordsRoutes(),
+  // File browser (spec 044, research R13): one mounted root; children only carry the location.
+  'system.files': [
+    { path: '/', component: FilesApp, children: [...FILES_ROUTE_CHILDREN] },
+  ],
 }
 
 /** `undefined` for an `appId` no routes are registered for — `wm/TabPanel.vue` then renders

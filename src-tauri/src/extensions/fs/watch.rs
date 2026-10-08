@@ -39,14 +39,8 @@ fn rule_id(params: &Value) -> Result<String, BridgeError> {
 mod desktop {
     use std::collections::HashMap;
     use std::path::{Path, PathBuf};
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
-    use std::time::Duration;
 
-    use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode};
-    use notify_debouncer_full::{
-        new_debouncer_opt, DebounceEventResult, Debouncer, RecommendedCache,
-    };
     use serde_json::json;
     use uuid::Uuid;
 
@@ -54,27 +48,14 @@ mod desktop {
     use crate::extensions::bridge::dispatch::Emit;
     use crate::extensions::bridge::events::emit_to_frames;
     use crate::extensions::host::ExtensionHost;
-
-    /// Changes within this time come as one batch.
-    const DEBOUNCE: Duration = Duration::from_millis(500);
-
-    type Watcher = Debouncer<RecommendedWatcher, RecommendedCache>;
+    use crate::files::local::watch::{watch_folder, FolderWatch};
 
     /// A running watch, its folder and, when only a dialog choice allowed it, the frame of that
-    /// choice.
+    /// choice. Dropping it ends the watch (`files::local::watch`).
     struct Watch {
-        _watcher: Watcher,
+        _watch: FolderWatch,
         root: PathBuf,
         frame: Option<String>,
-        /// Cleared when the watch ends: the debouncer's thread outlives it by one tick and may
-        /// still hand over a batch, which must not reach the extension any more.
-        live: Arc<AtomicBool>,
-    }
-
-    impl Drop for Watch {
-        fn drop(&mut self) {
-            self.live.store(false, Ordering::SeqCst);
-        }
     }
 
     /// The running watches, by (extension, `ruleId`).
@@ -99,58 +80,33 @@ mod desktop {
         ) -> Result<(), String> {
             let rule = rule_id.clone();
             let base = root.clone();
-            let live = Arc::new(AtomicBool::new(true));
-            let handler_live = Arc::clone(&live);
-            let handler = move |result: DebounceEventResult| {
-                let Ok(events) = result else {
-                    return;
-                };
+            let watch = watch_folder(&root, true, move |changes| {
                 let Some(host) = host.upgrade() else {
                     return;
                 };
-                for event in events {
-                    let change = match event.kind {
-                        EventKind::Create(_) => "created",
-                        EventKind::Modify(_) => "modified",
-                        EventKind::Remove(_) => "removed",
-                        _ => "any",
+                for change in changes {
+                    let Some(path) = relative(&base, &change.path) else {
+                        continue;
                     };
-                    for path in event.paths.iter().filter_map(|p| relative(&base, p)) {
-                        if !handler_live.load(Ordering::SeqCst) {
-                            return;
-                        }
-                        emit_to_frames(
-                            emitter.as_ref(),
-                            &host,
-                            extension_id,
-                            FILE_CHANGED,
-                            &json!({
-                                "ruleId": rule,
-                                "changeType": change,
-                                "path": path,
-                            }),
-                        );
-                    }
+                    emit_to_frames(
+                        emitter.as_ref(),
+                        &host,
+                        extension_id,
+                        FILE_CHANGED,
+                        &json!({
+                            "ruleId": rule,
+                            "changeType": change.kind.as_str(),
+                            "path": path,
+                        }),
+                    );
                 }
-            };
-            let mut watcher = new_debouncer_opt::<_, RecommendedWatcher, _>(
-                DEBOUNCE,
-                None,
-                handler,
-                RecommendedCache::new(),
-                Config::default().with_follow_symlinks(false),
-            )
-            .map_err(|e| e.to_string())?;
-            watcher
-                .watch(&root, RecursiveMode::Recursive)
-                .map_err(|e| e.to_string())?;
+            })?;
             self.map().insert(
                 (extension_id, rule_id),
                 Watch {
-                    _watcher: watcher,
+                    _watch: watch,
                     root,
                     frame,
-                    live,
                 },
             );
             Ok(())

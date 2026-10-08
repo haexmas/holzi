@@ -40,6 +40,26 @@ test('a blocked fetch fails the step with its reason', async () => {
   })
 })
 
+test('the context and policy violations explain a blocked fetch', async () => {
+  const blocked = (async () => {
+    throw new TypeError('Failed to fetch')
+  }) as typeof fetch
+  const report = await runPlatformProbe(4000, blocked, 'UA', {
+    origin: 'http://tauri.localhost',
+    secure: false,
+    violations: () => ['connect-src http://127.0.0.1:4000/__probe'],
+  })
+  assert.deepEqual(report.steps[1], {
+    name: 'context',
+    ok: true,
+    detail: 'origin http://tauri.localhost, secure context false',
+  })
+  assert.equal(
+    report.steps[2]?.detail,
+    'TypeError: Failed to fetch; policy violations: connect-src http://127.0.0.1:4000/__probe',
+  )
+})
+
 test('a wrong answer fails the step', async () => {
   const report = await runPlatformProbe(4000, answering(404, ''), 'UA')
   assert.equal(report.steps[1]?.ok, false)
