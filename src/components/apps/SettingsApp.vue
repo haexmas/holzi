@@ -208,7 +208,10 @@ onMounted(() => {
             </h1>
           </div>
         </div>
-        <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+        <div
+          class="min-h-0 flex-1 overflow-y-auto px-6 pb-6"
+          :style="{ scrollPaddingBottom: '4rem' }"
+        >
           <div class="mx-auto w-full max-w-3xl">
             <p v-if="loadError" class="text-sm text-destructive" role="alert">
               {{ t('errors.deviceInfoFailed') }}: {{ loadError }}
