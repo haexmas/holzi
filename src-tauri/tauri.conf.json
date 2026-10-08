@@ -23,27 +23,29 @@
     "security": {
       "csp": {
         "default-src": "'self'",
-        "connect-src": "ipc: http://ipc.localhost",
+        "connect-src": "ipc: http://ipc.localhost http://127.0.0.1:*",
         "font-src": "'self' data:",
-        "img-src": "'self' asset: http://asset.localhost blob: data: holzi-ext://localhost http://holzi-ext.localhost",
+        "img-src": "'self' asset: http://asset.localhost blob: data: holzi-ext://localhost http://holzi-ext.localhost http://127.0.0.1:*",
         "frame-src": "holzi-ext://localhost http://holzi-ext.localhost",
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
         "object-src": "'none'",
         "base-uri": "'self'",
-        "frame-ancestors": "'none'"
+        "frame-ancestors": "'none'",
+        "media-src": "'self' http://127.0.0.1:*"
       },
       "devCsp": {
         "default-src": "'self' http://localhost:3030",
-        "connect-src": "ipc: http://ipc.localhost 'self' http://localhost:3030 ws://localhost:3030",
+        "connect-src": "ipc: http://ipc.localhost 'self' http://localhost:3030 ws://localhost:3030 http://127.0.0.1:*",
         "font-src": "'self' data: http://localhost:3030",
-        "img-src": "'self' asset: http://asset.localhost blob: data: http://localhost:3030 holzi-ext://localhost http://holzi-ext.localhost",
+        "img-src": "'self' asset: http://asset.localhost blob: data: http://localhost:3030 holzi-ext://localhost http://holzi-ext.localhost http://127.0.0.1:*",
         "frame-src": "holzi-ext://localhost http://holzi-ext.localhost",
         "script-src": "'self' 'unsafe-eval' http://localhost:3030",
         "style-src": "'self' 'unsafe-inline' http://localhost:3030",
         "object-src": "'none'",
         "base-uri": "'self'",
-        "frame-ancestors": "'none'"
+        "frame-ancestors": "'none'",
+        "media-src": "'self' http://127.0.0.1:*"
       }
     }
   },
