@@ -147,35 +147,31 @@ onMounted(() => {
         <legend class="mb-1 text-muted-foreground">
           {{ t('extensions.storageDialog.credentialsFrom') }}
         </legend>
-        <label
-          v-for="connection in connections"
-          :key="connection.id"
-          class="flex items-center gap-2"
+        <ShadcnRadioGroup
+          class="gap-2"
+          :model-value="chosen"
+          @update:model-value="chosen = String($event)"
         >
-          <input
-            v-model="chosen"
-            type="radio"
-            name="storage-connection"
-            :value="connection.id"
-            class="size-4 accent-primary"
-          />
-          {{
-            t('extensions.storageDialog.existing', {
-              name: connection.providerName,
-            })
-          }}
-        </label>
-        <label class="flex items-center gap-2">
-          <input
-            v-model="chosen"
-            type="radio"
-            name="storage-connection"
-            value=""
-            class="size-4 accent-primary"
-            data-testid="storage-dialog-new-credentials"
-          />
-          {{ t('extensions.storageDialog.newCredentials') }}
-        </label>
+          <label
+            v-for="connection in connections"
+            :key="connection.id"
+            class="flex items-center gap-2"
+          >
+            <ShadcnRadioGroupItem :value="connection.id" />
+            {{
+              t('extensions.storageDialog.existing', {
+                name: connection.providerName,
+              })
+            }}
+          </label>
+          <label class="flex items-center gap-2">
+            <ShadcnRadioGroupItem
+              value=""
+              data-testid="storage-dialog-new-credentials"
+            />
+            {{ t('extensions.storageDialog.newCredentials') }}
+          </label>
+        </ShadcnRadioGroup>
       </fieldset>
       <label
         v-if="request.kind === 'update'"

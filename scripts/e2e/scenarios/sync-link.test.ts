@@ -48,7 +48,7 @@ scenario('sync-link', { timeoutMs: 360_000 }, async (ctx) => {
   )
   assert.equal(
     await laptop.page.exec<boolean>(
-      `return document.querySelector('[data-testid="link-role-linked"]').checked === true && document.querySelector('[data-testid="link-role-main"]').checked === false`,
+      `return document.querySelector('[data-testid="link-role-linked"]').getAttribute('aria-checked') === 'true' && document.querySelector('[data-testid="link-role-main"]').getAttribute('aria-checked') === 'false'`,
     ),
     true,
     'the role question is answered "no" (a linked device) by default',

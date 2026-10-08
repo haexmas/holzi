@@ -58,15 +58,12 @@ const entries = computed<Entry[]>(() => {
 const isChecked = (entry: Entry) =>
   'custom' in entry.choice ||
   ('preset' in props.modelValue && props.modelValue.preset === entry.key)
-const selectedIndex = computed(() =>
-  Math.max(0, entries.value.findIndex(isChecked)),
-)
+const checkedKey = computed(() => entries.value.find(isChecked)?.key ?? null)
 
-const buttons = useTemplateRef<HTMLButtonElement[]>('buttons')
-function move(index: number, step: number) {
-  const next = (index + step + entries.value.length) % entries.value.length
-  emit('select', entries.value[next]!.choice)
-  void nextTick(() => buttons.value?.[next]?.focus())
+/** The radio group reports the chosen field by its key; arrow keys choose as they move. */
+function choose(key: unknown) {
+  const entry = entries.value.find((e) => e.key === key)
+  if (entry) emit('select', entry.choice)
 }
 
 const pickerOpen = ref(false)
@@ -81,36 +78,23 @@ function pick(value: string) {
 </script>
 
 <template>
-  <div
+  <ShadcnRadioGroup
     class="flex flex-wrap items-center gap-2"
-    role="radiogroup"
+    :model-value="checkedKey"
+    :disabled="disabled"
     :aria-labelledby="labelledby"
     :aria-label="labelledby ? undefined : t('settings.appearance.swatches')"
+    @update:model-value="choose"
   >
-    <button
-      v-for="(entry, index) in entries"
+    <UiRadioGroupTile
+      v-for="entry in entries"
       :key="entry.key"
-      ref="buttons"
-      type="button"
-      role="radio"
-      :aria-checked="isChecked(entry)"
+      :value="entry.key"
       :aria-label="entry.label"
       :title="entry.label"
-      :tabindex="index === selectedIndex ? 0 : -1"
-      :disabled="disabled"
-      class="relative flex size-8 items-center justify-center rounded-lg border border-foreground/20 transition-shadow focus-visible:ring-[3px] focus-visible:ring-primary/50 focus-visible:outline-none disabled:opacity-50"
-      :class="
-        isChecked(entry)
-          ? 'ring-2 ring-primary ring-offset-2 ring-offset-muted'
-          : ''
-      "
+      class="relative flex size-8 items-center justify-center rounded-lg border border-foreground/20 transition-shadow focus-visible:ring-primary/50 data-[state=checked]:ring-2 data-[state=checked]:ring-primary data-[state=checked]:ring-offset-2 data-[state=checked]:ring-offset-muted"
       :style="{ backgroundColor: entry.color }"
       :data-testid="`appearance-swatch-${control}-${entry.key}`"
-      @click="emit('select', entry.choice)"
-      @keydown.right.prevent="move(index, 1)"
-      @keydown.down.prevent="move(index, 1)"
-      @keydown.left.prevent="move(index, -1)"
-      @keydown.up.prevent="move(index, -1)"
     >
       <Icon
         v-if="isChecked(entry)"
@@ -118,7 +102,7 @@ function pick(value: string) {
         class="size-4 mix-blend-difference"
         style="color: white"
       />
-    </button>
+    </UiRadioGroupTile>
 
     <ShadcnPopover v-model:open="pickerOpen">
       <ShadcnPopoverTrigger as-child>
@@ -154,5 +138,5 @@ function pick(value: string) {
         />
       </ShadcnPopoverContent>
     </ShadcnPopover>
-  </div>
+  </ShadcnRadioGroup>
 </template>

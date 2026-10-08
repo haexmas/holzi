@@ -9,6 +9,7 @@
 import type { ItemDetail } from '@bindings/ItemDetail'
 import type { Draft } from '~/lib/passwords/draft'
 import { ENTRY_COLORS, ENTRY_ICONS } from '~/lib/passwords/icons'
+import { wasChecked } from '~/lib/ui/radio'
 
 const props = defineProps<{
   /** `null` is a new entry. */
@@ -429,49 +430,37 @@ const showOtpInput = computed(
 
     <SettingsGroup :label="t('passwords.editor.look')">
       <li class="flex flex-col gap-3 px-4 py-3">
-        <div
+        <ShadcnRadioGroup
+          v-model="draft.icon"
           class="flex flex-wrap gap-1.5"
-          role="radiogroup"
           :aria-label="t('passwords.fields.icon')"
         >
-          <button
+          <UiRadioGroupTile
             v-for="name in ENTRY_ICONS"
             :key="name"
-            type="button"
-            role="radio"
-            :aria-checked="draft.icon === name"
+            :value="name"
             :aria-label="name.replace('lucide:', '')"
-            class="flex size-9 items-center justify-center rounded-lg border"
-            :class="
-              draft.icon === name
-                ? 'border-primary bg-primary/10'
-                : 'border-transparent bg-background hover:bg-accent'
-            "
-            @click="draft.icon = draft.icon === name ? null : name"
+            class="flex size-9 items-center justify-center rounded-lg border border-transparent bg-background hover:bg-accent data-[state=checked]:border-primary data-[state=checked]:bg-primary/10"
+            @click="wasChecked($event) && (draft.icon = null)"
           >
             <Icon :name="name" class="size-5" />
-          </button>
-        </div>
-        <div
+          </UiRadioGroupTile>
+        </ShadcnRadioGroup>
+        <ShadcnRadioGroup
+          v-model="draft.color"
           class="flex flex-wrap gap-1.5"
-          role="radiogroup"
           :aria-label="t('passwords.fields.color')"
         >
-          <button
+          <UiRadioGroupTile
             v-for="color in ENTRY_COLORS"
             :key="color"
-            type="button"
-            role="radio"
-            :aria-checked="draft.color === color"
+            :value="color"
             :aria-label="color"
-            class="size-7 rounded-full border-2"
-            :class="
-              draft.color === color ? 'border-foreground' : 'border-transparent'
-            "
+            class="size-7 rounded-full border-2 border-transparent data-[state=checked]:border-foreground"
             :style="{ backgroundColor: color }"
-            @click="draft.color = draft.color === color ? null : color"
+            @click="wasChecked($event) && (draft.color = null)"
           />
-        </div>
+        </ShadcnRadioGroup>
       </li>
     </SettingsGroup>
 
