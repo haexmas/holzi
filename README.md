@@ -131,6 +131,73 @@ pnpm test:e2e
 `WebKitWebDriver` must be the same version as the host's WebKitGTK. The
 suite checks this before it starts.
 
+The same suite also runs against the Android app in an emulator; see
+[scripts/e2e/PLATFORMS.md](scripts/e2e/PLATFORMS.md).
+
+### Android
+
+holzi runs as an Android app from Android 8 (API 26) on
+([spec 043](specs/043-android-build/spec.md)). The Nix devShell brings the
+Android SDK, the NDK, Java 17 and a Rust toolchain with the Android targets;
+it sets `ANDROID_HOME`, `NDK_HOME`, `ANDROID_NDK_ROOT` and `JAVA_HOME`.
+
+```bash
+nix develop --command pnpm tauri android build --debug --apk --split-per-abi --target aarch64 --target x86_64
+adb install -r src-tauri/gen/android/app/build/outputs/apk/arm64/debug/app-arm64-debug.apk     # phone
+adb install -r src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk   # emulator
+```
+
+Without building: every pull request's CI run has the debug APKs as the
+artifact `holzi-android-debug`. They are signed with the CI's debug key, so
+uninstall a locally built holzi before installing one of them (and the other
+way round); uninstalling deletes the vaults on the phone.
+
+Development mode with hot reload: `nix develop --command pnpm tauri android dev`
+for an emulator, add `--host` for a phone in the same network.
+
+#### Release key
+
+Release APKs are signed with holzi's own key. Every update must be signed
+with the same key: if it is lost, installed apps can no longer be updated,
+only uninstalled (which deletes their vaults). The key is never in the
+repository. The person who maintains holzi creates it once and keeps the
+keystore and its password safe outside GitHub:
+
+```bash
+keytool -genkeypair -keystore holzi-release.keystore -storetype PKCS12 \
+  -alias holzi -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=holzi"
+keytool -list -v -keystore holzi-release.keystore -alias holzi   # SHA256 fingerprint
+```
+
+A PKCS12 keystore has one password for the store and the key. The workflow
+`.github/workflows/android-release.yml` reads it from these repository
+settings (Settings → Secrets and variables → Actions):
+
+| Name                   | Kind     | Content                                                                |
+| ---------------------- | -------- | ---------------------------------------------------------------------- |
+| `ANDROID_KEY_BASE64`   | secret   | the keystore, `base64 -w0 holzi-release.keystore`                      |
+| `ANDROID_KEY_ALIAS`    | secret   | the key alias (`holzi` above)                                          |
+| `ANDROID_KEY_PASSWORD` | secret   | the keystore password                                                  |
+| `ANDROID_CERT_SHA256`  | variable | the certificate's SHA-256 fingerprint (public), as `keytool` prints it |
+
+A tag `v<version>` matching `version` in `src-tauri/tauri.conf.json` builds
+the signed APKs, checks their certificate against `ANDROID_CERT_SHA256` and
+attaches them to that tag's GitHub release. Raise the version for every
+release: Android installs an APK over the previous one only with a higher
+version code, which Tauri derives from the version. Starting the workflow
+by hand builds and checks the APKs without a release (artifact
+`holzi-android-release`). Without the secrets the workflow fails; it never
+publishes an unsigned APK.
+
+To sign a release build locally, put a `keystore.properties` (ignored by
+git) next to `src-tauri/gen/android/build.gradle.kts`:
+
+```properties
+storeFile=/absolute/path/to/holzi-release.keystore
+keyAlias=holzi
+password=...
+```
+
 ## Development setup
 
 The repository uses the Claude speckit integration. After a fresh clone,
