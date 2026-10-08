@@ -48,8 +48,10 @@ export function dockEntryAt(
   entries: readonly DockEntry[],
 ): DockEntry | null {
   const key =
-    target instanceof Element
-      ? target.closest('[data-dock-key]')?.getAttribute('data-dock-key')
+    target && typeof (target as Element).closest === 'function'
+      ? (target as Element)
+          .closest('[data-dock-key]')
+          ?.getAttribute('data-dock-key')
       : null
   return entries.find((entry) => dockItemKey(entry) === key) ?? null
 }
