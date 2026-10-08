@@ -15,10 +15,19 @@ declare global {
 export default defineNuxtPlugin(() => {
   const probe = window.__HOLZI_PROBE__
   if (!probe) return
+  const violations: string[] = []
+  document.addEventListener('securitypolicyviolation', (event) => {
+    violations.push(`${event.effectiveDirective} ${event.blockedURI}`)
+  })
   void runPlatformProbe(
     probe.port,
     window.fetch.bind(window),
     navigator.userAgent,
+    {
+      origin: window.location.origin,
+      secure: window.isSecureContext,
+      violations: () => [...violations],
+    },
   )
     .then((report) => invoke('platform_probe_report', { report }))
     .catch((error) => {
