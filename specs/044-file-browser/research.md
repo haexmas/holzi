@@ -81,6 +81,10 @@ Kompilieren, nicht Verhalten zur Laufzeit.
   Umsetzung ist eine selbstprüfende Plattform-Probe in der CI auf Windows, macOS und Android (Feature
   `platform-probe`, tasks.md T007; Android im Emulator wie haex-vault mit
   `reactivecircus/android-emulator-runner`); Ausweichweg: WebView2-Argument, das LNA abschaltet.
+- **Ergebnis der Plattform-Probe** (T007, PR #328, 2026-10-08): `fetch` aus der Webview an
+  `127.0.0.1` gelingt unter Windows (WebView2, Edge 153, also nach Einführung von LNA in Chromium 142) und macOS (WKWebView). Im Android-Emulator (Android 15, WebView 124, Debug-APK mit erlaubtem
+  Cleartext) scheitert er mit `TypeError: Failed to fetch`. LNA scheidet dort aus (WebView zu alt);
+  offen sind CSP und Private Network Access. Bis das geklärt ist, ruht der Medienserver (T014 ff.).
 - **Alternatives**: eigenes URI-Schema (verworfen: WebKitGTK), `asset://` (verworfen: kein Range, Scope
   über das ganze Dateisystem), vorsignierte S3-URLs (verworfen: CSP für beliebige Endpunkte, Zugangsdaten
   indirekt in der Webview, Grundsatz aus 038).
