@@ -284,7 +284,7 @@ export function useExtensionFrame(
       requestId: open.requestId,
       confirmed,
     }).catch(() => {})
-    void nextTick(() => iframe.value?.focus())
+    void nextTick(() => requestAnimationFrame(() => iframe.value?.focus()))
   }
 
   async function closeAsync(): Promise<void> {
