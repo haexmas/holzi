@@ -10,6 +10,7 @@ import { computed, inject, ref, useTemplateRef, watch } from 'vue'
 import { DOCK_HOLD } from '~/composables/useDock'
 import {
   dockActivation,
+  dockItemKey,
   type DockControlId,
   type DockEntry,
   type DockInstance,
@@ -148,6 +149,17 @@ function togglePin() {
   void (props.entry.pinned ? dock.unpinAsync(appId) : dock.pinAsync(appId))
 }
 
+const isLauncher = computed(
+  () => props.entry.kind === 'control' && props.entry.id === 'launcher',
+)
+
+/** Workspaces and windows can leave the dock; the launcher cannot (FR-006, US4). */
+function removeControl() {
+  const key = dockItemKey(props.entry)
+  const index = dock.items.value.findIndex((item) => dockItemKey(item) === key)
+  if (index >= 0 && !isLauncher.value) void dock.removeAsync(index)
+}
+
 /** Closes every instance as a click on its tab's close button would, guards included (FR-016);
  * stops at the first one the user keeps open. */
 async function closeAll() {
@@ -161,7 +173,7 @@ async function closeAll() {
 <template>
   <ShadcnPopover v-model:open="chooserOpen">
     <ShadcnContextMenu @update:open="hold">
-      <ShadcnContextMenuTrigger as-child :disabled="entry.kind === 'control'">
+      <ShadcnContextMenuTrigger as-child :disabled="isLauncher">
         <button
           ref="button"
           type="button"
@@ -223,7 +235,18 @@ async function closeAll() {
         </button>
       </ShadcnContextMenuTrigger>
       <ShadcnContextMenuContent class="min-w-48" data-testid="dock-item-menu">
-        <ShadcnContextMenuItem data-testid="dock-menu-pin" @select="togglePin">
+        <ShadcnContextMenuItem
+          v-if="entry.kind === 'control'"
+          data-testid="dock-menu-remove"
+          @select="removeControl"
+        >
+          {{ t('wm.dock.remove') }}
+        </ShadcnContextMenuItem>
+        <ShadcnContextMenuItem
+          v-else
+          data-testid="dock-menu-pin"
+          @select="togglePin"
+        >
           {{
             entry.kind === 'app' && entry.pinned
               ? t('wm.dock.unpin')

@@ -22,10 +22,11 @@ async function passwordsTabs(
     .filter((tab) => tab.appId === PASSWORDS).length
 }
 
-// Spec 045-dock, quickstart 1–4 and 6 (US1–US3; FR-001, FR-003, FR-005, FR-007, FR-010–FR-012, FR-015,
-// FR-017, FR-022): the dock replaces the floating buttons, an app pinned from the launcher opens from the dock
-// and unpins from its menu, a click brings its one instance back from another workspace instead of
-// opening a second, an app with two instances offers them to choose, and the settings move the dock.
+// Spec 045-dock, quickstart 1–4, 6 and 7 (US1–US4; FR-001, FR-003, FR-005, FR-007, FR-010–FR-012,
+// FR-015, FR-017, FR-020, FR-022): the dock replaces the floating buttons, an app pinned from the
+// launcher opens from the dock and unpins from its menu, a click brings its one instance back from
+// another workspace instead of opening a second, an app with two instances offers them to choose,
+// and the settings move the dock and remove an entry, but never the launcher.
 scenario('dock', {}, async (ctx) => {
   const instance = await ctx.startInstance()
   await createAndUnlock(instance, { name: 'e2e-dock' })
@@ -114,4 +115,22 @@ scenario('dock', {}, async (ctx) => {
     ),
   )
   ctx.step('placed at the left edge from the settings')
+
+  await instance.click(
+    '[data-testid="settings-dock-item-control:windows"] [data-testid="settings-dock-remove"]',
+  )
+  await ctx.waitFor(
+    'the windows entry to leave the dock',
+    async () =>
+      !(await isShown(instance, '[data-testid="dock-control-windows"]')),
+  )
+  assert.equal(
+    await isShown(
+      instance,
+      '[data-testid="settings-dock-item-control:launcher"] [data-testid="settings-dock-remove"]',
+    ),
+    false,
+    'the launcher can be removed',
+  )
+  ctx.step('windows entry removed, launcher not removable')
 })

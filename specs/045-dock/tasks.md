@@ -105,11 +105,11 @@ click, close all.
 
 **Independent Test**: Spec US4 acceptance scenarios 1–5 (quickstart step 7).
 
-- [ ] T033 [US4] In `src/components/wm/DockBar.vue`: native HTML5 drag-and-drop between pinned entries and controls (pattern `src/components/passwords/List.vue` / `TreeItem.vue`), drop → `useDock().moveAsync(from, to)` using indexes into `dock.items` (not into the rendered entries, which skip unavailable apps); unpinned running entries are not draggable (FR-019). Add a `ponytail:` comment: mouse only, touch sorts in settings (research R8)
+- [x] T033 [US4] In `src/components/wm/DockBar.vue`: native HTML5 drag-and-drop between pinned entries and controls (pattern `src/components/passwords/List.vue` / `TreeItem.vue`), drop → `useDock().moveAsync(from, to)` using indexes into `dock.items` (not into the rendered entries, which skip unavailable apps); unpinned running entries are not draggable (FR-019). Add a `ponytail:` comment: mouse only, touch sorts in settings (research R8)
 - [x] T034 [US4] In `src/components/settings/DockView.vue`: entries group listing every `DockItemState` with icon and name, "Nach oben"/"Nach unten" buttons, "Entfernen" for all but the launcher, unavailable apps greyed with "nicht verfügbar" (FR-020, FR-021, FR-006); an "Hinzufügen" select listing apps from `wm.apps()` not yet pinned plus removed controls
-- [ ] T035 [US4] In `src/components/wm/DockItem.vue` context menu: "Aus Dock entfernen" for the workspaces and windows controls → `useDock().removeAsync(index)`; nothing for the launcher (US4 scenario 5)
+- [x] T035 [US4] In `src/components/wm/DockItem.vue` context menu: "Aus Dock entfernen" for the workspaces and windows controls → `useDock().removeAsync(index)`; nothing for the launcher (US4 scenario 5)
 - [x] T036 [P] [US4] i18n: `settings.dock.{moveUp,moveDown,remove,add,unavailable}`, `wm.dock.remove`
-- [ ] T037 [US4] Extend `scripts/e2e/scenarios/dock.test.ts`: remove the windows control in settings → `dock-control-windows` gone; assert the launcher row has no remove button
+- [x] T037 [US4] Extend `scripts/e2e/scenarios/dock.test.ts`: remove the windows control in settings → `dock-control-windows` gone; assert the launcher row has no remove button
 
 **Checkpoint**: Dock content fully user-defined.
 

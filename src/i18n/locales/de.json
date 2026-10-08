@@ -123,6 +123,7 @@
       "unpin": "Vom Dock lösen",
       "newWindow": "Neues Fenster",
       "closeAll": "Alle schließen",
+      "remove": "Aus Dock entfernen",
       "instances": "Instanzen",
       "running": "läuft",
       "count": "{count} Instanzen offen",

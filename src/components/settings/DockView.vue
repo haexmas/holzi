@@ -6,7 +6,12 @@
  * listed as such and can be removed (FR-021). Every choice is saved at once.
  */
 import type { SettingsSelectOption } from '~/components/settings/Select.vue'
-import type { DockControlId, DockItemState, DockPlacement } from '~/lib/wm/dock'
+import {
+  dockItemKey,
+  type DockControlId,
+  type DockItemState,
+  type DockPlacement,
+} from '~/lib/wm/dock'
 
 const { t } = useI18n()
 const wm = useWindowManagerStore()
@@ -56,13 +61,9 @@ function iconOf(item: DockItemState): string {
   return appOf(item)?.icon ?? 'lucide:puzzle'
 }
 
-function keyOf(item: DockItemState): string {
-  return item.kind === 'control' ? `control:${item.id}` : `app:${item.appId}`
-}
-
 /** Apps not yet in the dock and removed controls, as "control:<id>" / "app:<id>". */
 const addable = computed<SettingsSelectOption[]>(() => {
-  const present = new Set(dock.items.value.map(keyOf))
+  const present = new Set(dock.items.value.map(dockItemKey))
   const controls = (['workspaces', 'windows'] as const)
     .filter((id) => !present.has(`control:${id}`))
     .map((id) => ({
@@ -112,14 +113,14 @@ function add(value: string) {
     <SettingsGroup :label="t('settings.dock.items')">
       <SettingsRow
         v-for="(item, index) in dock.items.value"
-        :key="keyOf(item)"
+        :key="dockItemKey(item)"
         :title="titleOf(item)"
         :icon="iconOf(item)"
         :description="
           item.available ? undefined : t('settings.dock.unavailable')
         "
         :class="item.available ? '' : 'opacity-60'"
-        :data-testid="`settings-dock-item-${keyOf(item)}`"
+        :data-testid="`settings-dock-item-${dockItemKey(item)}`"
       >
         <UiButton
           variant="ghost"

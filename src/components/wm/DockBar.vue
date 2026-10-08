@@ -3,10 +3,11 @@
  * The dock as a bar (spec 045): its entries in a row, or in a column at the left and right edge
  * (FR-026), scrolling along its axis when they do not fit; running apps that are not pinned
  * follow after a separator (FR-005). A toolbar with one tab stop; the arrow
- * keys move between the entries, Enter and Space activate (FR-041).
+ * keys move between the entries, Enter and Space activate (FR-041). Pinned entries and controls
+ * are dragged to a new place (FR-019).
  */
 import { computed, ref, useTemplateRef, watch } from 'vue'
-import type { DockEntry } from '~/lib/wm/dock'
+import { dockItemKey, type DockEntry } from '~/lib/wm/dock'
 
 const props = defineProps<{
   entries: DockEntry[]
@@ -61,8 +62,39 @@ const firstRunning = computed(() =>
   props.entries.findIndex((entry) => entry.kind === 'app' && !entry.pinned),
 )
 
-function entryKey(entry: DockEntry): string {
-  return entry.kind === 'control' ? `control:${entry.id}` : `app:${entry.appId}`
+// ponytail: native drag and drop works with a mouse only; on touch a long press opens the menu,
+// so entries are sorted in the settings there (research R8). Upgrade path: pointer-event sorting.
+const DRAG_MIME = 'application/x-holzi-dock-item'
+const dock = useDock()
+
+/** Only stored entries move; a running app that is not pinned has no place to move to. */
+function draggable(entry: DockEntry): boolean {
+  return entry.kind === 'control' || entry.pinned
+}
+
+/** Its index in the stored entries, which also hold apps hidden on this device. */
+function storedIndex(key: string): number {
+  return dock.items.value.findIndex((item) => dockItemKey(item) === key)
+}
+
+function onDragstart(event: DragEvent, entry: DockEntry) {
+  event.dataTransfer?.setData(DRAG_MIME, dockItemKey(entry))
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+
+function onDragover(event: DragEvent, entry: DockEntry) {
+  if (!draggable(entry)) return
+  if (!event.dataTransfer?.types.includes(DRAG_MIME)) return
+  event.preventDefault()
+}
+
+function onDrop(event: DragEvent, entry: DockEntry) {
+  const key = event.dataTransfer?.getData(DRAG_MIME)
+  if (!key || !draggable(entry)) return
+  event.preventDefault()
+  const from = storedIndex(key)
+  const to = storedIndex(dockItemKey(entry))
+  if (from >= 0 && to >= 0) void dock.moveAsync(from, to)
 }
 </script>
 
@@ -81,14 +113,22 @@ function entryKey(entry: DockEntry): string {
     @focusin="onFocusin"
     @keydown="onKeydown"
   >
-    <template v-for="(entry, index) in entries" :key="entryKey(entry)">
+    <template v-for="(entry, index) in entries" :key="dockItemKey(entry)">
       <span
         v-if="index === firstRunning"
         class="shrink-0 self-stretch bg-border"
         :class="orientation === 'horizontal' ? 'mx-0.5 w-px' : 'my-0.5 h-px'"
         aria-hidden="true"
       />
-      <WmDockItem :entry="entry" :tabbable="index === focusIndex" />
+      <div
+        class="shrink-0"
+        :draggable="draggable(entry)"
+        @dragstart="onDragstart($event, entry)"
+        @dragover="onDragover($event, entry)"
+        @drop="onDrop($event, entry)"
+      >
+        <WmDockItem :entry="entry" :tabbable="index === focusIndex" />
+      </div>
     </template>
   </div>
 </template>

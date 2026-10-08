@@ -123,6 +123,7 @@
       "unpin": "Unpin from dock",
       "newWindow": "New window",
       "closeAll": "Close all",
+      "remove": "Remove from dock",
       "instances": "Instances",
       "running": "running",
       "count": "{count} instances open",

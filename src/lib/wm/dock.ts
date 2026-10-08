@@ -111,7 +111,8 @@ export function parseDockPlacement(raw: string | null): DockPlacement {
   }
 }
 
-function itemKey(item: DockItem): string {
+/** A stable key for an item or entry (`control:<id>` / `app:<appId>`), for lists and drag and drop. */
+export function dockItemKey(item: DockItem): string {
   return item.kind === 'control' ? `control:${item.id}` : `app:${item.appId}`
 }
 
@@ -129,7 +130,7 @@ export function normalizeDockItems(
       stored.kind === 'app'
         ? { kind: 'app', appId: resolveAppAlias(stored.appId).appId }
         : stored
-    const key = itemKey(item)
+    const key = dockItemKey(item)
     if (seen.has(key)) continue
     seen.add(key)
     result.push({
