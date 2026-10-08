@@ -11,3 +11,10 @@ pub fn init<R: Runtime>(_app: &AppHandle<R>, _api: PluginApi<R, ()>) -> HolziAnd
 
 /// Stand-in with the same methods as the Android side; each does nothing.
 pub struct HolziAndroid<R: Runtime>(PhantomData<fn() -> R>);
+
+impl<R: Runtime> HolziAndroid<R> {
+    /// Addresses of document providers exist only on Android.
+    pub fn display_name(&self, _uri: &str) -> Option<String> {
+        None
+    }
+}

@@ -19,6 +19,7 @@ use super::model::ItemInput;
 use super::test_support::open_test_vault;
 use super::ATTACHMENT_LIMIT_BYTES;
 use crate::error::HolziError;
+use crate::files::test_support::{picked, PathOpener};
 use crate::storage::query;
 
 const DAY: i64 = 86_400_000;
@@ -109,7 +110,7 @@ fn a_file_above_the_limit_is_refused_before_it_is_read() {
     // A sparse file: the size is there, the bytes are never written.
     file.set_len(ATTACHMENT_LIMIT_BYTES + 1)
         .expect("set length");
-    let result = read_attachment_file(&path);
+    let result = read_attachment_file(&PathOpener::default(), &picked(&path));
     assert!(
         matches!(
             result,
@@ -120,7 +121,8 @@ fn a_file_above_the_limit_is_refused_before_it_is_read() {
     );
     // At the limit it is read.
     file.set_len(ATTACHMENT_LIMIT_BYTES).expect("set length");
-    let (name, bytes) = read_attachment_file(&path).expect("at the limit");
+    let (name, bytes) =
+        read_attachment_file(&PathOpener::default(), &picked(&path)).expect("at the limit");
     assert_eq!(name, "big.bin");
     assert_eq!(bytes.len() as u64, ATTACHMENT_LIMIT_BYTES);
 }
@@ -131,11 +133,11 @@ fn an_empty_or_missing_file_is_invalid_input() {
     let empty = dir.path().join("empty.txt");
     std::fs::File::create(&empty).expect("create");
     assert!(matches!(
-        read_attachment_file(&empty),
+        read_attachment_file(&PathOpener::default(), &picked(&empty)),
         Err(HolziError::InvalidInput { reason }) if reason == "empty"
     ));
     assert!(matches!(
-        read_attachment_file(&dir.path().join("missing")),
+        read_attachment_file(&PathOpener::default(), &picked(&dir.path().join("missing"))),
         Err(HolziError::InvalidInput { reason }) if reason == "unreadable"
     ));
 }
@@ -377,7 +379,7 @@ fn the_data_is_read_by_its_own_query_and_saved_byte_for_byte() {
         assert_eq!(file_name, name);
         assert_eq!(&bytes, data);
         let target = dir.path().join(format!("saved-{name}"));
-        save_to(&target, &bytes).expect("save");
+        save_to(&PathOpener::default(), &picked(&target), &bytes).expect("save");
         assert_eq!(&std::fs::read(&target).expect("read back"), data, "{name}");
     }
     // The detail view of the entry lists the attachments without any data.

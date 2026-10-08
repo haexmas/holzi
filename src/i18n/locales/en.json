@@ -100,6 +100,20 @@
         "incompatible": "This device and the main device run versions that cannot sync. Update the older one.",
         "connection_lost": "The connection was lost."
       }
+    },
+    "import": {
+      "button": "Open vault file",
+      "title": "Open vault file",
+      "passphrase": "Passphrase",
+      "submit": "Open",
+      "hint": "holzi makes a copy of the file and opens it. The chosen file stays as it is.",
+      "errors": {
+        "wrongPassphrase": "Wrong password, or not a vault file of holzi.",
+        "notAVault": "This is not a vault file of holzi.",
+        "alreadyHere": "This vault is already on this device: {name}",
+        "notEnoughSpace": "Not enough free space.",
+        "unreadable": "The file cannot be read."
+      }
     }
   },
   "wm": {
@@ -1035,6 +1049,8 @@
     "vaultAlreadyActive": "A vault is already open in this window.",
     "vaultClosed": "The vault was closed.",
     "transactionTooLarge": "The change is too large to save. Large files do not belong in the vault database.",
+    "unreadable": "The chosen file cannot be read.",
+    "notEnoughSpace": "Not enough free space.",
     "hf": {
       "invalidInput": "Invalid input.",
       "network": "Network error — please check your connection.",
@@ -1059,6 +1075,7 @@
       "importFailed": "The import failed.",
       "importReason": {
         "unreadable": "The file cannot be read.",
+        "too_large": "The import file or key file is too large.",
         "wrong_credentials": "The password or key file is wrong.",
         "corrupt": "The file is damaged.",
         "unsupported_format": "The format is not supported.",
@@ -1570,6 +1587,7 @@
       "noFile": "No file chosen yet",
       "chooseFile": "Choose file",
       "fileHint": "The file is only read; nothing of it stays outside the vault.",
+      "fileHintAndroidHaexVault": "On Android holzi reads only the chosen file, no companion file beside it. Close haex-vault before you copy the file, so all changes are in it.",
       "password": "Database password",
       "noKeyFile": "No key file",
       "chooseKeyFile": "Choose key file",

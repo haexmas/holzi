@@ -16,15 +16,14 @@
  * the grouped report) into `ImportPreviewStep.vue` and `ImportReportStep.vue` with props.
  */
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import { open, save } from '@tauri-apps/plugin-dialog'
 import { toast } from 'vue-sonner'
 import type { ImportPreview } from '@bindings/ImportPreview'
 import type { ImportReport } from '@bindings/ImportReport'
 import type { ImportSource } from '@bindings/ImportSource'
 import type { OnDuplicate } from '@bindings/OnDuplicate'
+import type { PickedFile } from '@bindings/PickedFile'
 import type { Progress } from '@bindings/Progress'
 import {
-  baseName,
   canPreviewImport,
   groupReport,
   importFailureReason,
@@ -52,14 +51,19 @@ const {
   importCancelAsync,
   importReportSaveAsync,
 } = usePasswords()
+const { pickOneAsync, pickSaveTargetAsync, nameOfAsync } = usePickedFile()
+const { isAndroid } = useDeviceCapabilities()
 
 const { password: passwordLabels } = useFieldLabels()
 
 const step = ref<Step>('choose')
 const source = ref<ImportSource>('keepass')
-const path = ref<string | null>(null)
+// The choices of the file dialog and the names to show for them (spec 043: no path is derived).
+const file = ref<PickedFile | null>(null)
+const fileName = ref('')
 const password = ref('')
-const keyFilePath = ref<string | null>(null)
+const keyFile = ref<PickedFile | null>(null)
+const keyFileName = ref('')
 const onDuplicate = ref<OnDuplicate>('skip')
 const preview = ref<ImportPreview | null>(null)
 const report = ref<ImportReport | null>(null)
@@ -75,9 +79,9 @@ const secrets = computed(() => sourceSecrets(source.value))
 const canPreview = computed(() =>
   canPreviewImport(
     source.value,
-    path.value !== null,
+    file.value !== null,
     password.value !== '',
-    keyFilePath.value !== null,
+    keyFile.value !== null,
   ),
 )
 const percent = computed(() =>
@@ -92,38 +96,37 @@ const groups = computed(() =>
 function args() {
   return {
     source: source.value,
-    path: path.value ?? '',
+    file: file.value ?? '',
     ...(password.value === '' ? {} : { password: password.value }),
-    ...(keyFilePath.value === null ? {} : { keyFilePath: keyFilePath.value }),
+    ...(keyFile.value === null ? {} : { keyFile: keyFile.value }),
   }
 }
 
 function chooseSource(next: ImportSource) {
   source.value = next
-  path.value = null
-  keyFilePath.value = null
+  file.value = null
+  keyFile.value = null
   error.value = null
 }
 
 async function pickFileAsync() {
-  const selected = await open({
-    multiple: false,
-    filters: [
-      {
-        name: t(`passwords.import.sources.${source.value}`),
-        extensions: extensions.value,
-      },
-    ],
-  })
-  if (typeof selected === 'string') {
-    path.value = selected
-    error.value = null
-  }
+  const selected = await pickOneAsync([
+    {
+      name: t(`passwords.import.sources.${source.value}`),
+      extensions: extensions.value,
+    },
+  ])
+  if (selected === null) return
+  fileName.value = await nameOfAsync(selected)
+  file.value = selected
+  error.value = null
 }
 
 async function pickKeyFileAsync() {
-  const selected = await open({ multiple: false })
-  if (typeof selected === 'string') keyFilePath.value = selected
+  const selected = await pickOneAsync()
+  if (selected === null) return
+  keyFileName.value = await nameOfAsync(selected)
+  keyFile.value = selected
 }
 
 async function previewAsync() {
@@ -173,7 +176,7 @@ async function cancelAsync() {
 
 async function saveReportAsync() {
   if (!report.value) return
-  const target = await save({ defaultPath: 'import-report.txt' })
+  const target = await pickSaveTargetAsync('import-report.txt')
   if (!target) return
   try {
     await importReportSaveAsync(report.value, target)
@@ -186,8 +189,8 @@ async function saveReportAsync() {
 function again() {
   report.value = null
   preview.value = null
-  path.value = null
-  keyFilePath.value = null
+  file.value = null
+  keyFile.value = null
   step.value = 'choose'
 }
 
@@ -281,8 +284,12 @@ onBeforeUnmount(() => {
         </SettingsGroup>
         <SettingsGroup :label="t('passwords.import.file')">
           <SettingsRow
-            :title="path ? baseName(path) : t('passwords.import.noFile')"
-            :description="t('passwords.import.fileHint')"
+            :title="file ? fileName : t('passwords.import.noFile')"
+            :description="
+              isAndroid && source === 'haexvault'
+                ? t('passwords.import.fileHintAndroidHaexVault')
+                : t('passwords.import.fileHint')
+            "
             icon="lucide:file"
           >
             <UiButton
@@ -310,11 +317,7 @@ onBeforeUnmount(() => {
             </SettingsRow>
             <SettingsRow
               v-if="secrets.keyFile"
-              :title="
-                keyFilePath
-                  ? baseName(keyFilePath)
-                  : t('passwords.import.noKeyFile')
-              "
+              :title="keyFile ? keyFileName : t('passwords.import.noKeyFile')"
               :description="t('passwords.import.keyFileHint')"
               icon="lucide:file-key"
             >
@@ -322,10 +325,10 @@ onBeforeUnmount(() => {
                 {{ t('passwords.import.chooseKeyFile') }}
               </UiButton>
               <UiButton
-                v-if="keyFilePath"
+                v-if="keyFile"
                 variant="ghost"
                 size="sm"
-                @click="keyFilePath = null"
+                @click="keyFile = null"
               >
                 {{ t('passwords.import.removeKeyFile') }}
               </UiButton>

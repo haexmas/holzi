@@ -96,9 +96,3 @@ export function importFailureReason(error: unknown): string | null {
   }
   return null
 }
-
-/** The last part of a path, whichever separator it uses, for showing the chosen file. */
-export function baseName(path: string): string {
-  const parts = path.split(/[\\/]/).filter((part) => part !== '')
-  return parts.length ? parts[parts.length - 1]! : path
-}

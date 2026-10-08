@@ -83,7 +83,7 @@ export async function importExport(
     unwrap(
       'passwords_import_run',
       await instance.invoke('passwords_import_run', {
-        args: { source, path: files.path(fileName), onDuplicate: 'create' },
+        args: { source, file: files.path(fileName), onDuplicate: 'create' },
       }),
     )
   } finally {
@@ -107,7 +107,7 @@ export async function addAttachments(
       const view = unwrap<{ id: string }>(
         'passwords_attachment_add',
         await instance.invoke('passwords_attachment_add', {
-          args: { itemId, path: folder.path(file.name) },
+          args: { itemId, file: folder.path(file.name) },
         }),
       )
       ids.push(view.id)

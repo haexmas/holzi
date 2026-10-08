@@ -117,13 +117,14 @@ pub struct SendMessageArgs {
     pub attachments: Vec<AttachmentInput>,
 }
 
-/// One attachment the frontend picked, identified by its filesystem path
-/// (contracts/tauri-commands.md `send_message`). Content is read fresh by
-/// `send_message` itself, not carried over the wire from the frontend.
+/// One attachment the frontend picked, identified by the open dialog's choice
+/// (contracts/tauri-commands.md `send_message`; spec 043: a path or a provider
+/// address). Content is read fresh by `send_message` itself, not carried over
+/// the wire from the frontend.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AttachmentInput {
-    pub path: String,
+    pub path: crate::files::PickedFile,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -237,15 +238,15 @@ fn validated_reasoning_option(
 /// resolves normally with `usable: false`.
 #[tauri::command]
 pub async fn inspect_attachment(
+    app: AppHandle,
     state: State<'_, AppState>,
-    path: String,
+    path: crate::files::PickedFile,
     model_id: String,
 ) -> Result<crate::chat::attachments::AttachmentInfo> {
     use crate::chat::attachments::{usability_for, AttachmentUsability};
 
-    let mut info = tauri::async_runtime::spawn_blocking({
-        let path = path.clone();
-        move || crate::chat::attachments::classify_attachment(std::path::Path::new(&path))
+    let mut info = tauri::async_runtime::spawn_blocking(move || {
+        crate::chat::attachments::classify_attachment(&app, &path)
     })
     .await
     .map_err(|e| HolziError::CrdtInit {
@@ -453,19 +454,17 @@ pub async fn send_message(
     // A failure or unsupported kind excludes just that one attachment
     // (reported back via `excluded_attachments`) instead of failing the whole
     // send.
-    let attachment_paths: Vec<String> = args.attachments.iter().map(|a| a.path.clone()).collect();
+    let attachment_paths: Vec<crate::files::PickedFile> =
+        args.attachments.iter().map(|a| a.path.clone()).collect();
     let attachment_capabilities = model_capabilities.clone();
+    let opener = app.clone();
     let (read_attachments, excluded_attachments) =
         tauri::async_runtime::spawn_blocking(move || {
             let mut read = Vec::new();
             let mut excluded = Vec::new();
             for path in attachment_paths {
-                let file_name = std::path::Path::new(&path)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| path.clone());
-                match crate::chat::attachments::read_attachment_content(std::path::Path::new(&path))
-                {
+                let file_name = crate::files::picked::display_name(&opener, &path);
+                match crate::chat::attachments::read_attachment_content(&opener, &path) {
                     Ok(attachment)
                         if matches!(
                             crate::chat::attachments::usability_for(

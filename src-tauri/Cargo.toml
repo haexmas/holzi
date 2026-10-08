@@ -143,6 +143,7 @@ tauri-plugin-clipboard-manager = "2"
 ciborium = "0.2.2"
 psl = "2.1.239"
 url = "2.5.8"
+percent-encoding = "2.3"
 
 # haex-crdt 0.4.0, originally pinned per plans/001-desktop-mvp.md at commit
 # 1c069ef; no tagged releases past v0.1.0 exist yet, so holzi pins main by

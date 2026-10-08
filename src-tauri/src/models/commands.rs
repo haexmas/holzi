@@ -116,7 +116,8 @@ pub struct DownloadFromHfArgs {
 pub struct ImportModelArgs {
     pub id: String,
     pub name: String,
-    pub source_path: String,
+    /// The choice of the open dialog (spec 043: a path or a provider address).
+    pub source_path: crate::files::PickedFile,
     pub tokenizer_repo: String,
     pub context_window: Option<i64>,
     /// The GGUF filename inside the managed slug dir. Defaults to the
@@ -498,7 +499,7 @@ async fn download_from_hf_inner(
     Ok(payload)
 }
 
-/// Imports a GGUF from an operator-picked path.
+/// Imports a GGUF the operator chose in the file dialog.
 #[tauri::command]
 pub async fn import_model_from_file(
     app: AppHandle,
@@ -508,15 +509,10 @@ pub async fn import_model_from_file(
 ) -> Result<InstalledModelPayload> {
     let _operation = chat.acquire_operation()?;
     let db = active_database(&state)?;
-    let source = PathBuf::from(&args.source_path);
     let filename = args
         .filename
-        .or_else(|| {
-            source
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(|s| s.to_string())
-        })
+        .or_else(|| Some(crate::files::picked::display_name(&app, &args.source_path)))
+        .filter(|name| !name.is_empty())
         .ok_or_else(|| HolziError::InvalidInput {
             reason: "source path has no filename".into(),
         })?;
@@ -535,7 +531,7 @@ pub async fn import_model_from_file(
     let destination = paths::model_file_path(&app, &args.id, &filename)?;
     let staging = staging_path(&destination);
     let relative = paths::relative_path(&args.id, &filename)?;
-    let copy = import::copy_into_managed(&source, staging.clone());
+    let copy = import::copy_into_managed(app.clone(), args.source_path, staging.clone());
     let bytes = state.gate().run(copy).await??;
     register_downloaded(RegisterDownloadedArgs {
         db,

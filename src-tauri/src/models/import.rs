@@ -10,41 +10,29 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::{HolziError, Result};
+use crate::files::picked::{self, Opener, PickedFile};
 
-/// Copies `source` into `destination`, returning the actual byte count
-/// copied. Publishes only a completed copy, preserving an existing model
-/// on failure. The destination directory is expected to exist (callers use
-/// [`super::paths::slug_dir`] first).
-pub async fn copy_into_managed(source: &Path, destination: PathBuf) -> Result<u64> {
-    if !tokio::fs::metadata(source)
-        .await
-        .map_err(|e| HolziError::ModelImport {
-            reason: format!("source metadata {}: {e}", source.display()),
-        })?
-        .is_file()
-    {
-        return Err(HolziError::ModelImport {
-            reason: format!("source is not a regular file: {}", source.display()),
-        });
-    }
-    // A unique sidecar also keeps a cancelled copy's blocking worker from
-    // racing the next import. Discovery ignores its non-GGUF extension.
-    let staging = destination.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
-    let result = async {
-        let bytes = tokio::fs::copy(source, &staging).await?;
-        tokio::fs::rename(&staging, &destination).await?;
-        Ok::<u64, std::io::Error>(bytes)
-    }
-    .await;
-    if result.is_err() {
-        let _ = tokio::fs::remove_file(&staging).await;
-    }
-    result.map_err(|e| HolziError::ModelImport {
-        reason: format!(
-            "import {} -> {}: {e}",
-            source.display(),
-            destination.display()
-        ),
+/// Copies the chosen file into `destination`, returning the actual byte count copied. Publishes
+/// only a completed copy (a `.tmp` beside it, renamed at the end), preserving an existing model on
+/// failure. The destination directory is expected to exist (callers use [`super::paths::slug_dir`]
+/// first). A chosen file is a path on a desktop and a provider address on Android (spec 043).
+pub async fn copy_into_managed(
+    opener: impl Opener + Send + 'static,
+    source: PickedFile,
+    destination: PathBuf,
+) -> Result<u64> {
+    let target = destination.clone();
+    let copied =
+        tauri::async_runtime::spawn_blocking(move || picked::copy_into(&opener, &source, &target))
+            .await
+            .map_err(|e| HolziError::ModelImport {
+                reason: format!("import task: {e}"),
+            })?;
+    copied.map_err(|e| match e {
+        HolziError::NotEnoughSpace | HolziError::Unreadable => e,
+        other => HolziError::ModelImport {
+            reason: format!("import -> {}: {other}", destination.display()),
+        },
     })
 }
 

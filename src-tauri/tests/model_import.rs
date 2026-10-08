@@ -1,5 +1,10 @@
 //! Finalized model files must survive unsuccessful imports and self-imports.
 
+#[path = "common/chosen_files.rs"]
+mod chosen_files;
+
+use chosen_files::{chosen, Paths};
+
 use holzi_lib::models::import::{cleanup_staging_in_dir, copy_into_managed};
 
 #[tokio::test]
@@ -11,7 +16,7 @@ async fn reimporting_the_managed_file_preserves_its_contents() {
         .await
         .expect("seed model");
 
-    let copied = copy_into_managed(&model, model.clone())
+    let copied = copy_into_managed(Paths, chosen(&model), model.clone())
         .await
         .expect("reimport managed file");
 
@@ -31,7 +36,7 @@ async fn successful_import_replaces_only_the_destination() {
         .expect("destination");
 
     assert_eq!(
-        copy_into_managed(&source, destination.clone())
+        copy_into_managed(Paths, chosen(&source), destination.clone())
             .await
             .expect("import"),
         contents.len() as u64,
@@ -64,7 +69,9 @@ async fn failed_publication_preserves_destination_and_removes_staging() {
         .await
         .expect("existing file");
 
-    assert!(copy_into_managed(&source, destination).await.is_err());
+    assert!(copy_into_managed(Paths, chosen(&source), destination)
+        .await
+        .is_err());
     assert_eq!(
         tokio::fs::read(existing).await.expect("read existing"),
         b"existing"

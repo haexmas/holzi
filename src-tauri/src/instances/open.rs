@@ -115,6 +115,8 @@ pub async fn open_instance_core<R: Runtime>(
     )
     .await?;
 
+    // Spec 043: the fingerprint beside the vault, so an imported copy of it is recognised.
+    super::vault_id::write(&db_path, &candidate)?;
     state.install(
         ActiveInstanceHandle {
             name: name.to_string(),
@@ -170,7 +172,7 @@ pub async fn open_instance(
 }
 
 /// Opens an existing database with the lifecycle command's runtime configuration.
-fn open_existing_database(
+pub(super) fn open_existing_database(
     passphrase: &str,
     db_path: &Path,
     installation_id_file: &Path,

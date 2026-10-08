@@ -97,7 +97,10 @@ ausdrücklich nicht Teil dieser Spec. Referenz: haex-vault @
   Papierkorb, Verlauf, Symbole, alle Passkeys, ungültige TOTP-Secrets, alle Typen und Felder von
   Bitwarden (was kein eigenes Feld hat, kommt als eigenes Feld oder Tag). Anhänge über 25 MiB werden
   abgelehnt, aber im Bericht genannt; Fehler im Import stehen im Bericht, damit der Nutzer von
-  Hand nacharbeiten kann. Der Import schreibt in mehreren Schritten und macht bei einem
+  Hand nacharbeiten kann. Die Exportdatei wird vor dem Parsen höchstens 512 MiB gepuffert; größere
+  Dateien werden mit einer verständlichen Meldung abgelehnt. Eine KeePass-Schlüsseldatei wird nach
+  den KeePass-Regeln verarbeitet und nicht mit diesem Exportlimit verwechselt. Der Import schreibt
+  in mehreren Schritten und macht bei einem
   Gesamtfehler oder Abbruch alles rückgängig (Option A).
 - Q: (Analyse 2) Was dürfen Aufrufer von außen mit Einträgen im Papierkorb tun? → A: Nichts, sie
   sind für sie nicht vorhanden; sonst könnte ein zweites „Löschen“ endgültig entfernen. Benutzte

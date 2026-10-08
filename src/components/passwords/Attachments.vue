@@ -4,13 +4,14 @@
  * in a grid of three, two or one columns by the width of the container; a tap on an image opens the
  * lightbox over the entry's images in card order, a tap on anything else saves it. Adding through
  * the system's file dialog or by dropping files, renaming, removing and saving work as in 034.
- * Files travel as paths, never through the webview; a path is never stored. An attachment is saved
+ * Files travel as the dialog's choice (spec 043: a path or an address), never through the webview;
+ * nothing of the choice is stored. An attachment is saved
  * at once (it has no draft), so the editor can show this too.
  */
 import { getCurrentWebview } from '@tauri-apps/api/webview'
-import { open, save } from '@tauri-apps/plugin-dialog'
 import { toast } from 'vue-sonner'
 import type { AttachmentView } from '@bindings/AttachmentView'
+import type { PickedFile } from '@bindings/PickedFile'
 import { fileKind, safeFileName } from '~/lib/passwords/format'
 
 const props = defineProps<{
@@ -32,6 +33,7 @@ const {
   attachmentRemoveAsync,
   attachmentSaveAsync,
 } = usePasswords()
+const { pickManyAsync, pickSaveTargetAsync } = usePickedFile()
 
 const root = ref<HTMLElement | null>(null)
 const busy = ref(false)
@@ -47,14 +49,15 @@ const images = computed(() =>
   ),
 )
 
-async function addPathsAsync(paths: string[]) {
-  if (props.readonly || busy.value || !paths.length) return
+/** Chosen or dropped files (a dropped file is a path, a chosen one a path or an address). */
+async function addFilesAsync(files: PickedFile[]) {
+  if (props.readonly || busy.value || !files.length) return
   busy.value = true
   try {
     // One attachment per call: each is one write of its own.
-    for (const path of paths) {
+    for (const file of files) {
       try {
-        await attachmentAddAsync(props.itemId, path)
+        await attachmentAddAsync(props.itemId, file)
       } catch (cause) {
         toast.error(errString(cause))
       }
@@ -66,16 +69,14 @@ async function addPathsAsync(paths: string[]) {
 }
 
 async function pickAsync() {
-  const selected = await open({ multiple: true })
-  if (!selected) return
-  await addPathsAsync(Array.isArray(selected) ? selected : [selected])
+  await addFilesAsync(await pickManyAsync())
 }
 
 async function downloadAsync(attachment: AttachmentView) {
-  const path = await save({ defaultPath: safeFileName(attachment.fileName) })
-  if (!path) return
+  const target = await pickSaveTargetAsync(safeFileName(attachment.fileName))
+  if (!target) return
   try {
-    await attachmentSaveAsync(attachment.id, path)
+    await attachmentSaveAsync(attachment.id, target)
     toast.success(t('passwords.attachments.saved'))
   } catch (cause) {
     toast.error(errString(cause))
@@ -125,7 +126,7 @@ onMounted(async () => {
         dragging.value = false
       } else if (payload.type === 'drop') {
         dragging.value = false
-        if (overList(payload.position)) void addPathsAsync(payload.paths)
+        if (overList(payload.position)) void addFilesAsync(payload.paths)
       } else {
         dragging.value = overList(payload.position)
       }
