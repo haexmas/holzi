@@ -130,8 +130,8 @@ gewählte umgesetzt wird.
 - **Gewählte App ist inzwischen weg** (deinstalliert oder auf diesem Gerät nicht verfügbar, während
   die Rückfrage offen war): Die Aktion meldet das als Fehler an das Modell; es öffnet sich nichts.
 - **App ist installiert, aber auf diesem Gerät nicht verfügbar** (Erweiterung wird noch übertragen):
-  erscheint als Kandidat mit dem Hinweis, warum sie gerade nicht öffnet; Auswählen führt zum selben
-  Fehler wie heute beim Öffnen aus dem Launcher.
+  erscheint als Kandidat mit dem Hinweis, warum sie gerade nicht öffnet, und ist nicht wählbar, wie
+  im Launcher.
 - **Turn wird abgebrochen** (Stopp-Button) oder die App beendet, während eine Rückfrage offen ist:
   Die Rückfrage verschwindet, nichts wird ausgeführt; der Verlauf zeigt die Rückfrage als
   unbeantwortet.
