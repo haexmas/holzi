@@ -28,6 +28,8 @@ pub struct SyncRuntime {
     /// Wakes the session and presence as a local commit does, for changes
     /// that bypass `VaultDb` (a device list the link just published).
     pub wake: Arc<dyn Fn() + Send + Sync>,
+    /// Catching up after the app comes back or the network changes (spec 043).
+    pub wakeups: crate::sync::resume::Wakeups,
 }
 
 /// The slot the service publishes its runtime in.

@@ -16,6 +16,10 @@ Run it with an emulator or a phone attached (one device, or name it with `ANDROI
 E2E_CHROMEDRIVER=/path/to/chromedriver pnpm test:e2e --platform android --apk app-x86_64-debug.apk
 ```
 
+`iroh-relay` must be on `PATH` or named by `E2E_IROH_RELAY` (`cargo install iroh-relay --version
+<its version in src-tauri/Cargo.lock> --features server --locked`). With the Linux tools of a Linux run
+on this machine, the run also builds the Linux app for the other devices of a group.
+
 - **Driver**: chromedriver attached to the web view of the app that already runs
   (`goog:chromeOptions.androidUseRunningApp`; without it chromedriver would clear the app's data). Its
   major version must be the device web view's (`dumpsys package com.google.android.webview`); get it
@@ -34,8 +38,16 @@ E2E_CHROMEDRIVER=/path/to/chromedriver pnpm test:e2e --platform android --apk ap
 - **Not on Android**: [`platform-exclusions.ts`](platform-exclusions.ts) lists the scenarios that do not
   run there, as `excluded` (with the requirement and a counter case) or `pending` (with the stage of
   spec 043 that makes them run); `pnpm check:e2e-exclusions` checks the list and prints the share.
-- **One device**: a device holds one app's data, so a scenario has one Android device; groups that mix
-  in Linux devices come with stage 2 of spec 043.
+- **Mixed groups** (stage 2 of spec 043): a device holds one app's data, so a group has one device on
+  the phone, the one named `phone`, else its first device; the others run on Linux from the debug
+  build a Linux run makes (`group.ts`, `runsOnPhone`). The phone sits behind the emulator's network,
+  so the devices of a group meet through a local iroh relay (`iroh-relay --dev`,
+  [`lib/iroh-relay.ts`](lib/iroh-relay.ts)) instead of the closed port a Linux run uses; the Linux
+  devices bind loopback only (`HOLZI_E2E_SYNC_LOOPBACK=1`, debug builds), since the emulator's network
+  loses the direct path under load. A file a
+  scenario hands to a device is staged on the phone only for the device that runs there
+  (`onDevice`). A vault file copies from the phone to a Linux device; the other way is not needed
+  yet.
 - **CI**: three shards on an API 35 x86_64 emulator (`android-e2e` in `.github/workflows/ci.yml`,
   [`../ci/android-e2e.sh`](../ci/android-e2e.sh)), split with `--shard i/n`.
 

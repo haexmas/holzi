@@ -7,10 +7,12 @@ import {
   maxDevicesFrom,
   nextState,
   planGroup,
+  runsOnPhone,
 } from './group-plan.ts'
 import type { DeviceOperation, DeviceState } from './group-plan.ts'
 import { FakeHost, fakeRelay, pollingWaitFor } from './group.testlib.ts'
 import type { FakeData } from './group.testlib.ts'
+import type { DeviceHost } from './platform/host.ts'
 
 describe('planning a group', () => {
   it('names every device, its folder and which one makes the vault', () => {
@@ -136,7 +138,13 @@ interface Made {
 
 async function make(
   users: Parameters<typeof createGroup>[1]['users'],
-  options: { keep?: boolean; maxDevices?: number } = {},
+  options: {
+    keep?: boolean
+    maxDevices?: number
+    /** The phone, made over the same fake as the group's host, so linking between them works. */
+    phoneHost?: (host: FakeHost) => DeviceHost
+    irohRelays?: string[]
+  } = {},
 ): Promise<Made> {
   const host = new FakeHost()
   const teardowns: Made['teardowns'] = []
@@ -145,6 +153,8 @@ async function make(
   let counter = 0
   const deps: GroupDeps = {
     host,
+    phoneHost: options.phoneHost?.(host),
+    irohRelays: options.irohRelays,
     relay: fakeRelay(),
     credentials: () => ({ passphrase: `pass-${++counter}` }),
     onTeardown: (action) => void teardowns.push(action),
@@ -483,5 +493,51 @@ describe('copying a vault file', () => {
     assert.equal(laptop.state, 'stopped')
     assert.equal(host.data.get('4-anna-6-laptop')?.running, false)
     assert.throws(() => laptop.page, /it has no page/)
+  })
+})
+
+describe('a group in a run with a phone (spec 043)', () => {
+  it('puts the device named phone there, else the first device, and never a second one', () => {
+    const place = { taken: false, named: false, empty: true }
+    assert.equal(runsOnPhone('laptop', place), true)
+    assert.equal(runsOnPhone('laptop', { ...place, named: true }), false)
+    assert.equal(runsOnPhone('phone', { ...place, empty: false }), true)
+    assert.equal(runsOnPhone('phone', { ...place, taken: true }), false)
+    assert.equal(runsOnPhone('tablet', { ...place, empty: false }), false)
+  })
+
+  /** A distinct host that starts through `host`, as the phone of the group. */
+  const phoneOf = (made: { phone?: DeviceHost }) => (host: FakeHost) => {
+    const phone: DeviceHost = {
+      newData: (folder) => host.newData(folder),
+      start: (options) => host.start(options),
+    }
+    made.phone = phone
+    return phone
+  }
+
+  it('starts the phone on the phone host and the others on Linux, all on the iroh relay', async () => {
+    const made: { phone?: DeviceHost } = {}
+    const { group, host } = await make(
+      { anna: ['laptop', 'phone'] },
+      { phoneHost: phoneOf(made), irohRelays: ['http://127.0.0.1:3340'] },
+    )
+    assert.equal(group.device('anna/phone').host, made.phone)
+    assert.equal(group.device('anna/laptop').host, host)
+    const servers = host.servers[0]?.args as { irohRelays: string[] }
+    assert.deepEqual(servers.irohRelays, ['http://127.0.0.1:3340'])
+    const join = host.joins[0] as { servers: { irohRelays: string[] } }
+    assert.deepEqual(join.servers.irohRelays, ['http://127.0.0.1:3340'])
+  })
+
+  it('without a device named phone runs the first one there, and devices added later on Linux', async () => {
+    const made: { phone?: DeviceHost } = {}
+    const { group, host } = await make(
+      { anna: ['laptop'] },
+      { phoneHost: phoneOf(made) },
+    )
+    assert.equal(group.device('anna/laptop').host, made.phone)
+    const later = group.addDevice('anna', 'phone')
+    assert.equal(later.host, host, 'the phone already runs the laptop')
   })
 })

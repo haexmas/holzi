@@ -86,14 +86,18 @@ export function deviceFiles(
 }
 
 /**
- * A file of this machine at a path the app can read: the same path on Linux, a copy in the app's
- * storage on Android (it stays until the app's data is cleared with the next scenario).
+ * A file of this machine at a path the app on `page` can read: the same path on Linux, a copy in the
+ * app's storage on the phone (it stays until the app's data is cleared with the next scenario). In an
+ * Android run the other devices of a group run on Linux (stage 2); only a page with the phone's
+ * controls is on the phone.
  */
 export function onDevice(
   hostPath: string,
+  page: object,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  if (androidAdb(env) === undefined) return hostPath
+  const onPhone = 'phone' in page && page.phone !== undefined
+  if (!onPhone || androidAdb(env) === undefined) return hostPath
   const files = deviceFiles('e2e-staged-', env)
   files.write(basename(hostPath), readFileSync(hostPath))
   return files.path(basename(hostPath))

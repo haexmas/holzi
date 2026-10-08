@@ -32,6 +32,11 @@ export interface AndroidEnv {
   serial: string
   /** The chromedriver matching the device's web view. */
   chromedriver: string
+  /**
+   * The Linux debug build the other devices of a group run (stage 2: mixed groups), with the Linux
+   * tools in `tools`; undefined when this machine cannot run it.
+   */
+  linuxApp?: string
 }
 
 export interface Step {
@@ -102,6 +107,8 @@ export interface RunDeps {
   startInstance: (request: StartInstanceRequest) => Promise<Instance>
   /** The driver layer for groups; a run without one cannot make a group. */
   createHost?: (request: { scenario: string; env: E2EEnv }) => DeviceHost
+  /** The phone of an Android run, for one device of each group (spec 043). */
+  createPhoneHost?: (request: { scenario: string; env: E2EEnv }) => DeviceHost
   /** Called before teardown for body failures and after teardown for teardown failures. */
   onFailure?: (info: FailureInfo) => Promise<void>
 }

@@ -1,7 +1,8 @@
 // The Android implementation of the driver layer (spec 043, contract e2e-android.md): the app on one
 // device (an emulator in CI), started and ended through adb, driven through chromedriver attached to
-// its web view. One device holds one app's data, so a scenario has at most one Android device.
-import { mkdirSync, writeFileSync } from 'node:fs'
+// its web view. One device holds one app's data, so a scenario has at most one Android device; the
+// other devices of a group run on Linux (`group.ts`).
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ColorScheme, Instance, PhoneControls } from '../instance.ts'
 import { newSessionWithRetry } from '../instance.ts'
@@ -12,6 +13,7 @@ import type { Adb } from './adb.ts'
 import { androidCapabilities, startChromedriver } from './chromedriver.ts'
 import type { Chromedriver } from './chromedriver.ts'
 import type { DataHandle, DeviceHost, RunningDevice } from './host.ts'
+import { LinuxData, VAULT_DIR as LINUX_VAULT_DIR } from './linux.ts'
 
 export const PACKAGE = 'com.haex.holzi'
 const ACTIVITY = `${PACKAGE}/.MainActivity`
@@ -231,17 +233,68 @@ export class AndroidData implements DataHandle {
     this.adb = adb
   }
 
-  copyVaultFile(): Promise<void> {
-    return Promise.reject(
-      new Error(
-        'copying a vault file between devices needs a second host (stage 2: mixed groups)',
-      ),
-    )
+  /**
+   * Copies the vault file to a device on Linux, the only other host of a run with a phone (stage 2).
+   * Read as the app through `run-as`; each file's size is checked against the phone's.
+   */
+  async copyVaultFile(vaultName: string, to: DataHandle): Promise<void> {
+    if (!(to instanceof LinuxData)) {
+      throw new Error(
+        'a vault file on the phone can be copied to a Linux device only',
+      )
+    }
+    if (this.running) {
+      throw new Error(
+        'the source device is still running; stop it before copying its vault file',
+      )
+    }
+    let listing = ''
+    try {
+      listing = this.adb.runAs(PACKAGE, `ls ${VAULT_DIR}`).toString()
+    } catch {
+      // No folder: no vault file, said below.
+    }
+    // The file with what the closed app still keeps beside it; never the lock file.
+    const files = listing
+      .split(/\s+/)
+      .filter(
+        (file) => file.startsWith(`${vaultName}.db`) && !file.endsWith('.lock'),
+      )
+      .sort()
+    if (!files.includes(`${vaultName}.db`)) {
+      throw new Error(`there is no vault file of "${vaultName}" to copy`)
+    }
+    const target = join(to.root, ...LINUX_VAULT_DIR)
+    mkdirSync(target, { recursive: true })
+    const copied: string[] = []
+    try {
+      for (const file of files) {
+        const bytes = this.adb.runAs(PACKAGE, `cat ${VAULT_DIR}/${file}`)
+        const size = Number(
+          this.adb.runAs(PACKAGE, `stat -c %s ${VAULT_DIR}/${file}`).toString(),
+        )
+        if (bytes.length !== size) {
+          throw new Error(`${file} was read only in part`)
+        }
+        writeFileSync(join(target, file), bytes)
+        copied.push(file)
+      }
+    } catch (error) {
+      for (const file of copied) rmSync(join(target, file), { force: true })
+      throw new Error(
+        `copying the vault file of "${vaultName}" failed: ${(error as Error).message}`,
+        { cause: error },
+      )
+    }
   }
 
   keep(folder: string): void {
     try {
-      const tar = this.adb.runAs(PACKAGE, `tar c ${VAULT_DIR}`)
+      // The vaults and the app's log, as a Linux device keeps its whole data folder; not the caches.
+      const tar = this.adb.runAs(
+        PACKAGE,
+        'tar c --exclude=./cache --exclude=./code_cache --exclude=./app_webview .',
+      )
       mkdirSync(folder, { recursive: true })
       writeFileSync(join(folder, 'android-data.tar'), tar)
     } catch {
@@ -255,6 +308,30 @@ export class AndroidData implements DataHandle {
     } finally {
       this.adb.shell('pm', 'clear', PACKAGE)
     }
+  }
+}
+
+/**
+ * Ends the app the way a person does on a phone: the vault closes, and the app with it (FR-006). Its
+ * sync says goodbye to the other devices on the way; after a forced stop they would wait out the
+ * connection's idle time behind the relay and meanwhile refuse the phone's new process as a
+ * duplicate. A device without an open vault simply ends.
+ */
+export async function closeVault(
+  instance: Pick<Instance, 'invoke' | 'pid'>,
+  adb: Pick<Adb, 'pidof'>,
+  limitMs = 10_000,
+): Promise<void> {
+  if (adb.pidof(PACKAGE) !== instance.pid) return
+  // The app ends while the call is under way; a refusal (no vault open) comes at once.
+  let refused = false
+  void instance.invoke('close_instance', undefined, { expectEnd: true }).then(
+    (result) => void (refused = 'ok' in result && !result.ok),
+    () => {},
+  )
+  const end = Date.now() + limitMs
+  while (!refused && adb.pidof(PACKAGE) === instance.pid && Date.now() < end) {
+    await sleep(100)
   }
 }
 
@@ -272,7 +349,7 @@ export function createAndroidHost(options: AndroidHostOptions): DeviceHost {
     newData() {
       if (data !== undefined) {
         throw new Error(
-          'a scenario can have one Android device; the others run on Linux (stage 2: mixed groups)',
+          'a scenario can have one Android device; the others run on Linux',
         )
       }
       data = new AndroidData(options.adb)
@@ -294,11 +371,15 @@ export function createAndroidHost(options: AndroidHostOptions): DeviceHost {
       })
       own.running = true
       own.used = true
-      const end = async () => {
+      const kill = async () => {
         await instance.stop()
         own.running = false
       }
-      return { ...instance, stop: end, kill: end }
+      const stop = async () => {
+        await closeVault(instance, options.adb)
+        await kill()
+      }
+      return { ...instance, stop, kill }
     },
   }
 }

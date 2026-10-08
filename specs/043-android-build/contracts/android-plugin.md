@@ -39,6 +39,20 @@ nicht doppelt.
   die Variablen unten (`plugins/deviceInsets.client.ts`). So fragt eine neu geladene Seite nach,
   statt Werte zu verlieren, die Kotlin vor dem Laden geschrieben hätte.
 
+## Umsetzung in Stufe 2
+
+- `device_name() -> Option<String>` (ohne `Result`): Der Kern übernimmt den Namen einmal beim
+  Start (`hardware::hostname::use_platform_name`); „localhost“ zählt nie als Gerätename.
+- `watch_network(on_change)` statt eines Ereignisses `network-changed`: ein Kanal wie bei den
+  Rändern, ohne Nutzlast. Gemeldet wird nur ein Wechsel des Standardnetzes
+  (`onAvailable` mit einem anderen Netz als zuletzt); das Netz beim Start ist kein Wechsel, ein
+  Verlust allein auch nicht, denn ohne Netz gibt es nichts neu aufzubauen. `available` und
+  `metered` braucht niemand (Datenvolumen ist eine eigene Idee in `plans/README.md`).
+- Der Kern (`sync/resume.rs`) weckt auf `RunEvent::Resumed` und auf einen Netzwechsel die laufende
+  Sync-Sitzung: Nostr-Relays neu verbinden und die eigene Anwesenheit sofort senden, den
+  Wiederverbindungslauf anstoßen; beim Netzwechsel zusätzlich `Endpoint::network_change()`.
+  Während der Tresor schließt, geschieht nichts.
+
 ## Seite (Kotlin → WebView)
 
 In `load(webView)` setzt die Crate einen `OnApplyWindowInsetsListener` und schreibt bei jeder

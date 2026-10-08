@@ -1,9 +1,13 @@
 package space.haex.holzi.android
 
 import android.app.Activity
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.view.WindowManager
 import android.webkit.WebView
 import androidx.core.view.ViewCompat
@@ -28,6 +32,11 @@ class SecureArgs {
 
 @InvokeArg
 class InsetsArgs {
+    lateinit var channel: Channel
+}
+
+@InvokeArg
+class NetworkArgs {
     lateinit var channel: Channel
 }
 
@@ -70,6 +79,41 @@ class HolziAndroidPlugin(private val activity: Activity) : Plugin(activity) {
         insetsChannel = args.channel
         lastInsets?.let { args.channel.send(it) }
         invoke.resolve()
+    }
+
+    /**
+     * Tells the core when the device moves to another network (FR-019, research R5): iroh cannot
+     * see that from native code on Android. The network the device has when this is called is no
+     * change; a later default network that differs from the last one is.
+     */
+    @Command
+    fun watchNetwork(invoke: Invoke) {
+        val args = invoke.parseArgs(NetworkArgs::class.java)
+        val connectivity =
+            activity.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val current = connectivity.activeNetwork
+        connectivity.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            @Volatile private var last: Network? = current
+
+            override fun onAvailable(network: Network) {
+                if (network == last) return
+                last = network
+                args.channel.send(JSObject())
+            }
+        })
+        invoke.resolve()
+    }
+
+    /**
+     * The name the person gave the phone, else its model (research R10); the host name is
+     * "localhost" on Android.
+     */
+    @Command
+    fun deviceName(invoke: Invoke) {
+        val result = JSObject()
+        val named = Settings.Global.getString(activity.contentResolver, Settings.Global.DEVICE_NAME)
+        result.put("name", if (named.isNullOrBlank()) Build.MODEL else named)
+        invoke.resolve(result)
     }
 
     /** The name a document provider shows for a chosen file (contract picked-file.md). */

@@ -136,3 +136,23 @@ export function nextState(
       return state === 'offline' ? 'running' : refuse()
   }
 }
+
+/** What decides where the next device of a group runs in a run with a phone. */
+export interface PhonePlace {
+  /** A device of the group already runs on the phone. */
+  taken: boolean
+  /** The group was made with a device named `phone`. */
+  named: boolean
+  /** No device of the group exists yet. */
+  empty: boolean
+}
+
+/**
+ * Whether a device runs on the phone of an Android run (spec 043, contract e2e-android.md): the device
+ * named `phone`, else the first device of a group made without one; the others run on Linux. A group
+ * has at most one device on the phone, since the phone runs one app at a time.
+ */
+export function runsOnPhone(name: string, place: PhonePlace): boolean {
+  if (place.taken) return false
+  return name === 'phone' || (!place.named && place.empty)
+}

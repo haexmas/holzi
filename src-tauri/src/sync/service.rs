@@ -29,6 +29,7 @@ use crate::sync::keys::{self, DeviceKeys};
 use crate::sync::link::host_task::LinkHost;
 use crate::sync::registry::{SyncRegistry, SyncRuntime};
 use crate::sync::replica::Replica;
+use crate::sync::resume::Wakeups;
 use crate::vault_gate::VaultGate;
 
 /// Everything [`SyncService::start`] needs, already resolved by the caller:
@@ -43,8 +44,8 @@ pub struct SyncDeps<R: Runtime> {
     pub relay_mode: RelayMode,
     /// Nostr relays presence connects to (T037).
     pub nostr_relays: Vec<String>,
-    /// `None` in production (bind on every interface); tests pin this to
-    /// loopback, like [`crate::sync::endpoint`]'s own tests do.
+    /// [`crate::sync::endpoint::app_bind_addr`] in the app (every interface);
+    /// tests pin this to loopback, like [`crate::sync::endpoint`]'s own tests do.
     pub bind_addr: Option<std::net::SocketAddr>,
     pub app: AppHandle<R>,
 }
@@ -152,7 +153,7 @@ async fn resolve_deps<R: Runtime>(app: &AppHandle<R>, state: &AppState) -> Resul
         vault,
         relay_mode,
         nostr_relays,
-        bind_addr: None,
+        bind_addr: crate::sync::endpoint::app_bind_addr(),
         app: app.clone(),
     })
 }
@@ -206,9 +207,11 @@ async fn run<R: Runtime>(
     node.on_devices_changed(Arc::new(move || {
         events::emit(&devices_app, SYNC_DEVICES_CHANGED, ());
     }));
-    // Presence and the end of a session wake reconnect, so a device that just appeared or came
-    // back is dialed without waiting out the tick.
-    let reconnect_now = Arc::new(Notify::new());
+    // Presence, the end of a session and the app coming back (spec 043) wake reconnect, so a
+    // device that just appeared or came back is dialed without waiting out the tick.
+    let session_cancel = token.child_token();
+    let wakeups = Wakeups::new(session_cancel.clone());
+    let reconnect_now = Arc::clone(&wakeups.reconnect);
     let reconnect_on_end = Arc::clone(&reconnect_now);
     node.on_session_ended(Arc::new(move || reconnect_on_end.notify_one()));
 
@@ -220,7 +223,7 @@ async fn run<R: Runtime>(
         keys: presence_keys.clone(),
         vault,
         nostr_relays: nostr_relays.clone(),
-        cancel: token.child_token(),
+        cancel: session_cancel,
         link: LinkHost::new(Arc::new(move |status| {
             events::emit(&link_app, LINK_HOST_STATE_CHANGED, status);
         })),
@@ -231,6 +234,7 @@ async fn run<R: Runtime>(
                 changed_tx.send_modify(|n| *n = n.wrapping_add(1));
             })
         },
+        wakeups: wakeups.clone(),
     });
     if let Some(registry) = &registry {
         registry.set(Arc::clone(&runtime));
@@ -258,8 +262,15 @@ async fn run<R: Runtime>(
         vault,
         nostr_relays,
         changed_rx,
-        &reconnect_now,
+        &wakeups,
     );
+    // iroh does not see Android's network changes by itself (research R5).
+    let network_loop = async {
+        loop {
+            wakeups.network.notified().await;
+            node.network_change().await;
+        }
+    };
     let reconnect_loop = async {
         let mut tick = tokio::time::interval(RECONNECT_INTERVAL);
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -280,6 +291,7 @@ async fn run<R: Runtime>(
         _ = notify_loop => {}
         _ = presence_loop => {}
         _ = reconnect_loop => {}
+        _ = network_loop => {}
     }
     runtime.cancel.cancel();
     drop(registered);

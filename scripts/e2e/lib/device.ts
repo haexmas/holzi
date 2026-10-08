@@ -6,7 +6,7 @@ import { deviceFolder } from './device-folder.ts'
 import { nextState } from './group-plan.ts'
 import type { DeviceState, PlannedDevice } from './group-plan.ts'
 import type { Group } from './group.ts'
-import type { DataHandle, RunningDevice } from './platform/host.ts'
+import type { DataHandle, DeviceHost, RunningDevice } from './platform/host.ts'
 import { onlyServers, openVault } from './sync-flows.ts'
 
 /** A row of the device list the application shows (`list_vault_devices`). */
@@ -40,6 +40,8 @@ export class Device {
   readonly role: 'main' | 'linked'
   state: DeviceState = 'stopped'
   readonly data: DataHandle
+  /** Where the device runs: Linux, or the phone of an Android run (spec 043). */
+  readonly host: DeviceHost
   private process: RunningDevice | undefined
   private offlineMode = false
   private cachedPubkey: string | undefined
@@ -52,6 +54,7 @@ export class Device {
       vaultName: string
       passphrase: string
       data: DataHandle
+      host: DeviceHost
       role: 'main' | 'linked'
     },
   ) {
@@ -63,6 +66,7 @@ export class Device {
     this.vaultName = vault.vaultName
     this.passphrase = vault.passphrase
     this.data = vault.data
+    this.host = vault.host
     this.role = vault.role
   }
 
@@ -93,7 +97,7 @@ export class Device {
    */
   async startUnopened(): Promise<void> {
     const next = nextState(this.state, 'start', this.offlineMode)
-    this.process = await this.group.deps.host.start({
+    this.process = await this.host.start({
       data: this.data,
       folder: this.folder,
       step: (name, detail) =>
@@ -108,8 +112,7 @@ export class Device {
   }
 
   private async launch(): Promise<void> {
-    const { host } = this.group.deps
-    const process = await host.start({
+    const process = await this.host.start({
       data: this.data,
       folder: this.folder,
       step: (name, detail) =>
@@ -182,7 +185,11 @@ export class Device {
   async goOffline(): Promise<void> {
     nextState(this.state, 'goOffline', this.offlineMode)
     await this.setServers({
-      ...(await onlyServers(this.page, this.group.deps.relay.url)),
+      ...(await onlyServers(
+        this.page,
+        this.group.deps.relay.url,
+        this.group.deps.irohRelays,
+      )),
       nostrRelays: [],
       irohRelays: [],
     })
@@ -195,7 +202,11 @@ export class Device {
   async goOnline(): Promise<void> {
     nextState(this.state, 'goOnline', this.offlineMode)
     await this.setServers(
-      await onlyServers(this.page, this.group.deps.relay.url),
+      await onlyServers(
+        this.page,
+        this.group.deps.relay.url,
+        this.group.deps.irohRelays,
+      ),
     )
     this.offlineMode = false
     await this.restart()

@@ -8,6 +8,7 @@ import {
   limitMessage,
   maxDevicesFrom,
   planGroup,
+  runsOnPhone,
   usableName,
 } from './group-plan.ts'
 import type { GroupSpec, PlannedDevice } from './group-plan.ts'
@@ -30,7 +31,14 @@ export interface CaptureDevice {
 
 export interface GroupDeps extends WaitContext {
   host: DeviceHost
+  /**
+   * The phone of an Android run (spec 043): the device `runsOnPhone` picks runs there, the others on
+   * `host`. Without it every device runs on `host`.
+   */
+  phoneHost?: DeviceHost
   relay: NostrRelay
+  /** The iroh relays the devices use; none reachable unless the run has a phone (`sync-flows.ts`). */
+  irohRelays?: string[]
   credentials(): { passphrase: string }
   onTeardown(action: () => Promise<void> | void): void
   /** Keep the data of passing scenarios too. */
@@ -46,6 +54,8 @@ export class Group {
   readonly devices = new Map<string, Device>()
   /** The vault of each user. */
   readonly users = new Map<string, { vaultName: string }>()
+  /** The group was made with a device named `phone` (it then runs on the phone, see `runsOnPhone`). */
+  phoneNamed = false
 
   constructor(deps: GroupDeps) {
     this.deps = deps
@@ -125,6 +135,11 @@ export class Group {
     })
   }
 
+  /** Where a new device named `name` runs. */
+  hostFor(name: string): DeviceHost {
+    return hostOf(this, name)
+  }
+
   /**
    * Registers a device that does not run yet; refuses an unusable name, a name another device of the
    * group has (as `planGroup` does) and one more device than the limit allows.
@@ -149,13 +164,28 @@ export class Group {
     if (this.devices.size + 1 > this.deps.maxDevices) {
       throw new Error(limitMessage(this.devices.size + 1, this.deps.maxDevices))
     }
+    const host = this.hostFor(planned.name)
     const device = new Device(this, planned, {
       ...vault,
-      data: this.deps.host.newData(planned.folder),
+      host,
+      data: host.newData(planned.folder),
     })
     this.devices.set(planned.address, device)
     return device
   }
+}
+
+/** Where a new device of the group runs: on the phone of an Android run or on the group's host. */
+function hostOf(group: Group, name: string): DeviceHost {
+  const phone = group.deps.phoneHost
+  if (phone === undefined) return group.deps.host
+  const devices = [...group.devices.values()]
+  const onPhone = runsOnPhone(name, {
+    taken: devices.some((device) => device.host === phone),
+    named: group.phoneNamed,
+    empty: devices.length === 0,
+  })
+  return onPhone ? phone : group.deps.host
 }
 
 /** Makes the group the spec describes and ends all of it with the scenario. */
@@ -165,6 +195,9 @@ export async function createGroup(
 ): Promise<Group> {
   const plan = planGroup(spec, deps.maxDevices)
   const group = new Group(deps)
+  group.phoneNamed = plan.some((user) =>
+    user.devices.some((device) => device.name === 'phone'),
+  )
   deps.onTeardown(async () => {
     for (const device of [...group.devices.values()].reverse()) {
       try {
@@ -204,8 +237,8 @@ export async function createGroup(
 
 /** The first device creates the vault, points it at the relay, and reopens it so the servers apply. */
 async function createFirstDevice(group: Group, device: Device): Promise<void> {
-  const { host, relay, step } = group.deps
-  const fresh = await host.start({
+  const { relay, step, irohRelays } = group.deps
+  const fresh = await device.host.start({
     data: device.data,
     folder: device.folder,
     step: (name, detail) => step(name, detail, device.address),
@@ -216,6 +249,7 @@ async function createFirstDevice(group: Group, device: Device): Promise<void> {
       relay.url,
       device.vaultName,
       device.passphrase,
+      irohRelays,
     )
   } finally {
     await fresh.stop()
@@ -229,14 +263,14 @@ async function linkDeviceInto(
   origin: Device,
   planned: PlannedDevice,
 ): Promise<Device> {
-  const { host, relay, step, credentials } = group.deps
+  const { relay, step, credentials, irohRelays } = group.deps
   const passphrase = credentials().passphrase
   const device = group.add(planned, {
     vaultName: origin.vaultName,
     passphrase,
     role: planned.main ? 'main' : 'linked',
   })
-  const fresh = await host.start({
+  const fresh = await device.host.start({
     data: device.data,
     folder: device.folder,
     step: (name, detail) => step(name, detail, device.address),
@@ -247,6 +281,7 @@ async function linkDeviceInto(
       deviceName: planned.name,
       passphrase,
       relayUrl: relay.url,
+      irohRelays,
       asMainDevice: planned.main,
       device: device.address,
     })

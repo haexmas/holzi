@@ -171,8 +171,11 @@ Hintergrund-Sync).
 Wiederverbindungstakt aus PR #235); Android braucht nur den Anstoß zur richtigen Zeit, statt auf
 das nächste Zeitfenster zu warten (SC-005: 10 s).
 
-**Offen**: ob iroh 0.9x auf Android Netzwechsel selbst erkennt (`netwatch`); der Anstoß aus der
-Plugin-Crate schadet in keinem Fall.
+**Geklärt (Stufe 2)**: iroh 1.3 erkennt Netzwechsel auf Android nicht selbst; die Dokumentation
+von `Endpoint::network_change` sagt, Android gebe diese Information nur an Java-Code. Der Anstoß
+aus der Plugin-Crate ist also nötig. Bei der Rückkehr in den Vordergrund baut holzi außerdem die
+Nostr-Verbindungen neu auf, weil Android die Sockets einer Hintergrund-App schließen kann, ohne
+dass der Client es sofort merkt.
 
 ## R6 — Ränder, Aussparung und Tastatur (FR-011, FR-012)
 

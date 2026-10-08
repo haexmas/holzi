@@ -8,10 +8,11 @@
 //! when it is used (the new installation's meeting arrived), cancelled, out
 //! of time, or with the vault session.
 
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use futures::StreamExt;
+use futures::{FutureExt, Stream, StreamExt};
 use nostr::event::Kind;
 use nostr::filter::Filter;
 use nostr_sdk::client::{Client, ClientNotification};
@@ -31,6 +32,10 @@ use crate::sync::registry::SyncRuntime;
 
 /// How long the dial of the new installation may take.
 const DIAL_TIMEOUT: Duration = Duration::from_secs(20);
+/// How long one dial may take before a newer meeting is tried (spec 043): the first meeting can
+/// lack the relay a device behind a NAT is reachable through, and the new installation sends a new
+/// meeting every few seconds.
+const DIAL_ATTEMPT: Duration = Duration::from_secs(6);
 /// How long a proven new device may wait for the user's answer.
 const DECISION_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// How long the new device gets to read the last message before this side
@@ -265,16 +270,16 @@ async fn drive(
     cancel: &CancellationToken,
     expires_at: u64,
 ) -> Result<Outcome, LinkError> {
+    let mut rendezvous = Rendezvous::open(runtime, code).await?;
     let addr = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Err(LinkError::Aborted(crate::sync::link::wire::AbortReason::Cancelled)),
-        found = wait_for_meeting(runtime, code, expires_at) => found?,
+        found = rendezvous.first(expires_at) => found?,
     };
-    // The code counts as used from here on: the rendezvous is left.
-    let connection = tokio::time::timeout(DIAL_TIMEOUT, runtime.node.dial_link(addr))
-        .await
-        .map_err(|_| LinkError::TimedOut)?
-        .map_err(|e| LinkError::List(e.to_string()))?;
+    // The code counts as used from here on.
+    let dialed = dial(runtime, &mut rendezvous, addr).await;
+    rendezvous.close().await;
+    let connection = dialed?;
     let remote = *connection.remote_id().as_bytes();
     let (mut send, mut recv) = connection
         .open_bi()
@@ -318,54 +323,116 @@ async fn drive(
     outcome
 }
 
-/// Waits on the code's rendezvous for the new installation's first fresh
-/// meeting and returns where it can be reached.
-async fn wait_for_meeting(
+/// Dials the new installation at `addr`; when a dial does not get through, at the newest meeting
+/// that arrived meanwhile, until [`DIAL_TIMEOUT`].
+async fn dial(
     runtime: &Arc<SyncRuntime>,
-    code: &LinkCode,
-    expires_at: u64,
-) -> Result<iroh::EndpointAddr, LinkError> {
-    let (rv_sk, rv_pk) = code
-        .rendezvous_keys()
-        .map_err(|e| LinkError::List(e.to_string()))?;
-    crate::sync::presence::ensure_crypto_provider();
-    let client = Client::new();
-    for url in &runtime.nostr_relays {
-        if let Err(error) = client.add_relay(url.as_str()).await {
-            log::warn!("sync: link relay {url} is not a valid URL: {error}");
+    rendezvous: &mut Rendezvous,
+    mut addr: iroh::EndpointAddr,
+) -> Result<iroh::endpoint::Connection, LinkError> {
+    let deadline = tokio::time::Instant::now() + DIAL_TIMEOUT;
+    loop {
+        let attempt =
+            DIAL_ATTEMPT.min(deadline.saturating_duration_since(tokio::time::Instant::now()));
+        match tokio::time::timeout(attempt, runtime.node.dial_link(addr.clone())).await {
+            Ok(Ok(connection)) => return Ok(connection),
+            Ok(Err(error)) if tokio::time::Instant::now() >= deadline => {
+                return Err(LinkError::List(error.to_string()))
+            }
+            Ok(Err(error)) => {
+                log::info!("sync: dialing the new device failed, trying again: {error}");
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+            Err(_) if tokio::time::Instant::now() >= deadline => return Err(LinkError::TimedOut),
+            Err(_) => log::info!("sync: dialing the new device takes long, trying again"),
+        }
+        if let Some(newer) = rendezvous.latest() {
+            addr = newer;
         }
     }
-    client.connect().and_wait(RELAY_CONNECT_TIMEOUT).await;
-    let mut notifications = client.notifications();
-    client
-        .subscribe(Filter::new().kind(GIFT_WRAP_KIND).pubkey(rv_pk))
-        .await
-        .map_err(|e| LinkError::List(e.to_string()))?;
+}
 
-    let remaining = Duration::from_millis(expires_at.saturating_sub(now_ms()));
-    let found = tokio::time::timeout(remaining, async {
-        while let Some(notification) = notifications.next().await {
-            let ClientNotification::Event { event, .. } = notification else {
-                continue;
-            };
-            let Ok((_device, seen)) = meeting::open(&event, &rv_sk) else {
-                continue;
-            };
-            if !seen.is_fresh(now_ms()) {
-                continue;
-            }
-            if let Ok(addr) = seen.endpoint_addr() {
-                return Some(addr);
+/// The code's rendezvous: where the new installation's meetings arrive.
+struct Rendezvous {
+    client: Client,
+    notifications: Pin<Box<dyn Stream<Item = ClientNotification> + Send>>,
+    rv_sk: nostr::key::SecretKey,
+}
+
+impl Rendezvous {
+    async fn open(runtime: &Arc<SyncRuntime>, code: &LinkCode) -> Result<Self, LinkError> {
+        let (rv_sk, rv_pk) = code
+            .rendezvous_keys()
+            .map_err(|e| LinkError::List(e.to_string()))?;
+        crate::sync::presence::ensure_crypto_provider();
+        let client = Client::new();
+        for url in &runtime.nostr_relays {
+            if let Err(error) = client.add_relay(url.as_str()).await {
+                log::warn!("sync: link relay {url} is not a valid URL: {error}");
             }
         }
-        None
-    })
-    .await;
-    client.shutdown().await;
-    match found {
-        Ok(Some(addr)) => Ok(addr),
-        Ok(None) => Err(LinkError::TimedOut),
-        Err(_) => Err(LinkError::TimedOut),
+        client.connect().and_wait(RELAY_CONNECT_TIMEOUT).await;
+        let notifications = client.notifications();
+        client
+            .subscribe(Filter::new().kind(GIFT_WRAP_KIND).pubkey(rv_pk))
+            .await
+            .map_err(|e| LinkError::List(e.to_string()))?;
+        Ok(Self {
+            client,
+            notifications,
+            rv_sk,
+        })
+    }
+
+    /// Where the new installation can be reached, from a received event; `None` for anything else.
+    fn meeting(&self, notification: ClientNotification) -> Option<iroh::EndpointAddr> {
+        let ClientNotification::Event { event, .. } = notification else {
+            return None;
+        };
+        let (_device, seen) = meeting::open(&event, &self.rv_sk).ok()?;
+        if !seen.is_fresh(now_ms()) {
+            return None;
+        }
+        let addr = seen.endpoint_addr().ok()?;
+        log::info!(
+            "sync: link meeting with {} direct addresses, relay: {}",
+            addr.ip_addrs().count(),
+            addr.relay_urls().next().is_some()
+        );
+        Some(addr)
+    }
+
+    /// Waits for the first fresh meeting, until the code expires.
+    async fn first(&mut self, expires_at: u64) -> Result<iroh::EndpointAddr, LinkError> {
+        let remaining = Duration::from_millis(expires_at.saturating_sub(now_ms()));
+        let found = tokio::time::timeout(remaining, async {
+            while let Some(notification) = self.notifications.next().await {
+                if let Some(addr) = self.meeting(notification) {
+                    return Some(addr);
+                }
+            }
+            None
+        })
+        .await;
+        match found {
+            Ok(Some(addr)) => Ok(addr),
+            _ => Err(LinkError::TimedOut),
+        }
+    }
+
+    /// The newest meeting that arrived since the last look, without waiting.
+    fn latest(&mut self) -> Option<iroh::EndpointAddr> {
+        let mut newest = None;
+        while let Some(Some(notification)) = self.notifications.next().now_or_never() {
+            if let Some(addr) = self.meeting(notification) {
+                newest = Some(addr);
+            }
+        }
+        newest
+    }
+
+    async fn close(self) {
+        self.client.shutdown().await;
     }
 }
 

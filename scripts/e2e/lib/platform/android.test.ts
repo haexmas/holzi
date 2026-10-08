@@ -1,14 +1,19 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createAdb, deviceSerial } from './adb.ts'
 import type { AdbRunner } from './adb.ts'
 import {
   AndroidData,
+  closeVault,
   PACKAGE,
   createAndroidHost,
   mapAndroidUrl,
   prepareDevice,
 } from './android.ts'
+import { LinuxData, VAULT_DIR } from './linux.ts'
 
 /** An adb that records every call and answers from `answers` (by the joined argument list). */
 function fakeAdb(answers: Record<string, string | Error> = {}) {
@@ -147,5 +152,104 @@ describe('reachFromDevice', () => {
     )
     reachFromDevice(5001, {}, fake.run)
     assert.deepEqual(fake.calls, ['-s emu reverse tcp:5000 tcp:5000'])
+  })
+})
+
+describe('copying a vault file from the phone (stage 2)', () => {
+  const runAs = `-s emu exec-out run-as ${PACKAGE} sh -c`
+  const phoneWith = (overrides: Record<string, string | Error> = {}) =>
+    fakeAdb({
+      [`${runAs} ls instances`]:
+        'v.db\nv.db-wal\nv.db.lock\nv.db.vault-id\nother.db\n',
+      [`${runAs} cat instances/v.db-wal`]: 'wal',
+      [`${runAs} cat instances/v.db.vault-id`]: 'id\n',
+      [`${runAs} cat instances/v.db`]: 'vault',
+      [`${runAs} stat -c %s instances/v.db-wal`]: '3',
+      [`${runAs} stat -c %s instances/v.db.vault-id`]: '3',
+      [`${runAs} stat -c %s instances/v.db`]: '5',
+      ...overrides,
+    })
+
+  it('copies the vault and what it keeps beside it to a Linux device, never the lock', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'holzi-android-copy-'))
+    try {
+      const source = new AndroidData(createAdb('emu', phoneWith().run))
+      await source.copyVaultFile('v', new LinuxData(root))
+      const target = join(root, ...VAULT_DIR)
+      assert.deepEqual(readdirSync(target).sort(), [
+        'v.db',
+        'v.db-wal',
+        'v.db.vault-id',
+      ])
+      assert.equal(readFileSync(join(target, 'v.db'), 'utf8'), 'vault')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves nothing behind when a file arrives only in part', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'holzi-android-copy-'))
+    try {
+      const fake = phoneWith({
+        [`${runAs} stat -c %s instances/v.db.vault-id`]: '9',
+      })
+      const source = new AndroidData(createAdb('emu', fake.run))
+      await assert.rejects(
+        source.copyVaultFile('v', new LinuxData(root)),
+        /v\.db\.vault-id was read only in part/,
+      )
+      assert.deepEqual(readdirSync(join(root, ...VAULT_DIR)), [])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses a running source and another phone as the target', async () => {
+    const source = new AndroidData(createAdb('emu', phoneWith().run))
+    await assert.rejects(
+      source.copyVaultFile(
+        'v',
+        new AndroidData(createAdb('emu', phoneWith().run)),
+      ),
+      /Linux device only/,
+    )
+    source.running = true
+    await assert.rejects(
+      source.copyVaultFile('v', new LinuxData('/nowhere')),
+      /still running/,
+    )
+  })
+})
+
+describe('stopping the phone of a group (stage 2)', () => {
+  it('closes the vault and waits for the app to end', async () => {
+    let running = true
+    const calls: string[] = []
+    await closeVault(
+      {
+        pid: 7,
+        invoke: async (command: string) => {
+          calls.push(command)
+          setTimeout(() => (running = false), 30)
+          return { ok: true, data: null }
+        },
+      } as never,
+      { pidof: () => (running ? 7 : undefined) },
+    )
+    assert.deepEqual(calls, ['close_instance'])
+    assert.equal(running, false)
+  })
+
+  it('goes on at once when no vault is open', async () => {
+    const started = Date.now()
+    await closeVault(
+      {
+        pid: 7,
+        invoke: async () => ({ ok: false, error: 'no vault' }),
+      } as never,
+      { pidof: () => 7 },
+      5_000,
+    )
+    assert.ok(Date.now() - started < 1_000)
   })
 })

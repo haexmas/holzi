@@ -281,6 +281,9 @@ export async function runCli(
   let preflight: PreflightOutcome
   let platformEnv: Record<string, string> = {}
   let application: ApplicationInfo | null = null
+  /** Android runs: the Linux build the other devices of a group run (stage 2: mixed groups). */
+  let linuxApplication: ApplicationInfo | null = null
+  let linuxFound: PreflightOutcome['found'] = {}
   const messages: string[] = []
   if (options.platform === 'android') {
     const android = (deps.androidPreflight ?? defaultAndroidPreflight(env))(
@@ -293,7 +296,13 @@ export async function runCli(
       versions: android.versions,
       messages: android.messages,
     }
-    platformEnv = { E2E_PLATFORM: 'android', ...android.env }
+    // The devices beside the phone reach it only through the run's iroh relay: the emulator's own
+    // network loses the direct path under load (`sync::endpoint::app_bind_addr`, debug builds).
+    platformEnv = {
+      E2E_PLATFORM: 'android',
+      HOLZI_E2E_SYNC_LOOPBACK: '1',
+      ...android.env,
+    }
     // The app on the device; closing its vault always ends it (spec 043 FR-006).
     application = {
       path: PACKAGE,
@@ -304,6 +313,30 @@ export async function runCli(
     for (const [name, entry] of skippedHere) {
       deps.print(
         `not on android: ${name} (${entry.kind === 'pending' ? `stage ${entry.stage}` : 'excluded'}: ${entry.reason})`,
+      )
+    }
+    // The other devices of a group run on Linux, from the same debug build a Linux run makes. Without
+    // the Linux tools here, stop before scenarios so the missing desktop setup is reported as a preflight failure.
+    const linux = android.ok ? await deps.preflight() : undefined
+    if (linux === undefined) {
+      // The device check failed; the run stops below.
+    } else if (linux.ok) {
+      try {
+        linuxApplication = resolveApplication({
+          repoRoot: deps.repoRoot,
+          env,
+          appPath: options.app,
+          closeBehaviorFlag: options.closeBehavior,
+        })
+        linuxFound = linux.found
+      } catch (error) {
+        messages.push(
+          `the devices beside the phone cannot run: ${(error as Error).message}`,
+        )
+      }
+    } else {
+      messages.push(
+        `the devices beside the phone cannot run here: ${linux.messages.join('; ')}`,
       )
     }
   } else {
@@ -351,9 +384,10 @@ export async function runCli(
     }
 
     // 3. Build.
-    if (application.source === 'built') {
+    const toBuild = linuxApplication ?? application
+    if (toBuild.source === 'built') {
       try {
-        await deps.build(application, runDir, marker)
+        await deps.build(toBuild, runDir, marker)
       } catch (error) {
         deps.print((error as Error).message)
         await deps.stopRun(marker)
@@ -376,7 +410,12 @@ export async function runCli(
           E2E_RUN_DIR: runDir,
           E2E_APP: application.path,
           E2E_CLOSE_BEHAVIOR: application.closeBehavior,
-          E2E_TOOLS: JSON.stringify(preflight.found),
+          E2E_TOOLS: JSON.stringify(
+            options.platform === 'android' ? linuxFound : preflight.found,
+          ),
+          ...(linuxApplication === null
+            ? {}
+            : { E2E_LINUX_APP: linuxApplication.path }),
           E2E_SCENARIO_TIMEOUT_MS: String(options.scenarioTimeoutSec * 1000),
           E2E_TIME_SCALE: String(options.timeScale),
           E2E_KEEP: options.keep ? '1' : '0',

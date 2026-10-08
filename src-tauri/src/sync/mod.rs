@@ -24,6 +24,7 @@ pub mod progress;
 pub mod registry;
 pub mod removal;
 pub mod replica;
+pub mod resume;
 pub mod resync;
 pub mod seen;
 pub mod servers;

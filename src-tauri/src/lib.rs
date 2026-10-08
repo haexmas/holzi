@@ -226,6 +226,13 @@ pub fn run() {
             tls::init_platform_verifier()?;
             // Spec 043 (FR-011, FR-012): the space the system bars and the keyboard take.
             platform::insets::watch(app.handle());
+            // Spec 043 (research R5, R10): the sync's network changes and the phone's name come
+            // from the platform on Android; elsewhere both calls do nothing.
+            sync::resume::watch_network(app.handle());
+            {
+                use tauri_plugin_holzi_android::HolziAndroidExt;
+                hardware::hostname::use_platform_name(app.holzi_android().device_name());
+            }
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -522,6 +529,12 @@ pub fn run() {
                 if !relaunching && instances::take_over_exit(app) {
                     api.prevent_exit();
                 }
+            }
+            // Spec 043 (FR-018, research R5): back in the foreground, the sync catches up at once
+            // instead of on its next tick. Nothing runs on `Suspended`: no background sync.
+            #[cfg(target_os = "android")]
+            tauri::RunEvent::Resumed => {
+                sync::resume::wake_app(app, sync::resume::Wake::Resumed);
             }
             // Spec 043 (research R4): Android keeps the process of a finished activity cached.
             // End it, so the next start is a new process at the vault picker (ADR-0003).
