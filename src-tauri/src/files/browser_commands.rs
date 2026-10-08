@@ -148,7 +148,7 @@ pub async fn files_read_image(
 ) -> Result<Response, FilesError> {
     let real = device_path(&files, &source, &path, Want::Read)?;
     let bytes = blocking(move || {
-        let mut file = std::fs::File::open(&real).map_err(|error| ops::io_error(error, &real))?;
+        let file = std::fs::File::open(&real).map_err(|error| ops::io_error(error, &real))?;
         let size = file
             .metadata()
             .map_err(|error| ops::io_error(error, &real))?
