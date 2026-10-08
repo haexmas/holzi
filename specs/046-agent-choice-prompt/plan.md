@@ -19,7 +19,7 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
   Freigaben; Event `chat-choice-request`, Command `respond_choice`.
 - **Transport** (R3, R4): `ToolResult.choice`, `ActionReply::NeedsChoice`, Code `needs_choice` mit
   `options` durch Runner, Wire und Bridge; Endergebnis mit Vermerk im gespeicherten `content`.
-- **App-Auflösung** (R5, R8): reines Modul `src/lib/wm/appMatch.ts` (Fuse, `fold`), `ActionChoiceError`
+- **App-Auflösung** (R5, R8): reines Modul `src/lib/wm/appMatch.ts` (Editierdistanz, `fold`), `ActionChoiceError`
   in `wmActionHandlers.ts`, `t` für Titel der System-Apps.
 - **`ask_user`** (R6): eingebautes Werkzeug, immer angeboten, nie freigabepflichtig, Satz im Systemprompt.
 - **UI** (R9, R10): eine Warteschlange `pendingPrompts` für Freigaben und Rückfragen; neue Komponente
@@ -30,7 +30,7 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 
 **Language/Version**: Rust (Edition des Crates, `src-tauri`), TypeScript (strict), Vue 3.5, Nuxt 4 (SPA)
 
-**Primary Dependencies**: vorhanden — `tokio` (oneshot, `select!`), `serde`, `uuid`, `fuse.js` ^7.5,
+**Primary Dependencies**: vorhanden — `tokio` (oneshot, `select!`), `serde`, `uuid`,
 haex-ui-Layer (`UiDrawerModal`, `UiButton`, `UiInput`); keine neue Abhängigkeit, keine neue
 Tauri-Berechtigung
 

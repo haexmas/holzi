@@ -19,7 +19,7 @@ import { registerWmLayoutHandlers } from '~/stores/wmLayoutHandlers'
 export default defineNuxtPlugin((nuxtApp) => {
   const wm = useWindowManagerStore()
   const t = ((key, params) => nuxtApp.$i18n.t(key, params ?? {})) as Translate
-  registerWmActionHandlers(wm)
+  registerWmActionHandlers(wm, t)
   registerWmLayoutHandlers(wm, t)
   registerChatActionHandlers(wm)
   registerSettingsActionHandlers(wm)

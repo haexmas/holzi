@@ -111,9 +111,15 @@ der laufende Request müsste dazu Tool-Aufrufe enthalten, die das Modell nie gem
 2. Normalisieren mit `fold` (Diakritika weg, klein); ein Präfix `system.`/`extension.` wird abgeschnitten,
    damit „system.notes“ wie „notes“ sucht (US1/4).
 3. Exakter Treffer auf gefalteten Titel oder ID-Rest (`chat`, `settings`, …) → eindeutig.
-4. Fuse über `[titel, idRest]`, `ignoreLocation: true`, `includeScore: true`, `threshold: 0.4`.
-   **Klarer Treffer**: bester Score ≤ 0.25 und (kein Zweiter oder Abstand zum Zweiten ≥ 0.15). Sonst
-   `choice` mit den besten 5 (FR-004), auch leer.
+4. Score je App über Titel und ID-Rest (0 = gleich, 1 = fern): steckt das eine im anderen,
+   0,05–0,15 (kürzere Namen zuerst); sonst Editierdistanz (Vertauschung = ein Fehler) geteilt durch die
+   längere Länge. Kandidaten bis 0,5. **Klarer Treffer**: bester Score ≤ 0,2 und (kein Zweiter oder
+   Abstand zum Zweiten ≥ 0,1). Sonst `choice` mit den besten 5 (FR-004), auch leer.
+
+   _Beim Umsetzen geändert (T006):_ Geplant war Fuse (`threshold: 0.4`, klar bei ≤ 0,25 / Abstand
+   0,15). Gemessen gab Fuse „haex-mial“ für haex-mail und haex-files denselben Score 0,471, weil es den
+   besten Teil-Treffer irgendwo im Text bewertet, nicht den Abstand der ganzen Namen. Die
+   Editierdistanz trennt beide (0,11 gegen 0,4).
 
 Titel: `app.title ?? t(app.titleKey)` in der aktuellen Sprache; der ID-Rest deckt die englischen Namen
 der System-Apps ab. `registerWmActionHandlers(wm, t)` bekommt `t` wie `registerWmLayoutHandlers`
@@ -124,11 +130,11 @@ Die Schwellen werden in `scripts/check-wm-app-match.ts` an festen Fällen kalibr
 haex-mail eindeutig; „haex“ bei haex-mail/-notes/-files → Auswahl; „system.notes“ → haex-notes;
 „einstellungen“ → system.settings; „Kalender“ ohne passende App → Auswahl mit ≤ 5 oder leer.
 
-**Rationale**: Laziness-Ladder: `fuse.js` ist schon Abhängigkeit, das Muster aus der Passwortsuche ist
-erprobt. Reines Modul ⇒ mit `node --test` testbar.
+**Rationale**: App-Namen sind kurz und ein Wort; für Tippfehler zählt der Abstand der ganzen Namen.
+~20 Zeilen Editierdistanz ohne neue Abhängigkeit. Reines Modul ⇒ mit `node --test` testbar.
 
-**Alternatives considered**: Levenshtein selbst schreiben — verworfen, Fuse ist da. Wortweise Suche wie
-bei Passwörtern — verworfen, App-Namen sind ein Wort.
+**Alternatives considered**: Fuse wie in der Passwortsuche — verworfen nach Messung (siehe oben).
+Wortweise Suche wie bei Passwörtern — verworfen, App-Namen sind ein Wort.
 
 ## R6 — `ask_user` als eingebautes Werkzeug
 

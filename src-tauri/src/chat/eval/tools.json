@@ -101,7 +101,7 @@
       "properties": {
         "appId": {
           "type": "string",
-          "description": "App id exactly as wm.apps.list returns it, e.g. 'system.chat', 'system.settings'. An installed extension's id is 'extension.' followed by a UUID: look it up, never build it from the extension's name."
+          "description": "The app to open: its name as the user said it, e.g. 'haex-mail' or 'Einstellungen', or its id from wm.apps.list, e.g. 'system.chat'. Never invent an id; an extension's id is 'extension.' followed by a UUID."
         },
         "at": {
           "type": "string",
@@ -130,7 +130,7 @@
         },
         "appId": {
           "type": "string",
-          "description": "App id exactly as wm.apps.list returns it, e.g. 'system.chat', 'system.settings'. An installed extension's id is 'extension.' followed by a UUID: look it up, never build it from the extension's name."
+          "description": "The app to open: its name as the user said it, e.g. 'haex-mail' or 'Einstellungen', or its id from wm.apps.list, e.g. 'system.chat'. Never invent an id; an extension's id is 'extension.' followed by a UUID."
         },
         "at": {
           "type": "string",
