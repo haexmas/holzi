@@ -127,6 +127,7 @@
       "instances": "Instances",
       "running": "running",
       "count": "{count} instances open",
+      "wheel": { "open": "Open dock", "close": "Close dock" },
       "controls": {
         "launcher": "Launcher",
         "workspaces": "Workspaces",

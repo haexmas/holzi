@@ -255,3 +255,58 @@ export function effectivePlacement(
     align: placement.align === 'start' ? 'start' : 'end',
   }
 }
+
+/** Size of a dock entry and the least distance between two entries' centres on a ring (R6). */
+export const WHEEL_ITEM_SIZE = 48
+const WHEEL_SPACING = 56
+/** Radius of the innermost ring around the wheel's button, and the step to the next ring. */
+const WHEEL_FIRST_RADIUS = 76
+const WHEEL_RING_GAP = 56
+
+/** The arc the entries fan out over, in degrees (0° = right, 90° = down): a quarter circle into the
+ * screen at a corner, a half circle at the middle of an edge (FR-027). */
+function wheelArc(edge: DockEdge, align: DockAlign): [number, number] {
+  if (align === 'center') {
+    return {
+      top: [0, 180],
+      bottom: [180, 360],
+      left: [-90, 90],
+      right: [90, 270],
+    }[edge] as [number, number]
+  }
+  const left = edge === 'left' || (align === 'start' && edge !== 'right')
+  const top = edge === 'top' || (align === 'start' && edge !== 'bottom')
+  if (top) return left ? [0, 90] : [90, 180]
+  return left ? [270, 360] : [180, 270]
+}
+
+/** Where each of `count` entries sits, relative to the centre of the wheel's button: inner ring
+ * first, as many per ring as fit at `WHEEL_SPACING` apart, the rest on rings further out, so no two
+ * entries overlap (FR-028). */
+export function wheelLayout(
+  count: number,
+  edge: DockEdge,
+  align: DockAlign,
+): { x: number; y: number }[] {
+  const [from, to] = wheelArc(edge, align)
+  const span = ((to - from) * Math.PI) / 180
+  const offsets: { x: number; y: number }[] = []
+  for (let ring = 0; offsets.length < count; ring += 1) {
+    const radius = WHEEL_FIRST_RADIUS + ring * WHEEL_RING_GAP
+    const capacity = Math.max(
+      1,
+      Math.floor((radius * span) / WHEEL_SPACING) + 1,
+    )
+    const here = Math.min(capacity, count - offsets.length)
+    for (let i = 0; i < here; i += 1) {
+      const angle =
+        (from * Math.PI) / 180 +
+        (here === 1 ? span / 2 : (span * i) / (here - 1))
+      offsets.push({
+        x: radius * Math.cos(angle),
+        y: radius * Math.sin(angle),
+      })
+    }
+  }
+  return offsets
+}

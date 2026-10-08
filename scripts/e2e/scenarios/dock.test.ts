@@ -22,11 +22,11 @@ async function passwordsTabs(
     .filter((tab) => tab.appId === PASSWORDS).length
 }
 
-// Spec 045-dock, quickstart 1–4, 6 and 7 (US1–US4; FR-001, FR-003, FR-005, FR-007, FR-010–FR-012,
+// Spec 045-dock, quickstart 1–4 and 6–8 (US1–US5; FR-001, FR-003, FR-005, FR-007, FR-010–FR-012,
 // FR-015, FR-017, FR-020, FR-022): the dock replaces the floating buttons, an app pinned from the
 // launcher opens from the dock and unpins from its menu, a click brings its one instance back from
 // another workspace instead of opening a second, an app with two instances offers them to choose,
-// and the settings move the dock and remove an entry, but never the launcher.
+// the settings move the dock and remove an entry, but never the launcher, and the wheel fans out.
 scenario('dock', {}, async (ctx) => {
   const instance = await ctx.startInstance()
   await createAndUnlock(instance, { name: 'e2e-dock' })
@@ -151,4 +151,25 @@ scenario('dock', {}, async (ctx) => {
     'left',
   )
   ctx.step('a narrow area does not move the dock')
+
+  // US5 (FR-027, FR-029): the wheel fans out on a click and folds on Escape.
+  await choose(instance, 'settings-dock-style', 'wheel')
+  await instance.waitForDisplayed('dock-wheel-toggle')
+  const expanded = () =>
+    instance.exec<string | null>(
+      `return document.querySelector('[data-testid="dock-wheel-toggle"]')?.getAttribute('aria-expanded')`,
+    )
+  await instance.click('dock-wheel-toggle')
+  await ctx.waitFor(
+    'the wheel to open',
+    async () => (await expanded()) === 'true',
+  )
+  await instance.exec(
+    `document.querySelector('[data-testid="dock-wheel-toggle"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true`,
+  )
+  await ctx.waitFor(
+    'the wheel to fold',
+    async () => (await expanded()) === 'false',
+  )
+  ctx.step('wheel opens and folds')
 })

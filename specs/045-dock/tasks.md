@@ -136,11 +136,11 @@ click, close all.
 
 **Independent Test**: Spec US5 acceptance scenarios 1–6 (quickstart step 8).
 
-- [ ] T040 [US5] In `src/lib/wm/dock.ts` add `wheelLayout(count: number, edge: DockEdge, align: DockAlign): { x: number; y: number }[]` per research R6 (corner = `start`/`end` → 90°, `center` → 180°, opening toward the screen centre; ring radius `r0 + k·gap`, capacity `max(1, floor(arcLength / 56) + 1)`, fill inner to outer); add cases to `scripts/check-wm-dock.ts`: every pairwise distance ≥ 48 for counts 1–20 at all 12 positions, all offsets point into the screen, ring count grows when capacity is exceeded
-- [ ] T041 [US5] Create `src/components/wm/DockWheel.vue`: a 56 px round toggle (`data-testid="dock-wheel-toggle"`, `aria-haspopup="menu"`, `aria-expanded`) with an attention dot when any entry's app has attention (US5 scenario 5); when open renders the same `DockItem`s absolutely at `wheelLayout` offsets with a `transform` transition (none under `prefers-reduced-motion`); closes on activation, Escape and outside click (`onClickOutside`) (FR-027–FR-029); keyboard: Enter/Space opens, arrow keys move along the entry order, Enter activates (FR-042); `role="menu"` / `menuitem`
-- [ ] T042 [US5] In `src/components/wm/Dock.vue`: render `DockWheel` when the effective style is `wheel`, always absolutely positioned at the effective corner/edge over the window area, never reserving space (FR-030); ignore `mode`
-- [ ] T043 [P] [US5] i18n: `wm.dock.wheel.open` / `close` (toggle aria labels)
-- [ ] T044 [US5] Extend `scripts/e2e/scenarios/dock.test.ts`: set style `wheel` → `dock-wheel-toggle` visible, click → entries visible, Escape → hidden
+- [x] T040 [US5] In `src/lib/wm/dock.ts` add `wheelLayout(count: number, edge: DockEdge, align: DockAlign): { x: number; y: number }[]` per research R6 (corner = `start`/`end` → 90°, `center` → 180°, opening toward the screen centre; ring radius `r0 + k·gap`, capacity `max(1, floor(arcLength / 56) + 1)`, fill inner to outer); add cases to `scripts/check-wm-dock.ts`: every pairwise distance ≥ 48 for counts 1–20 at all 12 positions, all offsets point into the screen, ring count grows when capacity is exceeded
+- [x] T041 [US5] Create `src/components/wm/DockWheel.vue`: a 56 px round toggle (`data-testid="dock-wheel-toggle"`, `aria-haspopup="menu"`, `aria-expanded`) with an attention dot when any entry's app has attention (US5 scenario 5); when open renders the same `DockItem`s absolutely at `wheelLayout` offsets with a `transform` transition (none under `prefers-reduced-motion`); closes on activation, Escape and outside click (`onClickOutside`) (FR-027–FR-029); keyboard: Enter/Space opens, arrow keys move along the entry order, Enter activates (FR-042); `role="menu"` / `menuitem`
+- [x] T042 [US5] In `src/components/wm/Dock.vue`: render `DockWheel` when the effective style is `wheel`, always absolutely positioned at the effective corner/edge over the window area, never reserving space (FR-030); ignore `mode`
+- [x] T043 [P] [US5] i18n: `wm.dock.wheel.open` / `close` (toggle aria labels)
+- [x] T044 [US5] Extend `scripts/e2e/scenarios/dock.test.ts`: set style `wheel` → `dock-wheel-toggle` visible, click → entries visible, Escape → hidden
 
 **Checkpoint**: All six stories done.
 

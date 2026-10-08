@@ -6,7 +6,8 @@
  * `wm/Desktop.vue` measures what is left (FR-024); floating and hiding it lies over the windows.
  * Hiding, it comes in when the pointer reaches its edge and leaves 400 ms after the pointer, unless
  * focus is inside or one of its menus is open (FR-025). Right click on its free area sets edge,
- * alignment, style and mode (FR-018).
+ * alignment, style and mode (FR-018). As a wheel it always lies over the windows and keeps no space
+ * (FR-030); its mode does not apply.
  */
 import { computed, provide, ref, useTemplateRef } from 'vue'
 import { DOCK_HOLD } from '~/composables/useDock'
@@ -117,7 +118,14 @@ function onPointerleave() {
       aria-hidden="true"
       @pointerenter="reveal"
     />
-    <ShadcnContextMenu @update:open="hold">
+    <div v-if="placement.style === 'wheel'" class="pointer-events-auto">
+      <WmDockWheel
+        :entries="entries"
+        :edge="placement.edge"
+        :align="placement.align"
+      />
+    </div>
+    <ShadcnContextMenu v-else @update:open="hold">
       <ShadcnContextMenuTrigger as-child>
         <div
           ref="bar"

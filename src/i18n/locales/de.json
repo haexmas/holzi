@@ -127,6 +127,7 @@
       "instances": "Instanzen",
       "running": "läuft",
       "count": "{count} Instanzen offen",
+      "wheel": { "open": "Dock öffnen", "close": "Dock schließen" },
       "controls": {
         "launcher": "Launcher",
         "workspaces": "Arbeitsbereiche",
