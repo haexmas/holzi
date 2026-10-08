@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
-import type { Instance } from '../lib/instance.ts'
+import type { ScenarioContext } from '../lib/scenario.ts'
 import {
   createAndUnlock,
   openLauncher,
@@ -15,6 +15,8 @@ import { vaultFiles } from '../lib/vault-files.ts'
 const ENTRY = 'Bank'
 const FILE = 'Annas Vault.db'
 const IMPORTED = 'Annas-Vault'
+
+type Instance = Awaited<ReturnType<ScenarioContext['startInstance']>>
 
 /** Closes the vault, which ends the app (spec 013), and lets go of the driver. */
 async function lock(instance: Instance): Promise<void> {
