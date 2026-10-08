@@ -10,9 +10,9 @@
  * already uses) rather than threading its fields through as props.
  */
 import type { ComposerAttachment } from '~/components/chat/ComposerAttachments.vue'
-import type { PendingPrompt } from '~/composables/useChat'
+import type { ChoiceAnswer, PendingPrompt } from '~/composables/useChat'
 
-defineProps<{
+const props = defineProps<{
   composerInputDisabled: boolean
   sendDisabled: boolean
   streamingMessageId: string | null
@@ -33,6 +33,7 @@ const emit = defineEmits<{
   removeAttachment: [id: string]
   updatePermissionMode: [mode: 'manual' | 'auto' | 'plan']
   respondApproval: [requestId: string, decision: 'allow' | 'deny']
+  answerChoice: [requestId: string, answer: ChoiceAnswer]
   transcript: [text: string, autoSend: boolean]
 }>()
 
@@ -43,6 +44,12 @@ const voiceRecording = defineModel<boolean>('voiceRecording', {
 
 const { t } = useI18n()
 const modelStore = useModelsStore()
+
+/** The agent's question, when it is the oldest prompt (spec 046); approvals have their own dialog. */
+const choice = computed(() => {
+  const first = props.pendingPrompts[0]
+  return first?.kind === 'choice' ? first : undefined
+})
 const {
   displayModelId,
   displayModelName,
@@ -150,6 +157,11 @@ defineExpose({ reset })
               @allow="emit('respondApproval', $event, 'allow')"
               @deny="emit('respondApproval', $event, 'deny')"
               @cancel="emit('abort')"
+            />
+            <ChatChoicePrompt
+              v-if="choice"
+              :prompt="choice"
+              @answer="(id, answer) => emit('answerChoice', id, answer)"
             />
           </div>
           <ChatVoiceInputControl

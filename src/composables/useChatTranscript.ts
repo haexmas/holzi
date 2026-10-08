@@ -8,6 +8,7 @@ import type {
   ToolCallEvent,
   ToolPermissionRequestEvent,
   ToolResultEvent,
+  ChoiceRequestEvent,
   TurnCompleteEvent,
   useChat,
   PendingPrompt,
@@ -324,23 +325,36 @@ export function useChatTranscript(
     }
   }
 
+  /** Queues a prompt of `threadId`: shown at once for the active thread (each request once),
+   * parked for another thread until it is opened. */
+  function queuePrompt(threadId: string, prompt: PendingPrompt) {
+    if (threadId !== activeThreadId.value) {
+      const queued = pendingPromptsByThread.get(threadId) ?? []
+      pendingPromptsByThread.set(threadId, [...queued, prompt])
+      return
+    }
+    if (
+      !pendingPrompts.value.some((item) => item.requestId === prompt.requestId)
+    ) {
+      pendingPrompts.value = [...pendingPrompts.value, prompt]
+    }
+  }
+
   function handleToolPermissionRequest(e: ToolPermissionRequestEvent) {
-    const approval: PendingPrompt = {
+    queuePrompt(e.threadId, {
       kind: 'approval',
       requestId: e.requestId,
       toolName: e.toolName,
       toolInput: e.toolInput,
       riskClass: e.riskClass,
       toolSource: e.toolSource,
-    }
-    if (e.threadId !== activeThreadId.value) {
-      const queued = pendingPromptsByThread.get(e.threadId) ?? []
-      pendingPromptsByThread.set(e.threadId, [...queued, approval])
-      return
-    }
-    if (!pendingPrompts.value.some((item) => item.requestId === e.requestId)) {
-      pendingPrompts.value = [...pendingPrompts.value, approval]
-    }
+    })
+  }
+
+  /** A question of the agent (spec 046): queued like an approval, in the same order. */
+  function handleChoiceRequest(e: ChoiceRequestEvent) {
+    const { threadId, ...request } = e
+    queuePrompt(threadId, { kind: 'choice', ...request })
   }
 
   async function handleTurnComplete(e: TurnCompleteEvent) {
@@ -375,6 +389,7 @@ export function useChatTranscript(
     handleToolResult,
     applyTurnComplete,
     handleToolPermissionRequest,
+    handleChoiceRequest,
     handleTurnComplete,
     resolveTurnTerminal,
     waitForTurnTerminal,

@@ -593,6 +593,77 @@ test('leaving a chat with an approval pending aborts its active turn', async () 
   assert.equal(aborted, 1)
 })
 
+const CHOICE = {
+  requestId: 'choice',
+  toolName: 'wm_app_open',
+  question: null,
+  field: 'appId',
+  value: 'haex',
+  options: [{ value: 'extension.mail', label: 'haex-mail' }],
+}
+
+test('an agent question queues after an approval of the active conversation, once', async () => {
+  const state = createChatState()
+  state.input.value = 'Open haex'
+  await state.send()
+  state.handleToolPermissionRequest({
+    threadId: 'a',
+    requestId: 'approval',
+    toolName: 'run_command',
+  })
+  state.handleChoiceRequest({ threadId: 'a', ...CHOICE })
+  state.handleChoiceRequest({ threadId: 'a', ...CHOICE })
+  assert.deepEqual(
+    state.pendingPrompts.value.map((prompt) => [prompt.kind, prompt.requestId]),
+    [
+      ['approval', 'approval'],
+      ['choice', 'choice'],
+    ],
+  )
+  assert.deepEqual(state.pendingPrompts.value[1], { kind: 'choice', ...CHOICE })
+})
+
+test('a question of a background conversation waits until it is opened', async () => {
+  const state = createChatState()
+  state.input.value = 'Open haex'
+  await state.send()
+  await state.selectThread('b')
+  state.handleChoiceRequest({ threadId: 'a', ...CHOICE })
+  assert.deepEqual(state.pendingPrompts.value, [])
+  await state.selectThread('a')
+  assert.deepEqual(
+    state.pendingPrompts.value.map((prompt) => prompt.requestId),
+    ['choice'],
+  )
+})
+
+test('the end of the turn clears its open question', async () => {
+  const state = createChatState()
+  state.input.value = 'Open haex'
+  await state.send()
+  state.handleChoiceRequest({ threadId: 'a', ...CHOICE })
+  await state.handleTurnComplete({
+    threadId: 'a',
+    assistantMessageId: 'answer',
+    finishReason: 'cancelled',
+  })
+  assert.deepEqual(state.pendingPrompts.value, [])
+})
+
+test('leaving a chat with a question open aborts its active turn', async () => {
+  let aborted = 0
+  const state = createChatState({
+    abortAsync: async () => {
+      aborted++
+    },
+  })
+  state.input.value = 'Open haex'
+  await state.send()
+  state.handleChoiceRequest({ threadId: 'a', ...CHOICE })
+  await state.unmount()
+  assert.equal(aborted, 1)
+})
+
 test('leaving while the initial request starts aborts before response IDs exist', async () => {
   let aborted = 0
   let rejectSend

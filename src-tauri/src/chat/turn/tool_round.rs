@@ -38,7 +38,7 @@ pub const MAX_TOOL_ROUNDS: usize = 8;
 
 /// One executed call: the request, its result, and the source string
 /// recorded on the persisted row.
-type ExecutedCall = (LlmToolCall, ToolExecResult, &'static str);
+pub(super) type ExecutedCall = (LlmToolCall, ToolExecResult, &'static str);
 
 /// What the turn loop should do after a round.
 pub(super) enum RoundOutcome {
@@ -81,7 +81,8 @@ impl TurnRunner<'_> {
         }
 
         let plans = self.plan_calls(step.tool_calls).await;
-        let executed = Self::execute_plans(self.chat_state, &self.cancel, plans).await;
+        let mut executed = Self::execute_plans(self.chat_state, &self.cancel, plans).await;
+        self.resolve_choices(&mut executed).await;
 
         // Aborted mid-round (either an in-flight `execute()` was cut
         // short, or a pending approval's sender was dropped): none of

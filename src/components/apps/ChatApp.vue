@@ -25,6 +25,7 @@ import type {
   SendMessageArgs,
   PendingPrompt,
 } from '~/composables/useChat'
+import { promptSubscriptions } from '~/composables/useChatChoices'
 
 const instancesStore = useInstancesStore()
 const wm = useWindowManagerStore()
@@ -155,7 +156,6 @@ const {
   handleError,
   handleToolCall,
   handleToolResult,
-  handleToolPermissionRequest,
   handleTurnComplete,
 } = chatTranscript
 
@@ -354,10 +354,7 @@ onMounted(async () => {
             return handleTurnComplete(e)
           }),
           chat.onToolAvailability(handleToolAvailability),
-          chat.onToolPermissionRequest((e) => {
-            wmTab.requestAttention()
-            return handleToolPermissionRequest(e)
-          }),
+          ...promptSubscriptions(chat, wmTab, chatTranscript),
         ],
         unlisteners,
         () => unmounted,
@@ -474,6 +471,7 @@ onBeforeUnmount(() => {
           @remove-attachment="removeAttachment"
           @update-permission-mode="ui.setPermissionMode"
           @respond-approval="ui.respondApproval"
+          @answer-choice="ui.answerChoice"
           @transcript="onVoiceTranscript"
         />
       </div>

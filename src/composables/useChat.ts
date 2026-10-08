@@ -195,8 +195,41 @@ export interface PendingApproval {
   toolSource?: 'mcp' | 'cli' | 'action'
 }
 
+/** One proposed answer of a choice (spec 046). */
+export interface ChoiceOptionWire {
+  value: string
+  label: string
+  /** Why it cannot be picked right now; shown disabled. */
+  unavailable?: string
+}
+
+/** Payload of `chat-choice-request` (spec 046, contracts/choice-contract.md). Answered via
+ * `respond_choice`. */
+export interface ChoiceRequestEvent {
+  requestId: string
+  threadId: string
+  toolName: string
+  /** The agent's own question (`ask_user`); `null` for an action, worded by the chat. */
+  question: string | null
+  /** The action's input field the answer goes into; `null` for `ask_user`. */
+  field: string | null
+  /** What was asked for, e.g. the app name; empty for `ask_user`. */
+  value: string
+  options: ChoiceOptionWire[]
+}
+
+/** A question of the agent waiting for the user's answer. */
+export interface PendingChoice extends Omit<ChoiceRequestEvent, 'threadId'> {
+  kind: 'choice'
+}
+
+export type ChoiceAnswer =
+  | { kind: 'option'; value: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'cancel' }
+
 /** What a turn waits on the user for, oldest first; the chat shows only the first. */
-export type PendingPrompt = PendingApproval
+export type PendingPrompt = PendingApproval | PendingChoice
 
 /** Fires once per `send_message` call: whether the model got tools (spec 032 US4). */
 export interface ToolAvailabilityEvent {

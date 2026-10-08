@@ -356,13 +356,23 @@
         "workspace": "Arbeitsbereich"
       }
     },
+    "choice": {
+      "title": "Ich habe „{value}“ nicht eindeutig gefunden. Meintest du …?",
+      "other": "Etwas anderes …",
+      "otherPlaceholder": "Was meinst du?",
+      "confirm": "Bestätigen",
+      "cancel": "Abbrechen",
+      "unavailable": "Gerade nicht verfügbar: {reason}",
+      "noCandidates": "Ich habe nichts Passendes gefunden."
+    },
     "autonomy": {
       "standard": "Standard",
       "ungated": "Ungegated",
       "gated_permissive": "Gegated (permissiv)",
       "audit": {
         "gated_permissive_call_permitted": "Erlaubt",
-        "denied_by_deny_rule": "Durch Verbotsregel abgelehnt"
+        "denied_by_deny_rule": "Durch Verbotsregel abgelehnt",
+        "declined_by_user": "Rückfrage abgelehnt"
       }
     }
   },
@@ -1230,6 +1240,7 @@
       "approval": {
         "decide": "Freigabe entscheiden"
       },
+      "choice": { "answer": "Rückfrage beantworten" },
       "permissionMode": {
         "set": "Berechtigungsmodus setzen"
       },
