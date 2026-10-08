@@ -1,4 +1,9 @@
-import { getAppDefinition, resolveAppAlias } from '~/lib/wm/apps'
+import { ActionInputError } from '~/lib/actions/runner'
+import {
+  getAppDefinition,
+  resolveAppAlias,
+  unknownAppMessage,
+} from '~/lib/wm/apps'
 import type { useWindowManagerStore } from '~/stores/windowManager'
 
 type WmStore = ReturnType<typeof useWindowManagerStore>
@@ -38,7 +43,10 @@ export function registerWmActionHandlers(wm: WmStore): void {
   } {
     const alias = resolveAppAlias(String(input.appId))
     if (!getAppDefinition(alias.appId, wm.apps())) {
-      throw new Error(`unknown app ${alias.appId}`)
+      throw new ActionInputError(
+        unknownAppMessage(alias.appId, wm.apps()),
+        'appId',
+      )
     }
     return {
       appId: alias.appId,

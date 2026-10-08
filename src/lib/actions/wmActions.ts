@@ -126,7 +126,7 @@ export const WM_NAVIGATION_ACTIONS: readonly ActionDefinition[] = [
 const APP_ID: JsonSchema = {
   type: 'string',
   description:
-    "App id, e.g. 'system.chat', 'system.settings' (see wm.apps.list).",
+    "App id exactly as wm.apps.list returns it, e.g. 'system.chat', 'system.settings'. An installed extension's id is 'extension.' followed by a UUID: look it up, never build it from the extension's name.",
 }
 const AT: JsonSchema = {
   type: 'string',
