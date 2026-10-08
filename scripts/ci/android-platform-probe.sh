@@ -11,6 +11,12 @@ echo "web view: $(adb shell dumpsys package com.google.android.webview \
   | sed -n 's/.*versionName=\([^ ]*\).*/\1/p' | head -1)"
 
 adb install -r "$apk"
+# The generated activity is singleTask. Stop any instance restored with the emulator snapshot so
+# the next launch creates a fresh Rust process that observes the probe property and starts a new
+# listener instead of reusing a stale WebView/process from an earlier run.
+adb shell am force-stop "$package"
+# A rerun must not mistake a result left by an older process for this run's result.
+adb shell run-as "$package" rm -f cache/platform-probe-result.txt cache/platform-probe-started.txt
 # Read by `platform_probe::requested` through `getprop`; the shell user may set `debug.*`.
 adb shell setprop debug.holzi.probe 1
 echo "debug.holzi.probe=$(adb shell getprop debug.holzi.probe)"
