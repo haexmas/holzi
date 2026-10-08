@@ -420,14 +420,16 @@ pub fn show(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let desktop = ctx.host.desktop().ok_or_else(BridgeError::not_available)?;
     let extension_id = ctx.session.extension_id;
     if !desktop.notifications_allowed() {
-        // The system shows nothing: the message stays visible inside holzi. It has no buttons
-        // there and is not remembered; a dismiss of its id finds nothing, as for any gone one.
+        // The system shows nothing: the message stays visible inside holzi, where its tag replaces
+        // the earlier one. It has no buttons there and is not remembered; a dismiss of its id
+        // finds nothing, as for any gone one.
         ctx.emitter.emit(
             IN_APP,
             json!({
                 "extensionId": extension_id.to_string(),
                 "title": spec.title,
                 "body": spec.body,
+                "tag": tag,
             }),
         );
         return Ok(json!({ "id": Uuid::new_v4().to_string() }));

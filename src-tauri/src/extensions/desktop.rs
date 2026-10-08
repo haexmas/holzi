@@ -10,6 +10,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager, Runtime};
+#[cfg(mobile)]
+use tauri_plugin_notification::PermissionState;
 use tauri_plugin_notification::{Action, ActionType, NotificationExt};
 use tauri_plugin_opener::OpenerExt;
 
@@ -127,15 +129,16 @@ impl<R: Runtime> ShownNotification for PluginNotification<R> {
 
 impl<R: Runtime> Desktop for AppDesktop<R> {
     /// Android 13 and later ask the person once (spec 043 FR-023, research R12); a refusal holds
-    /// until they change it in the system's settings.
+    /// until they change it in the system's settings. Notifications at the same time wait for
+    /// the one question, since Android drops a second request while one is open.
     #[cfg(mobile)]
     fn notifications_allowed(&self) -> bool {
-        use tauri_plugin_notification::PermissionState;
+        static ASKING: Mutex<()> = Mutex::new(());
+        let _asking = ASKING.lock().unwrap_or_else(PoisonError::into_inner);
         let notifications = self.app.notification();
+        // `PromptWithRationale` means the person refused once: that answer holds.
         let state = match notifications.permission_state() {
-            Ok(PermissionState::Prompt | PermissionState::PromptWithRationale) => {
-                notifications.request_permission()
-            }
+            Ok(PermissionState::Prompt) => notifications.request_permission(),
             other => other,
         };
         match state {

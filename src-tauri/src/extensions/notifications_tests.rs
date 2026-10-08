@@ -404,7 +404,7 @@ fn a_refused_system_permission_keeps_the_message_inside_holzi() {
 
     let answer = show_call(
         &s.notes,
-        json!({ "title": "Standup", "body": "in 5 Minuten" }),
+        json!({ "title": "Standup", "body": "in 5 Minuten", "tag": "standup" }),
     );
 
     assert!(
@@ -421,6 +421,7 @@ fn a_refused_system_permission_keeps_the_message_inside_holzi() {
             "extensionId": s.notes.session.extension_id.to_string(),
             "title": "Standup",
             "body": "in 5 Minuten",
+            "tag": "standup",
         })]
     );
 }

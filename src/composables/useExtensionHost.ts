@@ -64,7 +64,7 @@ export function useExtensionHost() {
   const extensions = useExtensionsStore()
   const permissions = useExtensionPermissionsStore()
   const { scheme } = useColorScheme()
-  const { locale } = useI18n()
+  const { locale, t } = useI18n()
 
   watch(
     [scheme, locale],
@@ -84,7 +84,6 @@ export function useExtensionHost() {
   // hears the click through its frame. Registered once per scope; a listener that arrives after the
   // scope ended is dropped at once, and a failure does not stop the start.
   const wm = useWindowManagerStore()
-  const { t } = useI18n()
   let disposed = false
   const unlisteners: UnlistenFn[] = []
   onScopeDispose(() => {
@@ -113,19 +112,23 @@ export function useExtensionHost() {
   // Where the system shows no notification of an extension (Android: the person refused the
   // permission, spec 043 FR-023), holzi shows it as a message; "open" brings the extension's tab.
   keep(
-    listen<{ extensionId: string; title: string; body: string | null }>(
-      'extension-notification-in-app',
-      (event) => {
-        const { extensionId, title, body } = event.payload
-        toast(title, {
-          description: body ?? undefined,
-          action: {
-            label: t('extensions.notification.open'),
-            onClick: () => showExtension(extensionId),
-          },
-        })
-      },
-    ),
+    listen<{
+      extensionId: string
+      title: string
+      body: string | null
+      tag: string | null
+    }>('extension-notification-in-app', (event) => {
+      const { extensionId, title, body, tag } = event.payload
+      toast(title, {
+        // Like on the system, a tagged message replaces the extension's earlier one.
+        id: tag === null ? undefined : `${extensionId}:${tag}`,
+        description: body ?? undefined,
+        action: {
+          label: t('extensions.notification.open'),
+          onClick: () => showExtension(extensionId),
+        },
+      })
+    }),
     'notifications shown in holzi',
   )
 
