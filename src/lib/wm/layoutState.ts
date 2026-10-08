@@ -127,13 +127,21 @@ export function openApp(
     (w) => w.workspaceId === state.activeWorkspaceId,
   ).length
   const { x, y } = cascadePosition(openInWorkspace, app.defaultSize, state.area)
+  // A dock (or a compact window) can leave less room than an app's preferred size.  New windows
+  // must fit the current window area just like restored and resized windows; otherwise their
+  // content can end up underneath the dock and controls at the bottom become unclickable.
+  const geometry = clampGeometry(
+    { x, y, width: app.defaultSize.width, height: app.defaultSize.height },
+    app.minSize,
+    state.area,
+  )
   const window: WmWindow = {
     id: crypto.randomUUID(),
     workspaceId: state.activeWorkspaceId,
-    x,
-    y,
-    width: app.defaultSize.width,
-    height: app.defaultSize.height,
+    x: geometry.x,
+    y: geometry.y,
+    width: geometry.width,
+    height: geometry.height,
     minimized: false,
     maximized: false,
     stack: ++state.nextStack,
