@@ -58,7 +58,8 @@ export type WmState = {
   nextStack: number
   /** The window manager's visible drawing area (the resizable region windows are clamped into). */
   area: Size
-  /** Derived from `area.width <= COMPACT_MAX_WIDTH` (research R7); never written directly. */
+  /** Derived from the app window's width (`<= COMPACT_MAX_WIDTH`, research R7), not from `area`, which
+   * the dock can narrow (spec 045 research R1); never written directly. */
   compact: boolean
 }
 

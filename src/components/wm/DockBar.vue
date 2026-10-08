@@ -1,0 +1,94 @@
+<script setup lang="ts">
+/**
+ * The dock as a bar (spec 045): its entries in a row, or in a column at the left and right edge
+ * (FR-026), scrolling along its axis when they do not fit; running apps that are not pinned
+ * follow after a separator (FR-005). A toolbar with one tab stop; the arrow
+ * keys move between the entries, Enter and Space activate (FR-041).
+ */
+import { computed, ref, useTemplateRef, watch } from 'vue'
+import type { DockEntry } from '~/lib/wm/dock'
+
+const props = defineProps<{
+  entries: DockEntry[]
+  orientation: 'horizontal' | 'vertical'
+}>()
+
+const { t } = useI18n()
+const root = useTemplateRef<HTMLElement>('root')
+const focusIndex = ref(0)
+
+watch(
+  () => props.entries.length,
+  (length) => {
+    if (focusIndex.value >= length) focusIndex.value = Math.max(0, length - 1)
+  },
+)
+
+const keys = computed(() =>
+  props.orientation === 'horizontal'
+    ? { previous: 'ArrowLeft', next: 'ArrowRight' }
+    : { previous: 'ArrowUp', next: 'ArrowDown' },
+)
+
+function buttons(): HTMLElement[] {
+  return [
+    ...(root.value?.querySelectorAll<HTMLElement>('[data-dock-item]') ?? []),
+  ]
+}
+
+function onFocusin(event: FocusEvent) {
+  const index = buttons().indexOf(event.target as HTMLElement)
+  if (index >= 0) focusIndex.value = index
+}
+
+function onKeydown(event: KeyboardEvent) {
+  const all = buttons()
+  if (all.length === 0) return
+  let next: number
+  if (event.key === keys.value.next) next = (focusIndex.value + 1) % all.length
+  else if (event.key === keys.value.previous)
+    next = (focusIndex.value - 1 + all.length) % all.length
+  else if (event.key === 'Home') next = 0
+  else if (event.key === 'End') next = all.length - 1
+  else return
+  event.preventDefault()
+  focusIndex.value = next
+  all[next]?.focus()
+}
+
+/** Running apps that are not pinned come after a separator (FR-005); -1 without any. */
+const firstRunning = computed(() =>
+  props.entries.findIndex((entry) => entry.kind === 'app' && !entry.pinned),
+)
+
+function entryKey(entry: DockEntry): string {
+  return entry.kind === 'control' ? `control:${entry.id}` : `app:${entry.appId}`
+}
+</script>
+
+<template>
+  <div
+    ref="root"
+    role="toolbar"
+    :aria-label="t('wm.dock.label')"
+    :aria-orientation="orientation"
+    class="flex max-h-full max-w-full gap-1 rounded-full bg-background p-1 shadow-lg ring-1 ring-border"
+    :class="
+      orientation === 'horizontal'
+        ? 'flex-row overflow-x-auto'
+        : 'flex-col overflow-y-auto'
+    "
+    @focusin="onFocusin"
+    @keydown="onKeydown"
+  >
+    <template v-for="(entry, index) in entries" :key="entryKey(entry)">
+      <span
+        v-if="index === firstRunning"
+        class="shrink-0 self-stretch bg-border"
+        :class="orientation === 'horizontal' ? 'mx-0.5 w-px' : 'my-0.5 h-px'"
+        aria-hidden="true"
+      />
+      <WmDockItem :entry="entry" :tabbable="index === focusIndex" />
+    </template>
+  </div>
+</template>

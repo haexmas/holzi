@@ -69,7 +69,10 @@ export function createSessionSync(deps: {
           layout: { workspaces: [], windows: [], activeWorkspaceId: '' },
           histories: new Map<string, TabHistory>(),
         }
-    Object.assign(state, hydrate(layout, deps.apps(), state.area))
+    Object.assign(
+      state,
+      hydrate(layout, deps.apps(), state.area, state.compact),
+    )
     histories.clear()
     for (const [tabId, history] of saved) histories.set(tabId, history)
     deps.onRestored()

@@ -127,13 +127,21 @@ export function openApp(
     (w) => w.workspaceId === state.activeWorkspaceId,
   ).length
   const { x, y } = cascadePosition(openInWorkspace, app.defaultSize, state.area)
+  // A dock (or a compact window) can leave less room than an app's preferred size.  New windows
+  // must fit the current window area just like restored and resized windows; otherwise their
+  // content can end up underneath the dock and controls at the bottom become unclickable.
+  const geometry = clampGeometry(
+    { x, y, width: app.defaultSize.width, height: app.defaultSize.height },
+    app.minSize,
+    state.area,
+  )
   const window: WmWindow = {
     id: crypto.randomUUID(),
     workspaceId: state.activeWorkspaceId,
-    x,
-    y,
-    width: app.defaultSize.width,
-    height: app.defaultSize.height,
+    x: geometry.x,
+    y: geometry.y,
+    width: geometry.width,
+    height: geometry.height,
     minimized: false,
     maximized: false,
     stack: ++state.nextStack,
@@ -224,11 +232,14 @@ export function moveWindowToWorkspace(
  * unresolvable `appId` and any window left without one (FR-025); repair a dangling
  * `activeTabId`/`workspaceId`; clamp geometry into `area` (FR-026); re-derive dense `stack` from
  * the persisted order; fall back to one default workspace if none survive (FR-018, FR-025).
+ * `compact` follows the app window's width (spec 045 research R1), which `area` no longer equals
+ * once the dock takes space; without it, `area`'s width stands in, as at first load.
  */
 export function hydrate(
   layout: PersistedLayout,
   apps: readonly AppDefinition[],
   area: Size,
+  compact: boolean = area.width <= COMPACT_MAX_WIDTH,
 ): WmState {
   const defaultWorkspace: Workspace =
     layout.workspaces.reduce<Workspace | null>(
@@ -291,15 +302,16 @@ export function hydrate(
     activeWindowId: null,
     nextStack: stack,
     area,
-    compact: area.width <= COMPACT_MAX_WIDTH,
+    compact,
   }
   result.activeWindowId =
     frontmostWindow(result, activeWorkspaceId, true)?.id ?? null
   return result
 }
 
-/** Keeps the window manager's live area in sync with the actual window size (T049), recomputing `compact`
- * and re-clamping every window's stored (normal) geometry into the new area — the same clamp
+/** Keeps the window manager's live area in sync with the area its windows actually get (T049; spec 045:
+ * the app window minus a space-reserving dock), recomputing `compact` from `viewportWidth`, the app
+ * window's own width (spec 045 research R1), and re-clamping every window's stored (normal) geometry into the new area — the same clamp
  * `hydrate` applies at load time (FR-026), now also on a live resize, so shrinking never leaves a
  * window positioned or sized outside the visible area. Compact/maximized display itself needs no
  * clamp here: `windowDisplayRect` (geometry.ts) already resolves that per-render without touching
@@ -315,9 +327,10 @@ export function updateArea(
   state: WmState,
   area: Size,
   apps: readonly AppDefinition[],
+  viewportWidth: number,
 ): string[] {
   state.area = area
-  state.compact = area.width <= COMPACT_MAX_WIDTH
+  state.compact = viewportWidth <= COMPACT_MAX_WIDTH
 
   const changedWindowIds: string[] = []
   for (const window of state.windows) {

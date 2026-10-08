@@ -3,6 +3,7 @@
 // `passwords_create_item` where the editor is not what is being tested.
 import { deviceFiles } from './extension-files.ts'
 import { unwrap } from './flows.ts'
+import { toSelector } from './page.ts'
 import { resizeAppWindow } from './settings.ts'
 import type { FlowInstance } from './flows.ts'
 import type { WaitContext } from './sync-flows.ts'
@@ -129,22 +130,23 @@ export async function placeOf(
   return data.groups.find((group) => group.id === id)?.parentId
 }
 
-/** Opens the right-click menu of the element found by hook, as a right click does (the rig has no
- * pointer actions): a `contextmenu` event at its centre. */
+/** Opens the right-click menu of the element found by hook (a `data-testid` or a selector,
+ * `toSelector`), as a right click does (the rig has no pointer actions): a `contextmenu` event at
+ * its centre. */
 export async function contextMenu(
   instance: FlowInstance,
   hook: string,
 ): Promise<void> {
   await instance.waitForDisplayed(hook)
   await instance.exec(
-    `const el = document.querySelector('[data-testid="' + arguments[0] + '"]')
+    `const el = document.querySelector(arguments[0])
      const box = el.getBoundingClientRect()
      el.dispatchEvent(new MouseEvent('contextmenu', {
        bubbles: true, cancelable: true, button: 2,
        clientX: box.left + Math.min(box.width / 2, 40), clientY: box.top + box.height / 2,
      }))
      return true`,
-    [hook],
+    [toSelector(hook)],
   )
 }
 

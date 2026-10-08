@@ -117,6 +117,21 @@
     }
   },
   "wm": {
+    "dock": {
+      "label": "Dock",
+      "pin": "An Dock anheften",
+      "unpin": "Vom Dock lösen",
+      "newWindow": "Neues Fenster",
+      "closeAll": "Alle schließen",
+      "instances": "Instanzen",
+      "running": "läuft",
+      "count": "{count} Instanzen offen",
+      "controls": {
+        "launcher": "Launcher",
+        "workspaces": "Arbeitsbereiche",
+        "windows": "Fenster"
+      }
+    },
     "workspaces": {
       "title": "Arbeitsbereiche",
       "numbered": "Arbeitsbereich {number}",
@@ -145,7 +160,6 @@
       "restore": "Fenster wiederherstellen"
     },
     "windowOverview": {
-      "open": "Fensterübersicht",
       "title": "Fenster",
       "empty": "Keine Fenster geöffnet."
     },

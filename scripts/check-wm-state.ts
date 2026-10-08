@@ -41,6 +41,23 @@ test('openApp creates a new focused window for a singleton app not open yet', ()
   assert.equal(state.windows[0]?.tabs[0]?.appId, ALPHA.id)
 })
 
+test('openApp clamps a preferred window size to the available area', () => {
+  const state = emptyState()
+  state.area = { width: 500, height: 300 }
+
+  openApp(state, ALPHA.id, APPS)
+
+  assert.deepEqual(
+    state.windows[0] && {
+      x: state.windows[0].x,
+      y: state.windows[0].y,
+      width: state.windows[0].width,
+      height: state.windows[0].height,
+    },
+    { x: 0, y: 0, width: 500, height: 300 },
+  )
+})
+
 test('openApp reactivates a singleton already open instead of creating a second window', () => {
   const state = emptyState()
   openApp(state, ALPHA.id, APPS)
