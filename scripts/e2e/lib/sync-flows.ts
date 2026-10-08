@@ -7,7 +7,9 @@ import { unwrap, waitForWorkspace } from './flows.ts'
 import type { FlowInstance } from './flows.ts'
 
 /** Devices on one machine find each other by address; the iroh relays would need a network, so they
- * point at a closed port, which refuses at once (as in `tests/common/sync_fixture.rs`). */
+ * point at a closed port, which refuses at once (as in `tests/common/sync_fixture.rs`). A run with a
+ * phone passes the local iroh relay instead (spec 043): the phone is behind the emulator's own
+ * network, which the other devices reach only through a relay. */
 const NO_IROH_RELAY = ['https://127.0.0.1:1']
 
 interface Thread {
@@ -21,14 +23,18 @@ export interface ThreadDevice {
 }
 
 /** Only the test relay: the built-in servers, which would need a network, are switched off. */
-export async function onlyServers(page: Page, relayUrl: string) {
+export async function onlyServers(
+  page: Page,
+  relayUrl: string,
+  irohRelays: string[] = NO_IROH_RELAY,
+) {
   const defaults = unwrap<{ nostrRelays: string[]; irohRelays: string[] }>(
     'sync_servers_defaults',
     await page.invoke('sync_servers_defaults'),
   )
   return {
     nostrRelays: [relayUrl],
-    irohRelays: NO_IROH_RELAY,
+    irohRelays,
     disabled: [...defaults.nostrRelays, ...defaults.irohRelays],
   }
 }
@@ -58,6 +64,7 @@ export async function createVaultOnRelay(
   relayUrl: string,
   vaultName: string,
   passphrase: string,
+  irohRelays?: string[],
 ): Promise<void> {
   unwrap(
     'create_instance',
@@ -76,7 +83,7 @@ export async function createVaultOnRelay(
   unwrap(
     'sync_servers_set',
     await page.invoke('sync_servers_set', {
-      args: await onlyServers(page, relayUrl),
+      args: await onlyServers(page, relayUrl, irohRelays),
     }),
   )
 }
@@ -96,6 +103,7 @@ export async function runLink(
     deviceName: string
     passphrase: string
     relayUrl: string
+    irohRelays?: string[]
     asMainDevice?: boolean
     device?: string
   },
@@ -112,7 +120,7 @@ export async function runLink(
         vaultName: link.vaultName,
         deviceName: link.deviceName,
         passphrase: link.passphrase,
-        servers: await onlyServers(fresh, link.relayUrl),
+        servers: await onlyServers(fresh, link.relayUrl, link.irohRelays),
       },
     }),
   )

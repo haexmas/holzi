@@ -17,6 +17,7 @@ import type { CaptureDevice } from './group.ts'
 import { createLinuxHost } from './platform/linux.ts'
 import { createAdb } from './platform/adb.ts'
 import { createAndroidHost, startAndroidInstance } from './platform/android.ts'
+import { startIrohRelay } from './iroh-relay.ts'
 import type { Tools } from './preflight.ts'
 import { containerRuntimeAvailable } from './rustfs.ts'
 import type {
@@ -240,9 +241,22 @@ export async function runScenario(
           'this run has no driver layer, so it cannot make a group',
         )
       }
+      // A phone sits behind the emulator's network: the devices reach each other through a local
+      // iroh relay (spec 043).
+      const phoneHost = deps.createPhoneHost?.({ scenario: name, env })
+      let irohRelays: string[] | undefined
+      if (phoneHost !== undefined) {
+        const iroh = await startIrohRelay({
+          logFile: join(env.runDir, name, 'iroh-relay.log'),
+        })
+        teardowns.push(() => iroh.stop())
+        irohRelays = [iroh.url]
+      }
       return createGroup(
         {
           host: deps.createHost({ scenario: name, env }),
+          phoneHost,
+          irohRelays,
           relay: await ctx.nostrRelay(),
           credentials: ctx.credentials,
           onTeardown: ctx.onTeardown,
@@ -385,10 +399,11 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): E2EEnv {
     runDir: need('E2E_RUN_DIR'),
     app: need('E2E_APP'),
     closeBehavior,
-    // An Android run needs no Linux tools until a group mixes Linux devices in (stage 2).
+    // An Android run has the Linux tools only where this machine can run the other devices of a
+    // group (stage 2); without them a Linux device fails at its start with what is missing.
     tools:
       platform === 'android'
-        ? NO_LINUX_TOOLS
+        ? linuxToolsOrNone(source.E2E_TOOLS)
         : toTools(JSON.parse(need('E2E_TOOLS'))),
     scenarioTimeoutMs: Number(source.E2E_SCENARIO_TIMEOUT_MS ?? '60000'),
     timeScale,
@@ -399,6 +414,7 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): E2EEnv {
         ? {
             serial: need('ANDROID_SERIAL'),
             chromedriver: need('E2E_CHROMEDRIVER'),
+            linuxApp: source.E2E_LINUX_APP || undefined,
           }
         : undefined,
   }
@@ -406,9 +422,17 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): E2EEnv {
 
 /** Linux tools an Android run does not have; a Linux device started with them fails at once. */
 const NO_LINUX_TOOLS: Tools = {
-  tauriDriver: 'tauri-driver (not available in an Android run)',
-  webKitWebDriver: 'WebKitWebDriver (not available in an Android run)',
-  xvfbRun: 'xvfb-run (not available in an Android run)',
+  tauriDriver: 'tauri-driver (not available in this Android run)',
+  webKitWebDriver: 'WebKitWebDriver (not available in this Android run)',
+  xvfbRun: 'xvfb-run (not available in this Android run)',
+}
+
+function linuxToolsOrNone(found: string | undefined): Tools {
+  try {
+    return toTools(JSON.parse(found || '{}'))
+  } catch {
+    return NO_LINUX_TOOLS
+  }
 }
 
 /** Declare a scenario. The name is the file's base name; the command checks that they agree. */
@@ -447,15 +471,31 @@ export function scenario(
               step: request.step,
               framebufferDir: request.framebufferDir,
             }),
+      // The devices of a group run on Linux; in an Android run one of them runs on the phone.
       createHost: (request) =>
+        createLinuxHost(
+          android === undefined
+            ? request
+            : {
+                ...request,
+                env: {
+                  ...request.env,
+                  app:
+                    android.linuxApp ??
+                    'the Linux build (not available in this Android run)',
+                },
+              },
+        ),
+      createPhoneHost:
         android !== undefined && adb !== undefined
-          ? createAndroidHost({
-              adb,
-              chromedriver: android.chromedriver,
-              marker: request.env.marker,
-              logDir: join(request.env.runDir, request.scenario),
-            })
-          : createLinuxHost(request),
+          ? (request) =>
+              createAndroidHost({
+                adb,
+                chromedriver: android.chromedriver,
+                marker: request.env.marker,
+                logDir: join(request.env.runDir, request.scenario),
+              })
+          : undefined,
       onFailure: (info) =>
         captureFailure({
           runDir: info.env.runDir,

@@ -46,7 +46,7 @@ describe('checkAndroidPreflight', () => {
   it('passes with one device, the debug app and a matching chromedriver', () => {
     const { deps: d } = deps()
     const result = checkAndroidPreflight(
-      { env: { E2E_CHROMEDRIVER: '/cd' } },
+      { env: { E2E_CHROMEDRIVER: '/cd', E2E_IROH_RELAY: '/ir' } },
       d,
     )
     assert.deepEqual(result.messages, [])
@@ -54,6 +54,7 @@ describe('checkAndroidPreflight', () => {
     assert.deepEqual(result.env, {
       ANDROID_SERIAL: 'emulator-5554',
       E2E_CHROMEDRIVER: '/cd',
+      E2E_IROH_RELAY: '/ir',
     })
     assert.equal(result.versions.webview, '124.0.6367.219')
   })
@@ -61,7 +62,7 @@ describe('checkAndroidPreflight', () => {
   it('names a chromedriver of another major version and how to fix it', () => {
     const { deps: d } = deps({}, 'ChromeDriver 130.0.1.2')
     const result = checkAndroidPreflight(
-      { env: { E2E_CHROMEDRIVER: '/cd' } },
+      { env: { E2E_CHROMEDRIVER: '/cd', E2E_IROH_RELAY: '/ir' } },
       d,
     )
     assert.equal(result.ok, false)
@@ -73,12 +74,12 @@ describe('checkAndroidPreflight', () => {
 
   it('stops when the app is missing or not a debug build', () => {
     const missing = checkAndroidPreflight(
-      { env: { E2E_CHROMEDRIVER: '/cd' } },
+      { env: { E2E_CHROMEDRIVER: '/cd', E2E_IROH_RELAY: '/ir' } },
       deps({ '-s emulator-5554 shell pm path com.haex.holzi': '' }).deps,
     )
     assert.match(missing.messages.join(), /not installed/)
     const release = checkAndroidPreflight(
-      { env: { E2E_CHROMEDRIVER: '/cd' } },
+      { env: { E2E_CHROMEDRIVER: '/cd', E2E_IROH_RELAY: '/ir' } },
       deps({
         '-s emulator-5554 shell dumpsys package com.haex.holzi':
           'flags=[ HAS_CODE ]',
@@ -89,7 +90,7 @@ describe('checkAndroidPreflight', () => {
 
   it('reports package inspection failures instead of throwing', () => {
     const packageFailure = checkAndroidPreflight(
-      { env: { E2E_CHROMEDRIVER: '/cd' } },
+      { env: { E2E_CHROMEDRIVER: '/cd', E2E_IROH_RELAY: '/ir' } },
       deps({
         '-s emulator-5554 shell dumpsys package com.haex.holzi': new Error(
           'device went away',
@@ -103,7 +104,7 @@ describe('checkAndroidPreflight', () => {
     )
 
     const webviewFailure = checkAndroidPreflight(
-      { env: { E2E_CHROMEDRIVER: '/cd' } },
+      { env: { E2E_CHROMEDRIVER: '/cd', E2E_IROH_RELAY: '/ir' } },
       deps({
         '-s emulator-5554 shell dumpsys package com.google.android.webview':
           new Error('device went away'),
@@ -123,12 +124,41 @@ describe('checkAndroidPreflight', () => {
       ),
     })
     const result = checkAndroidPreflight(
-      { env: { E2E_CHROMEDRIVER: '/cd' }, apk: 'app.apk' },
+      {
+        env: { E2E_CHROMEDRIVER: '/cd', E2E_IROH_RELAY: '/ir' },
+        apk: 'app.apk',
+      },
       d,
     )
     assert.equal(result.ok, true)
     assert.ok(calls.includes('-s emulator-5554 uninstall com.haex.holzi'))
     assert.ok(calls.includes('-s emulator-5554 install app.apk'))
+  })
+
+  it('replaces a newer app, such as a release build, when it installs --apk', () => {
+    const { calls, deps: d } = deps({
+      '-s emulator-5554 install -r app.apk': new Error(
+        'Failure [INSTALL_FAILED_VERSION_DOWNGRADE: Update version code 1000 is older than current 1001]',
+      ),
+    })
+    const result = checkAndroidPreflight(
+      {
+        env: { E2E_CHROMEDRIVER: '/cd', E2E_IROH_RELAY: '/ir' },
+        apk: 'app.apk',
+      },
+      d,
+    )
+    assert.equal(result.ok, true)
+    assert.ok(calls.includes('-s emulator-5554 uninstall com.haex.holzi'))
+  })
+
+  it('names the missing iroh relay, which the devices of a group meet through', () => {
+    const result = checkAndroidPreflight(
+      { env: { E2E_CHROMEDRIVER: '/cd', PATH: '' } },
+      deps().deps,
+    )
+    assert.equal(result.ok, false)
+    assert.match(result.messages.join(), /no iroh-relay/)
   })
 
   it('stops without a device', () => {

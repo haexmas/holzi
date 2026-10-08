@@ -1,6 +1,7 @@
 // The checks before an Android run (spec 043, contract e2e-android.md): one device, the debug app on
-// it (installed from `--apk` when given), and a chromedriver whose major version is the device's web
-// view's. A mismatched chromedriver fails in ways that look like application bugs, so it stops the run.
+// it (installed from `--apk` when given), a chromedriver whose major version is the device's web
+// view's, and the iroh relay the devices of a group meet through. A mismatched chromedriver fails in
+// ways that look like application bugs, so it stops the run.
 import { execFileSync } from 'node:child_process'
 import { delimiter, join } from 'node:path'
 import { existsSync } from 'node:fs'
@@ -12,7 +13,7 @@ export interface AndroidPreflight {
   ok: boolean
   messages: string[]
   versions: { driver?: string; webview?: string }
-  /** What the scenarios need to reach the device: ANDROID_SERIAL, E2E_CHROMEDRIVER. */
+  /** What the scenarios need to reach the device: ANDROID_SERIAL, E2E_CHROMEDRIVER, E2E_IROH_RELAY. */
   env: Record<string, string>
 }
 
@@ -80,12 +81,13 @@ export function checkAndroidPreflight(
         try {
           deps.run(['-s', serial, 'install', '-r', options.apk])
         } catch (error) {
-          // An app signed with another debug key (a CI build over a local one) cannot be updated;
-          // the device only ever holds test data, so it is replaced.
+          // An app signed with another key (a CI build over a local one) or with a higher version
+          // (a release build) cannot be updated; the device only ever holds test data, so it is
+          // replaced.
+          const message = String((error as Error).message)
           if (
-            !String((error as Error).message).includes(
-              'INSTALL_FAILED_UPDATE_INCOMPATIBLE',
-            )
+            !message.includes('INSTALL_FAILED_UPDATE_INCOMPATIBLE') &&
+            !message.includes('INSTALL_FAILED_VERSION_DOWNGRADE')
           )
             throw error
           deps.run(['-s', serial, 'uninstall', PACKAGE])
@@ -158,13 +160,22 @@ export function checkAndroidPreflight(
     }
   }
 
-  return {
-    ok: messages.length === 0,
-    messages,
-    versions,
-    env:
-      chromedriver === undefined
-        ? { ANDROID_SERIAL: serial }
-        : { ANDROID_SERIAL: serial, E2E_CHROMEDRIVER: chromedriver },
+  // The phone is behind the emulator's network; the devices of a group reach it through this relay.
+  const irohRelay =
+    options.env.E2E_IROH_RELAY !== undefined &&
+    options.env.E2E_IROH_RELAY !== ''
+      ? options.env.E2E_IROH_RELAY
+      : findOnPath('iroh-relay', options.env.PATH, deps.exists)
+  if (irohRelay === undefined) {
+    messages.push(
+      'no iroh-relay: set E2E_IROH_RELAY or put iroh-relay on PATH (cargo install iroh-relay --version <iroh-relay in src-tauri/Cargo.lock> --features server --locked)',
+    )
+  } else if (deps.version(irohRelay) === undefined) {
+    messages.push(`${irohRelay} --version did not answer`)
   }
+
+  const env: Record<string, string> = { ANDROID_SERIAL: serial }
+  if (chromedriver !== undefined) env.E2E_CHROMEDRIVER = chromedriver
+  if (irohRelay !== undefined) env.E2E_IROH_RELAY = irohRelay
+  return { ok: messages.length === 0, messages, versions, env }
 }

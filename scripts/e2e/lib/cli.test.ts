@@ -393,14 +393,20 @@ describe('runCli on Android', () => {
     env: { ANDROID_SERIAL: 'emu', E2E_CHROMEDRIVER: '/cd' },
   })
 
-  it('checks the device instead of the Linux tools, builds nothing and hands the scenarios the device', async () => {
+  it('checks the device, builds the Linux app for the other devices and hands the scenarios both', async () => {
     const t = setup({
       androidPreflight,
       scenarioNames: () => ['a', 'extension-files', 'b'],
     })
     try {
       assert.equal(await runCli(['--platform', 'android'], {}, t.deps), 0)
-      assert.deepEqual(t.calls, ['sweep', 'scenarios', 'stopRun'])
+      assert.deepEqual(t.calls, [
+        'preflight',
+        'sweep',
+        'build',
+        'scenarios',
+        'stopRun',
+      ])
       const input = t.inputs[0]!
       assert.deepEqual(input.names, ['a', 'b'])
       assert.equal(input.env.E2E_PLATFORM, 'android')
@@ -408,9 +414,44 @@ describe('runCli on Android', () => {
       assert.equal(input.env.E2E_CHROMEDRIVER, '/cd')
       assert.equal(input.env.E2E_APP, 'com.haex.holzi')
       assert.equal(input.env.E2E_CLOSE_BEHAVIOR, 'exit')
+      assert.equal(input.env.HOLZI_E2E_SYNC_LOOPBACK, '1')
+      assert.equal(
+        input.env.E2E_LINUX_APP,
+        '/repo/src-tauri/target/debug/holzi',
+      )
+      assert.deepEqual(JSON.parse(input.env.E2E_TOOLS!), FOUND)
       assert.match(
         t.lines.join('\n'),
         /not on android: extension-files \(excluded/,
+      )
+    } finally {
+      t.cleanup()
+    }
+  })
+
+  it('runs without the Linux devices when this machine lacks their tools', async () => {
+    const t = setup({
+      androidPreflight,
+      preflight: async () => {
+        t.calls.push('preflight')
+        return {
+          ok: false,
+          found: {},
+          tools: [],
+          versions: {},
+          messages: ['tauri-driver is missing'],
+        }
+      },
+    })
+    try {
+      assert.equal(await runCli(['--platform', 'android'], {}, t.deps), 0)
+      assert.deepEqual(t.calls, ['preflight', 'sweep', 'scenarios', 'stopRun'])
+      const input = t.inputs[0]!
+      assert.equal(input.env.E2E_LINUX_APP, undefined)
+      assert.equal(input.env.E2E_TOOLS, '{}')
+      assert.match(
+        t.lines.join('\n'),
+        /devices beside the phone cannot run here: tauri-driver is missing/,
       )
     } finally {
       t.cleanup()
