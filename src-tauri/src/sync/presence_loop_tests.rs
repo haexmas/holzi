@@ -148,14 +148,15 @@ async fn a_fresh_meeting_from_a_listed_device_is_recorded_and_looked_up() {
     // a real relay never redelivers one to a subscription opened after
     // the fact) has a live subscription to actually land on.
     let linked_node = Arc::new(bind_loopback(&linked).await);
-    let reconnect = Arc::new(tokio::sync::Notify::new());
+    let wakeups = crate::sync::resume::Wakeups::new(tokio_util::sync::CancellationToken::new());
+    let reconnect = Arc::clone(&wakeups.reconnect);
     let receiver = {
         let linked_node = Arc::clone(&linked_node);
         let replica = Arc::clone(&linked.device.replica);
         let keys = linked.keys.clone();
         let vault = linked.vault;
         let relay_urls = vec![url.to_string()];
-        let reconnect = Arc::clone(&reconnect);
+        let wakeups = wakeups.clone();
         tokio::spawn(async move {
             // The sender stays alive for the whole run: a dropped one closes
             // the channel, and `run` ends on a closed `changed`.
@@ -169,7 +170,7 @@ async fn a_fresh_meeting_from_a_listed_device_is_recorded_and_looked_up() {
                     vault,
                     relay_urls,
                     changed_rx,
-                    &reconnect,
+                    &wakeups,
                 ),
             )
             .await;

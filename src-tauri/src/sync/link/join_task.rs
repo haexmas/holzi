@@ -35,6 +35,9 @@ use crate::sync::wire::LINK_ALPN;
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(90);
 /// How often the meeting is renewed while searching.
 const MEETING_INTERVAL: Duration = Duration::from_secs(5);
+/// How long the first meeting waits for the endpoint's relay (spec 043): the host dials the first
+/// meeting it sees, and without a relay in it a device behind a NAT cannot be reached.
+const ONLINE_TIMEOUT: Duration = Duration::from_secs(3);
 /// How long the endpoint may take to bind.
 const BIND_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long the relays get to connect before the search goes on without them.
@@ -69,7 +72,7 @@ impl JoinConfig {
         Self {
             nostr_relays: servers.effective_nostr_relays(),
             relay_mode: servers.relay_mode(),
-            bind_addr: None,
+            bind_addr: crate::sync::endpoint::app_bind_addr(),
             search_timeout: SEARCH_TIMEOUT,
         }
     }
@@ -294,6 +297,12 @@ async fn exchange(
         }
     }
     client.connect().and_wait(RELAY_CONNECT_TIMEOUT).await;
+    // The host dials the first meeting it sees. A phone on mobile data, or the emulator of the e2e
+    // suite (spec 043), is reachable only through its relay, so the meeting waits a moment for it;
+    // without a reachable relay it goes out with the direct addresses alone.
+    if !matches!(config.relay_mode, RelayMode::Disabled) {
+        let _ = tokio::time::timeout(ONLINE_TIMEOUT, endpoint.online()).await;
+    }
 
     let announce = async {
         loop {

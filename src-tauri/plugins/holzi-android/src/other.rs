@@ -26,6 +26,16 @@ impl<R: Runtime> HolziAndroid<R> {
         Ok(())
     }
 
+    /// The network changes the sync notices by itself here.
+    pub fn watch_network(&self, _on_change: impl Fn() + Send + Sync + 'static) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// The host name is the device's name here.
+    pub fn device_name(&self) -> Option<String> {
+        None
+    }
+
     /// Screen capture protection exists only on Android.
     pub fn set_secure(&self, _enabled: bool) -> Result<(), String> {
         Ok(())

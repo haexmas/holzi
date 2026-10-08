@@ -40,6 +40,16 @@ struct InsetsArgs {
     channel: Channel,
 }
 
+#[derive(Serialize)]
+struct NetworkArgs {
+    channel: Channel,
+}
+
+#[derive(Deserialize)]
+struct DeviceName {
+    name: Option<String>,
+}
+
 impl<R: Runtime> HolziAndroid<R> {
     /// The name a document provider shows for a `content://` address; `None` if it names none.
     pub fn display_name(&self, uri: &str) -> Option<String> {
@@ -66,6 +76,25 @@ impl<R: Runtime> HolziAndroid<R> {
         self.0
             .run_mobile_plugin::<()>("watchInsets", InsetsArgs { channel })
             .map_err(|error| error.to_string())
+    }
+
+    /// Calls `on_change` whenever the device moves to another network (FR-019).
+    pub fn watch_network(&self, on_change: impl Fn() + Send + Sync + 'static) -> Result<(), String> {
+        let channel = Channel::new(move |_| {
+            on_change();
+            Ok(())
+        });
+        self.0
+            .run_mobile_plugin::<()>("watchNetwork", NetworkArgs { channel })
+            .map_err(|error| error.to_string())
+    }
+
+    /// The name the person gave the phone, else its model (research R10).
+    pub fn device_name(&self) -> Option<String> {
+        self.0
+            .run_mobile_plugin::<DeviceName>("deviceName", ())
+            .ok()?
+            .name
     }
 
     /// Hides the window from screenshots, screen recordings and the recent apps view (FR-011a).

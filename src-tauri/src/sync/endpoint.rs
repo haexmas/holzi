@@ -45,6 +45,19 @@ const DUPLICATE: &[u8] = b"duplicate";
 /// How long the router may take to shut down at the session end.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// The environment variable of [`app_bind_addr`].
+const E2E_LOOPBACK: &str = "HOLZI_E2E_SYNC_LOOPBACK";
+
+/// Where the app binds its endpoints: every interface (`None`). A debug build started with
+/// `HOLZI_E2E_SYNC_LOOPBACK=1` binds loopback only: the e2e suite sets it for the devices on Linux
+/// beside an emulated phone (spec 043), so they reach the phone only through the run's iroh relay.
+/// The emulator's own network loses a burst of large UDP packets and then the whole direct path,
+/// which a real phone's network does not. A release build ignores the variable.
+pub fn app_bind_addr() -> Option<SocketAddr> {
+    let loopback = cfg!(debug_assertions) && std::env::var(E2E_LOOPBACK).as_deref() == Ok("1");
+    loopback.then(|| SocketAddr::from(([127, 0, 0, 1], 0)))
+}
+
 /// How the endpoint reaches other devices.
 #[derive(Debug, Clone)]
 pub struct NodeConfig {
@@ -396,6 +409,12 @@ impl SyncNode {
                 .unwrap_or_else(|e| e.into_inner());
             *applied = want;
         }
+    }
+
+    /// Tells iroh the network may have changed, which it cannot see by itself on Android
+    /// (spec 043, research R5); harmless when nothing changed.
+    pub async fn network_change(&self) {
+        self.inner.endpoint.network_change().await;
     }
 
     /// Ends every session and closes the endpoint (FR-031).

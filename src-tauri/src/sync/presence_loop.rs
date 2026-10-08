@@ -59,8 +59,8 @@ const OTHER_MAILBOXES: usize = 4;
 /// right away whenever `changed` fires, so a device list this session just
 /// issued (linking, removing) does not wait out the rest of the 60 s tick
 /// — and feeds every fresh, authenticated meeting it receives into `node`'s
-/// address book and `device_presence_no_sync`, then wakes `reconnect` so
-/// the caller's reconnect loop dials it (dialing here would stall presence
+/// address book and `device_presence_no_sync`, then wakes `wakeups.reconnect`
+/// so the caller's reconnect loop dials it (dialing here would stall presence
 /// for as long as an offline device's dial takes). Returns only if the relay
 /// client itself ends; the caller races this against its own cancellation.
 pub async fn run(
@@ -70,7 +70,7 @@ pub async fn run(
     vault: [u8; 32],
     relay_urls: Vec<String>,
     mut changed: tokio::sync::watch::Receiver<u64>,
-    reconnect: &tokio::sync::Notify,
+    wakeups: &crate::sync::resume::Wakeups,
 ) {
     use futures::StreamExt;
 
@@ -117,11 +117,25 @@ pub async fn run(
                     log::warn!("sync: publishing presence failed: {error}");
                 }
             }
+            // The app came back or the network changed (spec 043, research R5): the relay sockets
+            // may be dead without having noticed. New connections, a new subscription, and this
+            // device's presence at once, so the others dial it now.
+            _ = wakeups.relays.notified() => {
+                client.disconnect().await;
+                client.connect().and_wait(RELAY_CONNECT_TIMEOUT).await;
+                subscribed = None;
+                refresh_subscription(&client, replica, vault, keys, day, &mut subscribed).await;
+                if let Err(error) =
+                    publish_own(&client, node, replica, keys, vault, day, asking_since).await
+                {
+                    log::warn!("sync: publishing presence failed: {error}");
+                }
+            }
             notification = notifications.next() => {
                 let Some(notification) = notification else { break };
                 if let nostr_sdk::client::ClientNotification::Event { event, .. } = notification {
                     if handle_incoming(node, replica, keys, vault, day, &event).await {
-                        reconnect.notify_one();
+                        wakeups.reconnect.notify_one();
                     }
                 }
             }
