@@ -38,6 +38,8 @@ fn the_preflight_is_answered() {
     let answer = response_for("OPTIONS /__probe HTTP/1.1\r\n");
     assert!(answer.starts_with("HTTP/1.1 204 No Content\r\n"));
     assert!(answer.contains("Access-Control-Allow-Origin: *\r\n"));
+    assert!(answer.contains("Access-Control-Allow-Methods: GET, OPTIONS\r\n"));
+    assert!(answer.contains("Access-Control-Allow-Private-Network: true\r\n"));
 }
 
 #[test]

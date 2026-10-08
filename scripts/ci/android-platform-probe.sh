@@ -17,7 +17,7 @@ adb shell am start -n com.haex.holzi/.MainActivity
 
 # The probe gives up after 90 s itself; wait a little longer for its line.
 for _ in $(seq 1 50); do
-  adb logcat -d > "$log"
+  adb logcat -s holzi-probe -d > "$log"
   if grep -q HOLZI_PROBE_RESULT "$log"; then
     break
   fi

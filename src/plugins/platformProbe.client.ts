@@ -19,5 +19,9 @@ export default defineNuxtPlugin(() => {
     probe.port,
     window.fetch.bind(window),
     navigator.userAgent,
-  ).then((report) => invoke('platform_probe_report', { report }))
+  )
+    .then((report) => invoke('platform_probe_report', { report }))
+    .catch((error) => {
+      console.error('platform probe report failed', error)
+    })
 })

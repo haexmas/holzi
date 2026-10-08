@@ -191,7 +191,7 @@ pub fn platform_probe_report<R: Runtime>(app: AppHandle<R>, report: Report) {
 fn emit(line: &str) {
     println!("{line}");
     let _ = std::io::stdout().flush();
-    log::info!("{line}");
+    log::info!(target: "holzi-probe", "{line}");
 }
 
 /// Answers one request: the health route, its preflight, or 404.
@@ -216,7 +216,7 @@ pub fn response_for(request_line: &str) -> String {
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or_default();
     let path = parts.next().unwrap_or_default();
-    let cors = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\n";
+    let cors = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS\r\nAccess-Control-Allow-Private-Network: true\r\n";
     match (method, path) {
         ("OPTIONS", HEALTH_PATH) => {
             format!("HTTP/1.1 204 No Content\r\n{cors}Content-Length: 0\r\nConnection: close\r\n\r\n")

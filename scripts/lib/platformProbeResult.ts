@@ -3,8 +3,8 @@
 /** `platform_probe::RESULT_MARKER` in Rust. */
 export const RESULT_MARKER = 'HOLZI_PROBE_RESULT'
 
-/** The probe gives up after 90 s itself (`REPORT_TIMEOUT`); this leaves room for start and exit. */
-export const PROBE_TIMEOUT_MS = 150_000
+/** T007's desktop runner limit; the probe itself gives up after 90 s. */
+export const PROBE_TIMEOUT_MS = 120_000
 
 export interface ProbeVerdict {
   ok: boolean
