@@ -429,7 +429,7 @@ describe('runCli on Android', () => {
     }
   })
 
-  it('runs without the Linux devices when this machine lacks their tools', async () => {
+  it('stops before scenarios when this machine lacks the Linux devices tools', async () => {
     const t = setup({
       androidPreflight,
       preflight: async () => {
@@ -444,11 +444,9 @@ describe('runCli on Android', () => {
       },
     })
     try {
-      assert.equal(await runCli(['--platform', 'android'], {}, t.deps), 0)
-      assert.deepEqual(t.calls, ['preflight', 'sweep', 'scenarios', 'stopRun'])
-      const input = t.inputs[0]!
-      assert.equal(input.env.E2E_LINUX_APP, undefined)
-      assert.equal(input.env.E2E_TOOLS, '{}')
+      assert.equal(await runCli(['--platform', 'android'], {}, t.deps), 2)
+      assert.deepEqual(t.calls, ['preflight'])
+      assert.equal(t.inputs.length, 0)
       assert.match(
         t.lines.join('\n'),
         /devices beside the phone cannot run here: tauri-driver is missing/,
