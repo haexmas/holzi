@@ -1,6 +1,6 @@
 // How the viewer shows a file by its name (spec 044 FR-009, FR-014). Mirrors
 // `src-tauri/src/files/kind.rs`; `check-files-viewer.ts` runs the same cases as its Rust tests.
-import type { ViewerKind } from '@bindings/ViewerKind'
+import type { ViewerKind } from '../../types/bindings/ViewerKind.ts'
 
 const TEXT = new Set([
   'txt',

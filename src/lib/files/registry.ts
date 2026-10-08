@@ -1,7 +1,7 @@
 // File browser registry (spec 044, data-model.md "Ort eines Tabs", research R13): where a tab
 // stands, as a tab location, so session restore (spec 022) brings it back. Pure — the Vue side
 // attaches the component in `components/wm/appRoutes.ts`.
-import type { SourceRef } from '@bindings/SourceRef'
+import type { SourceRef } from '../../types/bindings/SourceRef.ts'
 
 import type { TabLocation } from '../wm/navigation.ts'
 

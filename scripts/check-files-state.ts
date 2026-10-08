@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import type { Entry } from '../src/types/bindings/Entry.ts'
 import {
+  type SortableEntry,
   breadcrumbs,
   childPath,
   DEFAULT_SORT,
@@ -13,6 +13,8 @@ import {
   visibleEntries,
 } from '../src/lib/files/state.ts'
 
+type Entry = SortableEntry & { path: string }
+
 function entry(name: string, partial: Partial<Entry> = {}): Entry {
   return {
     name,
@@ -20,11 +22,7 @@ function entry(name: string, partial: Partial<Entry> = {}): Entry {
     kind: 'file',
     size: 0,
     modifiedMs: 0,
-    mime: null,
     hidden: name.startsWith('.'),
-    symlink: false,
-    noAccess: false,
-    holziOwned: false,
     ...partial,
   }
 }

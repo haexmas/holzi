@@ -15,6 +15,13 @@ export interface ProbeReport {
   userAgent: string
 }
 
+/** The part of an `HTMLImageElement` the diagnosis uses. */
+interface ProbeImage {
+  onload: (() => void) | null
+  onerror: (() => void) | null
+  src: string
+}
+
 /** The answer of holzi's health route (`platform_probe::HEALTH_BODY`). */
 export const HEALTH_BODY = 'ok'
 
@@ -107,12 +114,14 @@ async function probeVariants(
       mode: 'no-cors',
     }),
   )
-  if (typeof Image !== 'undefined') {
+  // `Image` exists in the web view only; the Node checks run without a DOM.
+  const ImageCtor = (globalThis as { Image?: new () => ProbeImage }).Image
+  if (ImageCtor) {
     await attempt(
       'img',
       () =>
         new Promise<void>((resolve, reject) => {
-          const image = new Image()
+          const image = new ImageCtor()
           image.onload = () => resolve()
           image.onerror = () => reject(new Error('image error'))
           image.src = `http://127.0.0.1:${port}/__probe?v=img`

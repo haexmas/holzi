@@ -1,6 +1,14 @@
 // The file browser's view of a folder (spec 044 FR-003, FR-004), pure so `check-files-state.ts`
 // runs it without a DOM: sorting, hidden entries, the path bar and the parent folder.
-import type { Entry } from '@bindings/Entry'
+/** What sorting needs of an entry; the `Entry` binding has it. Kept structural, so the Node checks
+ * need no generated type with imports of its own. */
+export type SortableEntry = {
+  name: string
+  kind: 'file' | 'dir'
+  size: number | null
+  modifiedMs: number | null
+  hidden: boolean
+}
 
 export const SORT_KEYS = ['name', 'size', 'modified', 'type'] as const
 export type SortKey = (typeof SORT_KEYS)[number]
@@ -25,7 +33,7 @@ const collator = new Intl.Collator(undefined, {
   sensitivity: 'base',
 })
 
-function typeOf(entry: Entry): string {
+function typeOf(entry: SortableEntry): string {
   if (entry.kind === 'dir') return ''
   const dot = entry.name.lastIndexOf('.')
   return dot > 0 ? entry.name.slice(dot + 1).toLowerCase() : ''
@@ -33,14 +41,14 @@ function typeOf(entry: Entry): string {
 
 /** Folders first, then by `sort`; equal values fall back to the name. Hidden entries only when
  * `showHidden`. */
-export function visibleEntries(
-  entries: readonly Entry[],
+export function visibleEntries<E extends SortableEntry>(
+  entries: readonly E[],
   sort: Sort,
   showHidden: boolean,
-): Entry[] {
+): E[] {
   const direction = sort.ascending ? 1 : -1
-  const byName = (a: Entry, b: Entry) => collator.compare(a.name, b.name)
-  const byKey = (a: Entry, b: Entry): number => {
+  const byName = (a: E, b: E) => collator.compare(a.name, b.name)
+  const byKey = (a: E, b: E): number => {
     switch (sort.key) {
       case 'size':
         return (a.size ?? 0) - (b.size ?? 0)
