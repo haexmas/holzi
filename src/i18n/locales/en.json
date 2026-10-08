@@ -1211,7 +1211,7 @@
         "get": "Read workspaces, windows and tabs"
       },
       "apps": {
-        "list": "List apps"
+        "list": "List apps and extensions"
       },
       "actions": {
         "list": "List actions"

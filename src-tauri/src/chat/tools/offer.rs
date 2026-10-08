@@ -131,7 +131,23 @@ fn search_score(def: &AgentActionDef, query: &[String]) -> usize {
     .into_iter()
     .flat_map(words)
     .collect::<std::collections::HashSet<_>>();
-    query.iter().filter(|word| haystack.contains(*word)).count()
+    query
+        .iter()
+        .filter(|word| haystack.iter().any(|known| word_matches(word, known)))
+        .count()
+}
+
+/// Shortest word that may match as a prefix, so "extension" finds "extensions" and
+/// "Erweiterung" finds "Erweiterungen" without "set" finding "settings".
+const MIN_PREFIX_LEN: usize = 5;
+
+fn word_matches(query: &str, known: &str) -> bool {
+    let (shorter, longer) = if query.len() <= known.len() {
+        (query, known)
+    } else {
+        (known, query)
+    };
+    shorter == longer || (shorter.len() >= MIN_PREFIX_LEN && longer.starts_with(shorter))
 }
 
 /// Searches all registered built-in actions, with stable id ordering for ties.

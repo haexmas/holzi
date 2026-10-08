@@ -1211,7 +1211,7 @@
         "get": "Zustand von Arbeitsbereichen, Fenstern und Tabs lesen"
       },
       "apps": {
-        "list": "Apps auflisten"
+        "list": "Apps und Erweiterungen auflisten"
       },
       "actions": {
         "list": "Aktionen auflisten"

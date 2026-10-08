@@ -233,3 +233,19 @@ höchstens 5 Kandidaten plus „Etwas anderes …“. `scripts/check-wm-app-matc
 plus die System-Apps: jede App öffnet sich mit ihrem Namen in jeder Schreibweise; bei einem vertauschten
 Buchstabenpaar öffnen 37 von 41 direkt (≥ 90 %, SC-002), die übrigen (sehr kurze Namen wie „pdf“,
 „git“) stehen in der Rückfrage unter den Kandidaten.
+
+## R15 — „Welche Erweiterungen sind installiert?“ (beim Testen gefunden)
+
+Seit R13 erreicht der Agent `wm.apps.list` nur noch über `find_actions`. Die Suche verglich ganze
+Wörter aus Id, Beschreibung und Titeln; „erweiterungen“ stand nirgends, das leere Ergebnis mit dem
+Hinweis „no matching action“ las das Modell als „keine Erweiterungen installiert“. Drei Änderungen:
+
+- `wm.apps.list` nennt in Beschreibung und Titeln die installierten Erweiterungen („Apps und
+  Erweiterungen auflisten“).
+- Die Suche lässt ab fünf Buchstaben ein Wort als Präfix eines anderen gelten, sodass Einzahl und
+  Mehrzahl einander finden („Erweiterung“ ↔ „Erweiterungen“, „extension“ ↔ „extensions“); kürzere
+  Wörter zählen weiter nur ganz („set“ findet nicht „settings“).
+- Der Hinweis bei leerem Ergebnis sagt, dass er nur Aktionen betrifft, nicht die Daten des Nutzers,
+  und schlägt andere Stichworte oder die Liste aller Aktionen vor.
+
+Das Eval-Set bekommt den Satz „Welche Erweiterungen sind installiert?“ (`read-extensions-de-1`).

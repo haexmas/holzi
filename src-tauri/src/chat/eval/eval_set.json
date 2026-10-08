@@ -67,6 +67,19 @@
       "selfTest": false
     },
     {
+      "id": "read-extensions-de-1",
+      "lang": "de",
+      "kind": "read",
+      "text": "Welche Erweiterungen sind installiert?",
+      "expect": [
+        {
+          "tool": "wm_apps_list",
+          "args": {}
+        }
+      ],
+      "selfTest": false
+    },
+    {
       "id": "read-models-en-1",
       "lang": "en",
       "kind": "read",

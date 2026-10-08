@@ -167,3 +167,43 @@ fn core_offer_always_offers_ask_user() {
         .collect::<Vec<_>>();
     assert_eq!(names, ["ask_user"]);
 }
+
+#[test]
+fn search_matches_singular_and_plural_of_a_word() {
+    let defs = vec![
+        def(
+            "wm.apps.list",
+            "List the installed apps and extensions (Erweiterungen)",
+            false,
+        ),
+        def("settings.get", "Read all settings", false),
+    ];
+
+    for query in ["extension", "extensions", "Erweiterung", "Erweiterungen"] {
+        let (page, _) = search_actions(&defs, Some(query), None, 5);
+        let ids = page
+            .iter()
+            .map(|action| action.action_id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(ids, ["wm.apps.list"], "query {query}");
+    }
+
+    // Below five letters a word only matches whole words.
+    let (page, _) = search_actions(&defs, Some("set"), None, 5);
+    assert!(page.is_empty());
+}
+
+#[tokio::test]
+async fn find_actions_hint_says_a_miss_is_about_actions_not_data() {
+    let tool = FindActionsTool::new(vec![def("settings.get", "Read all settings", false)]);
+    let result = tool
+        .execute(
+            json!({ "query": "erweiterungen" }),
+            CancellationToken::new(),
+        )
+        .await;
+    let value: serde_json::Value = serde_json::from_str(&result.content).expect("JSON result");
+    let hint = value["hint"].as_str().expect("hint");
+    assert!(hint.contains("not about the user's data"), "{hint}");
+    assert!(hint.contains("omit query"), "{hint}");
+}
