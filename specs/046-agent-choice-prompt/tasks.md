@@ -18,8 +18,8 @@ row). Commit per phase with Conventional Commits (`feat(agent): …`, `refactor(
 
 **Purpose**: Build on PR #336 and satisfy the graphify-first rule before new named artifacts exist.
 
-- [ ] T001 Confirm PR #336 (`fix/agent-unknown-app`) and PR #337 (`refactor/radio-group`, haex-ui `ShadcnRadioGroup`) are merged, then `git fetch origin && git rebase origin/main` on branch `046-agent-choice-prompt`; verify `ActionInputError` exists in `src/lib/actions/runner.ts` and `unknownAppMessage` in `src/lib/wm/apps.ts`. verify `ShadcnRadioGroup` in `.nuxt/components.d.ts` after `nuxt prepare`. If either PR is not merged, stop and ask the operator
-- [ ] T002 Refresh the graph (`graphify` on the worktree) and run one bounded `graphify query "<intent>" --budget 1000` each for `src/lib/wm/appMatch.ts`, `src-tauri/src/chat/turn/choices.rs`, `src-tauri/src/chat/tools/ask_user.rs`, `src/components/chat/ChoicePrompt.vue`, `src/composables/useChatChoices.ts`; record candidates and why each did not match in the head section of `specs/046-agent-choice-prompt/research.md`. If a near-identical candidate appears, stop and ask the operator
+- [X] T001 Confirm PR #336 (`fix/agent-unknown-app`) and PR #337 (`refactor/radio-group`, haex-ui `ShadcnRadioGroup`) are merged, then `git fetch origin && git rebase origin/main` on branch `046-agent-choice-prompt`; verify `ActionInputError` exists in `src/lib/actions/runner.ts` and `unknownAppMessage` in `src/lib/wm/apps.ts`. verify `ShadcnRadioGroup` in `.nuxt/components.d.ts` after `nuxt prepare`. If either PR is not merged, stop and ask the operator
+- [X] T002 Refresh the graph (`graphify` on the worktree) and run one bounded `graphify query "<intent>" --budget 1000` each for `src/lib/wm/appMatch.ts`, `src-tauri/src/chat/turn/choices.rs`, `src-tauri/src/chat/tools/ask_user.rs`, `src/components/chat/ChoicePrompt.vue`, `src/composables/useChatChoices.ts`; record candidates and why each did not match in the head section of `specs/046-agent-choice-prompt/research.md`. If a near-identical candidate appears, stop and ask the operator
 
 ---
 

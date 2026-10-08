@@ -11,6 +11,16 @@ Kandidaten wurden per Code-Suche geprüft: `pending_tool_approvals` (Muster), `A
 `src/lib/passwords/search.ts` (`fold`, Fuse-Optionen). Nachprüfung mit frischem Graphen vor
 `/speckit-implement`.
 
+**Nachprüfung (T002, 2026-10-08, `graphify update .` → 19 694 Knoten, je Abfrage Budget 1000)**:
+
+| Neues Artefakt                         | Abfrage                                                      | Kandidaten und warum keiner passt                                                                                                                                                                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/lib/wm/appMatch.ts`               | „fuzzy match app name title resolve appId“                   | nur E2E-Hilfen (`scripts/e2e/lib/*`), `SettingsApp.vue`; keine App-Namenssuche vorhanden                                                                                                                                                                                 |
+| `chat/turn/choices.rs`                 | „pending user answer oneshot request id resolve cancel turn“ | `sync/link/pending.rs` (Kopplungs-Wartezustand, kein Turn), `passwords/clipboard.rs` (`Pending` = Leeren der Zwischenablage); beides andere Domäne                                                                                                                       |
+| `chat/tools/ask_user.rs`               | „built-in tool question options ask user“                    | `extensions/permissions/prompts.rs` (`Question`, `PermissionState`) und `src/lib/extensions/queue.ts`: Berechtigungsfragen von Erweiterungen mit Frames, 1004-Wiederholung, gemerkter Entscheidung Erlauben/Verweigern — anderer Lebenszyklus, keine Optionen, kein Turn |
+| `src/components/chat/ChoicePrompt.vue` | „chat prompt dialog radio choose answer“                     | nur E2E-Hilfen; Muster bleibt `PermissionPrompt.vue` (R10)                                                                                                                                                                                                               |
+| `src/composables/useChatChoices.ts`    | „listen tauri event chat request respond invoke composable“  | `vault_gate/invoke.rs`, Android-Plugin; Muster bleibt `onToolPermissionRequest` in `useChat.ts` (R9)                                                                                                                                                                     |
+
 ## R1 — Wo die Rückfrage gestellt wird: in der Tool-Runde, nicht im Tool
 
 **Decision**: Die Rückfrage stellt `TurnRunner` in einem neuen Schritt `resolve_choices` zwischen
