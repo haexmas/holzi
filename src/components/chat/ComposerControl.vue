@@ -31,39 +31,26 @@ function updateValue(nextValue: unknown) {
 </script>
 
 <template>
-  <ShadcnSelect
-    :model-value="value || undefined"
-    :disabled="disabled"
-    @update:model-value="updateValue"
-  >
-    <!-- One frame around icon, value and chevron; the value text yields to
-         the icon alone when the composer is too narrow (`composer` container
-         in Composer.vue). -->
-    <ShadcnSelectTrigger
+  <div class="relative min-w-0 shrink-0">
+    <Icon
+      v-if="icon"
+      :name="icon"
+      class="pointer-events-none absolute left-2 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground @lg/composer:hidden"
+      :aria-hidden="true"
+    />
+    <UiSelect
       :id="controlId"
-      class="h-7 w-auto max-w-48 shrink-0 gap-1.5 rounded-lg border-border/70 bg-muted/20 px-2 py-1 text-xs shadow-none"
+      :model-value="value || undefined"
+      :options="options"
       :aria-label="ariaLabel"
-      :title="ariaLabel"
-    >
-      <Icon
-        v-if="icon"
-        :name="icon"
-        class="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-        :aria-hidden="true"
-      />
-      <ShadcnSelectValue
-        class="hidden @lg/composer:block"
-        :placeholder="displayValue ?? label"
-      />
-    </ShadcnSelectTrigger>
-    <ShadcnSelectContent>
-      <ShadcnSelectItem
-        v-for="option in options"
-        :key="option.value"
-        :value="option.value"
-      >
-        {{ option.label }}
-      </ShadcnSelectItem>
-    </ShadcnSelectContent>
-  </ShadcnSelect>
+      :disabled="disabled"
+      :class="[
+        'w-auto max-w-48',
+        '[&_button]:h-7 [&_button]:w-auto [&_button]:max-w-48 [&_button]:shrink-0 [&_button]:gap-1.5 [&_button]:rounded-lg [&_button]:border-border/70 [&_button]:bg-muted/20 [&_button]:px-2 [&_button]:py-1 [&_button]:text-xs [&_button]:shadow-none',
+        '[&_button]:pl-8 @lg/composer:[&_button]:pl-2',
+        '[&_button>span]:hidden @lg/composer:[&_button>span]:block',
+      ]"
+      @update:model-value="updateValue"
+    />
+  </div>
 </template>
