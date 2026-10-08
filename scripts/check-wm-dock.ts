@@ -5,6 +5,7 @@ import { test } from 'node:test'
 
 import {
   DEFAULT_DOCK_PLACEMENT,
+  dockActivation,
   normalizeDockItems,
   parseDockItems,
   parseDockPlacement,
@@ -169,4 +170,45 @@ test("resolveDockEntries collects an app's tabs across windows and workspaces", 
       { tabId: 't3', windowId: 'w2', workspaceId: 'ws-2' },
     ],
   })
+})
+
+test('resolveDockEntries appends running apps that are not pinned, in tab order', () => {
+  const gamma = 'test.gamma'
+  const items = normalizeDockItems([launcher, alpha], APPS)
+  const open = [
+    windowWith('w1', 'ws-2', [
+      { id: 't1', appId: gamma },
+      { id: 't2', appId: ALPHA.id },
+    ]),
+    windowWith('w2', 'ws-1', [
+      { id: 't3', appId: BETA.id },
+      { id: 't4', appId: gamma },
+    ]),
+  ]
+  assert.deepEqual(
+    resolveDockEntries(items, open).map((entry) =>
+      entry.kind === 'app'
+        ? [entry.appId, entry.pinned, entry.instances.length]
+        : [entry.id],
+    ),
+    [['launcher'], [ALPHA.id, true, 1], [gamma, false, 2], [BETA.id, false, 1]],
+  )
+})
+
+test('resolveDockEntries shows a pinned running app once, at its pinned place', () => {
+  const items = normalizeDockItems([alpha, launcher], APPS)
+  const open = [windowWith('w1', 'ws-1', [{ id: 't1', appId: ALPHA.id }])]
+  const apps = resolveDockEntries(items, open).filter(
+    (entry) => entry.kind === 'app',
+  )
+  assert.equal(apps.length, 1)
+  assert.equal(resolveDockEntries(items, open)[0]?.kind, 'app')
+})
+
+test('dockActivation opens, focuses the one instance, or lets the user choose', () => {
+  const one = { tabId: 't1', windowId: 'w1', workspaceId: 'ws-1' }
+  const two = { tabId: 't2', windowId: 'w2', workspaceId: 'ws-2' }
+  assert.deepEqual(dockActivation([]), { kind: 'open' })
+  assert.deepEqual(dockActivation([one]), { kind: 'focus', tabId: 't1' })
+  assert.deepEqual(dockActivation([one, two]), { kind: 'choose' })
 })

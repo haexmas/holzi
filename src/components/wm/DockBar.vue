@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * The dock as a bar (spec 045): its entries in a row, or in a column at the left and right edge
- * (FR-026), scrolling along its axis when they do not fit. A toolbar with one tab stop; the arrow
+ * (FR-026), scrolling along its axis when they do not fit; running apps that are not pinned
+ * follow after a separator (FR-005). A toolbar with one tab stop; the arrow
  * keys move between the entries, Enter and Space activate (FR-041).
  */
 import { computed, ref, useTemplateRef, watch } from 'vue'
@@ -55,6 +56,11 @@ function onKeydown(event: KeyboardEvent) {
   all[next]?.focus()
 }
 
+/** Running apps that are not pinned come after a separator (FR-005); -1 without any. */
+const firstRunning = computed(() =>
+  props.entries.findIndex((entry) => entry.kind === 'app' && !entry.pinned),
+)
+
 function entryKey(entry: DockEntry): string {
   return entry.kind === 'control' ? `control:${entry.id}` : `app:${entry.appId}`
 }
@@ -75,11 +81,14 @@ function entryKey(entry: DockEntry): string {
     @focusin="onFocusin"
     @keydown="onKeydown"
   >
-    <WmDockItem
-      v-for="(entry, index) in entries"
-      :key="entryKey(entry)"
-      :entry="entry"
-      :tabbable="index === focusIndex"
-    />
+    <template v-for="(entry, index) in entries" :key="entryKey(entry)">
+      <span
+        v-if="index === firstRunning"
+        class="shrink-0 self-stretch bg-border"
+        :class="orientation === 'horizontal' ? 'mx-0.5 w-px' : 'my-0.5 h-px'"
+        aria-hidden="true"
+      />
+      <WmDockItem :entry="entry" :tabbable="index === focusIndex" />
+    </template>
   </div>
 </template>

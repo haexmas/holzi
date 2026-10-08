@@ -1,7 +1,8 @@
+import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
 import { createAndUnlock } from '../lib/flows.ts'
 import { contextMenu } from '../lib/passwords.ts'
-import { isShown, WM, wmSnapshot } from '../lib/settings.ts'
+import { isShown, runAction, WM, wmSnapshot } from '../lib/settings.ts'
 
 const PASSWORDS = 'system.passwords'
 
@@ -13,8 +14,10 @@ async function passwordsTabs(
     .filter((tab) => tab.appId === PASSWORDS).length
 }
 
-// Spec 045-dock, quickstart 1–2 (US1, FR-001, FR-003, FR-010, FR-015, FR-017): the dock replaces the
-// floating buttons, an app pinned from the launcher opens from the dock and unpins from its menu.
+// Spec 045-dock, quickstart 1–4 (US1, US2; FR-001, FR-003, FR-005, FR-007, FR-010–FR-012, FR-015,
+// FR-017): the dock replaces the floating buttons, an app pinned from the launcher opens from the dock
+// and unpins from its menu, a click brings its one instance back from another workspace instead of
+// opening a second, and an app with two instances offers them to choose.
 scenario('dock', {}, async (ctx) => {
   const instance = await ctx.startInstance()
   await createAndUnlock(instance, { name: 'e2e-dock' })
@@ -38,7 +41,7 @@ scenario('dock', {}, async (ctx) => {
 
   // Unpinned while not running, so it leaves the dock (a running app would stay, FR-005).
   await contextMenu(instance, `dock-item-${PASSWORDS}`)
-  await instance.click('dock-menu-unpin')
+  await instance.click('dock-menu-pin')
   await ctx.waitFor(
     'the passwords entry to leave the dock',
     async () =>
@@ -53,4 +56,40 @@ scenario('dock', {}, async (ctx) => {
     async () => (await passwordsTabs(instance)) === 1,
   )
   ctx.step('opened from the dock')
+
+  const activeWorkspace = () =>
+    instance.exec<string>(`return ${WM}.activeWorkspaceId`)
+  const first = await activeWorkspace()
+  const created = await runAction(instance, 'wm.workspace.create')
+  if (!created.ok)
+    throw new Error(`wm.workspace.create failed: ${JSON.stringify(created)}`)
+  await ctx.waitFor(
+    'the new workspace',
+    async () => (await activeWorkspace()) !== first,
+  )
+  await instance.click(`dock-item-${PASSWORDS}`)
+  await ctx.waitFor(
+    'back in the first workspace',
+    async () => (await activeWorkspace()) === first,
+  )
+  assert.equal(
+    await passwordsTabs(instance),
+    1,
+    'the dock opened a second passwords tab',
+  )
+  ctx.step('focused across workspaces')
+
+  for (let i = 0; i < 2; i += 1) {
+    await instance.click('open-launcher')
+    await instance.click('open-chat')
+    await instance.exec(`${WM}.overlays.launcher = false; return true`)
+  }
+  await ctx.waitFor('two chat instances in the dock', async () =>
+    instance.exec<boolean>(
+      `return document.querySelector('[data-testid="dock-item-system.chat"]')?.dataset.count === '2'`,
+    ),
+  )
+  await instance.click('dock-item-system.chat')
+  await instance.waitForDisplayed('dock-instances')
+  ctx.step('two instances offered to choose')
 })

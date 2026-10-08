@@ -189,12 +189,13 @@ function instancesOf(
   )
 }
 
-/** What the dock shows: the available entries in their order, each app with its instances. */
+/** What the dock shows: the available entries in their order, each app with its instances, then
+ * every running app that is not among them, in the order of its first tab (FR-005). */
 export function resolveDockEntries(
   items: readonly DockItemState[],
   windows: readonly WmWindow[],
 ): DockEntry[] {
-  return items.flatMap((item): DockEntry[] => {
+  const pinned = items.flatMap((item): DockEntry[] => {
     if (!item.available) return []
     if (item.kind === 'control') return [{ kind: 'control', id: item.id }]
     return [
@@ -206,4 +207,33 @@ export function resolveDockEntries(
       },
     ]
   })
+  const pinnedIds = new Set(
+    items.flatMap((item) => (item.kind === 'app' ? [item.appId] : [])),
+  )
+  const runningIds = new Set(
+    windows.flatMap((window) => window.tabs.map((tab) => tab.appId)),
+  )
+  const running = [...runningIds]
+    .filter((appId) => !pinnedIds.has(appId))
+    .map((appId): DockEntry => ({
+      kind: 'app',
+      appId,
+      pinned: false,
+      instances: instancesOf(appId, windows),
+    }))
+  return [...pinned, ...running]
+}
+
+export type DockActivation =
+  { kind: 'open' } | { kind: 'focus'; tabId: string } | { kind: 'choose' }
+
+/** What a click on an app entry does: open it, bring its one instance to the front, or let the user
+ * choose among several (FR-010–FR-012). */
+export function dockActivation(
+  instances: readonly DockInstance[],
+): DockActivation {
+  const [only, second] = instances
+  if (!only) return { kind: 'open' }
+  if (!second) return { kind: 'focus', tabId: only.tabId }
+  return { kind: 'choose' }
 }

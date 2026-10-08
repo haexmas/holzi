@@ -1,11 +1,18 @@
 <script setup lang="ts">
 /**
  * One entry of the dock (spec 045): a control (Launcher, window overview, workspace overview,
- * FR-014) or an app (FR-004, FR-009, FR-010), with its context menu (FR-015). Right click and a long
- * press on touch both open the menu (reka, FR-043).
+ * FR-014) or an app (FR-004, FR-009). An app shows whether it runs, how many instances it has and
+ * whether it wants attention (FR-007, FR-008). A click opens it, brings its one instance to the
+ * front, or offers its instances grouped by workspace (FR-010–FR-012); a middle click opens a new
+ * one (FR-013). Right click and a long press on touch open the context menu (reka, FR-015, FR-043).
  */
-import { computed } from 'vue'
-import type { DockControlId, DockEntry } from '~/lib/wm/dock'
+import { computed, ref, watch } from 'vue'
+import {
+  dockActivation,
+  type DockControlId,
+  type DockEntry,
+  type DockInstance,
+} from '~/lib/wm/dock'
 
 const props = defineProps<{
   entry: DockEntry
@@ -28,6 +35,8 @@ const CONTROL_ACTIONS = {
   windows: useAction('wm.windows.overview'),
 } satisfies Record<DockControlId, unknown>
 const openApp = useAction('wm.app.open')
+const activateTab = useAction('wm.tab.activate')
+const closeTab = useAction('wm.tab.close')
 
 const app = computed(() => {
   const entry = props.entry
@@ -35,11 +44,19 @@ const app = computed(() => {
   return wm.apps().find((candidate) => candidate.id === entry.appId)
 })
 
+const instances = computed<readonly DockInstance[]>(() =>
+  props.entry.kind === 'app' ? props.entry.instances : [],
+)
+
 const label = computed(() => {
   if (props.entry.kind === 'control')
     return t(`wm.dock.controls.${props.entry.id}`)
   return app.value ? (app.value.title ?? t(app.value.titleKey)) : ''
 })
+
+const attention = computed(
+  () => props.entry.kind === 'app' && wm.appHasAttention(props.entry.appId),
+)
 
 const testId = computed(() => {
   if (props.entry.kind === 'app') return `dock-item-${props.entry.appId}`
@@ -48,60 +65,211 @@ const testId = computed(() => {
     : `dock-control-${props.entry.id}`
 })
 
+const chooserOpen = ref(false)
+// An instance closed elsewhere leaves the chooser; with fewer than two there is nothing to choose.
+watch(
+  () => instances.value.length,
+  (count) => {
+    if (count < 2) chooserOpen.value = false
+  },
+)
+
+function tabTitle(instance: DockInstance): string {
+  const tab = wm.windows
+    .find((window) => window.id === instance.windowId)
+    ?.tabs.find((candidate) => candidate.id === instance.tabId)
+  if (!tab) return label.value
+  const info = wm.tabDisplayInfo(tab)
+  return (
+    info.titleOverride ??
+    (info.titleKey ? t(info.titleKey, info.titleParams) : label.value)
+  )
+}
+
+/** The instances by workspace, in workspace order, each titled like its tab. */
+const groups = computed(() =>
+  [...wm.workspaces]
+    .sort((a, b) => a.position - b.position)
+    .map((workspace) => ({
+      id: workspace.id,
+      label: t('wm.workspaces.numbered', { number: workspace.position + 1 }),
+      rows: instances.value
+        .filter((instance) => instance.workspaceId === workspace.id)
+        .map((instance) => ({
+          tabId: instance.tabId,
+          title: tabTitle(instance),
+        })),
+    }))
+    .filter((group) => group.rows.length > 0),
+)
+
+function newInstance() {
+  if (props.entry.kind === 'app') void openApp({ appId: props.entry.appId })
+}
+
 function activate() {
   const entry = props.entry
   if (entry.kind === 'control') {
     void CONTROL_ACTIONS[entry.id]({})
     return
   }
-  void openApp({ appId: entry.appId })
+  const activation = dockActivation(entry.instances)
+  if (activation.kind === 'open') newInstance()
+  else if (activation.kind === 'focus')
+    void activateTab({ tabId: activation.tabId })
+  else chooserOpen.value = true
 }
 
-function unpin() {
-  if (props.entry.kind === 'app') void dock.unpinAsync(props.entry.appId)
+function choose(tabId: string) {
+  chooserOpen.value = false
+  void activateTab({ tabId })
+}
+
+function chooseNew() {
+  chooserOpen.value = false
+  newInstance()
+}
+
+function onAuxclick(event: MouseEvent) {
+  if (event.button !== 1) return
+  event.preventDefault()
+  if (app.value?.multiInstance) newInstance()
+  else activate()
+}
+
+function togglePin() {
+  if (props.entry.kind !== 'app') return
+  const appId = props.entry.appId
+  void (props.entry.pinned ? dock.unpinAsync(appId) : dock.pinAsync(appId))
+}
+
+/** Closes every instance as a click on its tab's close button would, guards included (FR-016);
+ * stops at the first one the user keeps open. */
+async function closeAll() {
+  for (const instance of [...instances.value]) {
+    const outcome = await closeTab({ tabId: instance.tabId })
+    if (!outcome.ok) return
+  }
 }
 </script>
 
 <template>
-  <ShadcnContextMenu>
-    <ShadcnContextMenuTrigger as-child :disabled="entry.kind === 'control'">
+  <ShadcnPopover v-model:open="chooserOpen">
+    <ShadcnContextMenu>
+      <ShadcnPopoverAnchor as-child>
+        <ShadcnContextMenuTrigger as-child :disabled="entry.kind === 'control'">
+          <button
+            type="button"
+            class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+            :class="[
+              entry.kind === 'control' && entry.id === 'launcher'
+                ? 'bg-foreground text-background hover:opacity-90'
+                : 'text-foreground hover:bg-accent',
+              attention ? 'ring-2 ring-warning' : '',
+            ]"
+            :data-testid="testId"
+            data-dock-item
+            :data-running="instances.length > 0 || undefined"
+            :data-count="instances.length || undefined"
+            :tabindex="tabbable ? 0 : -1"
+            :aria-label="label"
+            :title="label"
+            @click="activate"
+            @auxclick="onAuxclick"
+            @mousedown.middle.prevent
+          >
+            <img
+              v-if="app?.iconUrl"
+              :src="app.iconUrl"
+              alt=""
+              class="h-6 w-6 object-contain"
+            />
+            <Icon
+              v-else
+              :name="
+                entry.kind === 'control'
+                  ? CONTROL_ICONS[entry.id]
+                  : (app?.icon ?? '')
+              "
+              class="h-5 w-5"
+              :aria-hidden="true"
+            />
+            <span
+              v-if="instances.length > 0"
+              class="absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-foreground"
+            />
+            <span class="sr-only">
+              <template v-if="instances.length > 1">
+                {{ t('wm.dock.count', { count: instances.length }) }}
+              </template>
+              <template v-else-if="instances.length > 0">
+                {{ t('wm.dock.running') }}
+              </template>
+              <template v-if="attention">{{ t('wm.attention') }}</template>
+            </span>
+            <span
+              v-if="instances.length > 1"
+              class="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground"
+              aria-hidden="true"
+            >
+              {{ instances.length }}
+            </span>
+          </button>
+        </ShadcnContextMenuTrigger>
+      </ShadcnPopoverAnchor>
+      <ShadcnContextMenuContent class="min-w-48" data-testid="dock-item-menu">
+        <ShadcnContextMenuItem data-testid="dock-menu-pin" @select="togglePin">
+          {{
+            entry.kind === 'app' && entry.pinned
+              ? t('wm.dock.unpin')
+              : t('wm.dock.pin')
+          }}
+        </ShadcnContextMenuItem>
+        <ShadcnContextMenuItem
+          v-if="app?.multiInstance"
+          data-testid="dock-menu-new"
+          @select="newInstance"
+        >
+          {{ t('wm.dock.newWindow') }}
+        </ShadcnContextMenuItem>
+        <ShadcnContextMenuItem
+          v-if="instances.length > 0"
+          data-testid="dock-menu-close-all"
+          @select="closeAll"
+        >
+          {{ t('wm.dock.closeAll') }}
+        </ShadcnContextMenuItem>
+      </ShadcnContextMenuContent>
+    </ShadcnContextMenu>
+    <ShadcnPopoverContent
+      class="flex w-64 flex-col gap-2 p-2"
+      data-testid="dock-instances"
+      :aria-label="t('wm.dock.instances')"
+    >
+      <div v-for="group in groups" :key="group.id" class="flex flex-col">
+        <span class="px-2 py-1 text-xs text-muted-foreground">
+          {{ group.label }}
+        </span>
+        <button
+          v-for="row in group.rows"
+          :key="row.tabId"
+          type="button"
+          class="truncate rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+          :data-testid="`dock-instance-${row.tabId}`"
+          @click="choose(row.tabId)"
+        >
+          {{ row.title }}
+        </button>
+      </div>
       <button
         type="button"
-        class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
-        :class="
-          entry.kind === 'control' && entry.id === 'launcher'
-            ? 'bg-foreground text-background hover:opacity-90'
-            : 'text-foreground hover:bg-accent'
-        "
-        :data-testid="testId"
-        data-dock-item
-        :tabindex="tabbable ? 0 : -1"
-        :aria-label="label"
-        :title="label"
-        @click="activate"
+        class="flex items-center gap-2 rounded-md border-t px-2 py-1.5 text-left text-sm hover:bg-accent"
+        data-testid="dock-instances-new"
+        @click="chooseNew"
       >
-        <img
-          v-if="app?.iconUrl"
-          :src="app.iconUrl"
-          alt=""
-          class="h-6 w-6 object-contain"
-        />
-        <Icon
-          v-else
-          :name="
-            entry.kind === 'control'
-              ? CONTROL_ICONS[entry.id]
-              : (app?.icon ?? '')
-          "
-          class="h-5 w-5"
-          :aria-hidden="true"
-        />
+        <Icon name="lucide:plus" class="h-4 w-4" :aria-hidden="true" />
+        {{ t('wm.dock.newWindow') }}
       </button>
-    </ShadcnContextMenuTrigger>
-    <ShadcnContextMenuContent class="min-w-48" data-testid="dock-item-menu">
-      <ShadcnContextMenuItem data-testid="dock-menu-unpin" @select="unpin">
-        {{ t('wm.dock.unpin') }}
-      </ShadcnContextMenuItem>
-    </ShadcnContextMenuContent>
-  </ShadcnContextMenu>
+    </ShadcnPopoverContent>
+  </ShadcnPopover>
 </template>

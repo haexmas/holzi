@@ -107,6 +107,11 @@
       "label": "Dock",
       "pin": "Pin to dock",
       "unpin": "Unpin from dock",
+      "newWindow": "New window",
+      "closeAll": "Close all",
+      "instances": "Instances",
+      "running": "running",
+      "count": "{count} instances open",
       "controls": {
         "launcher": "Launcher",
         "workspaces": "Workspaces",

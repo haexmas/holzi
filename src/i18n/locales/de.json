@@ -107,6 +107,11 @@
       "label": "Dock",
       "pin": "An Dock anheften",
       "unpin": "Vom Dock lösen",
+      "newWindow": "Neues Fenster",
+      "closeAll": "Alle schließen",
+      "instances": "Instanzen",
+      "running": "läuft",
+      "count": "{count} Instanzen offen",
       "controls": {
         "launcher": "Launcher",
         "workspaces": "Arbeitsbereiche",
