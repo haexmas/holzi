@@ -20,14 +20,18 @@ const { t } = useI18n()
 const root = ref<HTMLElement | null>(null)
 const proposal = computed(() => props.request.proposal)
 const connections = computed(() => proposal.value.connections ?? [])
-/** For a new storage: an existing connection, or `''` for new credentials. */
-const chosen = ref(connections.value[0]?.id ?? '')
+/** Reka reserves the empty radio value for clearing the group, so use a non-empty sentinel. */
+const NEW_CREDENTIALS_VALUE = '__holzi_new_credentials__'
+/** For a new storage: an existing connection, or the sentinel for new credentials. */
+const chosen = ref(connections.value[0]?.id ?? NEW_CREDENTIALS_VALUE)
 /** For a change: new credentials in holzi's window. */
 const newCredentials = ref(false)
 
 const needsCredentials = computed(() => {
   if (props.request.kind === 'add')
-    return !proposal.value.sameProvider && chosen.value === ''
+    return (
+      !proposal.value.sameProvider && chosen.value === NEW_CREDENTIALS_VALUE
+    )
   return props.request.kind === 'update' && newCredentials.value
 })
 
@@ -35,7 +39,7 @@ function confirm() {
   emit('answer', {
     confirm: true,
     connectionId:
-      props.request.kind === 'add' && chosen.value !== ''
+      props.request.kind === 'add' && chosen.value !== NEW_CREDENTIALS_VALUE
         ? chosen.value
         : undefined,
     newCredentials: needsCredentials.value,
@@ -166,7 +170,7 @@ onMounted(() => {
           </label>
           <label class="flex items-center gap-2">
             <ShadcnRadioGroupItem
-              value=""
+              :value="NEW_CREDENTIALS_VALUE"
               data-testid="storage-dialog-new-credentials"
             />
             {{ t('extensions.storageDialog.newCredentials') }}
