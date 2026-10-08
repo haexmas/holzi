@@ -148,7 +148,8 @@
       "chat": "Chat",
       "settings": "Settings",
       "passwords": "Passwords",
-      "extension": "Extension"
+      "extension": "Extension",
+      "files": "Files"
     },
     "launcher": {
       "lock": "Lock",
@@ -199,6 +200,10 @@
       "trash": "Trash",
       "generator": "Generator",
       "import": "Import"
+    },
+    "files": {
+      "device": "This device",
+      "storage": "Storage"
     }
   },
   "chat": {
@@ -1349,7 +1354,31 @@
     "owners": {
       "storage": "Storage"
     },
-    "menu": "Menu",
+    "menu": {
+      "button": "Actions for {name}",
+      "open": "Open",
+      "edit": "Edit",
+      "newSubfolder": "New subfolder",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "copyUsername": "Copy username",
+      "copyPassword": "Copy password",
+      "cut": "Cut",
+      "copy": "Copy",
+      "paste": "Paste",
+      "delete": "Delete",
+      "restore": "Restore",
+      "deleteForGood": "Delete for good",
+      "newEntry": "New entry",
+      "newFolder": "New folder",
+      "emptyTrash": "Empty trash",
+      "keys": {
+        "mod": "Ctrl",
+        "shift": "Shift",
+        "delete": "Del",
+        "enter": "Enter"
+      }
+    },
     "new": "New",
     "newMenu": {
       "entry": "Key",
@@ -1767,31 +1796,6 @@
       "missingCount": "{count} no longer there | {count} no longer there",
       "movedSome": "{moved}, {missing}"
     },
-    "menu": {
-      "button": "Actions for {name}",
-      "open": "Open",
-      "edit": "Edit",
-      "newSubfolder": "New subfolder",
-      "moveUp": "Move up",
-      "moveDown": "Move down",
-      "copyUsername": "Copy username",
-      "copyPassword": "Copy password",
-      "cut": "Cut",
-      "copy": "Copy",
-      "paste": "Paste",
-      "delete": "Delete",
-      "restore": "Restore",
-      "deleteForGood": "Delete for good",
-      "newEntry": "New entry",
-      "newFolder": "New folder",
-      "emptyTrash": "Empty trash",
-      "keys": {
-        "mod": "Ctrl",
-        "shift": "Shift",
-        "delete": "Del",
-        "enter": "Enter"
-      }
-    },
     "references": {
       "listMark": "Reference",
       "kind": {
@@ -1968,6 +1972,75 @@
       "for": "“{name}” wants to use a storage at {provider}.",
       "onlyHere": "holzi asks for credentials only in this window over the whole app, never in an extension's tab. They go to the password manager; the extension never gets them.",
       "confirm": "Test and save"
+    }
+  },
+  "files": {
+    "back": "Back",
+    "forward": "Forward",
+    "up": "Up one folder",
+    "reload": "Reload",
+    "pathBar": "Path",
+    "menu": "Sort and show",
+    "empty": "This folder is empty.",
+    "symlink": "Link",
+    "holziOwned": "holzi's own data, read-only",
+    "view": {
+      "list": "Show as list",
+      "grid": "Show as grid"
+    },
+    "sort": {
+      "name": "Name",
+      "size": "Size",
+      "modified": "Modified",
+      "type": "Type"
+    },
+    "hidden": {
+      "show": "Show hidden files",
+      "hide": "Hide hidden files"
+    },
+    "sidebar": {
+      "label": "Places and drives",
+      "show": "Show sidebar",
+      "hide": "Hide sidebar",
+      "places": "Places",
+      "drives": "Drives",
+      "free": "{size} free"
+    },
+    "places": {
+      "home": "Home",
+      "pictures": "Pictures",
+      "downloads": "Downloads",
+      "documents": "Documents",
+      "desktop": "Desktop",
+      "videos": "Videos"
+    },
+    "viewer": {
+      "close": "Close",
+      "previous": "Previous file",
+      "next": "Next file",
+      "openSystem": "Open with system app",
+      "truncated": "Only the first 5 MB are shown."
+    },
+    "info": {
+      "name": "Name",
+      "type": "Type",
+      "size": "Size",
+      "modified": "Modified"
+    },
+    "error": {
+      "invalidPath": "This path cannot be opened.",
+      "notFound": "Not found.",
+      "noAccess": "No access: the system denies it.",
+      "binary": "This is not a text file.",
+      "tooLarge": "Too large to show here.",
+      "broken": "This image cannot be shown.",
+      "holziOwned": "holzi's own data cannot be changed.",
+      "blocked": "Not available.",
+      "notGranted": "Not granted.",
+      "unsupported": "Not available here yet.",
+      "exists": "This name exists already.",
+      "intoItself": "A folder cannot go into itself.",
+      "noSpace": "Not enough space."
     }
   }
 }

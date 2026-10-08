@@ -1,5 +1,5 @@
 // Part of `pnpm check:passwords` (spec 036, FR-041, research R14): the cache of the attachment
-// thumbnails (src/lib/passwords/thumbnails.ts). Rendering is injected, so the queue and the LRU are
+// thumbnails (src/lib/images/thumbnailCache.ts). Rendering is injected, so the queue and the LRU are
 // checked without a DOM.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
@@ -8,7 +8,7 @@ import {
   createThumbnailCache,
   THUMBNAIL_CACHE_SIZE,
   ThumbnailNotNow,
-} from '../src/lib/passwords/thumbnails.ts'
+} from '../src/lib/images/thumbnailCache.ts'
 
 /** A render whose calls stay open until the test settles them. */
 function controlledRender() {

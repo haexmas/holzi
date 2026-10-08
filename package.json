@@ -24,6 +24,7 @@
     "check:templates": "node scripts/check-vue-templates.ts",
     "check:android-versions": "node --test scripts/check-android-versions.ts",
     "check:e2e-exclusions": "node --test scripts/check-e2e-exclusions.ts",
+    "check:files": "node --test scripts/check-files-*.ts",
     "check:platform-probe": "node --test scripts/check-platform-probe.ts",
     "check:e2e-lib": "node --test scripts/e2e/lib/*.test.ts scripts/e2e/lib/platform/*.test.ts",
     "test:e2e": "scripts/with-nix-host-bridge.sh node scripts/e2e/cli.ts",

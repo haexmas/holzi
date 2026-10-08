@@ -1,0 +1,69 @@
+// File browser registry (spec 044, data-model.md "Ort eines Tabs", research R13): where a tab
+// stands, as a tab location, so session restore (spec 022) brings it back. Pure — the Vue side
+// attaches the component in `components/wm/appRoutes.ts`.
+import type { SourceRef } from '@bindings/SourceRef'
+
+import type { TabLocation } from '../wm/navigation.ts'
+
+/** The app id in `lib/wm/apps.ts`. */
+export const FILES_APP_ID = 'system.files'
+
+/** Where a tab of the file browser stands. `path` is `null` at the start (the home folder). */
+export type FilesPlace = {
+  source: SourceRef
+  path: string | null
+  /** The file open in the viewer, by name within `path`. */
+  open?: string
+}
+
+/** Route patterns below `/`: the start, the device and a storage. One mounted root component reads
+ * the location, so moving between folders never remounts the browser. */
+export const FILES_ROUTE_CHILDREN = [
+  { path: '' },
+  { path: 'device', titleKey: 'wm.files.device' },
+  { path: 'storage/:id', titleKey: 'wm.files.storage' },
+] as const
+
+/** The query keys a place may carry; anything else is dropped. */
+const KEYS = ['p', 'open'] as const
+
+const OPAQUE_ID = /^[A-Za-z0-9-]{1,64}$/
+
+/** The tab location of `place`. */
+export function filesLocation(place: FilesPlace): TabLocation {
+  const query: Record<string, string> = {}
+  if (place.path !== null) query.p = place.path
+  if (place.open) query.open = place.open
+  const path =
+    place.source.kind === 'storage'
+      ? `/storage/${place.source.storageId}`
+      : '/device'
+  return { path, query }
+}
+
+/** The place of a tab location; `undefined` for a location the browser does not know. */
+export function parseFilesPlace(location: TabLocation): FilesPlace | undefined {
+  const query: Record<string, string> = {}
+  for (const key of KEYS) {
+    const value = location.query[key]
+    if (typeof value === 'string' && value !== '') query[key] = value
+  }
+  const path = query.p ?? null
+  const open = query.open && !/[\\/]/.test(query.open) ? query.open : undefined
+  if (location.path === '/' || location.path === '') {
+    return { source: { kind: 'device' }, path: null }
+  }
+  const withOpen = (place: FilesPlace): FilesPlace =>
+    open ? { ...place, open } : place
+  if (location.path === '/device') {
+    return withOpen({ source: { kind: 'device' }, path })
+  }
+  const storage = /^\/storage\/([^/]+)$/.exec(location.path)
+  if (storage?.[1] && OPAQUE_ID.test(storage[1])) {
+    return withOpen({
+      source: { kind: 'storage', storageId: storage[1] },
+      path,
+    })
+  }
+  return undefined
+}

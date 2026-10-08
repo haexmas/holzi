@@ -1,6 +1,7 @@
 /**
- * The cache of the attachment thumbnails (spec 036, FR-041, research R14): an LRU of rendered
- * thumbnails by key (the checksum of the bytes, so the same file in two entries renders once), with
+ * A cache of rendered thumbnails, shared by the attachments (spec 036, FR-041, research R14) and the
+ * file browser (spec 044, FR-005): an LRU of rendered thumbnails by key (for attachments the
+ * checksum of the bytes, so the same file in two entries renders once), with
  * at most two renders at a time, because each render briefly holds the full bytes of the file. A
  * failed render is remembered as a failure and not tried again, unless it threw `ThumbnailNotNow`
  * (the bytes could not be read this time). Rendering and revoking a URL are injected; this module

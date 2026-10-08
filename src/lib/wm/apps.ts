@@ -62,6 +62,16 @@ export const WM_APPS: readonly AppDefinition[] = [
     multiInstance: true,
     tabTitle: 'app',
   },
+  // Spec 044: the file browser; each tab has its own folder.
+  {
+    id: 'system.files',
+    titleKey: 'wm.apps.files',
+    icon: 'lucide:folder',
+    defaultSize: { width: 960, height: 640 },
+    minSize: { width: 360, height: 360 },
+    multiInstance: true,
+    tabTitle: 'app',
+  },
 ]
 
 /** Apps that no longer exist and where their callers land now (spec 023 research R11): the

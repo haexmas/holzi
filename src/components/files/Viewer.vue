@@ -1,0 +1,234 @@
+<script setup lang="ts">
+/**
+ * The viewer over the open folder (spec 044 FR-009, FR-011, FR-014, FR-015): text and images
+ * show here; video, audio and PDF show the info view until the media server plays them (T014 ff.).
+ * Arrows and the buttons move to the previous or next file of the same kind; Escape closes.
+ */
+import type { Entry } from '@bindings/Entry'
+import type { SourceRef } from '@bindings/SourceRef'
+import type { TextContent } from '@bindings/TextContent'
+import { asFilesError } from '~/composables/useFiles'
+import { formatFileSize } from '~/lib/passwords/format'
+import { viewerKind } from '~/lib/files/viewerKind'
+
+const props = defineProps<{
+  source: SourceRef
+  entry: Pick<Entry, 'name' | 'path'> & Partial<Entry>
+  siblings: Entry[]
+}>()
+
+const emit = defineEmits<{ close: []; show: [entry: Entry] }>()
+
+const { t, d } = useI18n()
+const { readTextAsync, readImageAsync, openSystemAsync } = useFiles()
+
+const kind = computed(() => viewerKind(props.entry.name))
+/** What this version shows itself; the rest goes to the info view. */
+const shown = computed(() =>
+  kind.value === 'text' || kind.value === 'image' ? kind.value : 'info',
+)
+
+const text = ref<TextContent | null>(null)
+const imageUrl = ref<string | null>(null)
+const failed = ref<string | null>(null)
+const zoomed = ref(false)
+
+function dropImage() {
+  if (imageUrl.value) URL.revokeObjectURL(imageUrl.value)
+  imageUrl.value = null
+}
+
+watch(
+  () => props.entry.path,
+  async (path) => {
+    text.value = null
+    dropImage()
+    failed.value = null
+    zoomed.value = false
+    try {
+      if (shown.value === 'text') {
+        const content = await readTextAsync(props.source, path)
+        if (path === props.entry.path) text.value = content
+      } else if (shown.value === 'image') {
+        const bytes = await readImageAsync(props.source, path)
+        if (path === props.entry.path) {
+          imageUrl.value = URL.createObjectURL(new Blob([bytes]))
+        }
+      }
+    } catch (error) {
+      if (path !== props.entry.path) return
+      const code = asFilesError(error)?.code
+      failed.value = code ? t(`files.error.${code}`) : String(error)
+    }
+  },
+  { immediate: true },
+)
+onBeforeUnmount(dropImage)
+
+/** The files of the same kind in folder order, for previous and next. */
+const sameKind = computed(() =>
+  props.siblings.filter(
+    (sibling) =>
+      sibling.kind === 'file' && viewerKind(sibling.name) === kind.value,
+  ),
+)
+const position = computed(() =>
+  sameKind.value.findIndex((sibling) => sibling.path === props.entry.path),
+)
+
+function step(by: number) {
+  const list = sameKind.value
+  if (list.length < 2 || position.value < 0) return
+  const next = list[(position.value + by + list.length) % list.length]
+  if (next) emit('show', next)
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') emit('close')
+  else if (event.key === 'ArrowLeft') step(-1)
+  else if (event.key === 'ArrowRight') step(1)
+}
+
+async function openSystem() {
+  try {
+    await openSystemAsync(props.source, props.entry.path)
+  } catch (error) {
+    const code = asFilesError(error)?.code
+    failed.value = code ? t(`files.error.${code}`) : String(error)
+  }
+}
+
+const panel = useTemplateRef<HTMLElement>('panel')
+onMounted(() => panel.value?.focus())
+</script>
+
+<template>
+  <div
+    ref="panel"
+    class="absolute inset-0 z-30 flex flex-col bg-background outline-none"
+    tabindex="-1"
+    role="dialog"
+    :aria-label="entry.name"
+    data-testid="files-viewer"
+    @keydown="onKeydown"
+  >
+    <div class="flex h-12 shrink-0 items-center gap-1 border-b px-2">
+      <UiButton
+        variant="ghost"
+        size="icon"
+        :aria-label="t('files.viewer.close')"
+        :tooltip="t('files.viewer.close')"
+        data-testid="files-viewer-close"
+        @click="emit('close')"
+      >
+        <Icon name="lucide:x" class="size-4" />
+      </UiButton>
+      <span class="min-w-0 flex-1 truncate text-sm font-medium">{{
+        entry.name
+      }}</span>
+      <template v-if="sameKind.length > 1">
+        <UiButton
+          variant="ghost"
+          size="icon"
+          :aria-label="t('files.viewer.previous')"
+          :tooltip="t('files.viewer.previous')"
+          data-testid="files-viewer-previous"
+          @click="step(-1)"
+        >
+          <Icon name="lucide:chevron-left" class="size-4" />
+        </UiButton>
+        <UiButton
+          variant="ghost"
+          size="icon"
+          :aria-label="t('files.viewer.next')"
+          :tooltip="t('files.viewer.next')"
+          data-testid="files-viewer-next"
+          @click="step(1)"
+        >
+          <Icon name="lucide:chevron-right" class="size-4" />
+        </UiButton>
+      </template>
+      <UiButton
+        variant="ghost"
+        size="icon"
+        :aria-label="t('files.viewer.openSystem')"
+        :tooltip="t('files.viewer.openSystem')"
+        data-testid="files-viewer-open-system"
+        @click="openSystem"
+      >
+        <Icon name="lucide:external-link" class="size-4" />
+      </UiButton>
+    </div>
+
+    <div class="relative min-h-0 flex-1 overflow-auto">
+      <p
+        v-if="failed"
+        class="p-6 text-center text-sm text-muted-foreground"
+        data-testid="files-viewer-failed"
+      >
+        {{ failed }}
+      </p>
+      <div v-else-if="shown === 'text' && text" data-testid="files-viewer-text">
+        <p
+          v-if="text.truncated"
+          class="border-b bg-muted px-4 py-2 text-xs text-muted-foreground"
+        >
+          {{ t('files.viewer.truncated') }}
+        </p>
+        <pre class="p-4 font-mono text-sm break-words whitespace-pre-wrap">{{
+          text.text
+        }}</pre>
+      </div>
+      <div
+        v-else-if="shown === 'image' && imageUrl"
+        class="flex min-h-full items-center justify-center p-2"
+        data-testid="files-viewer-image"
+      >
+        <img
+          :src="imageUrl"
+          :alt="entry.name"
+          class="cursor-zoom-in"
+          :class="
+            zoomed
+              ? 'max-w-none cursor-zoom-out'
+              : 'max-h-full max-w-full object-contain'
+          "
+          @click="zoomed = !zoomed"
+        />
+      </div>
+      <dl
+        v-else-if="shown === 'info'"
+        class="mx-auto grid max-w-md grid-cols-[auto_1fr] gap-x-4 gap-y-2 p-6 text-sm"
+        data-testid="files-viewer-info"
+      >
+        <dt class="text-muted-foreground">{{ t('files.info.name') }}</dt>
+        <dd class="break-all">{{ entry.name }}</dd>
+        <template v-if="entry.mime">
+          <dt class="text-muted-foreground">{{ t('files.info.type') }}</dt>
+          <dd>{{ entry.mime }}</dd>
+        </template>
+        <template v-if="entry.size !== undefined && entry.size !== null">
+          <dt class="text-muted-foreground">{{ t('files.info.size') }}</dt>
+          <dd>{{ formatFileSize(entry.size) }}</dd>
+        </template>
+        <template v-if="entry.modifiedMs">
+          <dt class="text-muted-foreground">{{ t('files.info.modified') }}</dt>
+          <dd>
+            {{
+              d(new Date(entry.modifiedMs), {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              })
+            }}
+          </dd>
+        </template>
+        <dd class="col-span-2 pt-4">
+          <UiButton data-testid="files-info-open-system" @click="openSystem">
+            <Icon name="lucide:external-link" class="size-4" />
+            {{ t('files.viewer.openSystem') }}
+          </UiButton>
+        </dd>
+      </dl>
+    </div>
+  </div>
+</template>

@@ -8,7 +8,7 @@
  */
 import type { AttachmentView } from '@bindings/AttachmentView'
 import { fileKind, formatFileSize, type FileKind } from '~/lib/passwords/format'
-import type { Thumbnail } from '~/lib/passwords/thumbnails'
+import type { Thumbnail } from '~/lib/images/thumbnailCache'
 
 const props = defineProps<{
   attachment: AttachmentView

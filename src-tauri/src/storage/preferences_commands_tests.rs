@@ -62,3 +62,26 @@ fn the_background_takes_only_a_webp_data_url_within_the_limit() {
         assert!(format!("{err:?}").contains("InvalidInput"));
     }
 }
+
+#[test]
+fn file_browser_preferences_take_only_their_choices() {
+    for (key, value) in [
+        ("files.view", "list"),
+        ("files.view", "grid"),
+        ("files.hidden", "true"),
+        ("files.hidden", "false"),
+        ("files.sort", "name:asc"),
+        ("files.sort", "modified:desc"),
+    ] {
+        validate_value(key, value).expect("a choice");
+    }
+    for (key, value) in [
+        ("files.view", "tiles"),
+        ("files.hidden", "yes"),
+        ("files.sort", "name"),
+        ("files.sort", "colour:asc"),
+        ("files.sort", "size:up"),
+    ] {
+        validate_value(key, value).expect_err("not a choice");
+    }
+}
