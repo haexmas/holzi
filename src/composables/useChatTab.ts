@@ -1,11 +1,6 @@
 import type { Ref } from 'vue'
-import type {
-  ChoiceAnswer,
-  PendingPrompt,
-  Message,
-  Thread,
-  useChat,
-} from '~/composables/useChat'
+import type { Message, Thread, useChat } from '~/composables/useChat'
+import type { ChoiceAnswer, PendingPrompt } from '~/lib/chat/prompts'
 import { respondChoiceAsync } from '~/composables/useChatChoices'
 import { useChatNavigation } from '~/composables/useChatNavigation'
 import type { WmTabApi } from '~/composables/useWmTab'

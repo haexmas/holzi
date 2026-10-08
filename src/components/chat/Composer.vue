@@ -10,7 +10,7 @@
  * already uses) rather than threading its fields through as props.
  */
 import type { ComposerAttachment } from '~/components/chat/ComposerAttachments.vue'
-import type { ChoiceAnswer, PendingPrompt } from '~/composables/useChat'
+import type { ChoiceAnswer, PendingPrompt } from '~/lib/chat/prompts'
 
 const props = defineProps<{
   composerInputDisabled: boolean

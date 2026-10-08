@@ -1,10 +1,6 @@
 import { ref, type Ref } from 'vue'
-import type {
-  Message,
-  Thread,
-  useChat,
-  PendingPrompt,
-} from '~/composables/useChat'
+import type { Message, Thread, useChat } from '~/composables/useChat'
+import type { PendingPrompt } from '~/lib/chat/prompts'
 import type { useChatTranscript } from '~/composables/useChatTranscript'
 
 type HistoryDurationUnit = 'min' | 'h' | 'd'

@@ -1,12 +1,8 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
-import type {
-  ChoiceAnswer,
-  ChoiceRequestEvent,
-  ToolPermissionRequestEvent,
-  useChat,
-} from '~/composables/useChat'
+import type { ToolPermissionRequestEvent, useChat } from '~/composables/useChat'
+import type { ChoiceAnswer, ChoiceRequestEvent } from '~/lib/chat/prompts'
 import type { WmTabApi } from '~/composables/useWmTab'
 
 /** Listens for the agent's questions (`chat-choice-request`, spec 046). */

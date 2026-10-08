@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PendingPrompt } from '~/composables/useChat'
+import type { PendingPrompt } from '~/lib/chat/prompts'
 import { describeToolCall, type ResolveTarget } from '~/lib/actions/agentTools'
 import { ALL_ACTIONS } from '~/lib/actions/catalog'
 import { useWindowManagerStore } from '~/stores/windowManager'

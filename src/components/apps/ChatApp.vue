@@ -20,11 +20,8 @@ import {
   useTemplateRef,
 } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import type {
-  Message,
-  SendMessageArgs,
-  PendingPrompt,
-} from '~/composables/useChat'
+import type { Message, SendMessageArgs } from '~/composables/useChat'
+import type { PendingPrompt } from '~/lib/chat/prompts'
 import { promptSubscriptions } from '~/composables/useChatChoices'
 
 const instancesStore = useInstancesStore()

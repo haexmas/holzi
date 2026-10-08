@@ -5,7 +5,7 @@
  * declined answer), unlike the approval dialog, where closing stops the turn. A candidate that
  * cannot be picked right now is shown disabled with its reason.
  */
-import type { ChoiceAnswer, PendingChoice } from '~/composables/useChat'
+import type { ChoiceAnswer, PendingChoice } from '~/lib/chat/prompts'
 
 const props = defineProps<{
   prompt: PendingChoice

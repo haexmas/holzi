@@ -5,8 +5,8 @@ import type {
   Message,
   SendMessageArgs,
   useChat,
-  PendingPrompt,
 } from '~/composables/useChat'
+import type { PendingPrompt } from '~/lib/chat/prompts'
 import type { useChatTranscript } from '~/composables/useChatTranscript'
 import type { ComposerAttachment } from '~/components/chat/ComposerAttachments.vue'
 

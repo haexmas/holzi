@@ -8,11 +8,10 @@ import type {
   ToolCallEvent,
   ToolPermissionRequestEvent,
   ToolResultEvent,
-  ChoiceRequestEvent,
   TurnCompleteEvent,
   useChat,
-  PendingPrompt,
 } from '~/composables/useChat'
+import type { ChoiceRequestEvent, PendingPrompt } from '~/lib/chat/prompts'
 
 type PendingStreamEvents = {
   tokens: string
