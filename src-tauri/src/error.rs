@@ -308,6 +308,20 @@ pub enum HolziError {
     StorageCredentialsUnavailable {
         state: crate::remote_storage::CredentialsState,
     },
+
+    // --- Chosen files and vault files (spec 043, contracts picked-file.md, import-instance.md) ---
+    /// The chosen file gives nothing back: gone, the permission was taken back, or a cloud file
+    /// is offline.
+    #[error("The chosen file cannot be read")]
+    Unreadable,
+
+    /// The device ran out of space while copying.
+    #[error("Not enough free space")]
+    NotEnoughSpace,
+
+    /// A vault file whose vault identity another vault of this installation already has.
+    #[error("This vault is already on this device as '{name}'")]
+    AlreadyOnThisDevice { name: String },
 }
 
 pub type Result<T> = std::result::Result<T, HolziError>;

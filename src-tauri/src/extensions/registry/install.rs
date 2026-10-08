@@ -6,7 +6,7 @@
 //! (contracts/permissions.md §Installation).
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::io::Read;
 
 use haex_crdt::rusqlite::params;
 use haex_crdt::CrdtTransaction;
@@ -22,6 +22,7 @@ use crate::extensions::ids::{extension_id, TablePrefix};
 use crate::extensions::permissions::manifest_map::DeclaredPermission;
 use crate::extensions::permissions::store::{self as permission_store, NewPermission};
 use crate::extensions::permissions::PermissionStatus;
+use crate::files::picked::{self, Opener, PickedFile};
 use crate::storage::query::Query;
 use crate::vault_gate::VaultDb;
 
@@ -155,21 +156,35 @@ pub fn publisher_fingerprint(public_key: &str) -> String {
     )
 }
 
-/// Reads a `.xt` file: its size is checked on the metadata before a byte is read. Blocking.
-pub fn read_bundle_file(path: &Path) -> Result<Vec<u8>> {
+/// Reads a chosen `.xt` file: where its size is known it is checked before a byte is read,
+/// otherwise reading stops one byte past the limit. Blocking.
+pub fn read_bundle_file(opener: &impl Opener, file: &PickedFile) -> Result<Vec<u8>> {
     let unreadable = || HolziError::ExtensionInstall {
         reason: "unreadable".into(),
     };
-    let metadata = std::fs::metadata(path).map_err(|_| unreadable())?;
-    if !metadata.is_file() {
+    let too_large = || HolziError::ExtensionInstall {
+        reason: haex_bundle::ErrorKind::ArchiveTooLarge.as_str().into(),
+    };
+    let source = picked::open_read(opener, file).map_err(|error| match error {
+        HolziError::InvalidInput { .. } => error,
+        _ => unreadable(),
+    })?;
+    let metadata = source.metadata().map_err(|_| unreadable())?;
+    if metadata.is_dir() {
         return Err(unreadable());
     }
-    if metadata.len() > limits::ARCHIVE_BYTES {
-        return Err(HolziError::ExtensionInstall {
-            reason: haex_bundle::ErrorKind::ArchiveTooLarge.as_str().into(),
-        });
+    if metadata.is_file() && metadata.len() > limits::ARCHIVE_BYTES {
+        return Err(too_large());
     }
-    std::fs::read(path).map_err(|_| unreadable())
+    let mut bytes = Vec::new();
+    source
+        .take(limits::ARCHIVE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| unreadable())?;
+    if bytes.len() as u64 > limits::ARCHIVE_BYTES {
+        return Err(too_large());
+    }
+    Ok(bytes)
 }
 
 fn key_of(kind: &str, action: &str, target: &str) -> (String, String, String) {

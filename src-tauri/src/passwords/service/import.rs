@@ -2,7 +2,7 @@
 //! imported icon. For the user alone (rule Z11). The file is read and parsed on blocking threads
 //! (a KeePass key derivation can take seconds); the parse is a pure function of the bytes.
 
-use std::path::{Path, PathBuf};
+use std::io::Read;
 use std::sync::atomic::AtomicBool;
 
 use haex_crdt::rusqlite::params;
@@ -10,6 +10,7 @@ use zeroize::Zeroizing;
 
 use super::{require_user, PasswordsService};
 use crate::error::{HolziError, Result};
+use crate::files::picked::{self, Opener, PickedFile};
 use crate::passwords::access::Caller;
 use crate::passwords::import::apply::{self, Control, OnDuplicate, Progress};
 use crate::passwords::import::haex_vault::{self, WARNING_CLOSE_FIRST, WARNING_HAEX_PASS_TABLES};
@@ -24,13 +25,13 @@ fn failed(reason: &str) -> HolziError {
     }
 }
 
-/// What the window hands over for a run: the format, the file, and a KeePass password and key file
-/// path. The secrets are zeroed when dropped.
+/// What the window hands over for a run: the format, the chosen file, and a KeePass password and
+/// key file. The secrets are zeroed when dropped.
 pub struct ImportRequest {
     pub source: ImportSource,
-    pub path: String,
+    pub file: PickedFile,
     pub password: Option<Zeroizing<String>>,
-    pub key_file_path: Option<String>,
+    pub key_file: Option<PickedFile>,
 }
 
 /// A file read: its model and what the preview says about the file besides the counts.
@@ -39,16 +40,40 @@ struct ReadFile {
     warnings: Vec<String>,
 }
 
+/// Reads all of a chosen file; an unreadable one is `unreadable`.
+fn read_all(opener: &impl Opener, file: &PickedFile) -> Result<Zeroizing<Vec<u8>>> {
+    let mut bytes = Zeroizing::new(Vec::new());
+    picked::open_read(opener, file)
+        .map_err(|_| failed("unreadable"))?
+        .read_to_end(&mut bytes)
+        .map_err(|_| failed("unreadable"))?;
+    Ok(bytes)
+}
+
 /// Reads the file (and key file) and parses it, off the async threads. A haex-vault file is a
-/// database and is read from its path (spec 037).
-async fn read_model(request: ImportRequest) -> Result<ReadFile> {
+/// database and is read from a path (spec 037): a chosen path as it is, together with its `-wal`;
+/// a provider address (Android, spec 043) is copied into the app's temporary folder first, and a
+/// `-wal` beside it cannot be reached (contract `picked-file.md`).
+async fn read_model(
+    opener: impl Opener + Send + 'static,
+    request: ImportRequest,
+) -> Result<ReadFile> {
     tauri::async_runtime::spawn_blocking(move || {
         if request.source == ImportSource::HaexVault {
             let credentials = Credentials {
                 password: request.password,
                 key_file: None,
             };
-            let read = haex_vault::read(Path::new(&request.path), &credentials)?;
+            let read = match picked::resolve(&opener, &request.file)? {
+                tauri_plugin_fs::FilePath::Path(path) => haex_vault::read(&path, &credentials)?,
+                tauri_plugin_fs::FilePath::Url(_) => {
+                    let dir = tempfile::tempdir().map_err(|_| failed("unreadable"))?;
+                    let copy = dir.path().join("haex-vault.db");
+                    picked::copy_into(&opener, &request.file, &copy)
+                        .map_err(|_| failed("unreadable"))?;
+                    haex_vault::read(&copy, &credentials)?
+                }
+            };
             let mut warnings = vec![WARNING_CLOSE_FIRST.to_string()];
             if read.has_haex_pass_tables {
                 warnings.push(WARNING_HAEX_PASS_TABLES.to_string());
@@ -58,13 +83,9 @@ async fn read_model(request: ImportRequest) -> Result<ReadFile> {
                 warnings,
             });
         }
-        let bytes = Zeroizing::new(
-            std::fs::read(PathBuf::from(&request.path)).map_err(|_| failed("unreadable"))?,
-        );
-        let key_file = match &request.key_file_path {
-            Some(path) => Some(Zeroizing::new(
-                std::fs::read(PathBuf::from(path)).map_err(|_| failed("unreadable"))?,
-            )),
+        let bytes = read_all(&opener, &request.file)?;
+        let key_file = match &request.key_file {
+            Some(file) => Some(read_all(&opener, file)?),
             None => None,
         };
         let credentials = Credentials {
@@ -111,10 +132,11 @@ impl PasswordsService {
     pub async fn import_preview(
         &self,
         caller: &Caller,
+        opener: impl Opener + Send + 'static,
         request: ImportRequest,
     ) -> Result<ImportPreview> {
         require_user(caller)?;
-        let read = read_model(request).await?;
+        let read = read_model(opener, request).await?;
         let existing = self.existing_keys().await?;
         let mut preview = import::preview(&read.model, &existing);
         preview.warnings.splice(0..0, read.warnings);
@@ -125,13 +147,14 @@ impl PasswordsService {
     pub async fn import_run(
         &self,
         caller: &Caller,
+        opener: impl Opener + Send + 'static,
         request: ImportRequest,
         on_duplicate: OnDuplicate,
         cancel: &AtomicBool,
         progress: &(dyn Fn(Progress) + Send + Sync),
     ) -> Result<ImportReport> {
         require_user(caller)?;
-        let model = read_model(request).await?.model;
+        let model = read_model(opener, request).await?.model;
         let existing = self.existing_keys().await?;
         let control = Control {
             cancel,

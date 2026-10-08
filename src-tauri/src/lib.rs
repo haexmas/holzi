@@ -6,6 +6,7 @@ pub mod chat;
 pub mod device;
 pub mod error;
 pub mod extensions;
+pub mod files;
 pub mod hardware;
 pub mod identity;
 pub mod instances;
@@ -296,6 +297,7 @@ pub fn run() {
         .invoke_handler(gate.wrap(tauri::generate_handler![
             active_instance_name,
             platform::commands::platform_capabilities,
+            files::commands::picked_file_name,
             list_instances,
             create_instance,
             open_instance,

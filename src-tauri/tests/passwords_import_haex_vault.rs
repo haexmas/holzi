@@ -6,6 +6,11 @@
 // These tests read raw vault state (counts, columns) that the CRDT write path does not expose.
 #![allow(clippy::disallowed_methods)]
 
+#[path = "common/chosen_files.rs"]
+mod chosen_files;
+
+use chosen_files::{chosen, Paths};
+
 #[path = "common/haex_vault_fixture.rs"]
 mod haex_vault_fixture;
 #[path = "common/kdbx_fixture.rs"]
@@ -96,9 +101,9 @@ fn counts(db: &Database) -> BTreeMap<String, i64> {
 fn request(path: &Path, password: &str) -> ImportRequest {
     ImportRequest {
         source: ImportSource::HaexVault,
-        path: path.to_string_lossy().into_owned(),
+        file: chosen(path),
         password: Some(Zeroizing::new(password.to_string())),
-        key_file_path: None,
+        key_file: None,
     }
 }
 
@@ -108,8 +113,7 @@ async fn run(
     on_duplicate: OnDuplicate,
 ) -> Result<ImportReport, HolziError> {
     f.service
-        .import_run(
-            &Caller::User,
+        .import_run(&Caller::User, Paths,
             request,
             on_duplicate,
             &AtomicBool::new(false),
@@ -362,7 +366,7 @@ async fn the_import_writes_everything_the_contract_names() {
     let vault = build(dir.path());
     let preview = f
         .service
-        .import_preview(&Caller::User, request(&vault.path, PASSWORD))
+        .import_preview(&Caller::User, Paths, request(&vault.path, PASSWORD))
         .await
         .expect("preview");
     assert_eq!(
@@ -586,15 +590,14 @@ async fn the_source_and_its_wal_stay_untouched_and_the_wal_arrives() {
     );
 
     f.service
-        .import_preview(&Caller::User, request(&vault.path, PASSWORD))
+        .import_preview(&Caller::User, Paths, request(&vault.path, PASSWORD))
         .await
         .expect("preview");
     reason(run(&f, request(&vault.path, "wrong"), OnDuplicate::Skip).await);
     let cancel = AtomicBool::new(true);
     let _ = f
         .service
-        .import_run(
-            &Caller::User,
+        .import_run(&Caller::User, Paths,
             request(&vault.path, PASSWORD),
             OnDuplicate::Skip,
             &cancel,
@@ -652,8 +655,7 @@ async fn a_cancel_after_the_extras_leaves_nothing() {
     };
     let result = f
         .service
-        .import_run(
-            &Caller::User,
+        .import_run(&Caller::User, Paths,
             request(&vault.path, PASSWORD),
             OnDuplicate::Create,
             &cancel,
@@ -681,7 +683,7 @@ async fn a_second_run_adds_no_folder_tag_passkey_or_preset() {
     let before = counts(&f.db);
     let preview = f
         .service
-        .import_preview(&Caller::User, request(&vault.path, PASSWORD))
+        .import_preview(&Caller::User, Paths, request(&vault.path, PASSWORD))
         .await
         .expect("preview");
     assert_eq!(
