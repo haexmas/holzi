@@ -330,6 +330,12 @@ Tauri-Plugin-Basis. Benachrichtigungen: Der Fork von `tauri-plugin-notification`
 Abgelehnt: die Nachricht erscheint in holzi (vorhandene Anzeige aus Spec 017), und die
 Einstellungen nennen den Weg zur Android-Einstellung.
 
+**Umsetzung (Stufe 3)**: Eine Anzeige von Erweiterungs-Benachrichtigungen in holzi gab es aus
+Spec 017 nicht. Bei abgelehnter Berechtigung zeigt holzi die Nachricht jetzt als Meldung im
+Fenster (Titel, Text, „Öffnen“ bringt den Tab der Erweiterung nach vorn). Gefragt wird beim ersten
+Senden einer Erweiterung, nicht beim Start. Der Hinweis auf die Android-Einstellung in holzis
+Einstellungen fehlt noch.
+
 ## R13 — Entwicklungsmodus auf dem Telefon (FR-034)
 
 **Entscheidung**: `nuxt.config.ts` liest `TAURI_DEV_HOST` (heute fälschlich `TAURI_ENV_HOST`,
