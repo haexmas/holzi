@@ -324,7 +324,9 @@ jobs:
         run: corepack pnpm install --frozen-lockfile --ignore-scripts
 
       # Same list the Rust job installs, plus the WebKit WebDriver and the
-      # virtual screen the suite needs (preflight.ts's REQUIRED_TOOLS).
+      # virtual screen the suite needs (preflight.ts's REQUIRED_TOOLS), and
+      # the GStreamer plugins WebKitGTK plays MP4 (H.264/AAC) and MP3 with
+      # (spec 044 files-media).
       - name: Install Linux build dependencies
         run: |
           # The hosted runner's Azure mirror occasionally stalls for minutes. Use
@@ -353,7 +355,10 @@ jobs:
             libasound2-dev \
             libclang-dev \
             webkit2gtk-driver \
-            xvfb
+            xvfb \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-libav
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
