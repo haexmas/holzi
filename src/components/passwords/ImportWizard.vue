@@ -268,18 +268,20 @@ onBeforeUnmount(() => {
 
       <!-- 1. Source, file and credentials -->
       <template v-if="step === 'choose'">
-        <SettingsGroup :label="t('passwords.import.source')">
+        <SettingsGroup
+          radio
+          :label="t('passwords.import.source')"
+          :model-value="source"
+          @update:model-value="chooseSource($event as ImportSource)"
+        >
           <SettingsOptionRow
             v-for="option in SOURCES"
             :key="option.id"
             type="radio"
-            name="passwords-import-source"
             :value="option.id"
-            :checked="source === option.id"
             :title="t(`passwords.import.sources.${option.id}`)"
             :description="t(`passwords.import.hints.${option.id}`)"
             :data-testid="`passwords-import-source-${option.id}`"
-            @change="chooseSource(option.id)"
           />
         </SettingsGroup>
         <SettingsGroup :label="t('passwords.import.file')">
@@ -375,25 +377,22 @@ onBeforeUnmount(() => {
         </SettingsGroup>
         <SettingsGroup
           v-if="preview.duplicates > 0"
+          radio
+          :model-value="onDuplicate"
+          @update:model-value="onDuplicate = $event as OnDuplicate"
           :label="t('passwords.import.onDuplicate')"
         >
           <SettingsOptionRow
             type="radio"
-            name="passwords-import-duplicate"
             value="skip"
-            :checked="onDuplicate === 'skip'"
             :title="t('passwords.import.skip')"
             :description="t('passwords.import.skipHint')"
-            @change="onDuplicate = 'skip'"
           />
           <SettingsOptionRow
             type="radio"
-            name="passwords-import-duplicate"
             value="create"
-            :checked="onDuplicate === 'create'"
             :title="t('passwords.import.create')"
             :description="t('passwords.import.createHint')"
-            @change="onDuplicate = 'create'"
           />
         </SettingsGroup>
         <div class="flex justify-end gap-2">

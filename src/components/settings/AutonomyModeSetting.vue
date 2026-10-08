@@ -93,19 +93,20 @@ onVaultTablesChanged(['preferences'], () => {
       v-if="!loading"
       :aria-label="t('settings.locations.agents.autonomy.title')"
     >
-      <SettingsGroup>
+      <SettingsGroup
+        radio
+        :model-value="selected"
+        :disabled="busy"
+        @update:model-value="onChoose($event as AutonomyMode)"
+      >
         <SettingsOptionRow
           v-for="mode in MODES"
           :key="mode"
           type="radio"
-          name="autonomy-mode"
           :value="mode"
-          :checked="selected === mode"
-          :disabled="busy"
           :title="t(`chat.autonomy.${mode}`)"
           :description="t(`settings.autonomyMode.${mode}Description`)"
           :data-testid="`settings-autonomy-${mode}`"
-          @change="onChoose(mode)"
         />
       </SettingsGroup>
     </fieldset>

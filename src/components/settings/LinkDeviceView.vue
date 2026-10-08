@@ -223,27 +223,24 @@ function onAgain() {
 
     <template v-else-if="phase === 'confirm'">
       <SettingsGroup
+        radio
         :label="t('settings.link.confirmTitle', { name: newDeviceName })"
+        :model-value="asMain ? 'main' : 'linked'"
+        @update:model-value="asMain = $event === 'main'"
       >
         <SettingsOptionRow
           type="radio"
-          name="link-role"
           value="linked"
-          :checked="!asMain"
           :title="t('settings.link.roleLinked')"
           :description="t('settings.link.roleLinkedDescription')"
           data-testid="link-role-linked"
-          @change="asMain = false"
         />
         <SettingsOptionRow
           type="radio"
-          name="link-role"
           value="main"
-          :checked="asMain"
           :title="t('settings.link.roleMain')"
           :description="t('settings.link.roleMainDescription')"
           data-testid="link-role-main"
-          @change="asMain = true"
         />
       </SettingsGroup>
       <p class="px-1 text-sm text-destructive" role="note">

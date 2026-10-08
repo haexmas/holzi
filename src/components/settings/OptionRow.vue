@@ -1,18 +1,17 @@
 <script setup lang="ts">
 /**
  * A choice inside a `SettingsGroup` (spec 023-settings-app, FR-002, FR-021): the whole row is the
- * label of its radio button or checkbox (haex-ui's `ShadcnCheckbox`; haex-ui has no radio group,
- * the native radio button follows the color scheme through `color-scheme`), so a click anywhere
- * on it chooses. Saving on the change is the caller's (`change`). Attributes such as
+ * label of its radio button or checkbox (haex-ui's `ShadcnRadioGroupItem` / `ShadcnCheckbox`), so
+ * a click anywhere on it chooses. A radio row needs a `SettingsGroup radio`, which owns the chosen
+ * `value`; a checkbox row reports `change`, saving is the caller's. Attributes such as
  * `data-testid` go to the control.
  */
 defineOptions({ inheritAttrs: false })
 
 defineProps<{
   type: 'radio' | 'checkbox'
-  name?: string
-  value?: string
-  checked: boolean
+  value?: string | number
+  checked?: boolean
   disabled?: boolean
   title: string
   description?: string
@@ -35,16 +34,11 @@ const emit = defineEmits<{
         v-bind="$attrs"
         @update:model-value="emit('change', $event === true)"
       />
-      <input
+      <ShadcnRadioGroupItem
         v-else
-        type="radio"
-        :name="name"
-        :value="value"
-        :checked="checked"
+        :value="value ?? ''"
         :disabled="disabled"
-        class="size-4 shrink-0 accent-primary"
         v-bind="$attrs"
-        @change="emit('change', ($event.target as HTMLInputElement).checked)"
       />
       <span class="flex min-w-0 flex-1 flex-col">
         <span>{{ title }}</span>

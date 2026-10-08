@@ -63,6 +63,12 @@ async function loadDetailsAsync() {
   }
 }
 
+/** The radio group reports the chosen file by its name. */
+function selectFileByName(filename: unknown) {
+  const file = visibleFiles.value.find((f) => f.filename === filename)
+  if (file) void selectFileAsync(file)
+}
+
 async function selectFileAsync(file: HuggingFaceFileCandidate) {
   selectedFile.value = file
   preview.value = null
@@ -187,17 +193,19 @@ onMounted(loadDetailsAsync)
       {{ t('models.search.filters.empty') }}
     </p>
 
-    <SettingsGroup v-if="details && visibleFiles.length > 0">
+    <SettingsGroup
+      v-if="details && visibleFiles.length > 0"
+      radio
+      :model-value="selectedFile?.filename ?? null"
+      @update:model-value="selectFileByName"
+    >
       <SettingsOptionRow
         v-for="file in visibleFiles"
         :key="file.filename"
         type="radio"
-        name="hf-file"
         :value="file.filename"
-        :checked="selectedFile?.filename === file.filename"
         :title="file.filename"
         :description="fileSummary(file)"
-        @change="selectFileAsync(file)"
       />
     </SettingsGroup>
 

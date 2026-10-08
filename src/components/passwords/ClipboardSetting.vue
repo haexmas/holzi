@@ -61,17 +61,19 @@ onVaultTablesChanged(['preferences'], () => {
 <template>
   <UiDrawerModal v-model:open="open" :title="t('passwords.settings.title')">
     <template #content>
-      <SettingsGroup :label="t('passwords.settings.clipboard.title')">
+      <SettingsGroup
+        radio
+        :label="t('passwords.settings.clipboard.title')"
+        :model-value="seconds"
+        @update:model-value="chooseAsync(Number($event))"
+      >
         <SettingsOptionRow
           v-for="value in CHOICES"
           :key="value"
           type="radio"
-          name="passwords-clipboard-clear"
-          :value="String(value)"
-          :checked="seconds === value"
+          :value="value"
           :title="label(value)"
           :data-testid="`passwords-clipboard-${value}`"
-          @change="chooseAsync(value)"
         />
       </SettingsGroup>
       <p class="mt-2 px-1 text-sm text-muted-foreground">

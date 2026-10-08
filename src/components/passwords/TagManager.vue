@@ -7,6 +7,7 @@
 import { toast } from 'vue-sonner'
 import type { TagRow } from '@bindings/TagRow'
 import { ENTRY_COLORS } from '~/lib/passwords/icons'
+import { clearOnReselect } from '~/lib/ui/radio'
 
 const open = defineModel<boolean>('open', { required: true })
 
@@ -126,26 +127,28 @@ async function confirmDeleteAsync() {
               </UiButton>
             </template>
           </div>
-          <div
+          <ShadcnRadioGroup
             class="flex flex-wrap gap-1.5"
-            role="radiogroup"
+            :model-value="tag.color"
             :aria-label="t('passwords.fields.color')"
+            @update:model-value="colorAsync(tag, String($event))"
           >
-            <button
+            <UiRadioGroupTile
               v-for="color in ENTRY_COLORS"
               :key="color"
-              type="button"
-              role="radio"
-              :aria-checked="tag.color === color"
+              :value="color"
               :aria-label="color"
-              class="size-5 rounded-full border-2"
-              :class="
-                tag.color === color ? 'border-foreground' : 'border-transparent'
-              "
+              class="size-5 rounded-full border-2 border-transparent data-[state=checked]:border-foreground"
               :style="{ backgroundColor: color }"
-              @click="colorAsync(tag, color)"
+              @select="
+                clearOnReselect(
+                  $event,
+                  tag.color === color,
+                  () => void colorAsync(tag, null),
+                )
+              "
             />
-          </div>
+          </ShadcnRadioGroup>
           <p
             v-if="editing === tag.id && error"
             class="text-sm text-destructive"
