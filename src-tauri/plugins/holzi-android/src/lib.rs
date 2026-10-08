@@ -14,6 +14,17 @@ mod other;
 
 #[cfg(target_os = "android")]
 pub use android::HolziAndroid;
+
+/// The space the system takes at the edges of the window, in CSS pixels: status bar, navigation
+/// bar and display cutout, and the on-screen keyboard apart from the navigation bar below it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Insets {
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+    pub left: f64,
+    pub keyboard: f64,
+}
 #[cfg(not(target_os = "android"))]
 pub use other::HolziAndroid;
 

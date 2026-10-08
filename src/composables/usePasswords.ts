@@ -11,6 +11,7 @@ import type { GroupPatch } from '@bindings/GroupPatch'
 import type { ItemDetail } from '@bindings/ItemDetail'
 import type { ItemInput } from '@bindings/ItemInput'
 import type { ItemPatch } from '@bindings/ItemPatch'
+import type { PickedFile } from '@bindings/PickedFile'
 import type { Preset } from '@bindings/Preset'
 import type { RefMark } from '@bindings/RefMark'
 import type { RefMarkKind } from '@bindings/RefMarkKind'
@@ -100,10 +101,11 @@ export function usePasswords() {
   const passkeyUnlinkAsync = (itemId: string, passkeyId: string) =>
     invoke<null>('passwords_passkey_unlink', { args: { itemId, passkeyId } })
 
-  // Files travel as paths from the system's dialogs, never as bytes (FR-019).
-  const attachmentAddAsync = (itemId: string, path: string) =>
+  // Files travel as the choice of the system's dialogs (spec 043: a path or an address), never as
+  // bytes (FR-019).
+  const attachmentAddAsync = (itemId: string, file: PickedFile) =>
     invoke<AttachmentView>('passwords_attachment_add', {
-      args: { itemId, path },
+      args: { itemId, file },
     })
   const attachmentRenameAsync = (attachmentId: string, fileName: string) =>
     invoke<string>('passwords_attachment_rename', {
@@ -111,15 +113,15 @@ export function usePasswords() {
     })
   const attachmentRemoveAsync = (attachmentId: string) =>
     invoke<null>('passwords_attachment_remove', { args: { attachmentId } })
-  const attachmentSaveAsync = (attachmentId: string, path: string) =>
-    invoke<null>('passwords_attachment_save', { args: { attachmentId, path } })
+  const attachmentSaveAsync = (attachmentId: string, file: PickedFile) =>
+    invoke<null>('passwords_attachment_save', { args: { attachmentId, file } })
   const importPreviewAsync = (args: ImportArgs) =>
     invoke<ImportPreview>('passwords_import_preview', { args })
   const importRunAsync = (args: ImportRunArgs) =>
     invoke<ImportReport>('passwords_import_run', { args })
   const importCancelAsync = () => invoke<null>('passwords_import_cancel')
-  const importReportSaveAsync = (report: ImportReport, path: string) =>
-    invoke<null>('passwords_import_report_save', { args: { report, path } })
+  const importReportSaveAsync = (report: ImportReport, file: PickedFile) =>
+    invoke<null>('passwords_import_report_save', { args: { report, file } })
   const attachmentPreviewAsync = (attachmentId: string) =>
     invoke<ArrayBuffer>('passwords_attachment_preview', {
       args: { attachmentId },

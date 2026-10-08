@@ -3,6 +3,7 @@ import type { InstanceInfo } from '@bindings/InstanceInfo'
 import type { CreateInstanceArgs } from '@bindings/CreateInstanceArgs'
 import type { CreateInstanceResult } from '@bindings/CreateInstanceResult'
 import type { OpenInstanceArgs } from '@bindings/OpenInstanceArgs'
+import type { ImportInstanceArgs } from '@bindings/ImportInstanceArgs'
 import type { ChangePassphraseArgs } from '@bindings/ChangePassphraseArgs'
 
 /**
@@ -28,6 +29,13 @@ export function useInstance() {
     return await invoke<InstanceInfo>('open_instance', { args })
   }
 
+  /** Spec 043: copies a chosen vault file into the app's storage and opens the copy. */
+  async function importAsync(
+    args: ImportInstanceArgs,
+  ): Promise<CreateInstanceResult> {
+    return await invoke<CreateInstanceResult>('import_instance', { args })
+  }
+
   async function closeAsync(): Promise<void> {
     await invoke('close_instance')
   }
@@ -44,6 +52,7 @@ export function useInstance() {
     listAsync,
     createAsync,
     openAsync,
+    importAsync,
     closeAsync,
     changePassphraseAsync,
   }

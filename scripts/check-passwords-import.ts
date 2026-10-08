@@ -4,7 +4,6 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
-  baseName,
   canPreviewImport,
   groupReport,
   importFailureReason,
@@ -74,13 +73,6 @@ test('the reason of a failed import is read from the error, nothing else is', ()
   )
   assert.equal(importFailureReason('cancelled'), null)
   assert.equal(importFailureReason(null), null)
-})
-
-test('a file name comes from either kind of path', () => {
-  assert.equal(baseName('/home/a/export.kdbx'), 'export.kdbx')
-  assert.equal(baseName('C:\\Users\\a\\export.csv'), 'export.csv')
-  assert.equal(baseName('plain.json'), 'plain.json')
-  assert.equal(baseName('/trailing/'), 'trailing')
 })
 
 test('haex-vault asks for its vault password and no key file, KeePass for both', () => {

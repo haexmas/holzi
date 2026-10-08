@@ -581,9 +581,12 @@ Zuordnungen je Format stehen in [contracts/import-mapping.md](./contracts/import
   den Webview, doppelte Parser für Test und Betrieb), _Import je Format als eigene App_.
 
 **Bewusste Grenze**: Das Modell hält alle Anhänge der Quelle im Speicher (je Anhang höchstens
-25 MiB, die größeren werden vor dem Lesen aussortiert, aber die Summe ist nicht begrenzt); bei
-einer sehr großen KDBX-Datei steigt der Speicherbedarf mit ihrer Größe (Aufrüstweg: Anhänge beim
-Schreiben nachladen).
+25 MiB, die größeren werden vor dem Lesen aussortiert, aber die Summe ist nicht begrenzt). Die
+Exportdatei wird höchstens 512 MiB gepuffert; größere Eingaben werden vor dem Parsen abgelehnt.
+Eine KeePass-Schlüsseldatei wird nach den KeePass-Regeln verarbeitet: XML-, 32-Byte- und
+Hex-Schlüssel werden erkannt, andere Inhalte werden zu einem 256-Bit-Schlüssel gehasht. Dafür gilt
+kein Exportlimit. Bei einer sehr großen, aber zulässigen KDBX-Datei steigt der Speicherbedarf mit
+ihrer Größe (Aufrüstweg: Anhänge beim Schreiben nachladen).
 
 **ponytail**: Das Verzeichnis der angelegten Zeilen liegt nur im Speicher; ein Absturz mitten im
 Import hinterlässt Teile (Erkennung von Doppelten hilft beim erneuten Lauf). Aufrüstweg: eine

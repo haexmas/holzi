@@ -1,6 +1,6 @@
 //! Import commands (spec 034, US7, `contracts/tauri-commands.md` §Import). All call the service as
-//! `Caller::User`. The password and key file path travel in a type that prints nothing; the file
-//! is read again by every command.
+//! `Caller::User`. The password and key file travel in a type that prints nothing; the file is read
+//! again by every command. Files are the choice of the system's dialogs (spec 043).
 
 use std::fmt;
 
@@ -12,6 +12,7 @@ use zeroize::Zeroizing;
 
 use super::service;
 use crate::error::{HolziError, Result};
+use crate::files::picked::{self, PickedFile};
 use crate::passwords::access::Caller;
 use crate::passwords::import::apply::{OnDuplicate, Progress};
 use crate::passwords::import::report::render_text;
@@ -27,9 +28,9 @@ const PROGRESS_EVENT: &str = "passwords-import-progress";
 #[serde(rename_all = "camelCase")]
 pub struct ImportArgs {
     pub source: ImportSource,
-    pub path: String,
+    pub file: PickedFile,
     pub password: Option<String>,
-    pub key_file_path: Option<String>,
+    pub key_file: Option<PickedFile>,
 }
 
 impl fmt::Debug for ImportArgs {
@@ -45,9 +46,9 @@ impl From<ImportArgs> for ImportRequest {
     fn from(args: ImportArgs) -> Self {
         ImportRequest {
             source: args.source,
-            path: args.path,
+            file: args.file,
             password: args.password.map(Zeroizing::new),
-            key_file_path: args.key_file_path.filter(|p| !p.is_empty()),
+            key_file: args.key_file.filter(|file| !file.0.is_empty()),
         }
     }
 }
@@ -57,9 +58,9 @@ impl From<ImportArgs> for ImportRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ImportRunArgs {
     pub source: ImportSource,
-    pub path: String,
+    pub file: PickedFile,
     pub password: Option<String>,
-    pub key_file_path: Option<String>,
+    pub key_file: Option<PickedFile>,
     pub on_duplicate: OnDuplicate,
 }
 
@@ -77,8 +78,8 @@ impl fmt::Debug for ImportRunArgs {
 #[serde(rename_all = "camelCase")]
 pub struct ReportSaveArgs {
     pub report: ImportReport,
-    /// A path from the save dialog.
-    pub path: String,
+    /// The choice of the save dialog.
+    pub file: PickedFile,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -91,11 +92,12 @@ pub struct IconPreviewArgs {
 /// Counts what the file would bring over; writes nothing.
 #[tauri::command]
 pub async fn passwords_import_preview(
+    app: AppHandle,
     state: State<'_, AppState>,
     args: ImportArgs,
 ) -> Result<ImportPreview> {
     service(&state)?
-        .import_preview(&Caller::User, args.into())
+        .import_preview(&Caller::User, app, args.into())
         .await
 }
 
@@ -112,17 +114,25 @@ pub async fn passwords_import_run(
     let on_duplicate = args.on_duplicate;
     let request = ImportRequest {
         source: args.source,
-        path: args.path,
+        file: args.file,
         password: args.password.map(Zeroizing::new),
-        key_file_path: args.key_file_path.filter(|p| !p.is_empty()),
+        key_file: args.key_file.filter(|file| !file.0.is_empty()),
     };
+    let opener = app.clone();
     let emit = move |progress: Progress| {
         if let Err(e) = app.emit(PROGRESS_EVENT, progress) {
             log::warn!("emit {PROGRESS_EVENT} failed: {e}");
         }
     };
     service
-        .import_run(&Caller::User, request, on_duplicate, guard.flag(), &emit)
+        .import_run(
+            &Caller::User,
+            opener,
+            request,
+            on_duplicate,
+            guard.flag(),
+            &emit,
+        )
         .await
 }
 
@@ -133,20 +143,18 @@ pub async fn passwords_import_cancel(state: State<'_, AppState>) -> Result<()> {
     Ok(())
 }
 
-/// Writes the report as text to the chosen path: titles, folder paths, kinds, field and file names
+/// Writes the report as text to the chosen file: titles, folder paths, kinds, field and file names
 /// and sizes, never a value of a secret.
 #[tauri::command]
-pub async fn passwords_import_report_save(args: ReportSaveArgs) -> Result<()> {
+pub async fn passwords_import_report_save(app: AppHandle, args: ReportSaveArgs) -> Result<()> {
     let text = render_text(&args.report);
-    let path = std::path::PathBuf::from(args.path);
-    tauri::async_runtime::spawn_blocking(move || std::fs::write(path, text))
+    let unwritable = || HolziError::PasswordsImportFailed {
+        reason: "unwritable".to_string(),
+    };
+    tauri::async_runtime::spawn_blocking(move || picked::write(&app, &args.file, text.as_bytes()))
         .await
-        .map_err(|_| HolziError::PasswordsImportFailed {
-            reason: "unwritable".to_string(),
-        })?
-        .map_err(|_| HolziError::PasswordsImportFailed {
-            reason: "unwritable".to_string(),
-        })
+        .map_err(|_| unwritable())?
+        .map_err(|_| unwritable())
 }
 
 /// The bytes of an imported picture; anything that is not a stored picture is `NotFound`.

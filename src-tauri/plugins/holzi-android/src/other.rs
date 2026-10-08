@@ -11,3 +11,23 @@ pub fn init<R: Runtime>(_app: &AppHandle<R>, _api: PluginApi<R, ()>) -> HolziAnd
 
 /// Stand-in with the same methods as the Android side; each does nothing.
 pub struct HolziAndroid<R: Runtime>(PhantomData<fn() -> R>);
+
+impl<R: Runtime> HolziAndroid<R> {
+    /// Addresses of document providers exist only on Android.
+    pub fn display_name(&self, _uri: &str) -> Option<String> {
+        None
+    }
+
+    /// The system takes no space at the window's edges here.
+    pub fn watch_insets(
+        &self,
+        _on_change: impl Fn(crate::Insets) + Send + Sync + 'static,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Screen capture protection exists only on Android.
+    pub fn set_secure(&self, _enabled: bool) -> Result<(), String> {
+        Ok(())
+    }
+}

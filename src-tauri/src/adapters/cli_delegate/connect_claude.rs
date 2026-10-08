@@ -293,6 +293,7 @@ pub async fn start_claude_connect(
     binary: &str,
     children: ChildRegistry,
 ) -> Result<(ClaudeConnectSession, String), AdapterError> {
+    super::process::ensure_available(crate::platform::capabilities().cli_delegates)?;
     let binary_owned = binary.to_string();
     let mut session = tokio::task::spawn_blocking(move || {
         let config_dir = TempDir::new().map_err(|error| AdapterError::Http {

@@ -1,12 +1,11 @@
 //! Attachment methods of the service (spec 034, US5, FR-019..FR-021): add from a file, rename,
 //! remove, save to a file and preview an image. For the user alone (rule Z11). The file travels as
-//! a path chosen in the system's dialog and is read and written on a blocking thread, so a 25 MiB
-//! attachment never crosses the webview.
-
-use std::path::PathBuf;
+//! the choice of the system's dialog (spec 043, a path or a provider address) and is read and
+//! written on a blocking thread, so a 25 MiB attachment never crosses the webview.
 
 use super::{require_user, PasswordsService};
 use crate::error::{HolziError, Result};
+use crate::files::picked::{Opener, PickedFile};
 use crate::passwords::access::Caller;
 use crate::passwords::binaries;
 use crate::passwords::model::AttachmentView;
@@ -18,16 +17,18 @@ fn io_failed(error: tauri::Error) -> HolziError {
 }
 
 impl PasswordsService {
-    /// Attaches the file at `path` to an entry. The size is checked on the file before it is read.
+    /// Attaches the chosen file to an entry. The size is checked before the file is read where
+    /// it is known.
     pub async fn attachment_add(
         &self,
         caller: &Caller,
         item_id: String,
-        path: String,
+        opener: impl Opener + Send + 'static,
+        file: PickedFile,
     ) -> Result<AttachmentView> {
         require_user(caller)?;
         let (name, bytes) = tauri::async_runtime::spawn_blocking(move || {
-            binaries::read_attachment_file(&PathBuf::from(path))
+            binaries::read_attachment_file(&opener, &file)
         })
         .await
         .map_err(io_failed)??;
@@ -64,18 +65,17 @@ impl PasswordsService {
         &self,
         caller: &Caller,
         attachment_id: String,
-        path: String,
+        opener: impl Opener + Send + 'static,
+        file: PickedFile,
     ) -> Result<()> {
         require_user(caller)?;
         let (_, bytes) = self
             .db()
             .read(move |q| binaries::attachment_data(q, &attachment_id).map_err(Into::into))
             .await?;
-        tauri::async_runtime::spawn_blocking(move || {
-            binaries::save_to(&PathBuf::from(path), &bytes)
-        })
-        .await
-        .map_err(io_failed)?
+        tauri::async_runtime::spawn_blocking(move || binaries::save_to(&opener, &file, &bytes))
+            .await
+            .map_err(io_failed)?
     }
 
     /// The bytes of an image attachment for the preview.

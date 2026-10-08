@@ -43,6 +43,10 @@ nicht Teil dieser Spec.
   Modelle und eine kleinere Spracherkennung auf dem Telefon.
 - [`033-multi-device-e2e`](../033-multi-device-e2e/spec.md) FR-022: Die Plattform-Beschreibung
   für Android ergänzt diese Spec um das, was auf dem Telefon geprüft wurde.
+- [`044-file-browser`](../044-file-browser/spec.md) FR-039: Der eingebaute Dateibrowser bekommt
+  auf Android „Zugriff auf alle Dateien“ und damit echte Pfade. Das gilt nur für den Dateibrowser:
+  Wo diese Spec eine Datei wählen lässt (FR-015), bleibt es bei der Dateiauswahl des Systems, und
+  Erweiterungen bekommen weiter nur gewählte Dateien (FR-016, FR-022).
 
 ## Clarifications
 

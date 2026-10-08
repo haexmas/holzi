@@ -4,6 +4,7 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 import type { DelegateVendor, Provider } from '~/composables/useProviders'
 
 const { t } = useI18n()
+const { capabilities } = useDeviceCapabilities()
 const { errString } = useErrorString()
 const fieldLabels = useFieldLabels()
 const { listAsync, onDelegateConnectProgress } = useProviders()
@@ -202,6 +203,7 @@ function hasDetails(vendor: DelegateVendor): boolean {
 
 <template>
   <section class="flex flex-col gap-3">
+    <SettingsNotOnThisDevice v-if="capabilities?.cliDelegates === false" />
     <div v-if="loading" class="text-sm text-muted-foreground">
       {{ t('onboarding.wizard.loadingDeviceInfo') }}
     </div>
@@ -225,7 +227,12 @@ function hasDetails(vendor: DelegateVendor): boolean {
           }}</span>
         </template>
         <template v-if="!awaitingCode[vendor] && !connecting[vendor]">
-          <UiButton type="button" variant="outline" @click="onConnect(vendor)">
+          <UiButton
+            type="button"
+            variant="outline"
+            :disabled="capabilities?.cliDelegates === false"
+            @click="onConnect(vendor)"
+          >
             {{
               connectedProvider(vendor)
                 ? t('settings.cliDelegate.reconnect')

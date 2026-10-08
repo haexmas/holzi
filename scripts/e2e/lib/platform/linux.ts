@@ -23,7 +23,7 @@ import type {
 } from './host.ts'
 
 /** Where the application keeps its vault files below the data root of an instance. */
-const VAULT_DIR = ['data', 'com.haex.holzi', 'instances']
+export const VAULT_DIR = ['data', 'com.haex.holzi', 'instances']
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms))

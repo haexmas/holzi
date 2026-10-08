@@ -54,6 +54,7 @@ export const useModelsStore = defineStore('models', () => {
   // `initialize()`; nothing is read or written before it is known.
   const vaultDeviceUuid = ref<string | null>(null)
 
+  const { capabilities: deviceCapabilities } = useDeviceCapabilities()
   const {
     installedModels,
     catalogEntries,
@@ -65,7 +66,15 @@ export const useModelsStore = defineStore('models', () => {
     capabilitiesFor,
     refreshInstalledAndCatalog,
     refreshProviders,
-  } = useModelInventory({ models, catalog, providers, t, errString, setError })
+  } = useModelInventory({
+    models,
+    catalog,
+    providers,
+    t,
+    errString,
+    setError,
+    cliDelegates: () => deviceCapabilities.value?.cliDelegates ?? true,
+  })
 
   const downloadingId = ref<string | null>(null)
   const downloadProgressBytes = ref(0)

@@ -3,6 +3,7 @@
 //! Contract: `specs/001-frontend-onboarding/contracts/tauri-commands.md`.
 //! One file per command mirrors haex-vault's convention.
 
+pub mod cleanup;
 pub mod close;
 pub mod link_vault;
 pub mod lock_retry;
@@ -11,10 +12,12 @@ pub mod paths;
 pub mod presence;
 pub mod startup;
 pub mod vault_config;
+pub mod vault_id;
 
 mod close_effects;
 mod create;
 mod events;
+mod import;
 mod info;
 mod list;
 mod open;
@@ -22,6 +25,7 @@ mod passphrase_change;
 
 pub use close::{close_instance, start_close, take_over_exit};
 pub use create::{create_instance, create_instance_core, CreateInstanceArgs, CreateInstanceResult};
+pub use import::{import_instance, import_instance_core, ImportInstanceArgs};
 pub use info::InstanceInfo;
 pub use list::{active_instance_name, list_instances};
 pub use lock_retry::retry_while_locked;

@@ -457,3 +457,17 @@ Plattform-Verifier mit lettre-Patch, eine lokale Plugin-Crate für alles Plattfo
 eingechecktes `gen/android`, Schließen beendet die App (ADR 0003 gilt unverändert). Geschrieben als
 [`docs/adr/0010-android-platform.md`](../../docs/adr/0010-android-platform.md); ADR 0002 trägt den
 Hinweis „superseded in part“.
+
+## R18 — Temporäre Dateien auf Android (gefunden in Stufe 1c)
+
+**Befund**: `std::env::temp_dir()` fällt auf Android ohne `TMPDIR` auf `/data/local/tmp` zurück,
+und dort darf eine App nicht schreiben. Das traf jede Stelle mit `tempfile::tempdir()` (etwa den
+Import aus haex-vault, der die Vault-Datei vor dem Öffnen kopiert) und SQLite selbst, das seine
+Zwischendateien ebenfalls über `TMPDIR` ablegt.
+
+**Entscheidung**: `MainActivity.onCreate` setzt `TMPDIR` auf den Cache-Ordner der App
+(`Os.setenv`), bevor `super.onCreate` die Rust-Seite startet. Zu diesem Zeitpunkt läuft noch kein
+Rust-Thread, der die Umgebung liest; ein `set_var` im `setup` des Kerns wäre nicht mehr
+threadsicher.
+
+**Verworfen**: jedem `tempfile`-Aufruf einen Ordner mitgeben (übersieht SQLite und Abhängigkeiten).

@@ -184,6 +184,19 @@ export interface StartInstanceOptions {
   framebufferDir?: string
 }
 
+/**
+ * What only a phone has (spec 043, the Android scenarios): its system gestures, its screen and the
+ * system's hand on the app's process. The platform layer provides it; a desktop instance has none.
+ */
+export interface PhoneControls {
+  /** The system's back gesture. */
+  back(): void
+  /** Sends the app to the background and lets the system end its process, as under memory pressure. */
+  killInBackground(): void
+  /** Whether the system keeps the window out of screenshots and recordings. */
+  screenProtected(): boolean
+}
+
 export interface Instance extends Page {
   root: string
   marker: string
@@ -198,6 +211,8 @@ export interface Instance extends Page {
   stop(): Promise<void>
   /** Records a timeline entry on the scenario that started this instance (used by scripts/e2e/lib/flows.ts). */
   step: StepRecorder
+  /** Present when the instance runs on a phone. */
+  phone?: PhoneControls
 }
 
 async function launchDriver(

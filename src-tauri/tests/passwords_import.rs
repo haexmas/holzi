@@ -6,6 +6,11 @@
 // These tests read raw vault state (counts, columns) that the CRDT write path does not expose.
 #![allow(clippy::disallowed_methods)]
 
+#[path = "common/chosen_files.rs"]
+mod chosen_files;
+
+use chosen_files::{chosen, Paths};
+
 #[path = "common/kdbx_fixture.rs"]
 mod kdbx_fixture;
 
@@ -18,6 +23,7 @@ use haex_crdt::rusqlite::params;
 use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
 use zeroize::Zeroizing;
 
+use holzi_lib::files::picked::PickedFile;
 use holzi_lib::identity::{
     holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
 };
@@ -102,18 +108,18 @@ fn keepass_request(f: &Fixture, password: &str) -> ImportRequest {
     let (path, key) = keepass_file(f);
     ImportRequest {
         source: ImportSource::Keepass,
-        path,
+        file: PickedFile(path),
         password: Some(Zeroizing::new(password.to_string())),
-        key_file_path: Some(key),
+        key_file: Some(PickedFile(key)),
     }
 }
 
 fn file_request(source: ImportSource, name: &str) -> ImportRequest {
     ImportRequest {
         source,
-        path: fixtures_dir().join(name).to_string_lossy().into_owned(),
+        file: chosen(&fixtures_dir().join(name)),
         password: None,
-        key_file_path: None,
+        key_file: None,
     }
 }
 
@@ -125,6 +131,7 @@ async fn run(
     f.service
         .import_run(
             &Caller::User,
+            Paths,
             request,
             on_duplicate,
             &AtomicBool::new(false),
@@ -139,7 +146,7 @@ async fn the_keepass_counts_match_the_source_down_to_the_trash() {
     let request = keepass_request(&f, PASSWORD);
     let preview = f
         .service
-        .import_preview(&Caller::User, request)
+        .import_preview(&Caller::User, Paths, request)
         .await
         .expect("preview");
     assert_eq!(
@@ -300,9 +307,9 @@ async fn wrong_credentials_and_a_corrupt_file_change_nothing() {
     std::fs::write(&broken, b"not a database at all").expect("write");
     let request = ImportRequest {
         source: ImportSource::Keepass,
-        path: broken.to_string_lossy().into_owned(),
+        file: chosen(&broken),
         password: Some(Zeroizing::new(PASSWORD.to_string())),
-        key_file_path: None,
+        key_file: None,
     };
     match run(&f, request, OnDuplicate::Create).await {
         Err(HolziError::PasswordsImportFailed { reason }) => assert_eq!(reason, "corrupt"),
@@ -310,14 +317,9 @@ async fn wrong_credentials_and_a_corrupt_file_change_nothing() {
     }
     let missing = ImportRequest {
         source: ImportSource::Bitwarden,
-        path: f
-            .dir
-            .path()
-            .join("nothing.json")
-            .to_string_lossy()
-            .into_owned(),
+        file: chosen(&f.dir.path().join("nothing.json")),
         password: None,
-        key_file_path: None,
+        key_file: None,
     };
     match run(&f, missing, OnDuplicate::Create).await {
         Err(HolziError::PasswordsImportFailed { reason }) => assert_eq!(reason, "unreadable"),
@@ -340,6 +342,7 @@ async fn a_cancelled_run_leaves_nothing() {
         .service
         .import_run(
             &Caller::User,
+            Paths,
             keepass_request(&f, PASSWORD),
             OnDuplicate::Create,
             &cancel,
@@ -461,6 +464,7 @@ async fn a_folder_the_vault_has_takes_the_entries_and_survives_a_rollback() {
         .service
         .import_run(
             &Caller::User,
+            Paths,
             keepass_request(&g, PASSWORD),
             OnDuplicate::Create,
             &cancel,
@@ -486,9 +490,9 @@ async fn an_encrypted_bitwarden_export_is_refused_and_writes_nothing() {
     let before = counts(&f.db);
     let request = ImportRequest {
         source: ImportSource::Bitwarden,
-        path: path.to_string_lossy().into_owned(),
+        file: chosen(&path),
         password: None,
-        key_file_path: None,
+        key_file: None,
     };
     match run(&f, request, OnDuplicate::Create).await {
         Err(HolziError::PasswordsImportFailed { reason }) => assert_eq!(reason, "encrypted_export"),
@@ -540,7 +544,7 @@ async fn nobody_but_the_user_may_import() {
     let request = || file_request(ImportSource::Bitwarden, "bitwarden.json");
     assert!(matches!(
         f.service
-            .import_preview(&Caller::BuiltinAgent, request())
+            .import_preview(&Caller::BuiltinAgent, Paths, request())
             .await,
         Err(HolziError::PasswordsForbidden)
     ));
@@ -548,6 +552,7 @@ async fn nobody_but_the_user_may_import() {
         f.service
             .import_run(
                 &Caller::BuiltinAgent,
+                Paths,
                 request(),
                 OnDuplicate::Create,
                 &AtomicBool::new(false),
@@ -595,9 +600,9 @@ async fn keepass_references_become_placeholders_on_the_imported_entries() {
     std::fs::write(&key, KEY_FILE).expect("write key file");
     let request = ImportRequest {
         source: ImportSource::Keepass,
-        path: kdbx.to_string_lossy().into_owned(),
+        file: chosen(&kdbx),
         password: Some(Zeroizing::new(PASSWORD.to_string())),
-        key_file_path: Some(key.to_string_lossy().into_owned()),
+        key_file: Some(chosen(&key)),
     };
     let report = run(&f, request, OnDuplicate::Create).await.expect("import");
     // By id and by a unique title: converted; by a title two entries contain: text.

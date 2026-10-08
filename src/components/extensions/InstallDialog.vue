@@ -21,6 +21,7 @@ const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{ dev?: boolean }>()
 const { t } = useI18n()
 const { errString } = useErrorString()
+const { pickOneAsync } = usePickedFile()
 
 const path = ref<string | null>(null)
 const preview = ref<InstallPreview | null>(null)
@@ -61,16 +62,13 @@ function reset() {
 
 async function chooseAsync() {
   reset()
-  const selected = await openFile(
-    props.dev
-      ? { multiple: false, directory: true }
-      : {
-          multiple: false,
-          filters: [
-            { name: t('extensions.install.fileType'), extensions: ['xt'] },
-          ],
-        },
-  )
+  // A project folder (development mode, desktop only) or a bundle file chosen in the dialog
+  // (spec 043: a path or an address, passed on unchanged).
+  const selected = props.dev
+    ? await openFile({ multiple: false, directory: true })
+    : await pickOneAsync([
+        { name: t('extensions.install.fileType'), extensions: ['xt'] },
+      ])
   if (typeof selected !== 'string') {
     open.value = false
     return
@@ -83,7 +81,7 @@ async function chooseAsync() {
           projectPath: selected,
         })
       : await invoke<InstallPreview>('extension_install_preview', {
-          path: selected,
+          file: selected,
         })
     for (const permission of shown.value)
       choices.value[key(permission)] = { granted: true }
@@ -113,7 +111,7 @@ async function installAsync() {
     else
       await invoke('extension_install', {
         args: {
-          path: path.value,
+          file: path.value,
           accepted,
           confirmed: confirmed.value,
         },

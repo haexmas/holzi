@@ -1,14 +1,16 @@
 //! Attachment commands (spec 034, US5, `contracts/tauri-commands.md` §Anhänge). Files travel as
-//! paths from the system's dialogs, never as bytes through the webview; only the bytes of an image
+//! the choice of the system's dialogs (spec 043: a path or a provider address), never as bytes
+//! through the webview; only the bytes of an image
 //! preview go back, as raw bytes (`tauri::ipc::Response`).
 
 use serde::Deserialize;
 use tauri::ipc::Response;
-use tauri::State;
+use tauri::{AppHandle, State};
 use ts_rs::TS;
 
 use super::service;
 use crate::error::Result;
+use crate::files::PickedFile;
 use crate::passwords::access::Caller;
 use crate::passwords::model::AttachmentView;
 use crate::state::AppState;
@@ -18,8 +20,8 @@ use crate::state::AppState;
 #[serde(rename_all = "camelCase")]
 pub struct AttachmentAddArgs {
     pub item_id: String,
-    /// A path from the open dialog.
-    pub path: String,
+    /// The choice of the open dialog.
+    pub file: PickedFile,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -42,18 +44,19 @@ pub struct AttachmentIdArgs {
 #[serde(rename_all = "camelCase")]
 pub struct AttachmentSaveArgs {
     pub attachment_id: String,
-    /// A path from the save dialog.
-    pub path: String,
+    /// The choice of the save dialog.
+    pub file: PickedFile,
 }
 
 /// Attaches a file; above 25 MiB it is refused before it is read.
 #[tauri::command]
 pub async fn passwords_attachment_add(
+    app: AppHandle,
     state: State<'_, AppState>,
     args: AttachmentAddArgs,
 ) -> Result<AttachmentView> {
     service(&state)?
-        .attachment_add(&Caller::User, args.item_id, args.path)
+        .attachment_add(&Caller::User, args.item_id, app, args.file)
         .await
 }
 
@@ -79,14 +82,15 @@ pub async fn passwords_attachment_remove(
         .await
 }
 
-/// Writes an attachment byte for byte to the chosen path.
+/// Writes an attachment byte for byte to the chosen file.
 #[tauri::command]
 pub async fn passwords_attachment_save(
+    app: AppHandle,
     state: State<'_, AppState>,
     args: AttachmentSaveArgs,
 ) -> Result<()> {
     service(&state)?
-        .attachment_save(&Caller::User, args.attachment_id, args.path)
+        .attachment_save(&Caller::User, args.attachment_id, app, args.file)
         .await
 }
 

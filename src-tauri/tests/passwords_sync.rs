@@ -7,6 +7,11 @@
 // These tests read raw vault state (rows, markers) that the CRDT write path does not expose.
 #![allow(clippy::disallowed_methods)]
 
+#[path = "common/chosen_files.rs"]
+mod chosen_files;
+
+use chosen_files::{chosen, Paths};
+
 use std::sync::Arc;
 
 use haex_crdt::rusqlite::params;
@@ -288,11 +293,7 @@ async fn attach(dev: &Dev, dir: &std::path::Path, id: &str, name: &str, bytes: &
     let path = dir.join(name);
     std::fs::write(&path, bytes).expect("write file");
     dev.service
-        .attachment_add(
-            &Caller::User,
-            id.to_string(),
-            path.to_string_lossy().into_owned(),
-        )
+        .attachment_add(&Caller::User, id.to_string(), Paths, chosen(&path))
         .await
         .expect("attach");
 }
@@ -342,7 +343,8 @@ async fn an_attachment_of_25_mib_arrives_complete() {
         .attachment_save(
             &Caller::User,
             detail.attachments[0].id.clone(),
-            saved.to_string_lossy().into_owned(),
+            Paths,
+            chosen(&saved),
         )
         .await
         .expect("save on B");

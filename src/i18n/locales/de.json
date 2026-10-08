@@ -100,6 +100,20 @@
         "incompatible": "Dieses Gerät und das Hauptgerät haben Versionen, die sich nicht synchronisieren lassen. Aktualisiere das ältere.",
         "connection_lost": "Die Verbindung ist abgebrochen."
       }
+    },
+    "import": {
+      "button": "Vault-Datei öffnen",
+      "title": "Vault-Datei öffnen",
+      "passphrase": "Passphrase",
+      "submit": "Öffnen",
+      "hint": "holzi legt eine Kopie der Datei an und öffnet sie. Die gewählte Datei bleibt, wie sie ist.",
+      "errors": {
+        "wrongPassphrase": "Passwort falsch oder keine Vault-Datei von holzi.",
+        "notAVault": "Das ist keine Vault-Datei von holzi.",
+        "alreadyHere": "Diese Vault gibt es auf diesem Gerät schon: {name}",
+        "notEnoughSpace": "Nicht genug freier Speicher.",
+        "unreadable": "Die Datei lässt sich nicht lesen."
+      }
     }
   },
   "wm": {
@@ -368,6 +382,12 @@
       "saved": "Gespeichert.",
       "failed": "Die Einstellung konnte nicht geändert werden",
       "description": "Offene Fenster und Tabs beim Öffnen der Vault zurückholen"
+    },
+    "screenCapture": {
+      "title": "Bildschirmschutz",
+      "description": "Keine Bildschirmfotos und Aufnahmen, leere Vorschau in der App-Übersicht",
+      "saved": "Gespeichert.",
+      "failed": "Die Einstellung konnte nicht geändert werden"
     },
     "default": {
       "modelGroup": {
@@ -1035,6 +1055,9 @@
     "vaultAlreadyActive": "In diesem Fenster ist bereits eine Vault geöffnet.",
     "vaultClosed": "Die Vault wurde geschlossen.",
     "transactionTooLarge": "Die Änderung ist zu groß zum Speichern. Große Dateien gehören nicht in die Vault-Datenbank.",
+    "unreadable": "Die gewählte Datei lässt sich nicht lesen.",
+    "notAvailable": "Auf diesem Gerät nicht verfügbar.",
+    "notEnoughSpace": "Nicht genug freier Speicher.",
     "hf": {
       "invalidInput": "Ungültige Eingabe.",
       "network": "Netzwerkfehler — bitte Verbindung prüfen.",
@@ -1059,6 +1082,7 @@
       "importFailed": "Der Import ist fehlgeschlagen.",
       "importReason": {
         "unreadable": "Die Datei lässt sich nicht lesen.",
+        "too_large": "Die Import- oder Schlüsseldatei ist zu groß.",
         "wrong_credentials": "Passwort oder Schlüsseldatei sind falsch.",
         "corrupt": "Die Datei ist beschädigt.",
         "unsupported_format": "Das Format wird nicht unterstützt.",
@@ -1202,6 +1226,11 @@
       },
       "sessionRestore": {
         "set": "Sitzung wiederherstellen ein- oder ausschalten"
+      },
+      "privacy": {
+        "screenCapture": {
+          "set": "Bildschirmschutz ein- oder ausschalten"
+        }
       },
       "appearance": {
         "removeBackground": "Workspace-Hintergrund entfernen",
@@ -1570,6 +1599,7 @@
       "noFile": "Noch keine Datei gewählt",
       "chooseFile": "Datei wählen",
       "fileHint": "Die Datei wird nur gelesen, nichts davon bleibt außerhalb der Vault.",
+      "fileHintAndroidHaexVault": "Auf Android liest holzi nur die gewählte Datei, keine Begleitdatei daneben. Schließe haex-vault, bevor du die Datei kopierst, damit alle Änderungen in ihr stehen.",
       "password": "Passwort der Datenbank",
       "noKeyFile": "Keine Schlüsseldatei",
       "chooseKeyFile": "Schlüsseldatei wählen",

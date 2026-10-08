@@ -85,6 +85,7 @@ pub async fn run_device_auth(
     children: &ChildRegistry,
     mut on_prompt: impl FnMut(&DeviceAuthPrompt) + Send,
 ) -> Result<Vec<u8>, AdapterError> {
+    super::process::ensure_available(crate::platform::capabilities().cli_delegates)?;
     let tmp = TempDir::new().map_err(|error| AdapterError::Http {
         reason: format!("failed to create temp CODEX_HOME: {error}"),
     })?;

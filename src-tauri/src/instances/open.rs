@@ -115,6 +115,8 @@ pub async fn open_instance_core<R: Runtime>(
     )
     .await?;
 
+    // Spec 043: the fingerprint beside the vault, so an imported copy of it is recognised.
+    super::vault_id::write(&db_path, &candidate)?;
     state.install(
         ActiveInstanceHandle {
             name: name.to_string(),
@@ -139,6 +141,10 @@ pub async fn open_instance(
 ) -> Result<InstanceInfo> {
     let OpenInstanceArgs { name, passphrase } = args;
     let db_path = open_instance_core(&app, &state, &chat, &name, passphrase).await?;
+    // Spec 043 FR-011a: the screen capture protection of this device, before anything shows.
+    if let Ok(db) = state.database() {
+        crate::privacy::screen_capture::apply_for_vault(&app, &db).await;
+    }
     // Spec 024: the sync service runs as tracked session work and ends with the close.
     crate::vault_events::start_for_active_instance(&app, &state);
     crate::extensions::registry::lifecycle::start_for_active_instance(&app, &state);
@@ -170,7 +176,7 @@ pub async fn open_instance(
 }
 
 /// Opens an existing database with the lifecycle command's runtime configuration.
-fn open_existing_database(
+pub(super) fn open_existing_database(
     passphrase: &str,
     db_path: &Path,
     installation_id_file: &Path,

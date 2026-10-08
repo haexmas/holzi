@@ -2,7 +2,7 @@
 //!
 //! The data lies as a BLOB in `haex_passwords_binaries`, unique by the SHA-256 of the raw bytes;
 //! an entry (or a history state) links it under a file name. The size limit (25 MiB) is checked on
-//! the file's metadata **before** the file is read, the file name is stored as text (never a path),
+//! the file's metadata **before** the file is read where a size is known, the file name is stored as text (never a path),
 //! and the data is read only by its own query, never in a list.
 //!
 //! Clean-up: when the last link to a binary goes, it is marked (`orphaned_at`) and removed only
@@ -10,7 +10,7 @@
 //! nothing. A custom icon (`type = 'icon'`) has no link row; it counts as used while some entry,
 //! folder, passkey or history state names `binary:<hash>`.
 
-use std::path::Path;
+use std::io::Read;
 
 use haex_crdt::rusqlite::params;
 use haex_crdt::CrdtTransaction;
@@ -20,6 +20,7 @@ use uuid::Uuid;
 use super::model::AttachmentView;
 use super::{clock, snapshots, ATTACHMENT_LIMIT_BYTES, ORPHAN_GRACE_DAYS};
 use crate::error::{HolziError, Result};
+use crate::files::picked::{self, Opener, PickedFile};
 use crate::storage::query::Query;
 
 fn invalid(reason: &str) -> HolziError {
@@ -57,15 +58,29 @@ pub fn sanitize_file_name(name: &str) -> String {
     }
 }
 
-/// Reads a file for an attachment: its size is checked on the metadata first (above the limit it
-/// is refused without reading a byte), an empty file is `empty`, an unreadable one `unreadable`.
-/// Returns the file's name and its bytes. Blocking: run it on a blocking thread.
-pub fn read_attachment_file(path: &Path) -> Result<(String, Vec<u8>)> {
-    let metadata = std::fs::metadata(path).map_err(|_| invalid("unreadable"))?;
-    if !metadata.is_file() {
-        return Err(invalid("unreadable"));
+/// Reads a chosen file for an attachment: where the size is known it is checked first (above the
+/// limit it is refused without reading a byte), otherwise reading stops one byte past the limit. An
+/// empty file is `empty`, an unreadable one `unreadable`. Returns the name to show and the bytes.
+/// Blocking: run it on a blocking thread.
+pub fn read_attachment_file(opener: &impl Opener, file: &PickedFile) -> Result<(String, Vec<u8>)> {
+    let source = picked::open_read(opener, file).map_err(unreadable)?;
+    let known = source
+        .metadata()
+        .ok()
+        .filter(std::fs::Metadata::is_file)
+        .map(|metadata| metadata.len());
+    if let Some(size) = known.filter(|size| *size > ATTACHMENT_LIMIT_BYTES) {
+        return Err(HolziError::PasswordsAttachmentTooLarge {
+            bytes: size,
+            limit: ATTACHMENT_LIMIT_BYTES,
+        });
     }
-    let size = metadata.len();
+    let mut bytes = Vec::new();
+    source
+        .take(ATTACHMENT_LIMIT_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| invalid("unreadable"))?;
+    let size = bytes.len() as u64;
     if size > ATTACHMENT_LIMIT_BYTES {
         return Err(HolziError::PasswordsAttachmentTooLarge {
             bytes: size,
@@ -75,17 +90,23 @@ pub fn read_attachment_file(path: &Path) -> Result<(String, Vec<u8>)> {
     if size == 0 {
         return Err(invalid("empty"));
     }
-    let bytes = std::fs::read(path).map_err(|_| invalid("unreadable"))?;
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    Ok((name, bytes))
+    Ok((picked::display_name(opener, file), bytes))
 }
 
-/// Writes bytes to a file the user chose in the save dialog. Blocking.
-pub fn save_to(path: &Path, bytes: &[u8]) -> Result<()> {
-    std::fs::write(path, bytes).map_err(|_| invalid("unwritable"))
+/// A chosen file that gives nothing back keeps the reason the window already knows.
+fn unreadable(error: HolziError) -> HolziError {
+    match error {
+        HolziError::Unreadable => invalid("unreadable"),
+        other => other,
+    }
+}
+
+/// Writes bytes to the file chosen in the save dialog. Blocking.
+pub fn save_to(opener: &impl Opener, file: &PickedFile, bytes: &[u8]) -> Result<()> {
+    picked::write(opener, file, bytes).map_err(|error| match error {
+        HolziError::InvalidInput { .. } | HolziError::NotEnoughSpace => error,
+        _ => invalid("unwritable"),
+    })
 }
 
 /// Attaches bytes to an entry under a file name: the binary row is created if its hash is new

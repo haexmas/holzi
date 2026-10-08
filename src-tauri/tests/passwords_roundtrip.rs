@@ -6,6 +6,11 @@
 // These tests read raw vault state (CRDT columns, counts) that the CRDT write path does not expose.
 #![allow(clippy::disallowed_methods)]
 
+#[path = "common/chosen_files.rs"]
+mod chosen_files;
+
+use chosen_files::{chosen, Paths};
+
 use std::sync::Arc;
 
 use haex_crdt::rusqlite::{params, ToSql};
@@ -430,11 +435,7 @@ async fn attachments_of_the_largest_size_go_through_the_service_one_transaction_
     std::fs::write(&big, &bytes).expect("write");
     let first = f
         .service
-        .attachment_add(
-            &Caller::User,
-            id.clone(),
-            big.to_string_lossy().into_owned(),
-        )
+        .attachment_add(&Caller::User, id.clone(), Paths, chosen(&big))
         .await
         .expect("a 25 MiB attachment fits its own transaction");
     assert_eq!(first.size, ATTACHMENT_LIMIT_BYTES);
@@ -444,11 +445,7 @@ async fn attachments_of_the_largest_size_go_through_the_service_one_transaction_
     std::fs::write(&small, b"hello").expect("write");
     let second = f
         .service
-        .attachment_add(
-            &Caller::User,
-            id.clone(),
-            small.to_string_lossy().into_owned(),
-        )
+        .attachment_add(&Caller::User, id.clone(), Paths, chosen(&small))
         .await
         .expect("second attachment");
     assert_ne!(first.binary_hash, second.binary_hash);
@@ -458,11 +455,7 @@ async fn attachments_of_the_largest_size_go_through_the_service_one_transaction_
     std::fs::write(&over, vec![1u8; ATTACHMENT_LIMIT_BYTES as usize + 1]).expect("write");
     assert!(matches!(
         f.service
-            .attachment_add(
-                &Caller::User,
-                id.clone(),
-                over.to_string_lossy().into_owned()
-            )
+            .attachment_add(&Caller::User, id.clone(), Paths, chosen(&over))
             .await,
         Err(HolziError::PasswordsAttachmentTooLarge { .. })
     ));
@@ -470,11 +463,7 @@ async fn attachments_of_the_largest_size_go_through_the_service_one_transaction_
     // The data comes back byte for byte, and a non-image has no preview.
     let saved = dir.path().join("saved.bin");
     f.service
-        .attachment_save(
-            &Caller::User,
-            first.id.clone(),
-            saved.to_string_lossy().into_owned(),
-        )
+        .attachment_save(&Caller::User, first.id.clone(), Paths, chosen(&saved))
         .await
         .expect("save");
     assert_eq!(std::fs::read(&saved).expect("read"), bytes);

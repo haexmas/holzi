@@ -4357,6 +4357,7 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "p256",
+ "percent-encoding",
  "pkcs1",
  "pkcs8",
  "portable-pty",
@@ -10568,6 +10569,9 @@ dependencies = [
 name = "tauri-plugin-holzi-android"
 version = "0.1.0"
 dependencies = [
+ "log",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-plugin",
 ]

@@ -16,6 +16,7 @@ pub mod passwords;
 pub mod platform;
 #[cfg(feature = "platform-probe")]
 pub mod platform_probe;
+pub mod privacy;
 pub mod providers;
 pub mod remote_storage;
 pub mod state;
@@ -316,8 +317,13 @@ pub fn run() {
             platform_probe::platform_probe_report,
             active_instance_name,
             platform::commands::platform_capabilities,
+            files::commands::picked_file_name,
+            platform::insets::device_insets,
+            privacy::screen_capture::screen_capture_protection_get,
+            privacy::screen_capture::screen_capture_protection_set,
             list_instances,
             create_instance,
+            import_instance,
             open_instance,
             close_instance,
             change_vault_passphrase,

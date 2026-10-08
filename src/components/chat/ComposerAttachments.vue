@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { open } from '@tauri-apps/plugin-dialog'
 import type { AttachmentInfo } from '~/composables/useChat'
 
 export interface ComposerAttachment {
   id: string
+  /** The choice of the open dialog (spec 043: a path or an address). */
   path: string
   info: AttachmentInfo
 }
@@ -33,20 +33,17 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { pickManyAsync } = usePickedFile()
 
 async function pickFiles() {
   if (props.disabled) return
-  const selected = await open({
-    multiple: true,
-    filters: [
-      {
-        name: t('chat.composer.attachments.filterName'),
-        extensions: SUPPORTED_EXTENSIONS,
-      },
-    ],
-  })
-  if (!selected) return
-  emit('add', Array.isArray(selected) ? selected : [selected])
+  const selected = await pickManyAsync([
+    {
+      name: t('chat.composer.attachments.filterName'),
+      extensions: SUPPORTED_EXTENSIONS,
+    },
+  ])
+  if (selected.length) emit('add', selected)
 }
 </script>
 

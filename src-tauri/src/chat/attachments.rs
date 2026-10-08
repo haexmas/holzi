@@ -16,6 +16,7 @@ use serde::Serialize;
 
 use crate::adapters::{Attachment, AttachmentKind};
 use crate::error::{HolziError, Result};
+use crate::files::picked::{self, Opener, PickedFile};
 use crate::model_capabilities::ModelCapabilities;
 
 /// Anthropic's own published per-content-type limits (research.md §4) —
@@ -32,11 +33,12 @@ fn max_bytes_for(kind: &AttachmentKind) -> u64 {
     }
 }
 
-/// Extension-based kind + media-type detection. `None` for anything not in
-/// this list — an unrecognized extension is an unsupported type (FR-016),
+/// Extension-based kind + media-type detection from the file's shown name
+/// (spec 043: a chosen file on Android has no path). `None` for anything not
+/// in this list — an unrecognized extension is an unsupported type (FR-016),
 /// not a guess.
-fn kind_and_media_type(path: &Path) -> Option<(AttachmentKind, &'static str)> {
-    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+fn kind_and_media_type(name: &str) -> Option<(AttachmentKind, &'static str)> {
+    let ext = Path::new(name).extension()?.to_str()?.to_ascii_lowercase();
     Some(match ext.as_str() {
         "png" => (AttachmentKind::Image, "image/png"),
         "jpg" | "jpeg" => (AttachmentKind::Image, "image/jpeg"),
@@ -94,21 +96,37 @@ impl From<AttachmentKindWire> for AttachmentKind {
     }
 }
 
-/// "Is this file even attachable at all" — type + size, independent of any
-/// backend (FR-016). Errors only when the file cannot be read/stat'd at
-/// all (contracts/tauri-commands.md `inspect_attachment`); an oversized or
-/// unsupported-type file still resolves normally with `usable: false`.
-pub fn classify_attachment(path: &Path) -> Result<AttachmentInfo> {
-    let metadata = std::fs::metadata(path).map_err(|e| HolziError::InvalidInput {
-        reason: format!("cannot read attachment {}: {e}", path.display()),
-    })?;
-    let size_bytes = metadata.len();
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
+/// The largest limit of any kind: an attachment of unknown size is never
+/// read further than this to find out whether it is too large.
+const MAX_ANY_BYTES: u64 = MAX_DOCUMENT_BYTES;
 
-    let Some((kind, _media_type)) = kind_and_media_type(path) else {
+fn cannot_read(name: &str) -> HolziError {
+    HolziError::InvalidInput {
+        reason: format!("cannot read attachment {name}"),
+    }
+}
+
+/// The size of a chosen file: from its metadata where it is a plain file,
+/// otherwise by reading at most one byte past [`MAX_ANY_BYTES`] (a document
+/// provider may hand out a stream).
+fn size_of(opener: &impl Opener, file: &PickedFile, name: &str) -> Result<u64> {
+    let source = picked::open_read(opener, file).map_err(|_| cannot_read(name))?;
+    if let Some(metadata) = source.metadata().ok().filter(std::fs::Metadata::is_file) {
+        return Ok(metadata.len());
+    }
+    std::io::copy(&mut source.take(MAX_ANY_BYTES + 1), &mut std::io::sink())
+        .map_err(|_| cannot_read(name))
+}
+
+/// "Is this file even attachable at all" — type + size, independent of any
+/// backend (FR-016). Errors only when the file cannot be read at all
+/// (contracts/tauri-commands.md `inspect_attachment`); an oversized or
+/// unsupported-type file still resolves normally with `usable: false`.
+pub fn classify_attachment(opener: &impl Opener, file: &PickedFile) -> Result<AttachmentInfo> {
+    let name = picked::display_name(opener, file);
+    let size_bytes = size_of(opener, file, &name)?;
+
+    let Some((kind, _media_type)) = kind_and_media_type(&name) else {
         return Ok(AttachmentInfo {
             name,
             size_bytes,
@@ -165,32 +183,23 @@ pub fn usability_for(
     }
 }
 
-/// Re-stats and re-reads the file at send time (FR-018 — a file can vanish
-/// or change between attach and send). Errors here mean the caller must
-/// exclude this one attachment from the send, not fail the whole message.
-pub fn read_attachment_content(path: &Path) -> Result<Attachment> {
-    let (kind, media_type) = kind_and_media_type(path).ok_or_else(|| HolziError::InvalidInput {
-        reason: format!("unsupported attachment type: {}", path.display()),
-    })?;
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let cap = max_bytes_for(&kind);
-    let file = std::fs::File::open(path).map_err(|e| HolziError::InvalidInput {
-        reason: format!("failed to read attachment {}: {e}", path.display()),
-    })?;
-    let mut bytes = Vec::new();
-    file.take(cap + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| HolziError::InvalidInput {
-            reason: format!("failed to read attachment {}: {e}", path.display()),
+/// Re-reads the file at send time (FR-018 — a file can vanish or change
+/// between attach and send). Errors here mean the caller must exclude this
+/// one attachment from the send, not fail the whole message.
+pub fn read_attachment_content(opener: &impl Opener, file: &PickedFile) -> Result<Attachment> {
+    let name = picked::display_name(opener, file);
+    let (kind, media_type) =
+        kind_and_media_type(&name).ok_or_else(|| HolziError::InvalidInput {
+            reason: format!("unsupported attachment type: {name}"),
         })?;
+    let cap = max_bytes_for(&kind);
+    let bytes = picked::read(opener, file, cap).map_err(|_| HolziError::InvalidInput {
+        reason: format!("failed to read attachment {name}"),
+    })?;
     if bytes.len() as u64 > cap {
         return Err(HolziError::InvalidInput {
             reason: format!(
-                "attachment {} exceeds the {} limit for this file type",
-                path.display(),
+                "attachment {name} exceeds the {} limit for this file type",
                 human_bytes(cap)
             ),
         });
