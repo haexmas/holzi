@@ -53,7 +53,7 @@ export default defineNuxtConfig({
   components: [{ path: '~/components', pathPrefix: true }],
   css: ['~/assets/css/tailwind.css'],
   nitro: {
-    publicAssets: [pdfjs('cmaps'), pdfjs('standard_fonts')],
+    publicAssets: [pdfjs('cmaps'), pdfjs('standard_fonts'), pdfjs('wasm')],
   },
   vite: {
     plugins: [tailwindcss()],
