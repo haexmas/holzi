@@ -51,6 +51,9 @@ export function useErrorString() {
       if (kind === 'VaultAlreadyActive') return t('errors.vaultAlreadyActive')
       if (kind === 'VaultClosed') return t('errors.vaultClosed')
       if (kind === 'TransactionTooLarge') return t('errors.transactionTooLarge')
+      // Spec 043 (contract picked-file.md): a chosen file that gives nothing back, a full device.
+      if (kind === 'Unreadable') return t('errors.unreadable')
+      if (kind === 'NotEnoughSpace') return t('errors.notEnoughSpace')
       // Spec 034 (contracts/tauri-commands.md §Fehlerarten): the password manager's own kinds. They
       // carry a reason or numbers, never a value, so they must not reach `JSON.stringify` below.
       if (kind === 'PasswordsNotFound') return t('errors.passwords.notFound')

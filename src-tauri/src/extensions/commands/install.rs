@@ -6,11 +6,11 @@ use ts_rs::TS;
 
 use super::emit_changed;
 use crate::error::{HolziError, Result};
-use crate::files::PickedFile;
 use crate::extensions::registry::install::{
     install, install_preview, read_bundle_file, InstallPreview, PermissionChoice,
 };
 use crate::extensions::registry::list::{list, ExtensionSummary};
+use crate::files::PickedFile;
 use crate::passwords::clock::unix_millis;
 use crate::state::AppState;
 use crate::state_utils::active_database;

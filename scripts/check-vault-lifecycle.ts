@@ -196,6 +196,10 @@ function loadIndexPage(
     useInstance: () => ({
       activeNameAsync: async () => activeName,
     }),
+    usePickedFile: () => ({
+      pickOneAsync: async () => null,
+      nameOfAsync: async () => '',
+    }),
     useLanguage: () => ({
       language: { value: 'en' },
       options: [],

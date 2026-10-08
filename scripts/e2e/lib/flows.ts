@@ -126,9 +126,9 @@ interface CreateInstanceResult {
  */
 export async function createAndUnlock(
   instance: FlowInstance,
-  options: { name: string },
+  options: { name: string; passphrase?: string },
 ): Promise<void> {
-  const passphrase = generateSecret()
+  const passphrase = options.passphrase ?? generateSecret()
   unwrap<CreateInstanceResult>(
     'create_instance',
     await instance.invoke('create_instance', {

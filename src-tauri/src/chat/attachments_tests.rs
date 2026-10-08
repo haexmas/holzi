@@ -17,7 +17,11 @@ fn write_temp_file(name: &str, bytes: &[u8]) -> tempfile::TempDir {
 fn a_recognized_small_image_is_usable() {
     let bytes = b"not a real png but small";
     let dir = write_temp_file("photo.png", bytes);
-    let info = classify_attachment(&PathOpener::default(), &picked(&dir.path().join("photo.png"))).expect("classify");
+    let info = classify_attachment(
+        &PathOpener::default(),
+        &picked(&dir.path().join("photo.png")),
+    )
+    .expect("classify");
     assert!(info.usable);
     assert!(info.reason.is_none());
     assert_eq!(info.size_bytes, bytes.len() as u64);
@@ -26,7 +30,11 @@ fn a_recognized_small_image_is_usable() {
 #[test]
 fn an_unrecognized_extension_is_unusable_with_a_reason() {
     let dir = write_temp_file("archive.zip", b"PK\x03\x04");
-    let info = classify_attachment(&PathOpener::default(), &picked(&dir.path().join("archive.zip"))).expect("classify");
+    let info = classify_attachment(
+        &PathOpener::default(),
+        &picked(&dir.path().join("archive.zip")),
+    )
+    .expect("classify");
     assert!(!info.usable);
     assert!(info.reason.is_some());
 }

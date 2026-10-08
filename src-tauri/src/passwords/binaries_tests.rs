@@ -121,7 +121,8 @@ fn a_file_above_the_limit_is_refused_before_it_is_read() {
     );
     // At the limit it is read.
     file.set_len(ATTACHMENT_LIMIT_BYTES).expect("set length");
-    let (name, bytes) = read_attachment_file(&PathOpener::default(), &picked(&path)).expect("at the limit");
+    let (name, bytes) =
+        read_attachment_file(&PathOpener::default(), &picked(&path)).expect("at the limit");
     assert_eq!(name, "big.bin");
     assert_eq!(bytes.len() as u64, ATTACHMENT_LIMIT_BYTES);
 }

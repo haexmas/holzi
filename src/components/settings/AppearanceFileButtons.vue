@@ -3,7 +3,8 @@
  * "Importieren" and "Exportieren" of the appearance (spec 035-appearance-and-fields, FR-021,
  * contracts/appearance-file.md): the file dialog and the file access happen here, the checking and
  * the writing in the actions `settings.appearance.export` and `.import`. A file is read only after
- * the user has chosen it, and never larger than 16 KiB.
+ * the user has chosen it, and never larger than 16 KiB. The file plugin opens a chosen path and,
+ * on Android, a provider's `content://` address alike (spec 043).
  */
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { readTextFile, stat, writeTextFile } from '@tauri-apps/plugin-fs'
@@ -21,13 +22,26 @@ const importAction = useActionOrThrow('settings.appearance.import')
 const busy = ref(false)
 
 const FILTERS = [{ name: 'holzi appearance', extensions: ['json'] }]
+const { readyAsync } = useDeviceCapabilities()
+
+/** Android's document providers do not report extensions reliably (spec 043): no filter there. */
+async function filtersAsync() {
+  return (await readyAsync())?.platform === 'android' ? undefined : FILTERS
+}
+
+function tooLarge() {
+  return {
+    kind: 'AppearanceError',
+    reason: 'settings.appearance.import.notJson',
+  }
+}
 
 async function exportAsync() {
   busy.value = true
   try {
     const path = await save({
       defaultPath: 'holzi.holzi-appearance.json',
-      filters: FILTERS,
+      filters: await filtersAsync(),
     })
     if (!path) return
     const { file } = (await exportAction()) as { file: string }
@@ -43,16 +57,17 @@ async function exportAsync() {
 async function importAsync() {
   busy.value = true
   try {
-    const path = await open({ multiple: false, filters: FILTERS })
+    const path = await open({ multiple: false, filters: await filtersAsync() })
     if (typeof path !== 'string') return
-    const info = await stat(path)
-    if (info.size > FILE_MAX_BYTES) {
-      throw {
-        kind: 'AppearanceError',
-        reason: 'settings.appearance.import.notJson',
-      }
-    }
-    await importAction({ file: await readTextFile(path) })
+    // A provider address (Android, spec 043) may have no size; the text is checked after reading.
+    const size = await stat(path).then(
+      (info) => info.size,
+      () => null,
+    )
+    if (size !== null && size > FILE_MAX_BYTES) throw tooLarge()
+    const file = await readTextFile(path)
+    if (new TextEncoder().encode(file).length > FILE_MAX_BYTES) throw tooLarge()
+    await importAction({ file })
     emit('done', t('settings.appearance.imported'))
   } catch (error: unknown) {
     emit('failed', errString(error))

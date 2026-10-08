@@ -101,6 +101,7 @@ export interface SendMessageResult {
 }
 
 export interface AttachmentInput {
+  /** The choice of the open dialog (spec 043: a path or an address). */
   path: string
 }
 

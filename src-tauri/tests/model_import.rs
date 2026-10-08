@@ -69,7 +69,9 @@ async fn failed_publication_preserves_destination_and_removes_staging() {
         .await
         .expect("existing file");
 
-    assert!(copy_into_managed(Paths, chosen(&source), destination).await.is_err());
+    assert!(copy_into_managed(Paths, chosen(&source), destination)
+        .await
+        .is_err());
     assert_eq!(
         tokio::fs::read(existing).await.expect("read existing"),
         b"existing"

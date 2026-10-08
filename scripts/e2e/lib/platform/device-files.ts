@@ -15,6 +15,7 @@ export interface DeviceFiles {
   path: (name: string) => string
   write: (name: string, content: string | Uint8Array) => void
   read: (name: string) => string
+  readBytes: (name: string) => Buffer
   remove: () => void
 }
 
@@ -49,6 +50,7 @@ export function deviceFiles(
       path,
       write: (name, content) => writeFileSync(path(name), content),
       read: (name) => readFileSync(path(name), 'utf8'),
+      readBytes: (name) => readFileSync(path(name)),
       remove: () => rmSync(folder, { recursive: true, force: true }),
     }
   }
@@ -78,6 +80,7 @@ export function deviceFiles(
       }
     },
     read: (name) => adb.runAs(PACKAGE, `cat ${quote(path(name))}`).toString(),
+    readBytes: (name) => adb.runAs(PACKAGE, `cat ${quote(path(name))}`),
     remove: () => void adb.runAs(PACKAGE, `rm -rf ${quote(folder)}`),
   }
 }

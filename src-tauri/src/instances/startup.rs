@@ -31,7 +31,7 @@ pub fn cleanup_orphans_on_startup(app: &AppHandle) -> Result<()> {
 }
 
 /// Pure filesystem worker: scans `dir` for `<name>.db.pending` markers,
-/// deletes each together with its sibling `<name>.db`. Returns the
+/// deletes each together with every file of its vault (`cleanup`). Returns the
 /// number of orphans removed. Missing `dir` is not an error.
 pub fn cleanup_orphans_in_dir(dir: &Path) -> Result<usize> {
     if !dir.exists() {
@@ -53,26 +53,17 @@ pub fn cleanup_orphans_in_dir(dir: &Path) -> Result<usize> {
         if !filename.ends_with(&marker_suffix) {
             continue;
         }
-        // Sibling `.db` first. A missing sibling is expected if the crash
-        // happened before Database::open; other deletion failures retain the
-        // marker so the file cannot be published as a healthy instance.
+        // The vault's files first, with its sidecar files and temporary
+        // copies (spec 043). A missing file is expected if the crash happened
+        // before Database::open; other deletion failures retain the marker so
+        // the file cannot be published as a healthy instance.
         // `with_extension("db")` would turn `foo.db.pending` into
         // `foo.db.db`; strip the `.pending` suffix from the filename
         // instead.
         let sibling_db = path.with_file_name(sibling_filename);
-        match fs::remove_file(&sibling_db) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => {
-                log::warn!("failed to remove orphan database {sibling_db:?}: {e}");
-                continue;
-            }
+        if super::cleanup::remove_vault_files(&sibling_db) {
+            removed += 1;
         }
-        if let Err(e) = fs::remove_file(&path) {
-            log::warn!("failed to remove orphan pending marker {path:?}: {e}");
-            continue;
-        }
-        removed += 1;
     }
     Ok(removed)
 }

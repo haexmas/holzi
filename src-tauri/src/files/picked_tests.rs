@@ -16,7 +16,10 @@ fn reads_a_chosen_path_up_to_one_byte_past_the_limit() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("a.txt");
     std::fs::write(&path, b"0123456789").unwrap();
-    assert_eq!(read(&desktop(), &picked(&path), 100).unwrap(), b"0123456789");
+    assert_eq!(
+        read(&desktop(), &picked(&path), 100).unwrap(),
+        b"0123456789"
+    );
     assert_eq!(read(&desktop(), &picked(&path), 4).unwrap(), b"01234");
 }
 
@@ -119,7 +122,10 @@ fn without_free_paths_a_path_must_lie_in_the_app_storage() {
         roots: Some(vec![storage.path().to_path_buf()]),
     };
 
-    assert_eq!(read(&device, &picked(&inner.join("a.txt")), 10).unwrap(), b"x");
+    assert_eq!(
+        read(&device, &picked(&inner.join("a.txt")), 10).unwrap(),
+        b"x"
+    );
     for refused in [
         outside.path().join("b.txt"),
         inner.join("..").join("..").join("b.txt"),
@@ -155,6 +161,14 @@ fn a_link_in_the_app_storage_to_a_file_outside_is_refused() {
 
 #[test]
 fn other_addresses_are_refused() {
-    let error = read(&desktop(), &PickedFile::from("https://example.org/a.txt"), 10).unwrap_err();
-    assert!(matches!(error, HolziError::InvalidInput { .. }), "{error:?}");
+    let error = read(
+        &desktop(),
+        &PickedFile::from("https://example.org/a.txt"),
+        10,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(error, HolziError::InvalidInput { .. }),
+        "{error:?}"
+    );
 }

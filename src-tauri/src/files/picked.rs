@@ -189,9 +189,7 @@ pub fn copy_into(opener: &impl Opener, file: &PickedFile, target: &Path) -> Resu
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(unreadable(error)),
         };
-        temporary
-            .write_all(&buffer[..read])
-            .map_err(write_failed)?;
+        temporary.write_all(&buffer[..read]).map_err(write_failed)?;
         copied += read as u64;
     }
     temporary.as_file().sync_all().map_err(write_failed)?;

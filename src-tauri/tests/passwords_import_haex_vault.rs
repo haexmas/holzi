@@ -113,7 +113,9 @@ async fn run(
     on_duplicate: OnDuplicate,
 ) -> Result<ImportReport, HolziError> {
     f.service
-        .import_run(&Caller::User, Paths,
+        .import_run(
+            &Caller::User,
+            Paths,
             request,
             on_duplicate,
             &AtomicBool::new(false),
@@ -597,7 +599,9 @@ async fn the_source_and_its_wal_stay_untouched_and_the_wal_arrives() {
     let cancel = AtomicBool::new(true);
     let _ = f
         .service
-        .import_run(&Caller::User, Paths,
+        .import_run(
+            &Caller::User,
+            Paths,
             request(&vault.path, PASSWORD),
             OnDuplicate::Skip,
             &cancel,
@@ -655,7 +659,9 @@ async fn a_cancel_after_the_extras_leaves_nothing() {
     };
     let result = f
         .service
-        .import_run(&Caller::User, Paths,
+        .import_run(
+            &Caller::User,
+            Paths,
             request(&vault.path, PASSWORD),
             OnDuplicate::Create,
             &cancel,

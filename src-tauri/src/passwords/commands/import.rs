@@ -125,7 +125,14 @@ pub async fn passwords_import_run(
         }
     };
     service
-        .import_run(&Caller::User, opener, request, on_duplicate, guard.flag(), &emit)
+        .import_run(
+            &Caller::User,
+            opener,
+            request,
+            on_duplicate,
+            guard.flag(),
+            &emit,
+        )
         .await
 }
 

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { PickedFile } from '@bindings/PickedFile'
+
 const { t } = useI18n()
 const language = useLanguage()
 const { language: activeLanguage, options: languageOptions } = language
@@ -8,7 +10,11 @@ const { activeNameAsync } = useInstance()
 const createSheetOpen = ref(false)
 const linkSheetOpen = ref(false)
 const unlockSheetOpen = ref(false)
+const importSheetOpen = ref(false)
 const selectedName = ref<string | null>(null)
+const { pickOneAsync, nameOfAsync } = usePickedFile()
+const importFile = ref<PickedFile | null>(null)
+const importFileName = ref('')
 
 /** Re-syncs so a vault created or closed by another app process appears without a restart (spec
  * 013 US4, FR-021: this process's own `instance-list-changed` listener above only ever hears
@@ -96,6 +102,18 @@ async function onLinked(name: string) {
   onSelect(name)
 }
 
+/** Spec 043 (FR-002a): a vault file from elsewhere, chosen in the system's dialog; the sheet asks
+ * for its passphrase. On a desktop the dialog shows `.db` files, on Android every file. */
+async function chooseVaultFileAsync() {
+  const file = await pickOneAsync([
+    { name: t('onboarding.import.title'), extensions: ['db'] },
+  ])
+  if (file === null) return
+  importFileName.value = await nameOfAsync(file)
+  importFile.value = file
+  importSheetOpen.value = true
+}
+
 /** Activates an unlocked instance and opens its workspace-landing. */
 async function onUnlocked(name: string) {
   store.setActiveInstance(name)
@@ -134,6 +152,14 @@ async function onUnlocked(name: string) {
       >
         {{ t('onboarding.link.title') }}
       </UiButton>
+      <UiButton
+        class="w-full"
+        variant="ghost"
+        data-testid="landing-import"
+        @click="chooseVaultFileAsync"
+      >
+        {{ t('onboarding.import.button') }}
+      </UiButton>
     </div>
 
     <OnboardingInstancesList :instances="store.instances" @select="onSelect" />
@@ -148,6 +174,13 @@ async function onUnlocked(name: string) {
     />
 
     <OnboardingLinkSheet v-model:open="linkSheetOpen" @linked="onLinked" />
+
+    <OnboardingImportVaultSheet
+      v-model:open="importSheetOpen"
+      :file="importFile"
+      :file-name="importFileName"
+      @imported="onUnlocked"
+    />
 
     <OnboardingUnlockSheet
       v-model:open="unlockSheetOpen"

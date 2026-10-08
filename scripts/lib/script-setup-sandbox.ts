@@ -6,9 +6,9 @@
 // The block is transpiled with the `typescript` package already used by the other harness and run
 // in its own `new Function` scope. Nuxt's auto-imports and compiler macros have no module behind
 // them here, so they are injected as bare names. The ones that reach outside the page
-// (`useInstance`, `useInstancesStore`, `useWindowManagerStore`, `useLanguage`, `navigateTo`) throw
-// unless the case provides them, so a page that starts using one of them without the case knowing
-// fails loudly instead of doing nothing.
+// (`useInstance`, `useInstancesStore`, `useWindowManagerStore`, `useLanguage`, `usePickedFile`,
+// `navigateTo`) throw unless the case provides them, so a page that starts using one of them without
+// the case knowing fails loudly instead of doing nothing.
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve as resolvePath } from 'node:path'
@@ -26,6 +26,7 @@ export interface ScriptSetupGlobals {
   useFieldLabels?: () => unknown
   useErrorString?: () => unknown
   useLanguage?: () => unknown
+  usePickedFile?: () => unknown
   navigateTo?: (to: string) => unknown
   /** The route params the page reads, `{ instance: 'vault' }` by default. */
   params?: Record<string, string>
@@ -113,6 +114,7 @@ export function loadScriptSetup<T>(
     useFieldLabels: globals.useFieldLabels ?? notProvided('useFieldLabels'),
     useErrorString: globals.useErrorString ?? notProvided('useErrorString'),
     useLanguage: globals.useLanguage ?? notProvided('useLanguage'),
+    usePickedFile: globals.usePickedFile ?? notProvided('usePickedFile'),
     navigateTo: globals.navigateTo ?? notProvided('navigateTo'),
     window: 'window' in globals ? globals.window : notProvided('window'),
     document:

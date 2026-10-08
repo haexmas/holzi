@@ -73,7 +73,8 @@ use extensions::commands::permissions::{
 use hardware::get_hardware_info;
 use instances::{
     active_instance_name, change_vault_passphrase, cleanup_orphans_on_startup, close_instance,
-    create_instance, list_instances, open_instance, paths::get_app_local_data, ProcessPresence,
+    create_instance, import_instance, list_instances, open_instance, paths::get_app_local_data,
+    ProcessPresence,
 };
 use models::commands::{
     check_huggingface_model_updates, delete_installed_model, download_model_from_catalog,
@@ -300,6 +301,7 @@ pub fn run() {
             files::commands::picked_file_name,
             list_instances,
             create_instance,
+            import_instance,
             open_instance,
             close_instance,
             change_vault_passphrase,

@@ -23,6 +23,7 @@ use haex_crdt::rusqlite::params;
 use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
 use zeroize::Zeroizing;
 
+use holzi_lib::files::picked::PickedFile;
 use holzi_lib::identity::{
     holzi_migration_source, installation_id_path, HolziBootstrap, HOLZI_TRIGGER_VERSION,
 };
@@ -31,7 +32,6 @@ use holzi_lib::passwords::import::apply::{OnDuplicate, Phase, Progress};
 use holzi_lib::passwords::import::report::render_text;
 use holzi_lib::passwords::import::ImportSource;
 use holzi_lib::passwords::model::{AttentionKind, ImportReport};
-use holzi_lib::files::picked::PickedFile;
 use holzi_lib::passwords::service::import::ImportRequest;
 use holzi_lib::passwords::service::PasswordsService;
 use holzi_lib::vault_gate::VaultGate;
@@ -129,7 +129,9 @@ async fn run(
     on_duplicate: OnDuplicate,
 ) -> Result<ImportReport, HolziError> {
     f.service
-        .import_run(&Caller::User, Paths,
+        .import_run(
+            &Caller::User,
+            Paths,
             request,
             on_duplicate,
             &AtomicBool::new(false),
@@ -338,7 +340,9 @@ async fn a_cancelled_run_leaves_nothing() {
     };
     let result = f
         .service
-        .import_run(&Caller::User, Paths,
+        .import_run(
+            &Caller::User,
+            Paths,
             keepass_request(&f, PASSWORD),
             OnDuplicate::Create,
             &cancel,
@@ -458,7 +462,9 @@ async fn a_folder_the_vault_has_takes_the_entries_and_survives_a_rollback() {
     };
     let result = g
         .service
-        .import_run(&Caller::User, Paths,
+        .import_run(
+            &Caller::User,
+            Paths,
             keepass_request(&g, PASSWORD),
             OnDuplicate::Create,
             &cancel,

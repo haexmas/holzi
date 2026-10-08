@@ -20,6 +20,7 @@ use crate::identity::installation_id_path;
 use crate::state::{ActiveInstanceHandle, AppState};
 use crate::voice::VoiceState;
 
+use super::cleanup::remove_vault_files;
 use super::events::emit_instance_list_changed;
 use super::info::InstanceInfo;
 use super::passphrase::Passphrase;
@@ -27,6 +28,7 @@ use super::paths::{
     get_app_local_data, get_instance_path, get_pending_marker_path, validate_instance_name,
 };
 use super::vault_config::vault_config;
+use super::vault_id;
 
 #[derive(Debug, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/bindings/")]
@@ -86,7 +88,7 @@ pub async fn create_instance_core<R: Runtime>(
             _ => HolziError::from(e),
         })?;
 
-    // From here on, any early return MUST clean up the marker + .db.
+    // From here on, any early return MUST take back every file of the vault (`cleanup`).
     // Moved into the blocking task: the last owner erases it when the task ends.
     let open_path = db_path.clone();
     let open_installation_id_file = installation_id_file.clone();
@@ -97,8 +99,7 @@ pub async fn create_instance_core<R: Runtime>(
     {
         Ok(result) => result,
         Err(e) => {
-            let _ = std::fs::remove_file(&db_path);
-            let _ = std::fs::remove_file(&pending_marker);
+            remove_vault_files(&db_path);
             return Err(HolziError::CrdtInit {
                 reason: format!("database open task failed: {e}"),
             });
@@ -106,18 +107,19 @@ pub async fn create_instance_core<R: Runtime>(
     };
 
     match open_result {
-        Ok(db_arc) => match publish_active(state, name, &db_arc, &pending_marker) {
-            Ok(result) => Ok(result),
-            Err(e) => {
-                drop(db_arc);
-                let _ = std::fs::remove_file(&db_path);
-                let _ = std::fs::remove_file(&pending_marker);
-                Err(e)
+        Ok(db_arc) => {
+            vault_id::write(&db_path, &db_arc);
+            match publish_active(state, name, &db_arc, &pending_marker) {
+                Ok(result) => Ok(result),
+                Err(e) => {
+                    drop(db_arc);
+                    remove_vault_files(&db_path);
+                    Err(e)
+                }
             }
-        },
+        }
         Err(e) => {
-            let _ = std::fs::remove_file(&db_path);
-            let _ = std::fs::remove_file(&pending_marker);
+            remove_vault_files(&db_path);
             Err(e)
         }
     }
@@ -149,7 +151,7 @@ pub async fn create_instance(
 }
 
 /// Publishes a newly opened database as the active instance.
-fn publish_active(
+pub(super) fn publish_active(
     state: &AppState,
     name: &str,
     db_arc: &Arc<Database>,

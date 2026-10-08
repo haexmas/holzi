@@ -73,11 +73,9 @@ impl PasswordsService {
             .db()
             .read(move |q| binaries::attachment_data(q, &attachment_id).map_err(Into::into))
             .await?;
-        tauri::async_runtime::spawn_blocking(move || {
-            binaries::save_to(&opener, &file, &bytes)
-        })
-        .await
-        .map_err(io_failed)?
+        tauri::async_runtime::spawn_blocking(move || binaries::save_to(&opener, &file, &bytes))
+            .await
+            .map_err(io_failed)?
     }
 
     /// The bytes of an image attachment for the preview.
