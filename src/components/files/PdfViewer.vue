@@ -3,6 +3,7 @@
  * PDFs (spec 044 FR-009, FR-010; after haex-vault `src/components/haex/system/files/PdfViewer.vue`):
  * one page at a time with page buttons and zoom, the same on every platform. Loading and drawing
  * live in `lib/files/pdf.ts`. Used as `LazyFilesPdfViewer`, so pdf.js stays out of the main bundle.
+ * Takes the focus when it opens, so PageUp and PageDown turn pages; the other keys reach the viewer.
  */
 import type {
   PDFDocumentLoadingTask,
@@ -24,15 +25,19 @@ const pages = ref(0)
 const page = ref(1)
 const zoom = ref(FIT)
 const canvas = useTemplateRef<HTMLCanvasElement>('canvas')
+const root = useTemplateRef<HTMLElement>('root')
 
 let task: PDFDocumentLoadingTask | null = null
 let doc: PDFDocumentProxy | null = null
 let rendering: RenderTask | null = null
+/** The page on the canvas; leaving it frees what pdf.js keeps for it. */
+let drawnPage = 0
 
 async function load(url: string) {
   rendering?.cancel()
   void task?.destroy().catch(() => {})
   doc = null
+  drawnPage = 0
   pages.value = 0
   page.value = 1
   const current = loadPdf(url)
@@ -47,32 +52,51 @@ async function load(url: string) {
   }
 }
 
-/** Draws one page at a time: pdf.js refuses a second render on a canvas still in use. */
+/**
+ * Draws one page at a time: pdf.js refuses a second render on a canvas still in use. Only the
+ * latest request draws; the ones it overtook while waiting are skipped.
+ */
 let drawn: Promise<void> = Promise.resolve()
+let requested = 0
 
 function render() {
   rendering?.cancel()
-  drawn = drawn.then(draw)
+  const request = ++requested
+  drawn = drawn.then(() => (request === requested ? draw() : undefined))
 }
 
 async function draw() {
   const target = canvas.value
   const scale = ZOOMS[zoom.value]
   const number = page.value
-  if (!doc || !target || scale === undefined) return
+  const source = doc
+  if (!source || !target || scale === undefined) return
   try {
-    const current = await renderPdfPage(doc, number, target, scale)
+    const current = await renderPdfPage(source, number, target, scale)
     rendering = current
     await current.promise
     target.dataset.renderedPage = String(number)
-  } catch {
+    if (drawnPage !== 0 && drawnPage !== number)
+      void source
+        .getPage(drawnPage)
+        .then((left) => left.cleanup())
+        .catch(() => {})
+    drawnPage = number
+  } catch (error) {
     // Cancelled by a newer page or zoom, or the document went away.
+    if (doc !== source) return
+    if (error instanceof Error && error.name === 'RenderingCancelledException')
+      return
+    console.error('[files] drawing the PDF page failed', error)
+    emit('failed')
   }
 }
 
 watch(() => props.url, load, { immediate: true })
 watch([pages, page, zoom], render, { flush: 'post' })
+onMounted(() => root.value?.focus())
 onBeforeUnmount(() => {
+  doc = null
   rendering?.cancel()
   void task?.destroy().catch(() => {})
 })
@@ -89,7 +113,9 @@ function onKeydown(event: KeyboardEvent) {
 
 <template>
   <div
-    class="flex min-h-full flex-col items-center"
+    ref="root"
+    class="flex min-h-full flex-col items-center outline-none"
+    tabindex="-1"
     data-testid="files-viewer-pdf"
     @keydown="onKeydown"
   >

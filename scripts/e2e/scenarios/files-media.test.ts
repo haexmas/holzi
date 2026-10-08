@@ -7,7 +7,7 @@ import { scenario } from '../lib/scenario.ts'
 import { runAction } from '../lib/settings.ts'
 
 // Spec 044, US2, quickstart §2 (T040): audio and video play from the media server, the video seeks,
-// the server answers a range through the web view, a PDF turns to page 2, and the URL of a file
+// the server answers a range through the web view, a PDF turns to page 2 by key and button, and the URL of a file
 // answers 404 once its tab is closed. The fixtures and how they were made:
 // src-tauri/tests/fixtures/files/README.md.
 
@@ -25,7 +25,7 @@ const playing = (instance: FlowInstance, hook: string) =>
 
 const mediaUrl = (instance: FlowInstance, hook: string) =>
   instance.exec<string>(
-    `return document.querySelector('[data-testid="' + arguments[0] + '"]').currentSrc`,
+    `return document.querySelector('[data-testid="' + arguments[0] + '"]').src`,
     [hook],
   )
 
@@ -97,10 +97,10 @@ scenario('files-media', { timeoutMs: 240_000 }, async (ctx) => {
       length: 1000,
     })
     await instance.click('files-viewer-close')
-    assert.equal(
-      (await fetchFromPage(instance, url)).status,
-      404,
-      'the URL of a closed viewer still answers',
+    // The viewer releases its URL without waiting for the answer.
+    await ctx.waitFor(
+      'the URL of the closed viewer to end',
+      async () => (await fetchFromPage(instance, url)).status === 404,
     )
 
     // The PDF turns to page 2.
@@ -108,6 +108,20 @@ scenario('files-media', { timeoutMs: 240_000 }, async (ctx) => {
     await instance.waitForDisplayed('files-viewer-pdf')
     await ctx.waitFor(
       'page 1 of the PDF',
+      async () => (await pdfCanvas(instance)).page === '1',
+    )
+    // PageDown where the focus is when the PDF opens, then the buttons.
+    await instance.exec(
+      `document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true }))
+       return true`,
+    )
+    await ctx.waitFor(
+      'page 2 of the PDF after PageDown',
+      async () => (await pdfCanvas(instance)).page === '2',
+    )
+    await instance.click('files-pdf-previous')
+    await ctx.waitFor(
+      'page 1 of the PDF again',
       async () => (await pdfCanvas(instance)).page === '1',
     )
     await instance.click('files-pdf-next')

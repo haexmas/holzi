@@ -34,10 +34,9 @@ const shown = computed(() => {
     case 'text':
     case 'image':
     case 'pdf':
-      return kind.value
     case 'video':
     case 'audio':
-      return 'media'
+      return kind.value
     default:
       return 'info'
   }
@@ -215,11 +214,9 @@ onMounted(() => panel.value?.focus())
         />
       </div>
       <FilesMediaViewer
-        v-else-if="
-          shown === 'media' && url && (kind === 'video' || kind === 'audio')
-        "
+        v-else-if="(shown === 'video' || shown === 'audio') && url"
         :url="url"
-        :kind="kind"
+        :kind="shown"
         @failed="unplayable = true"
       />
       <LazyFilesPdfViewer
