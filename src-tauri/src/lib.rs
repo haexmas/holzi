@@ -6,6 +6,7 @@ pub mod chat;
 pub mod device;
 pub mod error;
 pub mod extensions;
+pub mod files;
 pub mod hardware;
 pub mod identity;
 pub mod instances;
@@ -75,7 +76,8 @@ use extensions::commands::permissions::{
 use hardware::get_hardware_info;
 use instances::{
     active_instance_name, change_vault_passphrase, cleanup_orphans_on_startup, close_instance,
-    create_instance, list_instances, open_instance, paths::get_app_local_data, ProcessPresence,
+    create_instance, import_instance, list_instances, open_instance, paths::get_app_local_data,
+    ProcessPresence,
 };
 use models::commands::{
     check_huggingface_model_updates, delete_installed_model, download_model_from_catalog,
@@ -222,6 +224,8 @@ pub fn run() {
             // Spec 043 (research R2): certificate checks need this on Android before any
             // network service starts.
             tls::init_platform_verifier()?;
+            // Spec 043 (FR-011, FR-012): the space the system bars and the keyboard take.
+            platform::insets::watch(app.handle());
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
