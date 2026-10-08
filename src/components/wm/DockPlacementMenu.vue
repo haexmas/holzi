@@ -22,9 +22,7 @@ function set(field: keyof DockPlacement, value: unknown) {
 
 <template>
   <template v-for="group in GROUPS" :key="group.field">
-    <ShadcnContextMenuSub
-      v-if="group.field !== 'mode' || dock.placement.value.style === 'bar'"
-    >
+    <ShadcnContextMenuSub>
       <ShadcnContextMenuSubTrigger
         :data-testid="`dock-placement-${group.field}`"
       >

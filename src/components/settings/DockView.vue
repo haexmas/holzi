@@ -95,7 +95,6 @@ function add(value: string) {
     <SettingsGroup :label="t('settings.dock.placement')">
       <template v-for="{ field, values } in FIELDS" :key="field">
         <SettingsRow
-          v-if="field !== 'mode' || dock.placement.value.style === 'bar'"
           :title="t(`settings.dock.${field}`)"
           :label-for="`settings-dock-${field}`"
         >

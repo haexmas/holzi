@@ -39,7 +39,7 @@ type DockPlacement = {
   style: DockStyle
   edge: DockEdge
   align: DockAlign
-  mode: DockMode // nur für `bar` wirksam
+  mode: DockMode // für Leiste und Rad
 }
 ```
 

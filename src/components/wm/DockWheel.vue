@@ -4,20 +4,22 @@
  * circle at a corner or a half circle at the middle of an edge, on further rings when they do not
  * fit (`wheelLayout`, FR-027, FR-028). It folds when an entry is activated, on Escape and on a
  * click outside (FR-029), but stays open while an entry's menu or chooser is (they live outside
- * it). A menu of entries (FR-042): Enter or Space opens it, the arrow keys follow the entries,
+ * it). Its one context menu offers the actions of the entry it was opened on, or edge,
+ * alignment and style on the button (`DockMenu`). A menu of entries (FR-042): Enter or Space opens it, the arrow keys follow the entries,
  * Enter activates. The button carries a dot while any app wants attention.
  */
 import {
   computed,
   inject,
   nextTick,
+  onBeforeUnmount,
   provide,
   reactive,
   ref,
   useTemplateRef,
   watch,
 } from 'vue'
-import { DOCK_HOLD, useDockHold } from '~/composables/useDock'
+import { DOCK_HOLD, dockEntryAt, useDockHold } from '~/composables/useDock'
 import {
   dockItemKey,
   wheelLayout,
@@ -40,21 +42,37 @@ const toggle = useTemplateRef<HTMLButtonElement>('toggle')
 const open = ref(false)
 const focusIndex = ref(0)
 
-/** The entries' menus and choosers open right now; they live outside the wheel, so while one is
- * open a click there is no "click outside". Passed on to the dock as well. */
+/** The wheel's menu and the entries' choosers open right now; they live outside the wheel, so
+ * while one is open a click there is no "click outside". Passed on to the dock as well. */
 const holders = reactive(new Set<symbol>())
 const holdDock = inject(DOCK_HOLD, () => {})
-provide(DOCK_HOLD, (holder: symbol, isOpen: boolean) => {
+function hold(holder: symbol, isOpen: boolean) {
   holdDock(holder, isOpen)
   if (isOpen) {
     holders.add(holder)
     return
   }
-  // The chooser of an entry closed after a choice: the wheel's job is done too.
+  // A chooser closed after a choice, a menu after its action: the wheel's job is done too.
   if (holders.delete(holder) && holders.size === 0) close()
+}
+provide(DOCK_HOLD, hold)
+onBeforeUnmount(() => {
+  for (const holder of holders) holdDock(holder, false)
 })
-// The button's own menu (edge, alignment, style) belongs to the dock, not to the entries.
-const holdToggleMenu = useDockHold()
+
+// The wheel's one context menu (only one menu open at a time): the entry it was opened on, or the
+// button, which offers edge, alignment and style.
+const menuEntry = ref<DockEntry | null>(null)
+function pickMenuEntry(event: Event) {
+  menuEntry.value = dockEntryAt(event.target, props.entries)
+}
+// A fanned-out wheel keeps a hiding dock visible (FR-025).
+const holdFanned = useDockHold()
+watch(open, (isOpen) => holdFanned(isOpen))
+const wheelMenu = Symbol('dockWheelMenu')
+function holdWheelMenu(isOpen: boolean) {
+  hold(wheelMenu, isOpen)
+}
 
 // Switching between compact and normal mode moves the wheel to another corner (FR-034).
 watch(
@@ -128,31 +146,40 @@ function onKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div ref="root" class="relative h-14 w-14" @keydown="onKeydown">
-    <div
-      role="menu"
-      :aria-label="t('wm.dock.label')"
-      :aria-hidden="!open"
-      class="absolute inset-0"
-    >
+  <ShadcnContextMenu @update:open="holdWheelMenu">
+    <ShadcnContextMenuTrigger as-child>
       <div
-        v-for="(entry, index) in entries"
-        :key="dockItemKey(entry)"
-        role="none"
-        class="absolute left-1/2 top-1/2 rounded-full bg-background shadow-lg ring-1 ring-border transition-[transform,opacity] duration-200 motion-reduce:transition-none"
-        :class="open ? 'opacity-100' : 'pointer-events-none opacity-0'"
-        :style="{
-          transform: open
-            ? `translate(-50%, -50%) translate(${offsets[index]?.x ?? 0}px, ${offsets[index]?.y ?? 0}px)`
-            : 'translate(-50%, -50%) scale(0.5)',
-        }"
-        @click="onItemClick"
+        ref="root"
+        class="relative h-14 w-14"
+        @keydown="onKeydown"
+        @pointerdown.capture="pickMenuEntry"
+        @contextmenu.capture="pickMenuEntry"
       >
-        <WmDockItem :entry="entry" :tabbable="open && index === focusIndex" />
-      </div>
-    </div>
-    <ShadcnContextMenu @update:open="holdToggleMenu">
-      <ShadcnContextMenuTrigger as-child>
+        <div
+          role="menu"
+          :aria-label="t('wm.dock.label')"
+          :aria-hidden="!open"
+          class="absolute inset-0"
+        >
+          <div
+            v-for="(entry, index) in entries"
+            :key="dockItemKey(entry)"
+            role="none"
+            class="absolute left-1/2 top-1/2 rounded-full bg-background shadow-lg ring-1 ring-border transition-[transform,opacity] duration-200 motion-reduce:transition-none"
+            :class="open ? 'opacity-100' : 'pointer-events-none opacity-0'"
+            :style="{
+              transform: open
+                ? `translate(-50%, -50%) translate(${offsets[index]?.x ?? 0}px, ${offsets[index]?.y ?? 0}px)`
+                : 'translate(-50%, -50%) scale(0.5)',
+            }"
+            @click="onItemClick"
+          >
+            <WmDockItem
+              :entry="entry"
+              :tabbable="open && index === focusIndex"
+            />
+          </div>
+        </div>
         <button
           ref="toggle"
           type="button"
@@ -177,10 +204,10 @@ function onKeydown(event: KeyboardEvent) {
             :aria-label="t('wm.attention')"
           />
         </button>
-      </ShadcnContextMenuTrigger>
-      <ShadcnContextMenuContent class="min-w-48" data-testid="dock-menu">
-        <WmDockPlacementMenu />
-      </ShadcnContextMenuContent>
-    </ShadcnContextMenu>
-  </div>
+      </div>
+    </ShadcnContextMenuTrigger>
+    <ShadcnContextMenuContent class="min-w-48" data-testid="dock-menu">
+      <WmDockMenu :entry="menuEntry" />
+    </ShadcnContextMenuContent>
+  </ShadcnContextMenu>
 </template>
