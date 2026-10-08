@@ -87,13 +87,13 @@ click, close all.
 
 **Independent Test**: Spec US3 acceptance scenarios 1–6 (quickstart step 6).
 
-- [ ] T026 [US3] In `src/lib/wm/dock.ts` add `effectivePlacement(placement: DockPlacement, compact: boolean): DockPlacement` per the table in `data-model.md`; add cases for all style × compact combinations to `scripts/check-wm-dock.ts`
-- [ ] T027 [US3] In `src/components/wm/Desktop.vue` and `src/components/wm/Dock.vue`: lay out by `effectivePlacement(dock.placement, wm.compact)` — `reserved`: flex sibling of the window area (`flex-col` / `flex-col-reverse` / `flex-row` / `flex-row-reverse` by edge), so T010's measurement yields the remaining area (FR-024); `floating`: absolutely positioned over the window area; alignment via `justify-start/center/end` along the edge; vertical orientation for `left`/`right` (FR-026)
-- [ ] T028 [US3] In `src/components/wm/Dock.vue`: `autohide` mode — a 4 px transparent strip at the edge (`pointerenter` shows), `pointerleave` of the bar hides after 400 ms; stays visible while `:focus-within`, its popover or a context menu is open (FR-025); slide transition disabled under `prefers-reduced-motion`
-- [ ] T029 [US3] In `src/components/wm/Dock.vue`: `ShadcnContextMenu` on the dock's free area with radio groups for edge, alignment, style and mode (mode only for `bar`) → `useDock().setPlacementAsync` (FR-018)
-- [ ] T030 [US3] Settings: in `src/lib/settings/registry.ts` add `subView('general.dock', 'general/dock', 'general', { icon: 'lucide:panel-bottom', overviewRow: true, settingKeys: ['settings.dock.style', 'settings.dock.edge', 'settings.dock.align', 'settings.dock.mode', 'settings.dock.items'] })` after `general.appearance`; create `src/components/settings/DockView.vue` with a placement group (`SettingsGroup`, `SettingsRow`, `SettingsSelect` like `ColorSchemeSetting.vue`; mode select hidden for `wheel`); map `'general.dock'` in `SETTINGS_VIEWS` of `src/components/wm/appRoutes.ts`
-- [ ] T031 [P] [US3] i18n: `settings.locations.general.dock.{title,description,keywords}` ("Dock", "Position, Stil, Einträge" / "Position, style, entries"), `settings.dock.{style,edge,align,mode,items}` labels and option texts (`bar`/`wheel`, `top`/`bottom`/`left`/`right`, `start`/`center`/`end`, `reserved`/`floating`/`autohide`); run `pnpm check:settings`
-- [ ] T032 [US3] Extend `scripts/e2e/scenarios/dock.test.ts`: in settings set edge `left` → `dock` has `data-edge="left"`
+- [x] T026 [US3] In `src/lib/wm/dock.ts` add `effectivePlacement(placement: DockPlacement, compact: boolean): DockPlacement` per the table in `data-model.md`; add cases for all style × compact combinations to `scripts/check-wm-dock.ts`
+- [x] T027 [US3] In `src/components/wm/Desktop.vue` and `src/components/wm/Dock.vue`: lay out by `effectivePlacement(dock.placement, wm.compact)` — `reserved`: flex sibling of the window area (`flex-col` / `flex-col-reverse` / `flex-row` / `flex-row-reverse` by edge), so T010's measurement yields the remaining area (FR-024); `floating`: absolutely positioned over the window area; alignment via `justify-start/center/end` along the edge; vertical orientation for `left`/`right` (FR-026)
+- [x] T028 [US3] In `src/components/wm/Dock.vue`: `autohide` mode — a 4 px transparent strip at the edge (`pointerenter` shows), `pointerleave` of the bar hides after 400 ms; stays visible while `:focus-within`, its popover or a context menu is open (FR-025); slide transition disabled under `prefers-reduced-motion`
+- [x] T029 [US3] In `src/components/wm/Dock.vue`: `ShadcnContextMenu` on the dock's free area with radio groups for edge, alignment, style and mode (mode only for `bar`) → `useDock().setPlacementAsync` (FR-018)
+- [x] T030 [US3] Settings: in `src/lib/settings/registry.ts` add `subView('general.dock', 'general/dock', 'general', { icon: 'lucide:panel-bottom', overviewRow: true, settingKeys: ['settings.dock.style', 'settings.dock.edge', 'settings.dock.align', 'settings.dock.mode', 'settings.dock.items'] })` after `general.appearance`; create `src/components/settings/DockView.vue` with a placement group (`SettingsGroup`, `SettingsRow`, `SettingsSelect` like `ColorSchemeSetting.vue`; mode select hidden for `wheel`); map `'general.dock'` in `SETTINGS_VIEWS` of `src/components/wm/appRoutes.ts`
+- [x] T031 [P] [US3] i18n: `settings.locations.general.dock.{title,description,keywords}` ("Dock", "Position, Stil, Einträge" / "Position, style, entries"), `settings.dock.{style,edge,align,mode,items}` labels and option texts (`bar`/`wheel`, `top`/`bottom`/`left`/`right`, `start`/`center`/`end`, `reserved`/`floating`/`autohide`); run `pnpm check:settings`
+- [x] T032 [US3] Extend `scripts/e2e/scenarios/dock.test.ts`: in settings set edge `left` → `dock` has `data-edge="left"`
 
 **Checkpoint**: Position and mode configurable per device.
 
@@ -105,11 +105,11 @@ click, close all.
 
 **Independent Test**: Spec US4 acceptance scenarios 1–5 (quickstart step 7).
 
-- [ ] T033 [US4] In `src/components/wm/DockBar.vue`: native HTML5 drag-and-drop between pinned entries and controls (pattern `src/components/passwords/List.vue` / `TreeItem.vue`), drop → `useDock().moveAsync(from, to)` using indexes into `dock.items` (not into the rendered entries, which skip unavailable apps); unpinned running entries are not draggable (FR-019). Add a `ponytail:` comment: mouse only, touch sorts in settings (research R8)
-- [ ] T034 [US4] In `src/components/settings/DockView.vue`: entries group listing every `DockItemState` with icon and name, "Nach oben"/"Nach unten" buttons, "Entfernen" for all but the launcher, unavailable apps greyed with "nicht verfügbar" (FR-020, FR-021, FR-006); an "Hinzufügen" select listing apps from `wm.apps()` not yet pinned plus removed controls
-- [ ] T035 [US4] In `src/components/wm/DockItem.vue` context menu: "Aus Dock entfernen" for the workspaces and windows controls → `useDock().removeAsync(index)`; nothing for the launcher (US4 scenario 5)
-- [ ] T036 [P] [US4] i18n: `settings.dock.{moveUp,moveDown,remove,add,unavailable}`, `wm.dock.remove`
-- [ ] T037 [US4] Extend `scripts/e2e/scenarios/dock.test.ts`: remove the windows control in settings → `dock-control-windows` gone; assert the launcher row has no remove button
+- [x] T033 [US4] In `src/components/wm/DockBar.vue`: native HTML5 drag-and-drop between pinned entries and controls (pattern `src/components/passwords/List.vue` / `TreeItem.vue`), drop → `useDock().moveAsync(from, to)` using indexes into `dock.items` (not into the rendered entries, which skip unavailable apps); unpinned running entries are not draggable (FR-019). Add a `ponytail:` comment: mouse only, touch sorts in settings (research R8)
+- [x] T034 [US4] In `src/components/settings/DockView.vue`: entries group listing every `DockItemState` with icon and name, "Nach oben"/"Nach unten" buttons, "Entfernen" for all but the launcher, unavailable apps greyed with "nicht verfügbar" (FR-020, FR-021, FR-006); an "Hinzufügen" select listing apps from `wm.apps()` not yet pinned plus removed controls
+- [x] T035 [US4] In `src/components/wm/DockItem.vue` context menu: "Aus Dock entfernen" for the workspaces and windows controls → `useDock().removeAsync(index)`; nothing for the launcher (US4 scenario 5)
+- [x] T036 [P] [US4] i18n: `settings.dock.{moveUp,moveDown,remove,add,unavailable}`, `wm.dock.remove`
+- [x] T037 [US4] Extend `scripts/e2e/scenarios/dock.test.ts`: remove the windows control in settings → `dock-control-windows` gone; assert the launcher row has no remove button
 
 **Checkpoint**: Dock content fully user-defined.
 
@@ -123,8 +123,8 @@ click, close all.
 
 **Depends on**: T026 (effectivePlacement), T027 (layout).
 
-- [ ] T038 [US6] In `src/components/wm/Dock.vue`: watch `wm.compact`; on change close an open instance popover and a fanned-out wheel (FR-034); the bar in compact scrolls horizontally with touch (`overflow-x-auto`, `touch-pan-x`)
-- [ ] T039 [US6] Extend `scripts/e2e/scenarios/dock.test.ts` (window resize as in `settings-narrow-window.test.ts`): edge `left`, width 700 → `data-edge="bottom"`; width 900 → `data-edge="left"` and stays there after a second check (FR-033)
+- [x] T038 [US6] In `src/components/wm/Dock.vue`: watch `wm.compact`; on change close an open instance popover and a fanned-out wheel (FR-034); the bar in compact scrolls horizontally with touch (`overflow-x-auto`, `touch-pan-x`)
+- [x] T039 [US6] Extend `scripts/e2e/scenarios/dock.test.ts`: with the bar at edge `left`, the window area is narrower than the app window (in the rig's 800 px window below the compact threshold) and `wm.compact` stays false (FR-033), checked without driving `updateArea` by hand. The rig cannot resize the app window (no window-rect call in `scripts/e2e/lib/webdriver.ts`), so the compact placement itself (FR-031/FR-032) is covered by `check-wm-dock.ts` (`effectivePlacement`) and quickstart step 9
 
 **Checkpoint**: Dock usable on phones; no position flip-flop near the threshold.
 
@@ -136,11 +136,11 @@ click, close all.
 
 **Independent Test**: Spec US5 acceptance scenarios 1–6 (quickstart step 8).
 
-- [ ] T040 [US5] In `src/lib/wm/dock.ts` add `wheelLayout(count: number, edge: DockEdge, align: DockAlign): { x: number; y: number }[]` per research R6 (corner = `start`/`end` → 90°, `center` → 180°, opening toward the screen centre; ring radius `r0 + k·gap`, capacity `max(1, floor(arcLength / 56) + 1)`, fill inner to outer); add cases to `scripts/check-wm-dock.ts`: every pairwise distance ≥ 48 for counts 1–20 at all 12 positions, all offsets point into the screen, ring count grows when capacity is exceeded
-- [ ] T041 [US5] Create `src/components/wm/DockWheel.vue`: a 56 px round toggle (`data-testid="dock-wheel-toggle"`, `aria-haspopup="menu"`, `aria-expanded`) with an attention dot when any entry's app has attention (US5 scenario 5); when open renders the same `DockItem`s absolutely at `wheelLayout` offsets with a `transform` transition (none under `prefers-reduced-motion`); closes on activation, Escape and outside click (`onClickOutside`) (FR-027–FR-029); keyboard: Enter/Space opens, arrow keys move along the entry order, Enter activates (FR-042); `role="menu"` / `menuitem`
-- [ ] T042 [US5] In `src/components/wm/Dock.vue`: render `DockWheel` when the effective style is `wheel`, always absolutely positioned at the effective corner/edge over the window area, never reserving space (FR-030); ignore `mode`
-- [ ] T043 [P] [US5] i18n: `wm.dock.wheel.open` / `close` (toggle aria labels)
-- [ ] T044 [US5] Extend `scripts/e2e/scenarios/dock.test.ts`: set style `wheel` → `dock-wheel-toggle` visible, click → entries visible, Escape → hidden
+- [x] T040 [US5] In `src/lib/wm/dock.ts` add `wheelLayout(count: number, edge: DockEdge, align: DockAlign): { x: number; y: number }[]` per research R6 (corner = `start`/`end` → 90°, `center` → 180°, opening toward the screen centre; ring radius `r0 + k·gap`, capacity `max(1, floor(arcLength / 56) + 1)`, fill inner to outer); add cases to `scripts/check-wm-dock.ts`: every pairwise distance ≥ 48 for counts 1–20 at all 12 positions, all offsets point into the screen, ring count grows when capacity is exceeded
+- [x] T041 [US5] Create `src/components/wm/DockWheel.vue`: a 56 px round toggle (`data-testid="dock-wheel-toggle"`, `aria-haspopup="menu"`, `aria-expanded`) with an attention dot when any entry's app has attention (US5 scenario 5); when open renders the same `DockItem`s absolutely at `wheelLayout` offsets with a `transform` transition (none under `prefers-reduced-motion`); closes on activation, Escape and outside click (`onClickOutside`) (FR-027–FR-029); keyboard: Enter/Space opens, arrow keys move along the entry order, Enter activates (FR-042); `role="menu"` / `menuitem`
+- [x] T042 [US5] In `src/components/wm/Dock.vue`: render `DockWheel` when the effective style is `wheel`, always absolutely positioned at the effective corner/edge over the window area, never reserving space (FR-030); ignore `mode`
+- [x] T043 [P] [US5] i18n: `wm.dock.wheel.open` / `close` (toggle aria labels)
+- [x] T044 [US5] Extend `scripts/e2e/scenarios/dock.test.ts`: set style `wheel` → `dock-wheel-toggle` visible, click → entries visible, Escape → hidden
 
 **Checkpoint**: All six stories done.
 
@@ -148,9 +148,9 @@ click, close all.
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T045 [P] Add a **Dock** entry to the window-manager glossary in `CONTEXT.md` (Dock, Leiste, Rad, Steuer-Eintrag, angeheftete/laufende App, Instanz = Tab; `dock.*` preference keys; avoid "Taskleiste" in UI text)
-- [ ] T046 Check every new or changed file stays under 500 lines (`wc -l src/lib/wm/dock.ts src/components/wm/Dock*.vue src/components/settings/DockView.vue src/composables/useDock.ts`); split `wheelLayout` into `src/lib/wm/dockWheel.ts` if `dock.ts` exceeds it
-- [ ] T047 Run `pnpm check:wm-state`, `pnpm check:wm-navigation`, `pnpm check:settings`, `pnpm check:agent-actions` (must stay unchanged — no new actions), `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`; fix until green
+- [x] T045 [P] Add a **Dock** entry to the window-manager glossary in `CONTEXT.md` (Dock, Leiste, Rad, Steuer-Eintrag, angeheftete/laufende App, Instanz = Tab; `dock.*` preference keys; avoid "Taskleiste" in UI text)
+- [x] T046 Check every new or changed file stays under 500 lines (`wc -l src/lib/wm/dock.ts src/components/wm/Dock*.vue src/components/settings/DockView.vue src/composables/useDock.ts`); split `wheelLayout` into `src/lib/wm/dockWheel.ts` if `dock.ts` exceeds it
+- [x] T047 Run `pnpm check:wm-state`, `pnpm check:wm-navigation`, `pnpm check:settings`, `pnpm check:agent-actions` (must stay unchanged — no new actions), `pnpm typecheck`, `pnpm typecheck:scripts`, `pnpm lint`, `pnpm format:check`; fix until green
 - [ ] T048 Walk through `specs/045-dock/quickstart.md` steps 1–11 in `pnpm tauri:dev` (steps 9 on a real Android device if available, step 10 with two devices); record skipped steps in the PR description
 - [ ] T049 Run `pnpm test:e2e --grep dock` plus the scenarios using `open-launcher` (`--grep settings`, `--grep chat-multi-instance`) on Arch, or confirm via `gh pr checks` (E2E job) on Pop!\_OS
 

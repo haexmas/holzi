@@ -139,6 +139,18 @@ export const SETTINGS_LOCATIONS: readonly SettingsLocation[] = [
       'settings.appearance.windowHint',
     ],
   }),
+  // Spec 045: the dock's placement on this device and its entries for the vault.
+  subView('general.dock', 'general/dock', 'general', {
+    icon: 'lucide:panel-bottom',
+    overviewRow: true,
+    settingKeys: [
+      'settings.dock.style',
+      'settings.dock.edge',
+      'settings.dock.align',
+      'settings.dock.mode',
+      'settings.dock.items',
+    ],
+  }),
   categoryLocation('models'),
   subView('models.default', 'models/default', 'models', {
     icon: 'lucide:star',

@@ -6,12 +6,18 @@ import { test } from 'node:test'
 import {
   DEFAULT_DOCK_PLACEMENT,
   dockActivation,
+  effectivePlacement,
   normalizeDockItems,
   parseDockItems,
   parseDockPlacement,
   resolveDockEntries,
   serializeDockItems,
+  wheelLayout,
+  WHEEL_ITEM_SIZE,
+  type DockAlign,
+  type DockEdge,
   type DockItem,
+  type DockPlacement,
 } from '../src/lib/wm/dock.ts'
 import type { WmWindow } from '../src/lib/wm/types.ts'
 import { ALPHA, APPS, BETA } from './lib/wm-fixtures.ts'
@@ -211,4 +217,106 @@ test('dockActivation opens, focuses the one instance, or lets the user choose', 
   assert.deepEqual(dockActivation([]), { kind: 'open' })
   assert.deepEqual(dockActivation([one]), { kind: 'focus', tabId: 't1' })
   assert.deepEqual(dockActivation([one, two]), { kind: 'choose' })
+})
+
+// ---------------------------------------------------------------------------
+// Effective placement (data-model.md)
+// ---------------------------------------------------------------------------
+
+test('effectivePlacement keeps the choice outside compact mode', () => {
+  const placement: DockPlacement = {
+    style: 'bar',
+    edge: 'left',
+    align: 'end',
+    mode: 'autohide',
+  }
+  assert.deepEqual(effectivePlacement(placement, false), placement)
+})
+
+test('effectivePlacement puts the bar at the bottom, reserving space, in compact mode', () => {
+  for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
+    for (const mode of ['reserved', 'floating', 'autohide'] as const) {
+      assert.deepEqual(
+        effectivePlacement({ style: 'bar', edge, align: 'start', mode }, true),
+        { style: 'bar', edge: 'bottom', align: 'center', mode: 'reserved' },
+      )
+    }
+  }
+})
+
+test('effectivePlacement puts the wheel into a bottom corner in compact mode', () => {
+  const wheel = (align: 'start' | 'center' | 'end'): DockPlacement => ({
+    style: 'wheel',
+    edge: 'top',
+    align,
+    mode: 'floating',
+  })
+  assert.equal(effectivePlacement(wheel('start'), true).align, 'start')
+  assert.equal(effectivePlacement(wheel('center'), true).align, 'end')
+  assert.equal(effectivePlacement(wheel('end'), true).align, 'end')
+  assert.equal(effectivePlacement(wheel('start'), true).edge, 'bottom')
+})
+
+// ---------------------------------------------------------------------------
+// Wheel geometry (research R6)
+// ---------------------------------------------------------------------------
+
+const EDGES: readonly DockEdge[] = ['top', 'bottom', 'left', 'right']
+const ALIGNS: readonly DockAlign[] = ['start', 'center', 'end']
+const EPSILON = 1e-6
+
+test('wheelLayout never lets two entries overlap, at any position and count', () => {
+  for (const edge of EDGES) {
+    for (const align of ALIGNS) {
+      for (let count = 1; count <= 20; count += 1) {
+        const offsets = wheelLayout(count, edge, align)
+        assert.equal(offsets.length, count)
+        for (let i = 0; i < offsets.length; i += 1) {
+          for (let j = i + 1; j < offsets.length; j += 1) {
+            const a = offsets[i]!
+            const b = offsets[j]!
+            const distance = Math.hypot(a.x - b.x, a.y - b.y)
+            assert.ok(
+              distance >= WHEEL_ITEM_SIZE - EPSILON,
+              `${edge}/${align} with ${count}: entries ${i} and ${j} are ${distance} apart`,
+            )
+          }
+        }
+      }
+    }
+  }
+})
+
+test('wheelLayout fans out into the screen, away from the edge and the corner', () => {
+  for (const align of ALIGNS) {
+    for (const { y } of wheelLayout(20, 'bottom', align))
+      assert.ok(y <= EPSILON, `bottom/${align} goes below the edge`)
+    for (const { y } of wheelLayout(20, 'top', align))
+      assert.ok(y >= -EPSILON, `top/${align} goes above the edge`)
+    for (const { x } of wheelLayout(20, 'left', align))
+      assert.ok(x >= -EPSILON, `left/${align} goes past the edge`)
+    for (const { x } of wheelLayout(20, 'right', align))
+      assert.ok(x <= EPSILON, `right/${align} goes past the edge`)
+  }
+  // Corners: both coordinates point inward.
+  for (const { x, y } of wheelLayout(20, 'bottom', 'end'))
+    assert.ok(x <= EPSILON && y <= EPSILON)
+  for (const { x, y } of wheelLayout(20, 'top', 'start'))
+    assert.ok(x >= -EPSILON && y >= -EPSILON)
+  for (const { x, y } of wheelLayout(20, 'left', 'end'))
+    assert.ok(x >= -EPSILON && y <= EPSILON)
+  for (const { x, y } of wheelLayout(20, 'right', 'start'))
+    assert.ok(x <= EPSILON && y >= -EPSILON)
+})
+
+test('wheelLayout adds outer rings once the inner one is full', () => {
+  const radii = (count: number) =>
+    new Set(
+      wheelLayout(count, 'bottom', 'end').map(({ x, y }) =>
+        Math.round(Math.hypot(x, y)),
+      ),
+    ).size
+  assert.equal(radii(1), 1)
+  assert.ok(radii(12) >= 2)
+  assert.ok(radii(20) > radii(6))
 })

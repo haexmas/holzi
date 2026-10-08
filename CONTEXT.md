@@ -136,6 +136,16 @@ inside it. Specs 015 and 020 call it **Shell**; it was renamed on
 be granted or denied access to (spec 021). Do not use "shell" for this
 concept in new code or specs.
 
+**Dock / Leiste / Rad** (spec 045):
+The control of the workspace that holds the **Steuer-Einträge** (Launcher, window overview,
+workspace overview), the apps the user **pinned** (angeheftet) and every **running** app (laufend:
+at least one instance in any workspace). It shows as a **Leiste** (bar) along an edge or as a
+**Rad** (wheel), one button that fans the entries out. An **Instanz** of an app is one of its tabs,
+alone in its own window or next to other tabs. The entries are the vault preference `dock.items`
+(synced), style and position the device preference `dock.placement`; code lives in
+`src/lib/wm/dock.ts`, `useDock`, `src/components/wm/Dock*.vue`.
+_Avoid_: "Taskleiste" in UI text, "Action-Menü".
+
 **Sitzung (wm session)** (spec 022):
 Which workspaces, windows and tabs are open, with window geometry and state and
 each tab's location and back/forward history. Saved (`wm_sessions_no_sync`, one
@@ -231,8 +241,8 @@ Föderation (`SETTINGS_CATEGORIES` in `src/lib/settings/registry.ts`). A
 category with several areas starts with an overview that leads into
 **Unteransichten**; every category and sub-view is an **Ort** of the settings
 tab. Settings apply to the vault on every device; only the Gerätename, the
-Standard-Modell and the Spracherkennungsmodell stay per device (FR-024). A
-choice saves on selection, without a save button.
+Standard-Modell, the Spracherkennungsmodell and the Dock-Position stay per
+device (FR-024). A choice saves on selection, without a save button.
 
 **Farbschema (color scheme)** (spec 023):
 Hell, Dunkel or System (`appearance.color_scheme`, vault value, default

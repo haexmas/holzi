@@ -123,9 +123,11 @@
       "unpin": "Vom Dock lösen",
       "newWindow": "Neues Fenster",
       "closeAll": "Alle schließen",
+      "remove": "Aus Dock entfernen",
       "instances": "Instanzen",
       "running": "läuft",
       "count": "{count} Instanzen offen",
+      "wheel": { "open": "Dock öffnen", "close": "Dock schließen" },
       "controls": {
         "launcher": "Launcher",
         "workspaces": "Arbeitsbereiche",
@@ -502,6 +504,11 @@
           "title": "Erscheinungsbild",
           "description": "Farbschema, Hintergrund und Farben.",
           "keywords": "Darstellung Farbschema hell dunkel System Theme Aussehen Hintergrund Hintergrundbild Wallpaper"
+        },
+        "dock": {
+          "title": "Dock",
+          "description": "Position, Stil und Einträge des Docks.",
+          "keywords": "Dock Leiste Taskleiste Rad anheften Position Kante Ecke automatisch ausblenden"
         }
       },
       "models": {
@@ -593,6 +600,32 @@
     "sidebar": {
       "show": "Seitenleiste einblenden",
       "hide": "Seitenleiste ausblenden"
+    },
+    "dock": {
+      "placement": "Auf diesem Gerät",
+      "items": "Einträge",
+      "style": "Stil",
+      "edge": "Kante",
+      "align": "Ausrichtung",
+      "mode": "Verhalten",
+      "styleOptions": { "bar": "Leiste", "wheel": "Rad" },
+      "edgeOptions": {
+        "top": "Oben",
+        "bottom": "Unten",
+        "left": "Links",
+        "right": "Rechts"
+      },
+      "alignOptions": { "start": "Anfang", "center": "Mitte", "end": "Ende" },
+      "modeOptions": {
+        "reserved": "Platz reservieren",
+        "floating": "Schweben",
+        "autohide": "Automatisch ausblenden"
+      },
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "remove": "Entfernen",
+      "add": "Hinzufügen",
+      "unavailable": "Auf diesem Gerät nicht verfügbar"
     },
     "colorScheme": {
       "label": "Farbschema",

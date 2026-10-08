@@ -7,8 +7,10 @@
  * one (FR-013). Right click and a long press on touch open the context menu (reka, FR-015, FR-043).
  */
 import { computed, ref, useTemplateRef, watch } from 'vue'
+import { useDockHold } from '~/composables/useDock'
 import {
   dockActivation,
+  dockItemKey,
   type DockControlId,
   type DockEntry,
   type DockInstance,
@@ -67,6 +69,17 @@ const testId = computed(() => {
 
 const button = useTemplateRef<HTMLButtonElement>('button')
 const chooserOpen = ref(false)
+// A hiding dock stays while this entry's menu or chooser is open (FR-025).
+const holdMenu = useDockHold()
+const holdChooser = useDockHold()
+watch(chooserOpen, (open) => holdChooser(open))
+// Switching between compact and normal mode moves the dock away from the chooser (FR-034).
+watch(
+  () => wm.compact,
+  () => {
+    chooserOpen.value = false
+  },
+)
 // An instance closed elsewhere leaves the chooser; with fewer than two there is nothing to choose.
 watch(
   () => instances.value.length,
@@ -144,6 +157,23 @@ function togglePin() {
   void (props.entry.pinned ? dock.unpinAsync(appId) : dock.pinAsync(appId))
 }
 
+const isLauncher = computed(
+  () => props.entry.kind === 'control' && props.entry.id === 'launcher',
+)
+
+/** An entry with its own menu keeps right click and long press to itself, so the dock's
+ * placement menu around it does not open too; on the launcher, which has none, they reach it. */
+function keepToItself(event: Event) {
+  if (!isLauncher.value) event.stopPropagation()
+}
+
+/** Workspaces and windows can leave the dock; the launcher cannot (FR-006, US4). */
+function removeControl() {
+  const key = dockItemKey(props.entry)
+  const index = dock.items.value.findIndex((item) => dockItemKey(item) === key)
+  if (index >= 0 && !isLauncher.value) void dock.removeAsync(index)
+}
+
 /** Closes every instance as a click on its tab's close button would, guards included (FR-016);
  * stops at the first one the user keeps open. */
 async function closeAll() {
@@ -156,8 +186,8 @@ async function closeAll() {
 
 <template>
   <ShadcnPopover v-model:open="chooserOpen">
-    <ShadcnContextMenu>
-      <ShadcnContextMenuTrigger as-child :disabled="entry.kind === 'control'">
+    <ShadcnContextMenu @update:open="holdMenu">
+      <ShadcnContextMenuTrigger as-child :disabled="isLauncher">
         <button
           ref="button"
           type="button"
@@ -177,6 +207,8 @@ async function closeAll() {
           :title="label"
           @click="activate"
           @auxclick="onAuxclick"
+          @pointerdown="keepToItself"
+          @contextmenu="keepToItself"
           @mousedown.middle.prevent
         >
           <img
@@ -218,7 +250,18 @@ async function closeAll() {
         </button>
       </ShadcnContextMenuTrigger>
       <ShadcnContextMenuContent class="min-w-48" data-testid="dock-item-menu">
-        <ShadcnContextMenuItem data-testid="dock-menu-pin" @select="togglePin">
+        <ShadcnContextMenuItem
+          v-if="entry.kind === 'control'"
+          data-testid="dock-menu-remove"
+          @select="removeControl"
+        >
+          {{ t('wm.dock.remove') }}
+        </ShadcnContextMenuItem>
+        <ShadcnContextMenuItem
+          v-else
+          data-testid="dock-menu-pin"
+          @select="togglePin"
+        >
           {{
             entry.kind === 'app' && entry.pinned
               ? t('wm.dock.unpin')

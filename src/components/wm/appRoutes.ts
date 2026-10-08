@@ -44,6 +44,9 @@ const SETTINGS_VIEWS: Record<string, Component> = {
   'general.appearance': defineAsyncComponent(
     () => import('~/components/settings/AppearanceView.vue'),
   ),
+  'general.dock': defineAsyncComponent(
+    () => import('~/components/settings/DockView.vue'),
+  ),
   models: defineAsyncComponent(
     () => import('~/components/settings/OverviewView.vue'),
   ),

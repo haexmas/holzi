@@ -93,6 +93,14 @@ const RETRIED_CLICK_ERRORS = new Set([
   'stale element reference',
 ])
 
+function isDetachedClickError(error: unknown): boolean {
+  return (
+    error instanceof WebDriverError &&
+    error.code === 'javascript error' &&
+    error.message.includes('el.dispatchEvent')
+  )
+}
+
 /** Clicks the displayed control and returns the element ID that was activated. */
 async function clickDisplayed(
   client: WebDriverClient,
@@ -116,7 +124,8 @@ async function clickDisplayed(
       // the front may still be animating over the control (found with scenarios that switch apps).
       if (
         !(error instanceof WebDriverError) ||
-        !RETRIED_CLICK_ERRORS.has(error.code) ||
+        (!RETRIED_CLICK_ERRORS.has(error.code) &&
+          !isDetachedClickError(error)) ||
         Date.now() >= end
       ) {
         // Name the control: a bare driver error ("element click intercepted") does not say which one.

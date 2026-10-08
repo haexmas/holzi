@@ -2,6 +2,7 @@
 import type { PickedFile } from '@bindings/PickedFile'
 
 const { t } = useI18n()
+const colorScheme = useColorScheme()
 const language = useLanguage()
 const { language: activeLanguage, options: languageOptions } = language
 const store = useInstancesStore()
@@ -24,6 +25,9 @@ function onFocusOrVisible() {
 }
 
 onMounted(async () => {
+  // The landing page is outside a vault and must always follow the operating system. This also
+  // matters when the user reaches it from a workspace without restarting the webview.
+  colorScheme.startSystem()
   window.addEventListener('focus', onFocusOrVisible)
   document.addEventListener('visibilitychange', onFocusOrVisible)
   let listenerError: unknown

@@ -45,6 +45,7 @@ const LOCATION_PATHS: Record<string, string> = {
   'general.basic': '/general/basic',
   'general.basic.password': '/general/basic/password',
   'general.appearance': '/general/appearance',
+  'general.dock': '/general/dock',
   models: '/models',
   'models.default': '/models/default',
   'models.installed': '/models/installed',
@@ -158,7 +159,11 @@ test('overview rows of general (spec 042), models and agents; federation has non
     'agents.autonomy',
     'agents.denyRules',
   ])
-  assert.deepEqual(rows('general'), ['general.basic', 'general.appearance'])
+  assert.deepEqual(rows('general'), [
+    'general.basic',
+    'general.appearance',
+    'general.dock',
+  ])
   assert.deepEqual(rows('federation'), [])
 })
 
