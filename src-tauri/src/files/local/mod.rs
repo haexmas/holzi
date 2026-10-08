@@ -3,6 +3,8 @@
 
 pub mod places;
 pub mod resolve;
+#[cfg(not(target_os = "ios"))]
+pub mod watch;
 
 pub use places::{known_places, OwnPlaces, Place};
 pub use resolve::resolve;
