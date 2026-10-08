@@ -6,12 +6,14 @@ import { test } from 'node:test'
 import {
   DEFAULT_DOCK_PLACEMENT,
   dockActivation,
+  effectivePlacement,
   normalizeDockItems,
   parseDockItems,
   parseDockPlacement,
   resolveDockEntries,
   serializeDockItems,
   type DockItem,
+  type DockPlacement,
 } from '../src/lib/wm/dock.ts'
 import type { WmWindow } from '../src/lib/wm/types.ts'
 import { ALPHA, APPS, BETA } from './lib/wm-fixtures.ts'
@@ -211,4 +213,42 @@ test('dockActivation opens, focuses the one instance, or lets the user choose', 
   assert.deepEqual(dockActivation([]), { kind: 'open' })
   assert.deepEqual(dockActivation([one]), { kind: 'focus', tabId: 't1' })
   assert.deepEqual(dockActivation([one, two]), { kind: 'choose' })
+})
+
+// ---------------------------------------------------------------------------
+// Effective placement (data-model.md)
+// ---------------------------------------------------------------------------
+
+test('effectivePlacement keeps the choice outside compact mode', () => {
+  const placement: DockPlacement = {
+    style: 'bar',
+    edge: 'left',
+    align: 'end',
+    mode: 'autohide',
+  }
+  assert.deepEqual(effectivePlacement(placement, false), placement)
+})
+
+test('effectivePlacement puts the bar at the bottom, reserving space, in compact mode', () => {
+  for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
+    for (const mode of ['reserved', 'floating', 'autohide'] as const) {
+      assert.deepEqual(
+        effectivePlacement({ style: 'bar', edge, align: 'start', mode }, true),
+        { style: 'bar', edge: 'bottom', align: 'center', mode: 'reserved' },
+      )
+    }
+  }
+})
+
+test('effectivePlacement puts the wheel into a bottom corner in compact mode', () => {
+  const wheel = (align: 'start' | 'center' | 'end'): DockPlacement => ({
+    style: 'wheel',
+    edge: 'top',
+    align,
+    mode: 'floating',
+  })
+  assert.equal(effectivePlacement(wheel('start'), true).align, 'start')
+  assert.equal(effectivePlacement(wheel('center'), true).align, 'end')
+  assert.equal(effectivePlacement(wheel('end'), true).align, 'end')
+  assert.equal(effectivePlacement(wheel('start'), true).edge, 'bottom')
 })

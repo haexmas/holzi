@@ -237,3 +237,20 @@ export function dockActivation(
   if (!second) return { kind: 'focus', tabId: only.tabId }
   return { kind: 'choose' }
 }
+
+/** Where the dock actually stands (data-model.md): in compact mode the bar sits at the bottom and
+ * reserves its space (FR-031), the wheel goes to a bottom corner (FR-032); otherwise the user's
+ * choice. */
+export function effectivePlacement(
+  placement: DockPlacement,
+  compact: boolean,
+): DockPlacement {
+  if (!compact) return placement
+  if (placement.style === 'bar')
+    return { style: 'bar', edge: 'bottom', align: 'center', mode: 'reserved' }
+  return {
+    ...placement,
+    edge: 'bottom',
+    align: placement.align === 'start' ? 'start' : 'end',
+  }
+}

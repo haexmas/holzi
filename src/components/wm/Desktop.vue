@@ -29,6 +29,16 @@ watch([width, height, viewportWidth], ([newWidth, newHeight, newViewport]) => {
   wm.updateArea({ width: newWidth, height: newHeight }, newViewport)
 })
 
+// A dock reserving space sits beside the window area on its edge (spec 045, FR-024).
+const dock = useDock()
+const DIRECTION = {
+  top: 'flex-col-reverse',
+  bottom: 'flex-col',
+  left: 'flex-row-reverse',
+  right: 'flex-row',
+} as const
+const direction = computed(() => DIRECTION[dock.effective.value.edge])
+
 const { background } = useWorkspaceBackground()
 // The value is a checked WebP data URL (`isBackgroundValue`): only base64 inside the quotes.
 const backgroundStyle = computed(() =>
@@ -44,11 +54,12 @@ const backgroundStyle = computed(() =>
 
 <template>
   <div
-    class="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-muted/10"
+    class="relative flex h-full min-h-0 w-full overflow-hidden bg-muted/10"
+    :class="direction"
     :style="backgroundStyle"
     data-testid="wm-desktop"
   >
-    <div ref="windowArea" class="relative isolate min-h-0 flex-1">
+    <div ref="windowArea" class="relative isolate min-h-0 min-w-0 flex-1">
       <WmWindow
         v-for="win in wm.windowsInActiveWorkspace"
         :key="win.id"

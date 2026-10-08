@@ -1,10 +1,11 @@
-import { computed, readonly, ref } from 'vue'
+import { computed, readonly, ref, type InjectionKey } from 'vue'
 import { usePreferences, type PrefScope } from '~/composables/usePreferences'
 import {
   DEFAULT_DOCK_ITEMS,
   DEFAULT_DOCK_PLACEMENT,
   DOCK_ITEMS_KEY,
   DOCK_PLACEMENT_KEY,
+  effectivePlacement,
   normalizeDockItems,
   parseDockItems,
   parseDockPlacement,
@@ -16,6 +17,11 @@ import {
 } from '~/lib/wm/dock'
 
 const VAULT: PrefScope = { kind: 'vault' }
+
+/** Provided by `wm/Dock.vue`: an entry reports its menu or chooser opening (`true`) and closing
+ * (`false`), so a hiding dock stays while one is open (FR-025). */
+export const DOCK_HOLD: InjectionKey<(open: boolean) => void> =
+  Symbol('dockHold')
 
 /** One state per process: a process holds one vault (spec 013). `null` = nothing readable stored,
  * so the defaults show and nothing is written until the user changes something (FR-038). */
@@ -39,6 +45,11 @@ export function useDock() {
    * hides its entry at once (FR-037). */
   const items = computed(() =>
     normalizeDockItems(storedItems.value ?? DEFAULT_DOCK_ITEMS, wm.apps()),
+  )
+  /** Where the dock stands right now: the stored choice, or the bottom in compact mode
+   * (FR-031, FR-032). */
+  const effective = computed(() =>
+    effectivePlacement(placement.value, wm.compact),
   )
 
   async function deviceScopeAsync(): Promise<PrefScope> {
@@ -168,6 +179,7 @@ export function useDock() {
   return {
     items,
     placement: readonly(placement),
+    effective,
     isPinned,
     loadAsync,
     refreshAsync,

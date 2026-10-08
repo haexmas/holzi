@@ -502,6 +502,11 @@
           "title": "Appearance",
           "description": "Color scheme, background and colors.",
           "keywords": "appearance color scheme light dark system theme look background wallpaper image"
+        },
+        "dock": {
+          "title": "Dock",
+          "description": "Position, style and entries of the dock.",
+          "keywords": "dock bar taskbar wheel pin position edge corner auto hide"
         }
       },
       "models": {
@@ -593,6 +598,32 @@
     "sidebar": {
       "show": "Show sidebar",
       "hide": "Hide sidebar"
+    },
+    "dock": {
+      "placement": "On this device",
+      "items": "Entries",
+      "style": "Style",
+      "edge": "Edge",
+      "align": "Alignment",
+      "mode": "Behavior",
+      "styleOptions": { "bar": "Bar", "wheel": "Wheel" },
+      "edgeOptions": {
+        "top": "Top",
+        "bottom": "Bottom",
+        "left": "Left",
+        "right": "Right"
+      },
+      "alignOptions": { "start": "Start", "center": "Center", "end": "End" },
+      "modeOptions": {
+        "reserved": "Reserve space",
+        "floating": "Float",
+        "autohide": "Hide automatically"
+      },
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "remove": "Remove",
+      "add": "Add",
+      "unavailable": "Not available on this device"
     },
     "colorScheme": {
       "label": "Color scheme",

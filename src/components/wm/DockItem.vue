@@ -6,7 +6,8 @@
  * front, or offers its instances grouped by workspace (FR-010–FR-012); a middle click opens a new
  * one (FR-013). Right click and a long press on touch open the context menu (reka, FR-015, FR-043).
  */
-import { computed, ref, useTemplateRef, watch } from 'vue'
+import { computed, inject, ref, useTemplateRef, watch } from 'vue'
+import { DOCK_HOLD } from '~/composables/useDock'
 import {
   dockActivation,
   type DockControlId,
@@ -67,6 +68,9 @@ const testId = computed(() => {
 
 const button = useTemplateRef<HTMLButtonElement>('button')
 const chooserOpen = ref(false)
+// A hiding dock stays while this entry's menu or chooser is open (FR-025).
+const hold = inject(DOCK_HOLD, () => {})
+watch(chooserOpen, (open) => hold(open))
 // An instance closed elsewhere leaves the chooser; with fewer than two there is nothing to choose.
 watch(
   () => instances.value.length,
@@ -156,7 +160,7 @@ async function closeAll() {
 
 <template>
   <ShadcnPopover v-model:open="chooserOpen">
-    <ShadcnContextMenu>
+    <ShadcnContextMenu @update:open="hold">
       <ShadcnContextMenuTrigger as-child :disabled="entry.kind === 'control'">
         <button
           ref="button"
@@ -177,6 +181,7 @@ async function closeAll() {
           :title="label"
           @click="activate"
           @auxclick="onAuxclick"
+          @contextmenu.stop
           @mousedown.middle.prevent
         >
           <img
