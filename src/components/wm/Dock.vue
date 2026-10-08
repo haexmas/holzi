@@ -6,8 +6,8 @@
  * `wm/Desktop.vue` measures what is left (FR-024); floating and hiding it lies over the windows.
  * Hiding, it comes in when the pointer reaches its edge and leaves 400 ms after the pointer, unless
  * focus is inside or one of its menus is open (FR-025). Right click on its free area sets edge,
- * alignment, style and mode (FR-018). As a wheel it always lies over the windows and keeps no space
- * (FR-030); its mode does not apply.
+ * alignment, style and mode (FR-018). The mode applies to the wheel too: reserving space it keeps a
+ * strip the size of its button, its fanned entries always lie over the windows (FR-030).
  */
 import { computed, provide, reactive, ref, useTemplateRef, watch } from 'vue'
 import { DOCK_HOLD, dockEntryAt } from '~/composables/useDock'
@@ -21,12 +21,8 @@ const placement = dock.effective
 const vertical = computed(
   () => placement.value.edge === 'left' || placement.value.edge === 'right',
 )
-const reserved = computed(
-  () => placement.value.style === 'bar' && placement.value.mode === 'reserved',
-)
-const autohide = computed(
-  () => placement.value.style === 'bar' && placement.value.mode === 'autohide',
-)
+const reserved = computed(() => placement.value.mode === 'reserved')
+const autohide = computed(() => placement.value.mode === 'autohide')
 
 const JUSTIFY = {
   start: 'justify-start',
@@ -137,7 +133,14 @@ function onPointerleave() {
       @pointerenter="reveal"
       @pointerleave="scheduleHide"
     />
-    <div v-if="placement.style === 'wheel'" class="pointer-events-auto">
+    <div
+      v-if="placement.style === 'wheel'"
+      ref="bar"
+      class="pointer-events-auto transition-transform duration-200 motion-reduce:transition-none"
+      :class="shown ? '' : HIDDEN[placement.edge]"
+      @pointerenter="onPointerenter"
+      @pointerleave="onPointerleave"
+    >
       <WmDockWheel
         :entries="entries"
         :edge="placement.edge"

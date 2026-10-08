@@ -193,8 +193,9 @@ Einträge anheften als in einen Bogen passen, einen Eintrag aktivieren, per Tast
    und 2.
 5. **Given** das Rad ist zugeklappt und eine App verlangt Aufmerksamkeit, **When** der Nutzer die
    Schaltfläche ansieht, **Then** trägt sie eine Markierung.
-6. **Given** der Stil „Rad“, **When** der Nutzer einen Modus für das Verhältnis zu Fenstern sucht,
-   **Then** gibt es keinen: Das Rad liegt immer über den Fenstern.
+6. **Given** der Stil „Rad“ mit Modus „Platz reservieren“, **When** ein Fenster maximiert ist, **Then**
+   endet das Fenster vor dem Streifen, den die Schaltfläche des Rads belegt; die aufgefächerten
+   Einträge liegen über den Fenstern. Mit „Schweben“ liegt auch die Schaltfläche über den Fenstern.
 
 ---
 
@@ -312,7 +313,7 @@ Kompakt-Schwelle verkleinern und zurück; auf dem Telefon per Touch bedienen.
 - **FR-022**: Der Nutzer MUSS eine Kante (oben, unten, links, rechts) und eine Ausrichtung (Anfang,
   Mitte, Ende) wählen können; das ergibt zwölf Positionen.
 - **FR-023**: Der Nutzer MUSS den Stil „Leiste“ oder „Rad“ wählen können.
-- **FR-024**: Für die Leiste MUSS der Nutzer einen Modus wählen können: „Platz reservieren“ (Fenster,
+- **FR-024**: Für Leiste und Rad MUSS der Nutzer einen Modus wählen können: „Platz reservieren“ (Fenster,
   auch maximierte, enden am Dock), „Schweben“ (Dock liegt über den Fenstern) oder „Automatisch
   ausblenden“ (Dock erscheint, wenn der Zeiger die Kante erreicht, und verschwindet nach kurzer
   Verzögerung, wenn er sie verlässt).
@@ -327,7 +328,8 @@ Kompakt-Schwelle verkleinern und zurück; auf dem Telefon per Touch bedienen.
   verteilen, ohne dass Einträge einander überlappen.
 - **FR-029**: Das Rad MUSS sich schließen, wenn ein Eintrag aktiviert wird, der Nutzer Escape drückt oder
   außerhalb klickt.
-- **FR-030**: Das Rad MUSS immer über den Fenstern liegen und DARF KEINEN Platz reservieren.
+- **FR-030**: Im Modus „Platz reservieren“ MUSS das Rad an seiner Kante einen Streifen in der Größe
+  seiner Schaltfläche freihalten; seine aufgefächerten Einträge MÜSSEN immer über den Fenstern liegen.
 
 **Kompaktmodus**
 
@@ -367,8 +369,8 @@ Kompakt-Schwelle verkleinern und zurück; auf dem Telefon per Touch bedienen.
 - **Dock-Konfiguration (Vault)**: geordnete Liste von Einträgen; jeder Eintrag ist entweder ein
   Steuer-Eintrag (Launcher, Fensterübersicht, Arbeitsbereichs-Übersicht) oder ein Verweis auf eine App
   über deren Kennung. Gilt für alle eigenen Geräte.
-- **Dock-Platzierung (Gerät)**: Stil (Leiste oder Rad), Kante, Ausrichtung und, nur für die Leiste,
-  Modus (Platz reservieren, Schweben, Automatisch ausblenden). Gilt nur für dieses Gerät.
+- **Dock-Platzierung (Gerät)**: Stil (Leiste oder Rad), Kante, Ausrichtung und Modus (Platz
+  reservieren, Schweben, Automatisch ausblenden). Gilt nur für dieses Gerät.
 - **Laufende App**: keine gespeicherte Größe, sondern abgeleitet aus den offenen Tabs aller
   Arbeitsbereiche: App, ihre Instanzen mit Fenster und Arbeitsbereich, und ob die App Aufmerksamkeit
   verlangt.

@@ -19,7 +19,7 @@ import {
   useTemplateRef,
   watch,
 } from 'vue'
-import { DOCK_HOLD, dockEntryAt } from '~/composables/useDock'
+import { DOCK_HOLD, dockEntryAt, useDockHold } from '~/composables/useDock'
 import {
   dockItemKey,
   wheelLayout,
@@ -66,6 +66,9 @@ const menuEntry = ref<DockEntry | null>(null)
 function pickMenuEntry(event: Event) {
   menuEntry.value = dockEntryAt(event.target, props.entries)
 }
+// A fanned-out wheel keeps a hiding dock visible (FR-025).
+const holdFanned = useDockHold()
+watch(open, (isOpen) => holdFanned(isOpen))
 const wheelMenu = Symbol('dockWheelMenu')
 function holdWheelMenu(isOpen: boolean) {
   hold(wheelMenu, isOpen)

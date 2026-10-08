@@ -21,7 +21,8 @@ export type DockItemState = DockItem & { available: boolean }
 export type DockEdge = 'top' | 'bottom' | 'left' | 'right'
 export type DockAlign = 'start' | 'center' | 'end'
 export type DockStyle = 'bar' | 'wheel'
-/** Only the bar has a mode; the wheel always floats (FR-030). */
+/** How the dock relates to the windows, for the bar and the wheel alike: keep its own space, lie
+ * over them, or hide until the pointer reaches its edge (FR-024). */
 export type DockMode = 'reserved' | 'floating' | 'autohide'
 
 export type DockPlacement = {

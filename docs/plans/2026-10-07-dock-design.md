@@ -12,19 +12,19 @@ System-Apps und haextensions als `AppDefinition`, geöffnet wird alles über `wm
 
 ## Entscheidungen
 
-| Frage                           | Entscheidung                                                                                                                                                             |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Umfang                          | Volle Taskleiste: angeheftete und laufende Apps, Instanz-Zähler, Attention                                                                                               |
-| Laufende Apps                   | Aus allen Arbeitsbereichen; ein Klick wechselt in den Arbeitsbereich der Instanz                                                                                         |
-| Speicherort                     | Platzierung pro Gerät, Einträge in der Vault (synchronisiert)                                                                                                            |
-| Platzierung                     | Kante (oben/unten/links/rechts) × Ausrichtung (Anfang/Mitte/Ende) = 12 Positionen                                                                                        |
-| Stil                            | Leiste oder Rad (FAB, der als Viertelkreis in der Ecke, als Halbkreis an der Kante auffächert)                                                                           |
-| Verhältnis zu Fenstern (Leiste) | Einstellbar: reserviert Platz, schwebt, blendet automatisch aus                                                                                                          |
-| Rad und Fenster                 | Das Rad schwebt immer                                                                                                                                                    |
-| Steuer-Einträge                 | Arbeitsbereiche, Fenster, Launcher sind normale Einträge, frei sortier- und entfernbar; nur der Launcher ist nicht entfernbar                                            |
-| Bedienung                       | Kontextmenü (Rechtsklick/Langdruck) im Dock und im Launcher, Ziehen zum Sortieren in der Leiste, Settings-Sektion „Dock“ mit sortierbarer Liste                          |
-| Kompaktmodus                    | Leiste: immer unten, mittig, reserviert. Rad: bleibt Rad, untere Ecke                                                                                                    |
-| Klick                           | 0 Instanzen: öffnen. 1: Arbeitsbereich wechseln, wiederherstellen, fokussieren. n: Popover nach Arbeitsbereich gruppiert plus „Neues Fenster“. Mittelklick: neue Instanz |
+| Frage                  | Entscheidung                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Umfang                 | Volle Taskleiste: angeheftete und laufende Apps, Instanz-Zähler, Attention                                                                                               |
+| Laufende Apps          | Aus allen Arbeitsbereichen; ein Klick wechselt in den Arbeitsbereich der Instanz                                                                                         |
+| Speicherort            | Platzierung pro Gerät, Einträge in der Vault (synchronisiert)                                                                                                            |
+| Platzierung            | Kante (oben/unten/links/rechts) × Ausrichtung (Anfang/Mitte/Ende) = 12 Positionen                                                                                        |
+| Stil                   | Leiste oder Rad (FAB, der als Viertelkreis in der Ecke, als Halbkreis an der Kante auffächert)                                                                           |
+| Verhältnis zu Fenstern | Einstellbar: reserviert Platz, schwebt, blendet automatisch aus                                                                                                          |
+| Rad und Fenster        | Wie die Leiste (2026-10-08 geändert); aufgefächerte Einträge liegen immer über den Fenstern                                                                              |
+| Steuer-Einträge        | Arbeitsbereiche, Fenster, Launcher sind normale Einträge, frei sortier- und entfernbar; nur der Launcher ist nicht entfernbar                                            |
+| Bedienung              | Kontextmenü (Rechtsklick/Langdruck) im Dock und im Launcher, Ziehen zum Sortieren in der Leiste, Settings-Sektion „Dock“ mit sortierbarer Liste                          |
+| Kompaktmodus           | Leiste: immer unten, mittig, reserviert. Rad: bleibt Rad, untere Ecke                                                                                                    |
+| Klick                  | 0 Instanzen: öffnen. 1: Arbeitsbereich wechseln, wiederherstellen, fokussieren. n: Popover nach Arbeitsbereich gruppiert plus „Neues Fenster“. Mittelklick: neue Instanz |
 
 ## Architektur
 
@@ -35,7 +35,7 @@ System-Apps und haextensions als `AppDefinition`, geöffnet wird alles über `wm
   Ein JSON-Wert, Last-Writer-Wins bei gleichzeitigem Umsortieren auf zwei Geräten (akzeptiert;
   eine eigene CRDT-Tabelle pro Eintrag wäre für ~10 Einträge Overkill).
 - Device-Pref `dock.placement`: `{ style: 'bar' | 'wheel', edge, align, mode }`; `mode`
-  (`reserved | floating | autohide`) gilt nur für `bar`.
+  (`reserved | floating | autohide`) gilt für Leiste und Rad (seit 2026-10-08).
 - Laufende, nicht angeheftete Apps sind Laufzeit-Zustand, abgeleitet aus `wm.windows`, nie gespeichert.
 
 **Module**
