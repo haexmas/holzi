@@ -1,0 +1,219 @@
+name: Android release
+
+# Spec 043 (contracts/ci.md, research R15): signed release APKs. A tag `v*` builds them and
+# attaches them to the GitHub release of that tag; `workflow_dispatch` builds and checks them
+# without a release, for trying the signature. The signing key exists only as the secrets
+# ANDROID_KEY_BASE64 (the keystore, base64), ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD; the
+# variable ANDROID_CERT_SHA256 holds the public fingerprint of its certificate. Without them the
+# workflow fails: a release is never unsigned or signed with a debug key (FR-033).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Signed release APKs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      # First, so a missing secret fails before an hour of building.
+      - name: Check the signing secrets
+        env:
+          KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          missing=()
+          [ -n "$KEY_BASE64" ] || missing+=(secret ANDROID_KEY_BASE64)
+          [ -n "$KEY_ALIAS" ] || missing+=(secret ANDROID_KEY_ALIAS)
+          [ -n "$KEY_PASSWORD" ] || missing+=(secret ANDROID_KEY_PASSWORD)
+          [ -n "$CERT_SHA256" ] || missing+=(variable ANDROID_CERT_SHA256)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::not set in the repository: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Android installs an APK over the previous one only with a higher versionCode, which the
+      # Tauri CLI derives from this version (major × 1 000 000 + minor × 1 000 + patch). A tag
+      # that disagrees with it would publish an APK that is no update.
+      - name: Read the app version
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "$REF_TYPE" = tag ] && [ "$REF_NAME" != "v$version" ]; then
+            echo "::error::tag $REF_NAME does not match version $version in src-tauri/tauri.conf.json"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.19.0
+
+      # The Tauri CLI runs `beforeBuildCommand` (`pnpm generate`) and Gradle runs `pnpm tauri`
+      # by name, so `pnpm` itself has to be on PATH.
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install frontend dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        run: |
+          set -euo pipefail
+          # `yes` ends with SIGPIPE once sdkmanager is done, which pipefail would count as a failure.
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-36" "platforms;android-37.0" \
+            "build-tools;36.0.0" "build-tools;37.0.0" "ndk;28.2.13676358" > /dev/null
+          echo "NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "APKSIGNER=$ANDROID_HOME/build-tools/37.0.0/apksigner" >> "$GITHUB_ENV"
+          # openssl-src (SQLCipher) runs ranlib by the target prefix unless told otherwise; the
+          # Tauri CLI sets only the compilers.
+          ndk="$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "RANLIB_aarch64_linux_android=$ndk/llvm-ranlib" >> "$GITHUB_ENV"
+          echo "RANLIB_x86_64_linux_android=$ndk/llvm-ranlib" >> "$GITHUB_ENV"
+
+      # bindgen (haex-crdt's SQLCipher hooks) needs libclang on the build host.
+      - name: Install Linux build dependencies
+        run: |
+          sudo sed -i \
+            -e 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+            -e 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+            -e 's|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+            /etc/apt/apt-mirrors.txt /etc/apt/sources.list \
+            /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+          timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get update -o Acquire::Retries=3
+          timeout 10m sudo env DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends libclang-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.98.1
+          targets: aarch64-linux-android, x86_64-linux-android
+
+      # No cargo cache: releases are rare, and a release build's cache would push the CI's
+      # Android and e2e caches out of the repository's 10 GB.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      # The keystore goes to the runner's temporary directory, `keystore.properties` to where
+      # `gen/android/app/build.gradle.kts` reads it (ignored by git). Both are removed at the end.
+      - name: Write the signing key
+        env:
+          KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keystore="$RUNNER_TEMP/holzi-release.keystore"
+          printf '%s' "$KEY_BASE64" | base64 --decode > "$keystore"
+          {
+            printf 'storeFile=%s\n' "$keystore"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'password=%s\n' "$KEY_PASSWORD"
+          } > src-tauri/gen/android/keystore.properties
+
+      - name: Build the release APKs
+        run: corepack pnpm tauri android build --apk --split-per-abi --target aarch64 --target x86_64
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/holzi-release.keystore" src-tauri/gen/android/keystore.properties
+
+      # Every APK must carry exactly the certificate whose fingerprint the repository publishes.
+      - name: Check the signatures
+        env:
+          CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          expected=$(printf '%s' "$CERT_SHA256" | tr -d ': ' | tr '[:upper:]' '[:lower:]')
+          mkdir -p "$RUNNER_TEMP/apks"
+          count=0
+          for abi in arm64 x86_64; do
+            apk="src-tauri/gen/android/app/build/outputs/apk/$abi/release/app-$abi-release.apk"
+            if [ ! -f "$apk" ]; then
+              echo "::error::no signed APK for $abi (an unsigned one is never published)"
+              ls -R src-tauri/gen/android/app/build/outputs/apk || true
+              exit 1
+            fi
+            # The lines are named after the signature scheme (`V2 Signer: …` with minSdk 26), so
+            # read the signer count and every certificate digest whatever their prefix.
+            certs=$("$APKSIGNER" verify --verbose --print-certs "$apk")
+            echo "$certs"
+            signers=$(printf '%s\n' "$certs" | sed -n 's/^Number of signers: //p')
+            actual=$(printf '%s\n' "$certs" | sed -n 's/^.*certificate SHA-256 digest: //p' | sort -u)
+            if [ "$signers" != 1 ] || [ "$actual" != "$expected" ]; then
+              echo "::error::$abi APK is signed with $actual ($signers signers), expected $expected"
+              exit 1
+            fi
+            cp "$apk" "$RUNNER_TEMP/apks/holzi-$VERSION-$abi.apk"
+            count=$((count + 1))
+          done
+          echo "checked $count APKs"
+
+      - name: Upload the APKs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: holzi-android-release
+          path: ${{ runner.temp }}/apks/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  # A job of its own, so the signing secrets and the write token never share a job.
+  publish:
+    name: Attach the APKs to the release
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download the APKs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: holzi-android-release
+          path: apks
+
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" apks/*.apk --clobber
+          else
+            gh release create "$TAG" apks/*.apk --verify-tag --title "holzi $TAG" --generate-notes
+          fi
