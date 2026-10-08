@@ -330,12 +330,12 @@ export async function runCli(
         })
         linuxFound = linux.found
       } catch (error) {
-        deps.print(
+        messages.push(
           `the devices beside the phone cannot run: ${(error as Error).message}`,
         )
       }
     } else {
-      deps.print(
+      messages.push(
         `the devices beside the phone cannot run here: ${linux.messages.join('; ')}`,
       )
     }
