@@ -123,8 +123,8 @@ click, close all.
 
 **Depends on**: T026 (effectivePlacement), T027 (layout).
 
-- [ ] T038 [US6] In `src/components/wm/Dock.vue`: watch `wm.compact`; on change close an open instance popover and a fanned-out wheel (FR-034); the bar in compact scrolls horizontally with touch (`overflow-x-auto`, `touch-pan-x`)
-- [ ] T039 [US6] Extend `scripts/e2e/scenarios/dock.test.ts` (window resize as in `settings-narrow-window.test.ts`): edge `left`, width 700 → `data-edge="bottom"`; width 900 → `data-edge="left"` and stays there after a second check (FR-033)
+- [x] T038 [US6] In `src/components/wm/Dock.vue`: watch `wm.compact`; on change close an open instance popover and a fanned-out wheel (FR-034); the bar in compact scrolls horizontally with touch (`overflow-x-auto`, `touch-pan-x`)
+- [x] T039 [US6] Extend `scripts/e2e/scenarios/dock.test.ts`: with edge `left`, `wm.updateArea({ width: 700, height: 600 }, window.innerWidth)` keeps `compact` false and `data-edge="left"` (FR-033). The rig cannot resize the app window (no window-rect call in `scripts/e2e/lib/webdriver.ts`), and driving `updateArea` with a narrow viewport is undone by `Desktop.vue`'s watcher once the dock moves, so the compact placement itself (FR-031/FR-032) is covered by `check-wm-dock.ts` (`effectivePlacement`) and quickstart step 9
 
 **Checkpoint**: Dock usable on phones; no position flip-flop near the threshold.
 

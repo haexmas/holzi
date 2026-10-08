@@ -133,4 +133,22 @@ scenario('dock', {}, async (ctx) => {
     'the launcher can be removed',
   )
   ctx.step('windows entry removed, launcher not removable')
+
+  // FR-033: the area a dock at the left leaves may be below the compact threshold while the app
+  // window is not; compact mode follows the app window, so the dock stays where it is.
+  await instance.exec(
+    `${WM}.updateArea({ width: 700, height: 600 }, window.innerWidth); return true`,
+  )
+  assert.equal(
+    await instance.exec<boolean>(`return ${WM}.compact`),
+    false,
+    'a narrow window area switched to compact mode',
+  )
+  assert.equal(
+    await instance.exec<string | undefined>(
+      `return document.querySelector('[data-testid="dock"]')?.dataset.edge`,
+    ),
+    'left',
+  )
+  ctx.step('a narrow area does not move the dock')
 })

@@ -72,6 +72,13 @@ const chooserOpen = ref(false)
 // A hiding dock stays while this entry's menu or chooser is open (FR-025).
 const hold = inject(DOCK_HOLD, () => {})
 watch(chooserOpen, (open) => hold(open))
+// Switching between compact and normal mode moves the dock away from the chooser (FR-034).
+watch(
+  () => wm.compact,
+  () => {
+    chooserOpen.value = false
+  },
+)
 // An instance closed elsewhere leaves the chooser; with fewer than two there is nothing to choose.
 watch(
   () => instances.value.length,
