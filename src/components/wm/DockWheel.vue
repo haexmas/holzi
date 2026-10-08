@@ -7,8 +7,17 @@
  * it). A menu of entries (FR-042): Enter or Space opens it, the arrow keys follow the entries,
  * Enter activates. The button carries a dot while any app wants attention.
  */
-import { computed, inject, nextTick, provide, ref, useTemplateRef } from 'vue'
-import { DOCK_HOLD } from '~/composables/useDock'
+import {
+  computed,
+  inject,
+  nextTick,
+  provide,
+  reactive,
+  ref,
+  useTemplateRef,
+  watch,
+} from 'vue'
+import { DOCK_HOLD, useDockHold } from '~/composables/useDock'
 import {
   dockItemKey,
   wheelLayout,
@@ -29,16 +38,29 @@ const { t } = useI18n()
 const root = useTemplateRef<HTMLElement>('root')
 const toggle = useTemplateRef<HTMLButtonElement>('toggle')
 const open = ref(false)
-const held = ref(0)
 const focusIndex = ref(0)
 
-const parentHold = inject(DOCK_HOLD, () => {})
-provide(DOCK_HOLD, (isOpen: boolean) => {
-  held.value = Math.max(0, held.value + (isOpen ? 1 : -1))
-  parentHold(isOpen)
+/** The entries' menus and choosers open right now; they live outside the wheel, so while one is
+ * open a click there is no "click outside". Passed on to the dock as well. */
+const holders = reactive(new Set<symbol>())
+const holdDock = inject(DOCK_HOLD, () => {})
+provide(DOCK_HOLD, (holder: symbol, isOpen: boolean) => {
+  holdDock(holder, isOpen)
+  if (isOpen) {
+    holders.add(holder)
+    return
+  }
   // The chooser of an entry closed after a choice: the wheel's job is done too.
-  if (!isOpen && held.value === 0) close()
+  if (holders.delete(holder) && holders.size === 0) close()
 })
+// The button's own menu (edge, alignment, style) belongs to the dock, not to the entries.
+const holdToggleMenu = useDockHold()
+
+// Switching between compact and normal mode moves the wheel to another corner (FR-034).
+watch(
+  () => wm.compact,
+  () => close(),
+)
 
 const offsets = computed(() =>
   wheelLayout(props.entries.length, props.edge, props.align),
@@ -75,12 +97,12 @@ function onToggle() {
 /** An activated entry folds the wheel, unless it opened its chooser, which then holds it. */
 function onItemClick() {
   void nextTick(() => {
-    if (held.value === 0) close()
+    if (holders.size === 0) close()
   })
 }
 
 onClickOutside(root, () => {
-  if (held.value === 0) close()
+  if (holders.size === 0) close()
 })
 
 function onKeydown(event: KeyboardEvent) {
@@ -129,7 +151,7 @@ function onKeydown(event: KeyboardEvent) {
         <WmDockItem :entry="entry" :tabbable="open && index === focusIndex" />
       </div>
     </div>
-    <ShadcnContextMenu @update:open="parentHold">
+    <ShadcnContextMenu @update:open="holdToggleMenu">
       <ShadcnContextMenuTrigger as-child>
         <button
           ref="toggle"

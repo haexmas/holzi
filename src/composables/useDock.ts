@@ -1,4 +1,11 @@
-import { computed, readonly, ref, type InjectionKey } from 'vue'
+import {
+  computed,
+  inject,
+  onBeforeUnmount,
+  readonly,
+  ref,
+  type InjectionKey,
+} from 'vue'
 import { usePreferences, type PrefScope } from '~/composables/usePreferences'
 import {
   DEFAULT_DOCK_ITEMS,
@@ -18,10 +25,19 @@ import {
 
 const VAULT: PrefScope = { kind: 'vault' }
 
-/** Provided by `wm/Dock.vue`: an entry reports its menu or chooser opening (`true`) and closing
- * (`false`), so a hiding dock stays while one is open (FR-025). */
-export const DOCK_HOLD: InjectionKey<(open: boolean) => void> =
-  Symbol('dockHold')
+/** Provided by `wm/Dock.vue` (and passed on by the wheel): a holder — a menu or chooser of the
+ * dock — reports being open or closed, so a hiding dock stays while any is open (FR-025). */
+export type DockHold = (holder: symbol, open: boolean) => void
+export const DOCK_HOLD: InjectionKey<DockHold> = Symbol('dockHold')
+
+/** One holder of the dock. It lets go when its component unmounts too: a menu item whose select
+ * removes its own entry unmounts the menu before reka closes it, so "closed" is never reported. */
+export function useDockHold(): (open: boolean) => void {
+  const hold = inject(DOCK_HOLD, () => {})
+  const holder = Symbol('dockHolder')
+  onBeforeUnmount(() => hold(holder, false))
+  return (open) => hold(holder, open)
+}
 
 /** One state per process: a process holds one vault (spec 013). `null` = nothing readable stored,
  * so the defaults show and nothing is written until the user changes something (FR-038). */
@@ -29,6 +45,9 @@ const storedItems = ref<DockItem[] | null>(null)
 const placement = ref<DockPlacement>({ ...DEFAULT_DOCK_PLACEMENT })
 let deviceUuid: string | null = null
 let pendingWrites = 0
+/** Bumped by every write, so a read that started before one is not applied after it. */
+let generation = 0
+let failed = false
 let writes: Promise<void> = Promise.resolve()
 
 /**
@@ -87,20 +106,36 @@ export function useDock() {
    * could still return the value before it, and the write's own change event re-reads anyway. */
   async function refreshAsync(): Promise<void> {
     if (pendingWrites > 0) return
+    const started = generation
     const next = await readAsync()
-    if (pendingWrites > 0) return
+    if (pendingWrites > 0 || generation !== started) return
     if (JSON.stringify(next.items) !== JSON.stringify(storedItems.value))
       storedItems.value = next.items
     if (JSON.stringify(next.placement) !== JSON.stringify(placement.value))
       placement.value = next.placement
   }
 
+  /** Runs `write` after the writes before it. A failed write is logged and the stored values are
+   * read again, so what the dock shows does not drift from what is stored. */
   function enqueue(write: () => Promise<void>): Promise<void> {
     pendingWrites += 1
-    const done = writes.then(write).finally(() => {
-      pendingWrites -= 1
-    })
-    writes = done.catch(() => undefined)
+    generation += 1
+    const done = writes
+      .then(write)
+      .catch((error: unknown) => {
+        console.error('[dock] saving the dock failed', error)
+        failed = true
+      })
+      .finally(() => {
+        pendingWrites -= 1
+        if (failed && pendingWrites === 0) {
+          failed = false
+          void refreshAsync().catch((error: unknown) => {
+            console.error('[dock] reading the dock failed', error)
+          })
+        }
+      })
+    writes = done
     return done
   }
 

@@ -134,23 +134,25 @@ scenario('dock', {}, async (ctx) => {
   )
   ctx.step('windows entry removed, launcher not removable')
 
-  // FR-033: the area a dock at the left leaves may be below the compact threshold while the app
-  // window is not; compact mode follows the app window, so the dock stays where it is.
-  await instance.exec(
-    `${WM}.updateArea({ width: 700, height: 600 }, window.innerWidth); return true`,
+  // FR-033: a dock reserving space at the left narrows the area windows get (in the 800 px app
+  // window below the compact threshold), but compact mode follows the app window, so the dock stays.
+  const layout = await instance.exec<{
+    area: number
+    viewport: number
+    compact: boolean
+  }>(
+    `const wm = ${WM}; return { area: wm.area.width, viewport: window.innerWidth, compact: wm.compact }`,
+  )
+  assert.ok(
+    layout.area < layout.viewport,
+    `the left dock reserves no space: area ${layout.area}, window ${layout.viewport}`,
   )
   assert.equal(
-    await instance.exec<boolean>(`return ${WM}.compact`),
+    layout.compact,
     false,
     'a narrow window area switched to compact mode',
   )
-  assert.equal(
-    await instance.exec<string | undefined>(
-      `return document.querySelector('[data-testid="dock"]')?.dataset.edge`,
-    ),
-    'left',
-  )
-  ctx.step('a narrow area does not move the dock')
+  ctx.step('the dock narrows the area without switching to compact mode')
 
   // US5 (FR-027, FR-029): the wheel fans out on a click and folds on Escape.
   await choose(instance, 'settings-dock-style', 'wheel')

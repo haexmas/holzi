@@ -6,8 +6,8 @@
  * front, or offers its instances grouped by workspace (FR-010–FR-012); a middle click opens a new
  * one (FR-013). Right click and a long press on touch open the context menu (reka, FR-015, FR-043).
  */
-import { computed, inject, ref, useTemplateRef, watch } from 'vue'
-import { DOCK_HOLD } from '~/composables/useDock'
+import { computed, ref, useTemplateRef, watch } from 'vue'
+import { useDockHold } from '~/composables/useDock'
 import {
   dockActivation,
   dockItemKey,
@@ -70,8 +70,9 @@ const testId = computed(() => {
 const button = useTemplateRef<HTMLButtonElement>('button')
 const chooserOpen = ref(false)
 // A hiding dock stays while this entry's menu or chooser is open (FR-025).
-const hold = inject(DOCK_HOLD, () => {})
-watch(chooserOpen, (open) => hold(open))
+const holdMenu = useDockHold()
+const holdChooser = useDockHold()
+watch(chooserOpen, (open) => holdChooser(open))
 // Switching between compact and normal mode moves the dock away from the chooser (FR-034).
 watch(
   () => wm.compact,
@@ -160,6 +161,12 @@ const isLauncher = computed(
   () => props.entry.kind === 'control' && props.entry.id === 'launcher',
 )
 
+/** An entry with its own menu keeps right click and long press to itself, so the dock's
+ * placement menu around it does not open too; on the launcher, which has none, they reach it. */
+function keepToItself(event: Event) {
+  if (!isLauncher.value) event.stopPropagation()
+}
+
 /** Workspaces and windows can leave the dock; the launcher cannot (FR-006, US4). */
 function removeControl() {
   const key = dockItemKey(props.entry)
@@ -179,7 +186,7 @@ async function closeAll() {
 
 <template>
   <ShadcnPopover v-model:open="chooserOpen">
-    <ShadcnContextMenu @update:open="hold">
+    <ShadcnContextMenu @update:open="holdMenu">
       <ShadcnContextMenuTrigger as-child :disabled="isLauncher">
         <button
           ref="button"
@@ -200,7 +207,8 @@ async function closeAll() {
           :title="label"
           @click="activate"
           @auxclick="onAuxclick"
-          @contextmenu.stop
+          @pointerdown="keepToItself"
+          @contextmenu="keepToItself"
           @mousedown.middle.prevent
         >
           <img

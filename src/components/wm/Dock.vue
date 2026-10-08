@@ -9,7 +9,7 @@
  * alignment, style and mode (FR-018). As a wheel it always lies over the windows and keeps no space
  * (FR-030); its mode does not apply.
  */
-import { computed, provide, ref, useTemplateRef } from 'vue'
+import { computed, provide, reactive, ref, useTemplateRef, watch } from 'vue'
 import { DOCK_HOLD } from '~/composables/useDock'
 import { resolveDockEntries } from '~/lib/wm/dock'
 
@@ -65,18 +65,30 @@ const frameClass = computed(() => [
 const bar = useTemplateRef<HTMLElement>('bar')
 const { focused } = useFocusWithin(bar)
 const pointerInside = ref(false)
-const held = ref(0)
+/** The menus and choosers open right now (`useDockHold`); a set, so a holder that reports
+ * "closed" twice, or only on unmount, cannot unbalance it. */
+const holders = reactive(new Set<symbol>())
 const revealed = ref(false)
 let hideTimer: ReturnType<typeof setTimeout> | undefined
 
-function hold(open: boolean) {
-  held.value = Math.max(0, held.value + (open ? 1 : -1))
-  if (!open) scheduleHide()
+function hold(holder: symbol, open: boolean) {
+  if (open) holders.add(holder)
+  else if (holders.delete(holder)) scheduleHide()
 }
 provide(DOCK_HOLD, hold)
 
+// The bar's own menu: switching to the wheel from it removes the bar before reka closes the menu.
+const barMenu = Symbol('dockBarMenu')
+function holdBarMenu(open: boolean) {
+  hold(barMenu, open)
+}
+watch(
+  () => placement.value.style,
+  () => hold(barMenu, false),
+)
+
 const shown = computed(
-  () => !autohide.value || revealed.value || focused.value || held.value > 0,
+  () => !autohide.value || revealed.value || focused.value || holders.size > 0,
 )
 
 function reveal() {
@@ -87,7 +99,7 @@ function reveal() {
 function scheduleHide() {
   clearTimeout(hideTimer)
   hideTimer = setTimeout(() => {
-    if (!pointerInside.value && held.value === 0) revealed.value = false
+    if (!pointerInside.value && holders.size === 0) revealed.value = false
   }, 400)
 }
 
@@ -117,6 +129,7 @@ function onPointerleave() {
       :class="STRIP[placement.edge]"
       aria-hidden="true"
       @pointerenter="reveal"
+      @pointerleave="scheduleHide"
     />
     <div v-if="placement.style === 'wheel'" class="pointer-events-auto">
       <WmDockWheel
@@ -125,7 +138,7 @@ function onPointerleave() {
         :align="placement.align"
       />
     </div>
-    <ShadcnContextMenu v-else @update:open="hold">
+    <ShadcnContextMenu v-else @update:open="holdBarMenu">
       <ShadcnContextMenuTrigger as-child>
         <div
           ref="bar"
