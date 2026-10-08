@@ -1,16 +1,17 @@
 import { invoke } from '@tauri-apps/api/core'
 
 import { runPlatformProbe } from '~/lib/platformProbe'
+import { runMediaProbe, type ProbeMedia } from '~/lib/platformProbeMedia'
 
 declare global {
   interface Window {
-    __HOLZI_PROBE__?: { port: number }
+    __HOLZI_PROBE__?: { port: number; media?: ProbeMedia }
   }
 }
 
 /**
- * The CI's platform probe (spec 044, T007): runs only when Rust handed over a port, and reports
- * through IPC, which no network rule can block.
+ * The CI's platform probe (spec 044, T007, T041): runs only when Rust handed over a port, plays and
+ * draws the media files Rust serves, and reports through IPC, which no network rule can block.
  */
 export default defineNuxtPlugin(() => {
   const probe = window.__HOLZI_PROBE__
@@ -29,7 +30,11 @@ export default defineNuxtPlugin(() => {
       violations: () => [...violations],
     },
   )
-    .then((report) => invoke('platform_probe_report', { report }))
+    .then(async (report) => {
+      if (probe.media && report.steps.every((step) => step.ok))
+        report.steps.push(...(await runMediaProbe(probe.media)))
+      return invoke('platform_probe_report', { report })
+    })
     .catch((error) => {
       console.error('platform probe report failed', error)
     })

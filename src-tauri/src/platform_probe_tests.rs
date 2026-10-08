@@ -118,9 +118,49 @@ fn the_result_line_starts_with_the_marker() {
 }
 
 #[test]
-fn the_init_script_names_the_port() {
+fn the_init_script_names_the_port_and_the_media() {
     assert_eq!(
-        init_script(41873),
-        "window.__HOLZI_PROBE__ = Object.freeze({ port: 41873 });"
+        init_script(41873, &serde_json::json!({ "pdf": "http://127.0.0.1:1/t" })),
+        r#"window.__HOLZI_PROBE__ = Object.freeze({ port: 41873, media: {"pdf":"http://127.0.0.1:1/t"} });"#
     );
+}
+
+#[tokio::test]
+async fn the_fixtures_are_served_with_their_ranges() {
+    use tokio::io::AsyncReadExt;
+
+    let media = MediaServer::start(tokio_util::sync::CancellationToken::new())
+        .await
+        .unwrap();
+    let urls = serve_fixtures(&media);
+    for (name, _, _) in FIXTURES {
+        assert!(urls[name]
+            .as_str()
+            .unwrap()
+            .starts_with("http://127.0.0.1:"));
+    }
+    let (_, bytes, _) = FIXTURES[2];
+    let fixture = Fixture {
+        bytes,
+        content_type: "application/pdf",
+    };
+    assert_eq!(fixture.size().await.unwrap(), bytes.len() as u64);
+    let mut part = Vec::new();
+    fixture
+        .open_range(1, 4)
+        .await
+        .unwrap()
+        .read_to_end(&mut part)
+        .await
+        .unwrap();
+    assert_eq!(part, b"PDF-");
+    let mut past = Vec::new();
+    fixture
+        .open_range(bytes.len() as u64 + 10, 4)
+        .await
+        .unwrap()
+        .read_to_end(&mut past)
+        .await
+        .unwrap();
+    assert!(past.is_empty());
 }
