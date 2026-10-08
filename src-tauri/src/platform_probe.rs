@@ -57,6 +57,7 @@ pub fn requested() -> bool {
 pub fn start<R: Runtime>(app: &AppHandle<R>) -> std::io::Result<u16> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr()?.port();
+    note(app, STARTED_FILE, &format!("port {port}"));
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
             std::thread::spawn(move || {
@@ -74,7 +75,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) -> std::io::Result<u16> {
                 "ok": false,
                 "steps": [{ "name": "report", "ok": false, "detail": "no report from the window" }],
             }));
-            emit(&line);
+            emit(&app, &line);
             app.exit(2);
         }
     });
@@ -184,14 +185,32 @@ pub fn platform_probe_report<R: Runtime>(app: AppHandle<R>, report: Report) {
         "userAgent": report.user_agent,
         "platform": std::env::consts::OS,
     }));
-    emit(&line);
+    emit(&app, &line);
     app.exit(code);
 }
 
-fn emit(line: &str) {
+/// Files in holzi's cache directory that the Android job reads with `adb shell run-as`, because a
+/// GUI app's stdout reaches no one there and logcat proved unreliable on the emulator.
+pub const STARTED_FILE: &str = "platform-probe-started.txt";
+pub const RESULT_FILE: &str = "platform-probe-result.txt";
+
+fn emit<R: Runtime>(app: &AppHandle<R>, line: &str) {
     println!("{line}");
     let _ = std::io::stdout().flush();
     log::info!(target: "holzi-probe", "{line}");
+    note(app, RESULT_FILE, line);
+}
+
+fn note<R: Runtime>(app: &AppHandle<R>, name: &str, content: &str) {
+    use tauri::Manager;
+    let Ok(dir) = app.path().app_cache_dir() else {
+        return;
+    };
+    if std::fs::create_dir_all(&dir).is_ok() {
+        if let Err(error) = std::fs::write(dir.join(name), format!("{content}\n")) {
+            log::warn!("platform probe: could not write {name}: {error}");
+        }
+    }
 }
 
 /// Answers one request: the health route, its preflight, or 404.
