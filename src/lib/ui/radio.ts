@@ -1,13 +1,17 @@
 // Helpers for haex-ui's radio groups (`ShadcnRadioGroup`, reka-ui). Pure, no Vue imports.
 
 /**
- * Whether the radio item a click landed on was already the checked one. A radio group never
- * clears itself, so a picker that lets a second click remove the choice asks this in its `click`
- * handler: the item's `data-state` still shows the state from before the click, because the group's
- * update re-renders only after the event.
+ * Lets a second click on the checked radio item clear the choice. A radio group never clears
+ * itself: reka checks the clicked item again even when it is already checked. Its item emits a
+ * cancelable `select` first, though; a picker passes it here from `@select`, and when the item was
+ * the checked one the default is prevented (the group leaves its value alone) and `clear` runs.
  */
-export function wasChecked(event: Event): boolean {
-  return (
-    (event.currentTarget as HTMLElement | null)?.dataset.state === 'checked'
-  )
+export function clearOnReselect(
+  event: Event,
+  checked: boolean,
+  clear: () => void,
+): void {
+  if (!checked) return
+  event.preventDefault()
+  clear()
 }

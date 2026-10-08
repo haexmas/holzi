@@ -6,7 +6,7 @@
 import { toast } from 'vue-sonner'
 import type { GroupRow } from '@bindings/GroupRow'
 import { ENTRY_COLORS, ENTRY_ICONS } from '~/lib/passwords/icons'
-import { wasChecked } from '~/lib/ui/radio'
+import { clearOnReselect } from '~/lib/ui/radio'
 
 const props = defineProps<{
   /** The folder to edit, or `null` to create one. */
@@ -108,7 +108,9 @@ async function saveAsync() {
             :value="candidate"
             :aria-label="candidate.replace('lucide:', '')"
             class="flex size-9 items-center justify-center rounded-lg border border-transparent bg-muted hover:bg-accent data-[state=checked]:border-primary data-[state=checked]:bg-primary/10"
-            @click="wasChecked($event) && (icon = null)"
+            @select="
+              clearOnReselect($event, icon === candidate, () => (icon = null))
+            "
           >
             <Icon :name="candidate" class="size-5" />
           </UiRadioGroupTile>
@@ -125,7 +127,9 @@ async function saveAsync() {
             :aria-label="candidate"
             class="size-7 rounded-full border-2 border-transparent data-[state=checked]:border-foreground"
             :style="{ backgroundColor: candidate }"
-            @click="wasChecked($event) && (color = null)"
+            @select="
+              clearOnReselect($event, color === candidate, () => (color = null))
+            "
           />
         </ShadcnRadioGroup>
         <p v-if="error" class="text-sm text-destructive" role="alert">

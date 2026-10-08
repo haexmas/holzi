@@ -9,7 +9,7 @@
 import type { ItemDetail } from '@bindings/ItemDetail'
 import type { Draft } from '~/lib/passwords/draft'
 import { ENTRY_COLORS, ENTRY_ICONS } from '~/lib/passwords/icons'
-import { wasChecked } from '~/lib/ui/radio'
+import { clearOnReselect } from '~/lib/ui/radio'
 
 const props = defineProps<{
   /** `null` is a new entry. */
@@ -441,7 +441,13 @@ const showOtpInput = computed(
             :value="name"
             :aria-label="name.replace('lucide:', '')"
             class="flex size-9 items-center justify-center rounded-lg border border-transparent bg-background hover:bg-accent data-[state=checked]:border-primary data-[state=checked]:bg-primary/10"
-            @click="wasChecked($event) && (draft.icon = null)"
+            @select="
+              clearOnReselect(
+                $event,
+                draft.icon === name,
+                () => (draft.icon = null),
+              )
+            "
           >
             <Icon :name="name" class="size-5" />
           </UiRadioGroupTile>
@@ -458,7 +464,13 @@ const showOtpInput = computed(
             :aria-label="color"
             class="size-7 rounded-full border-2 border-transparent data-[state=checked]:border-foreground"
             :style="{ backgroundColor: color }"
-            @click="wasChecked($event) && (draft.color = null)"
+            @select="
+              clearOnReselect(
+                $event,
+                draft.color === color,
+                () => (draft.color = null),
+              )
+            "
           />
         </ShadcnRadioGroup>
       </li>

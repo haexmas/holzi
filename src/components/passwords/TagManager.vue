@@ -7,7 +7,7 @@
 import { toast } from 'vue-sonner'
 import type { TagRow } from '@bindings/TagRow'
 import { ENTRY_COLORS } from '~/lib/passwords/icons'
-import { wasChecked } from '~/lib/ui/radio'
+import { clearOnReselect } from '~/lib/ui/radio'
 
 const open = defineModel<boolean>('open', { required: true })
 
@@ -140,7 +140,13 @@ async function confirmDeleteAsync() {
               :aria-label="color"
               class="size-5 rounded-full border-2 border-transparent data-[state=checked]:border-foreground"
               :style="{ backgroundColor: color }"
-              @click="wasChecked($event) && colorAsync(tag, color)"
+              @select="
+                clearOnReselect(
+                  $event,
+                  tag.color === color,
+                  () => void colorAsync(tag, null),
+                )
+              "
             />
           </ShadcnRadioGroup>
           <p
