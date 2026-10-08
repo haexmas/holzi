@@ -103,6 +103,16 @@
     }
   },
   "wm": {
+    "dock": {
+      "label": "Dock",
+      "pin": "An Dock anheften",
+      "unpin": "Vom Dock lösen",
+      "controls": {
+        "launcher": "Launcher",
+        "workspaces": "Arbeitsbereiche",
+        "windows": "Fenster"
+      }
+    },
     "workspaces": {
       "title": "Arbeitsbereiche",
       "numbered": "Arbeitsbereich {number}",
@@ -131,7 +141,6 @@
       "restore": "Fenster wiederherstellen"
     },
     "windowOverview": {
-      "open": "Fensterübersicht",
       "title": "Fenster",
       "empty": "Keine Fenster geöffnet."
     },

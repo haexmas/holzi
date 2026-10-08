@@ -165,3 +165,10 @@ press context menu row“, „window display title helper“, „device scoped p
 fan menu arc“: Der Graph enthält fast nur Rust- und Spec-Knoten, die Treffer waren fachfremd. Die
 Kandidaten oben (`usePasswordsRowPress`, `tabDisplayInfo`, `useWorkspaceBackground`, `wm.tab.activate`)
 stammen aus gezielter Code-Suche. Nachprüfung mit einem aktualisierten Graphen steht aus.
+
+**T001 (2026-10-08)**, je neuem Artefakt eine Abfrage (Budget 1000, Snapshot des Hauptcheckouts, nicht
+aktualisiert): `dock.ts` („pinned app list preference normalize parse“) und die Dock-Komponenten („toolbar
+of app icons with running indicator badge“) ohne Frontend-Treffer; `useDock` („composable load refresh
+vault preference ref“) → `stores/models.ts`, `useProviders.ts` (Modell- und Anbieterlisten, keine
+Präferenzen); Rad-Geometrie („radial wheel layout offsets ring“) → Chat- und Modell-Composables. Kein
+Kandidat passt; es bleibt bei den per Code-Suche gefundenen Vorbildern.

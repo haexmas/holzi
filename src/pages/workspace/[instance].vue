@@ -32,6 +32,7 @@ const colorScheme = useColorScheme()
 const appearance = useAppearance()
 const language = useLanguage()
 const background = useWorkspaceBackground()
+const dock = useDock()
 
 // The color scheme is a vault preference: another device or window can change it.
 onVaultTablesChanged(['preferences'], colorScheme.refreshAsync)
@@ -41,6 +42,8 @@ onVaultTablesChanged(['preferences'], appearance.refreshAsync)
 onVaultTablesChanged(['preferences'], language.refreshAsync)
 // And the workspace background (spec 042, FR-018).
 onVaultTablesChanged(['preferences'], background.refreshAsync)
+// And the dock's entries (spec 045, FR-040); its placement is this device's, but lives in the same table.
+onVaultTablesChanged(['preferences'], dock.refreshAsync)
 // So is "Sitzung wiederherstellen" (spec 023 FR-024): turned on on another device, this one starts
 // saving its session at once.
 onVaultTablesChanged(['preferences'], wm.refreshSessionRestoreAsync)
@@ -105,6 +108,10 @@ onMounted(async () => {
   })
   void background.loadAsync().catch((error: unknown) => {
     console.error('[settings] reading the background failed', error)
+  })
+  // Spec 045: a read error leaves the default dock.
+  void dock.loadAsync().catch((error: unknown) => {
+    console.error('[dock] reading the dock failed', error)
   })
   // The extension list first: a restored tab of an extension unknown at that moment is dropped.
   await extensionHost.startAsync().catch((error: unknown) => {

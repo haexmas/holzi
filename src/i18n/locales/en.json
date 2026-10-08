@@ -103,6 +103,16 @@
     }
   },
   "wm": {
+    "dock": {
+      "label": "Dock",
+      "pin": "Pin to dock",
+      "unpin": "Unpin from dock",
+      "controls": {
+        "launcher": "Launcher",
+        "workspaces": "Workspaces",
+        "windows": "Windows"
+      }
+    },
     "workspaces": {
       "title": "Workspaces",
       "numbered": "Workspace {number}",
@@ -131,7 +141,6 @@
       "restore": "Restore window"
     },
     "windowOverview": {
-      "open": "Window overview",
       "title": "Windows",
       "empty": "No windows are open."
     },
