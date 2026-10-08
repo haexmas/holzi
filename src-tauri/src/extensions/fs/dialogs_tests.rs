@@ -88,3 +88,19 @@ fn the_choice_of_a_document_ends_with_its_frame() {
 
     assert!(ops::read_file(&frame, &json!({ "path": ADDRESS })).is_err());
 }
+
+#[test]
+fn a_chosen_document_that_is_gone_no_longer_exists() {
+    let s = setup();
+    std::fs::write(s.documents.join("Bericht.txt"), "x").unwrap();
+    *lock(&s.dialogs.document) = Some(ADDRESS.to_string());
+    let frame = s.frame("good-notes-like.xt");
+    select_file(&frame, &json!({})).unwrap();
+
+    std::fs::remove_file(s.documents.join("Bericht.txt")).unwrap();
+
+    assert_eq!(
+        ops::exists(&frame, &json!({ "path": ADDRESS })).unwrap(),
+        json!(false)
+    );
+}

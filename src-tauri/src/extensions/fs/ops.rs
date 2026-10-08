@@ -157,13 +157,9 @@ pub fn remove(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
 /// `{path}` → whether it exists.
 pub fn exists(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     let raw = path_param(params, "path")?;
-    if ctx
-        .host
-        .fs
-        .document(&ctx.session.frame, raw, Access::Read)
-        .is_some()
-    {
-        return Ok(json!(true));
+    if let Some(file) = ctx.host.fs.document(&ctx.session.frame, raw, Access::Read) {
+        let opener = ctx.host.fs.environment()?.opener.clone();
+        return Ok(json!(picked::open_read(opener.as_ref(), &file).is_ok()));
     }
     let path = authorize(ctx, raw, Access::Read, Reach::Path)?;
     Ok(json!(path.exists()))
