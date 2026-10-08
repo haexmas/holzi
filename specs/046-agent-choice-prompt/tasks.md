@@ -18,8 +18,8 @@ row). Commit per phase with Conventional Commits (`feat(agent): …`, `refactor(
 
 **Purpose**: Build on PR #336 and satisfy the graphify-first rule before new named artifacts exist.
 
-- [X] T001 Confirm PR #336 (`fix/agent-unknown-app`) and PR #337 (`refactor/radio-group`, haex-ui `ShadcnRadioGroup`) are merged, then `git fetch origin && git rebase origin/main` on branch `046-agent-choice-prompt`; verify `ActionInputError` exists in `src/lib/actions/runner.ts` and `unknownAppMessage` in `src/lib/wm/apps.ts`. verify `ShadcnRadioGroup` in `.nuxt/components.d.ts` after `nuxt prepare`. If either PR is not merged, stop and ask the operator
-- [X] T002 Refresh the graph (`graphify` on the worktree) and run one bounded `graphify query "<intent>" --budget 1000` each for `src/lib/wm/appMatch.ts`, `src-tauri/src/chat/turn/choices.rs`, `src-tauri/src/chat/tools/ask_user.rs`, `src/components/chat/ChoicePrompt.vue`, `src/composables/useChatChoices.ts`; record candidates and why each did not match in the head section of `specs/046-agent-choice-prompt/research.md`. If a near-identical candidate appears, stop and ask the operator
+- [x] T001 Confirm PR #336 (`fix/agent-unknown-app`) and PR #337 (`refactor/radio-group`, haex-ui `ShadcnRadioGroup`) are merged, then `git fetch origin && git rebase origin/main` on branch `046-agent-choice-prompt`; verify `ActionInputError` exists in `src/lib/actions/runner.ts` and `unknownAppMessage` in `src/lib/wm/apps.ts`. verify `ShadcnRadioGroup` in `.nuxt/components.d.ts` after `nuxt prepare`. If either PR is not merged, stop and ask the operator
+- [x] T002 Refresh the graph (`graphify` on the worktree) and run one bounded `graphify query "<intent>" --budget 1000` each for `src/lib/wm/appMatch.ts`, `src-tauri/src/chat/turn/choices.rs`, `src-tauri/src/chat/tools/ask_user.rs`, `src/components/chat/ChoicePrompt.vue`, `src/composables/useChatChoices.ts`; record candidates and why each did not match in the head section of `specs/046-agent-choice-prompt/research.md`. If a near-identical candidate appears, stop and ask the operator
 
 ---
 
@@ -29,7 +29,7 @@ row). Commit per phase with Conventional Commits (`feat(agent): …`, `refactor(
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 [P] Move `fold` from `src/lib/passwords/search.ts:19-24` to new `src/lib/search/fold.ts` (named export, same doc comment); `src/lib/passwords/search.ts` imports it relatively and re-exports nothing new; `pnpm check:passwords` stays green; commit `refactor(search): move fold to a shared module`
+- [x] T003 [P] Move `fold` from `src/lib/passwords/search.ts:19-24` to new `src/lib/search/fold.ts` (named export, same doc comment); `src/lib/passwords/search.ts` imports it relatively and re-exports nothing new; `pnpm check:passwords` stays green; commit `refactor(search): move fold to a shared module`
 - [ ] T004 [P] Rename the chat prompt queue: `PendingApproval` → `PendingPrompt` with a `kind: 'approval'` discriminant (type moves from `src/components/chat/PermissionPrompt.vue` to `src/composables/useChat.ts` next to `ToolPermissionRequestEvent`), `pendingApprovals` → `pendingPrompts`, `pendingApprovalsByThread` → `pendingPromptsByThread` in `src/components/apps/ChatApp.vue`, `src/components/chat/Composer.vue`, `src/components/chat/PermissionPrompt.vue`, `src/composables/useChatTranscript.ts`, `src/composables/useComposer.ts`, `src/composables/useThreadSidebar.ts`, `src/composables/useChatTab.ts`, `scripts/lib/chat-state-harness.ts`, `scripts/check-chat-state.ts`; `handleToolPermissionRequest` sets `kind: 'approval'`; `PermissionPrompt` only reads prompts of kind `approval`; `pnpm check:chat-state`, `pnpm check:templates`, `pnpm typecheck` green; commit `refactor(chat): one queue for pending prompts`
 
 **Checkpoint**: Refactors merged into the branch; behaviour unchanged.

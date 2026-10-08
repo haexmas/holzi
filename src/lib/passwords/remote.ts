@@ -1,7 +1,7 @@
 // What the window does when the data changes under it (spec 034-password-manager, US8): whether an
 // open entry is still the one that was loaded, and how tags that two devices made twice show as one
 // (until the cleanup at the next open merges them for good). Pure; the window holds the state.
-import { fold } from './search.ts'
+import { fold } from '../search/fold.ts'
 
 export type EntryFreshness = 'fresh' | 'changed' | 'deleted'
 
