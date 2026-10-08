@@ -103,6 +103,20 @@ export function getAppDefinition(
   return apps.find((app) => app.id === appId)
 }
 
+/** The error for an `appId` no app has, naming every valid id: an extension's id is a UUID no agent
+ * can guess from its title, and a small model corrects its call from this message far more often
+ * than it takes the extra `wm.apps.list` round. An extension carries its title; holzi's own ids
+ * speak for themselves. */
+export function unknownAppMessage(
+  appId: string,
+  apps: readonly AppDefinition[],
+): string {
+  const valid = apps.map((app) =>
+    app.title ? `${app.id} (${app.title})` : app.id,
+  )
+  return `unknown app ${appId}; valid app ids: ${valid.join(', ')}`
+}
+
 export type TitleRef = {
   key: string | undefined
   params: Record<string, string>

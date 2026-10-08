@@ -8,6 +8,7 @@ import { test } from 'node:test'
 import { ALL_ACTIONS } from '../src/lib/actions/catalog.ts'
 import { tabCandidates } from '../src/lib/actions/handlers.ts'
 import {
+  ActionInputError,
   createActionRunner,
   type ActionHandler,
   type ActionRunnerDeps,
@@ -276,6 +277,21 @@ test('a throwing handler becomes failed with its message', async () => {
   const outcome = await createActionRunner(harness().deps).runAction(BROKEN.id)
   assert.equal(!outcome.ok && outcome.code, 'failed')
   assert.equal(!outcome.ok && outcome.message, 'boom')
+})
+
+test('a handler rejecting its input becomes invalid_input with message and field', async () => {
+  const { deps } = harness({
+    globalHandler: () => () => {
+      throw new ActionInputError('unknown app system.notes', 'appId')
+    },
+  })
+  const outcome = await createActionRunner(deps).runAction(GO.id, { steps: 1 })
+  assert.deepEqual(outcome, {
+    ok: false,
+    code: 'invalid_input',
+    message: 'unknown app system.notes',
+    field: 'appId',
+  })
 })
 
 test('a global action without a registered handler is failed, not a crash', async () => {

@@ -52,6 +52,19 @@ function failure(
     : { ok: false, code, message, field }
 }
 
+/** Thrown by a handler whose input passed the schema but names nothing that exists (an unknown app
+ * id). Becomes `invalid_input`, so an agent sees the message and can correct its call instead of
+ * getting the masked `failed`. */
+export class ActionInputError extends Error {
+  readonly field: string | undefined
+
+  constructor(message: string, field?: string) {
+    super(message)
+    this.name = 'ActionInputError'
+    this.field = field
+  }
+}
+
 /** A readable message for any thrown value: `Error.message`, a backend error's `reason` or
  * `message`, else its JSON. */
 function errorMessage(error: unknown): string {
@@ -153,6 +166,8 @@ export function createActionRunner(deps: ActionRunnerDeps) {
         return failure('failed', validation.message, validation.field)
       return { ok: true, result: normalized }
     } catch (error) {
+      if (error instanceof ActionInputError)
+        return failure('invalid_input', error.message, error.field)
       return {
         ok: false,
         code: 'failed',
