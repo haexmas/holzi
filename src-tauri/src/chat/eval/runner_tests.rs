@@ -175,8 +175,14 @@ async fn every_step_carries_the_tool_instruction_of_a_chat_turn() {
     let seen = adapter.seen.lock().unwrap();
     assert!(!seen.is_empty());
     assert!(seen.iter().all(|req| {
-        req.system_prompt.as_deref() == Some(crate::chat::tools::prompt::TOOL_INSTRUCTION)
+        req.system_prompt.as_deref().is_some_and(|prompt| {
+            prompt.starts_with(crate::chat::tools::prompt::TOOL_INSTRUCTION)
+                && prompt.contains("call ask_user")
+        })
     }));
+    assert!(seen
+        .iter()
+        .all(|req| req.tools.iter().any(|tool| tool.name == "ask_user")));
 }
 
 #[tokio::test]

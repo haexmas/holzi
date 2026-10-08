@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde_json::json;
 
 use super::embedded_set;
-use super::scoring::{Expect, Sentence};
+use super::scoring::{Expect, ExpectedCall, Sentence};
 use crate::adapters::types::{
     AdapterStream, ChatRequest, StreamChunk, ToolCall, ToolTemplateProbe,
 };
@@ -90,6 +90,29 @@ fn sentence<'a>(text: &str, set: &'a super::scoring::EvalSet) -> &'a Sentence {
     set.sentences.iter().find(|s| s.text == text).unwrap()
 }
 
+/// The arguments the oracle sends: what the sentence expects. Where a sentence leaves them open
+/// (an app named with a typo, the agent's own question), a value the tool's schema accepts.
+fn oracle_args(call: &ExpectedCall) -> serde_json::Value {
+    if call.tool == crate::chat::tools::ask_user::ASK_USER_TOOL_NAME {
+        return json!({ "question": "Which one?", "options": ["One", "Other"] });
+    }
+    let mut args = call.args.clone();
+    let tools = super::embedded_tools();
+    let required = tools
+        .iter()
+        .find(|def| def.tool_name == call.tool)
+        .and_then(|def| def.input_schema.get("required"))
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if let Some(object) = args.as_object_mut() {
+        for field in required.iter().filter_map(serde_json::Value::as_str) {
+            object.entry(field).or_insert_with(|| json!("x"));
+        }
+    }
+    args
+}
+
 /// The model the set was written for: calls what a sentence expects, searches first when the tool
 /// is not offered yet, and only talks for smalltalk.
 pub(crate) fn oracle() -> Scripted {
@@ -107,7 +130,7 @@ pub(crate) fn oracle() -> Scripted {
             return vec![calls(
                 expected
                     .iter()
-                    .map(|c| (c.tool.as_str(), c.args.clone()))
+                    .map(|c| (c.tool.as_str(), oracle_args(c)))
                     .collect(),
             )];
         }

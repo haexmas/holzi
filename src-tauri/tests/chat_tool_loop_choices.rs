@@ -12,10 +12,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use holzi_lib::adapters::types::ToolCall as LlmToolCall;
+use holzi_lib::adapters::types::ToolSpec;
 use holzi_lib::adapters::StreamChunk;
 use holzi_lib::chat::choices::ChoiceAnswer;
 use holzi_lib::chat::commands::abort_turn;
 use holzi_lib::chat::session::ChatState;
+use holzi_lib::chat::tools::ask_user::AskUserTool;
 use holzi_lib::chat::tools::{
     ApprovalDecision, ChoiceOption, ChoiceRequest, RiskClass, Tool, ToolResult,
 };
@@ -91,6 +93,11 @@ struct Turn {
 
 /// A turn whose model calls `open_app` with `appId: "haex"` once, then ends.
 async fn start(mode: &str) -> Turn {
+    start_with(mode, "open_app", json!({ "appId": "haex" })).await
+}
+
+/// A turn whose model calls `tool` with `input` once, then ends.
+async fn start_with(mode: &str, tool: &str, input: Value) -> Turn {
     let db = open_db();
     let thread_id = Uuid::new_v4();
     let user_message_id = Uuid::new_v4();
@@ -103,12 +110,17 @@ async fn start(mode: &str) -> Turn {
         .lock()
         .unwrap()
         .register(Arc::new(OpenApp));
+    chat_state
+        .tool_registry
+        .lock()
+        .unwrap()
+        .register(Arc::new(AskUserTool));
 
     let adapter = StubAdapter::new(vec![
         vec![Ok(StreamChunk::ToolCalls(vec![LlmToolCall {
             id: "call-1".to_string(),
-            name: "open_app".to_string(),
-            input: json!({ "appId": "haex" }),
+            name: tool.to_string(),
+            input,
         }]))],
         vec![Ok(StreamChunk::Done {
             finish_reason: Some("end_turn".to_string()),
@@ -119,7 +131,13 @@ async fn start(mode: &str) -> Turn {
         })],
     ]);
     let session = session_with(adapter).await;
-    let request = base_request();
+    let mut request = base_request();
+    // `ask_user` is an action-source tool: the round runs it only when the request offered it.
+    request.tools.push(ToolSpec {
+        name: "ask_user".to_string(),
+        description: String::new(),
+        input_schema: json!({ "type": "object" }),
+    });
     let stream = session.adapter.stream_chat(request.clone()).await.unwrap();
     let (handle, events) = spawn_turn(
         db.clone(),
@@ -289,4 +307,63 @@ async fn cancelling_the_turn_while_a_question_is_open_leaves_no_tool_rows() {
         .pending_choices
         .resolve(extract_request_id(&request), ChoiceAnswer::Cancel)
         .expect("a late answer to a cancelled question is no error");
+}
+
+async fn ask(mode: &str) -> Turn {
+    start_with(
+        mode,
+        "ask_user",
+        json!({ "question": "Which colour scheme?", "options": ["Dark", "Light"] }),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn the_agent_asks_without_an_approval_even_in_manual_mode() {
+    let mut turn = ask("manual").await;
+    let (request, before) = turn.until("chat-choice-request").await;
+    assert!(!before.iter().any(|e| e == "tool-permission-request"));
+    assert_eq!(request["question"], "Which colour scheme?");
+    assert_eq!(request["field"], Value::Null);
+    assert_eq!(request["options"][0]["label"], "Dark");
+    turn.answer(
+        &request,
+        ChoiceAnswer::Option {
+            value: "Dark".into(),
+        },
+    );
+    let (rows, rest) = turn.finish().await;
+    assert!(!rest.iter().any(|e| e == "tool-permission-request"));
+    let result = tool_result(&rows);
+    assert_eq!(result.tool_is_error, Some(false));
+    assert_eq!(
+        serde_json::from_str::<Value>(&result.content).unwrap(),
+        json!({ "answer": "Dark" })
+    );
+}
+
+#[tokio::test]
+async fn own_words_answer_the_agent_as_free_text() {
+    let mut turn = ask("auto").await;
+    let (request, _) = turn.until("chat-choice-request").await;
+    turn.answer(
+        &request,
+        ChoiceAnswer::Text {
+            text: "the darker accent".into(),
+        },
+    );
+    let (rows, _) = turn.finish().await;
+    assert_eq!(
+        serde_json::from_str::<Value>(&tool_result(&rows).content).unwrap(),
+        json!({ "answer": "the darker accent", "freeText": true })
+    );
+}
+
+#[tokio::test]
+async fn a_declined_question_of_the_agent_is_declined_by_user() {
+    let mut turn = ask("auto").await;
+    let (request, _) = turn.until("chat-choice-request").await;
+    turn.answer(&request, ChoiceAnswer::Cancel);
+    let (rows, _) = turn.finish().await;
+    assert_eq!(tool_result(&rows).content, "declined_by_user");
 }

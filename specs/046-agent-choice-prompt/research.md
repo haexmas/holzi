@@ -211,3 +211,25 @@ i18n unter `chat.choice.*`.
 
 **Decision**: Entfällt. `CLAUDE.md` wurde mit `c082fe89` („migrate holzi to spaex v4“) entfernt; es gibt
 keine Datei mit `SPECKIT`-Markern.
+
+## R13 — Kernangebot: `wm.apps.list` raus, `ask_user` rein (beim Umsetzen entschieden)
+
+**Decision**: `ask_user` gehört zum Erstangebot jedes Turns (FR-015). Damit das Erstangebot bei
+höchstens 10 Werkzeugen bleibt (Spec 032, R6), verlässt `wm.apps.list` die Kernaktionen
+(`CORE_AGENT_TOOLS`, `src/lib/actions/agentTools.ts`); `find_actions` findet es weiter. Nach einer Suche
+reserviert `extend_offer` je einen Platz für `find_actions` und `ask_user` (höchstens 15 Werkzeuge).
+
+**Rationale**: Seit `wm.app.open` App-Namen auflöst (R5), braucht das Modell die App-Liste zum Öffnen
+nicht mehr. Vom Operator am 2026-10-08 so gewählt.
+
+**Alternatives considered**: Grenze auf 11 anheben; eine andere Kernaktion (z. B.
+`settings.models.list`) herausnehmen.
+
+## R14 — Viele Apps (beim Umsetzen geprüft)
+
+Nutzer werden 30 und mehr Erweiterungen installieren; der Agent muss jede finden. `matchApp` durchsucht
+immer alle installierten Apps, ohne Obergrenze und ohne Liste im Prompt; nur die Rückfrage zeigt
+höchstens 5 Kandidaten plus „Etwas anderes …“. `scripts/check-wm-app-match.ts` prüft 40 Erweiterungen
+plus die System-Apps: jede App öffnet sich mit ihrem Namen in jeder Schreibweise; bei einem vertauschten
+Buchstabenpaar öffnen 37 von 41 direkt (≥ 90 %, SC-002), die übrigen (sehr kurze Namen wie „pdf“,
+„git“) stehen in der Rückfrage unter den Kandidaten.

@@ -9,6 +9,7 @@ use serde_json::Value;
 use crate::adapters::types::ToolSpec;
 
 use super::action_tool::{AgentActionDef, ACTION_SOURCE};
+use super::ask_user::ASK_USER_TOOL_NAME;
 use super::{Tool, ToolRegistry};
 
 pub const FIND_ACTIONS_TOOL_NAME: &str = "find_actions";
@@ -23,13 +24,14 @@ pub fn tool_spec(tool: &dyn Tool) -> ToolSpec {
     }
 }
 
-/// Keeps all non-action tools and only the fixed core action tools plus search.
+/// Keeps all non-action tools and only the fixed core action tools plus search and `ask_user`.
 pub fn core_offer(registry: &ToolRegistry) -> Vec<ToolSpec> {
     registry
         .iter()
         .filter(|tool| {
             tool.source() != ACTION_SOURCE
                 || tool.name() == FIND_ACTIONS_TOOL_NAME
+                || tool.name() == ASK_USER_TOOL_NAME
                 || tool.action_definition().is_some_and(|def| def.core)
         })
         .map(|tool| tool_spec(tool.as_ref()))
@@ -57,7 +59,8 @@ pub fn extend_offer(
         !action_names.contains(tool.name.as_str()) || core_names.contains(tool.name.as_str())
     });
 
-    let max_found = MAX_ACTION_OFFER.saturating_sub(core_names.len() + 1);
+    // One slot each stays for `find_actions` and `ask_user`.
+    let max_found = MAX_ACTION_OFFER.saturating_sub(core_names.len() + 2);
     let mut added = 0;
     for tool in found {
         if added >= max_found

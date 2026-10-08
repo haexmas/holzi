@@ -50,3 +50,12 @@ fn a_turn_without_search_does_not_mention_an_unavailable_tool() {
 fn the_instruction_names_the_search_tool_it_relies_on() {
     assert!(TOOL_INSTRUCTION.contains(crate::chat::tools::offer::FIND_ACTIONS_TOOL_NAME));
 }
+
+#[test]
+fn a_turn_offering_ask_user_is_told_to_ask_instead_of_refusing() {
+    let with = system_prompt(None, &[tool("find_actions"), tool("ask_user")]).unwrap();
+    assert!(with.contains("ask_user"));
+    assert!(with.contains("instead of refusing"));
+    let without = system_prompt(None, &[tool("find_actions")]).unwrap();
+    assert!(!without.contains("ask_user"));
+}

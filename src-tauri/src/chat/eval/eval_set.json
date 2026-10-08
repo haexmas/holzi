@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "sentences": [
     {
       "id": "read-tabs-de-1",
@@ -379,6 +379,150 @@
       "kind": "smalltalk",
       "text": "How do I say good morning in Spanish?",
       "expect": "none",
+      "selfTest": false
+    },
+    {
+      "id": "typo-open-de-1",
+      "lang": "de",
+      "kind": "change",
+      "text": "Öffne die Einstelungen.",
+      "expect": [
+        {
+          "tool": "wm_app_open"
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "typo-open-de-2",
+      "lang": "de",
+      "kind": "change",
+      "text": "Öffne die Passwörtr.",
+      "expect": [
+        {
+          "tool": "wm_app_open"
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "typo-open-de-3",
+      "lang": "de",
+      "kind": "change",
+      "text": "Starte den Chatt.",
+      "expect": [
+        {
+          "tool": "wm_app_open"
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "typo-open-en-1",
+      "lang": "en",
+      "kind": "change",
+      "text": "Open the setings.",
+      "expect": [
+        {
+          "tool": "wm_app_open"
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "typo-open-en-2",
+      "lang": "en",
+      "kind": "change",
+      "text": "Open passwrds.",
+      "expect": [
+        {
+          "tool": "wm_app_open"
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "typo-open-en-3",
+      "lang": "en",
+      "kind": "change",
+      "text": "Start the chta.",
+      "expect": [
+        {
+          "tool": "wm_app_open"
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "clarify-de-1",
+      "lang": "de",
+      "kind": "clarify",
+      "text": "Mach es dunkler.",
+      "expect": [
+        {
+          "tool": "ask_user"
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "clarify-de-2",
+      "lang": "de",
+      "kind": "clarify",
+      "text": "Ändere die Farbe.",
+      "expect": [
+        {
+          "tool": "ask_user"
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "clarify-de-3",
+      "lang": "de",
+      "kind": "clarify",
+      "text": "Stell das um.",
+      "expect": [
+        {
+          "tool": "ask_user"
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "clarify-en-1",
+      "lang": "en",
+      "kind": "clarify",
+      "text": "Make it darker.",
+      "expect": [
+        {
+          "tool": "ask_user"
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "clarify-en-2",
+      "lang": "en",
+      "kind": "clarify",
+      "text": "Change the colour.",
+      "expect": [
+        {
+          "tool": "ask_user"
+        }
+      ],
+      "selfTest": false
+    },
+    {
+      "id": "clarify-en-3",
+      "lang": "en",
+      "kind": "clarify",
+      "text": "Switch it over.",
+      "expect": [
+        {
+          "tool": "ask_user"
+        }
+      ],
       "selfTest": false
     }
   ]

@@ -5,6 +5,7 @@ use tokio_util::sync::CancellationToken;
 use super::action_bridge::ActionBridge;
 use super::action_tool::ActionTool;
 use super::action_tool::AgentActionDef;
+use super::ask_user::AskUserTool;
 use super::find_actions::FindActionsTool;
 use super::offer::{core_offer, extend_offer, found_tools, search_actions};
 use super::{Tool, ToolRegistry};
@@ -149,4 +150,20 @@ async fn find_actions_returns_bounded_search_results() {
     let value: serde_json::Value = serde_json::from_str(&result.content).expect("JSON result");
     assert_eq!(value["actions"].as_array().expect("actions").len(), 5);
     assert_eq!(value["nextCursor"], "5");
+}
+
+#[test]
+fn core_offer_always_offers_ask_user() {
+    let mut registry = ToolRegistry::new();
+    registry.register(Arc::new(ActionTool::new(
+        def("settings.get", "Read settings", false),
+        ActionBridge::default(),
+    )));
+    registry.register(Arc::new(AskUserTool));
+
+    let names = core_offer(&registry)
+        .into_iter()
+        .map(|tool| tool.name)
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["ask_user"]);
 }

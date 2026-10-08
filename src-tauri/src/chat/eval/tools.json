@@ -468,7 +468,7 @@
       "properties": {}
     },
     "effect": "read",
-    "core": true,
+    "core": false,
     "titles": {
       "de": "Apps auflisten",
       "en": "List apps"

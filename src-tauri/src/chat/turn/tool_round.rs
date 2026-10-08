@@ -19,6 +19,7 @@ use crate::chat::events::{
 };
 use crate::chat::session::ChatState;
 use crate::chat::tools::action_tool::ACTION_SOURCE;
+use crate::chat::tools::ask_user::ASK_USER_TOOL_NAME;
 use crate::chat::tools::offer::{extend_offer, found_tools};
 use crate::chat::tools::permission;
 use crate::chat::tools::{ApprovalDecision, Tool, ToolResult as ToolExecResult};
@@ -184,7 +185,14 @@ impl TurnRunner<'_> {
             // made for an earlier call, but the very next tool use
             // must observe it (T024B).
             let mode = permission::read_from_vault(self.db).await;
-            match permission::decide(mode, tool.risk_class()) {
+            // `ask_user` changes nothing and is itself a question to the user: asking for an
+            // approval first would ask twice (spec 046 FR-015).
+            let decision = if call.name == ASK_USER_TOOL_NAME {
+                permission::Decision::Allow
+            } else {
+                permission::decide(mode, tool.risk_class())
+            };
+            match decision {
                 permission::Decision::Allow => plans.push((call, ToolPlan::Allow(tool))),
                 permission::Decision::Deny => plans.push((call, ToolPlan::Deny(tool))),
                 permission::Decision::Ask => {

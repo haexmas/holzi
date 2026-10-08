@@ -154,3 +154,88 @@ test('a candidate that cannot open on this device carries its reason', () => {
   assert.equal(files?.unavailableKey, 'extensions.status.transferring')
   assert.equal(files?.title, 'haex-files')
 })
+
+test('with forty extensions every app opens by its name and is found despite a typo', () => {
+  const names = [
+    'mail',
+    'notes',
+    'files',
+    'calendar',
+    'contacts',
+    'draw',
+    'code',
+    'image',
+    'tetris',
+    'music',
+    'video',
+    'maps',
+    'weather',
+    'news',
+    'tasks',
+    'todo',
+    'journal',
+    'budget',
+    'recipes',
+    'fitness',
+    'books',
+    'podcasts',
+    'chess',
+    'sudoku',
+    'translate',
+    'clock',
+    'timer',
+    'scanner',
+    'pdf',
+    'terminal',
+    'git',
+    'wiki',
+    'bookmarks',
+    'feeds',
+    'photos',
+    'camera',
+    'voice',
+    'whiteboard',
+    'spreadsheet',
+    'slides',
+  ]
+  const apps = allApps(
+    extensionApps(
+      names.map((name, i) =>
+        summary(
+          `00000000-0000-0000-0000-${String(i).padStart(12, '0')}`,
+          `haex-${name}`,
+        ),
+      ),
+      {},
+    ),
+  )
+  let clear = 0
+  let typos = 0
+  for (const app of apps) {
+    const title = titleOf(app)
+    assert.deepEqual(match(title, apps), exact(app.id), title)
+    assert.deepEqual(match(title.toUpperCase(), apps), exact(app.id), title)
+
+    // Swap two neighbouring letters of the name after the prefix, where there are two.
+    const at = title.startsWith('haex-') ? 6 : 1
+    if (title.length < at + 2) continue
+    const typo =
+      title.slice(0, at) + title[at + 1] + title[at] + title.slice(at + 2)
+    if (typo === title) continue
+    typos++
+    const result = match(typo, apps)
+    if (result.kind === 'exact') {
+      assert.equal(result.appId, app.id, `${typo} opened another app`)
+      clear++
+    } else {
+      assert.ok(
+        result.candidates.some((c) => c.appId === app.id),
+        `${typo} does not offer ${title}`,
+      )
+    }
+  }
+  assert.ok(
+    clear / typos >= 0.9,
+    `only ${clear} of ${typos} typos open directly`,
+  )
+})
