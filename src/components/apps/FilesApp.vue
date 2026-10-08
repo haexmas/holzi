@@ -18,7 +18,7 @@ let openFrames = 0
 const { t } = useI18n()
 const router = useTabRouter()
 const prefs = useFilesPrefs()
-const { sourcesAsync } = useFiles()
+const { sourcesAsync, releaseTabAsync } = useFiles()
 
 const place = computed(() => parseFilesPlace(router.route))
 const source = computed(
@@ -52,7 +52,11 @@ onMounted(() => {
   openFrames += 1
   void prefs.ensureLoaded()
 })
+// FR-016: the media server URLs of this tab end with it.
+const { tabId } = useWmTab()
+
 onBeforeUnmount(() => {
+  void releaseTabAsync(tabId).catch(() => {})
   openFrames -= 1
   if (openFrames > 0) return
   clearFilesThumbnails()

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * The viewer over the open folder (spec 044 FR-009, FR-011, FR-014, FR-015): text and images
- * show here; video, audio and PDF show the info view until the media server plays them (T014 ff.).
+ * show here, images from the media server (FR-016: the URL is released when the viewer moves on or
+ * closes); video, audio and PDF show the info view until their viewers come (T037, T038).
  * Arrows and the buttons move to the previous or next file of the same kind; Escape closes.
  */
 import type { Entry } from '@bindings/Entry'
@@ -20,7 +21,8 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; show: [entry: Entry] }>()
 
 const { t, d } = useI18n()
-const { readTextAsync, readImageAsync, openSystemAsync } = useFiles()
+const { readTextAsync, openAsync, releaseAsync, openSystemAsync } = useFiles()
+const { tabId } = useWmTab()
 
 const kind = computed(() => viewerKind(props.entry.name))
 /** What this version shows itself; the rest goes to the info view. */
@@ -34,8 +36,9 @@ const failed = ref<string | null>(null)
 const zoomed = ref(false)
 
 function dropImage() {
-  if (imageUrl.value) URL.revokeObjectURL(imageUrl.value)
+  const url = imageUrl.value
   imageUrl.value = null
+  if (url) void releaseAsync(url).catch(() => {})
 }
 
 watch(
@@ -50,10 +53,9 @@ watch(
         const content = await readTextAsync(props.source, path)
         if (path === props.entry.path) text.value = content
       } else if (shown.value === 'image') {
-        const bytes = await readImageAsync(props.source, path)
-        if (path === props.entry.path) {
-          imageUrl.value = URL.createObjectURL(new Blob([bytes]))
-        }
+        const opened = await openAsync(props.source, path, tabId)
+        if (path === props.entry.path) imageUrl.value = opened.url
+        else if (opened.url) void releaseAsync(opened.url).catch(() => {})
       }
     } catch (error) {
       if (path !== props.entry.path) return

@@ -305,6 +305,11 @@ pub fn run() {
             // without an `AppHandle`, so the emitter is set here.
             // Spec 044: the file browser's places, thumbnail cache and folder watches.
             app.manage(files::state::FilesState::from_app(app.handle()));
+            // Spec 044 (research R4): the media server lives as long as the vault session.
+            let media = tauri::async_runtime::block_on(files::media::MediaServer::start(
+                app.state::<AppState>().gate().token(),
+            ))?;
+            app.manage(media);
             // Spec 017, US9: holzi's protected places, known places and dialogs for extensions.
             app.state::<AppState>()
                 .extensions()
@@ -328,7 +333,9 @@ pub fn run() {
             files::browser_commands::files_list,
             files::browser_commands::files_stat,
             files::browser_commands::files_read_text,
-            files::browser_commands::files_read_image,
+            files::browser_commands::files_open,
+            files::browser_commands::files_release,
+            files::browser_commands::files_release_tab,
             files::browser_commands::files_thumbnail,
             files::browser_commands::files_watch,
             files::browser_commands::files_unwatch,

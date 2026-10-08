@@ -6,6 +6,7 @@ import { Channel, invoke } from '@tauri-apps/api/core'
 import type { Entry } from '@bindings/Entry'
 import type { FilesError } from '@bindings/FilesError'
 import type { FolderChanged } from '@bindings/FolderChanged'
+import type { Opened } from '@bindings/Opened'
 import type { SourceRef } from '@bindings/SourceRef'
 import type { Sources } from '@bindings/Sources'
 import type { TextContent } from '@bindings/TextContent'
@@ -43,11 +44,22 @@ export function useFiles() {
     return await invoke<TextContent>('files_read_text', { source, path })
   }
 
-  async function readImageAsync(
+  /** Opens a file for the viewer of `tabId`; images, video, audio and PDF get a media server URL
+   * that lives until it is released or the tab goes away. */
+  async function openAsync(
     source: SourceRef,
     path: string,
-  ): Promise<ArrayBuffer> {
-    return await invoke<ArrayBuffer>('files_read_image', { source, path })
+    tabId: string,
+  ): Promise<Opened> {
+    return await invoke<Opened>('files_open', { source, path, tabId })
+  }
+
+  async function releaseAsync(url: string): Promise<void> {
+    await invoke('files_release', { url })
+  }
+
+  async function releaseTabAsync(tabId: string): Promise<void> {
+    await invoke('files_release_tab', { tabId })
   }
 
   async function thumbnailAsync(
@@ -88,7 +100,9 @@ export function useFiles() {
     listAsync,
     statAsync,
     readTextAsync,
-    readImageAsync,
+    openAsync,
+    releaseAsync,
+    releaseTabAsync,
     thumbnailAsync,
     watchAsync,
     unwatchAsync,

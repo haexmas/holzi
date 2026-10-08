@@ -8,8 +8,10 @@ pub mod browser_commands;
 pub mod commands;
 pub mod kind;
 pub mod local;
+pub mod media;
 pub mod picked;
 pub mod state;
+pub mod streaming;
 pub mod thumbnails;
 
 pub use picked::PickedFile;
