@@ -2,10 +2,15 @@
 import type { PickedFile } from '@bindings/PickedFile'
 
 const { t } = useI18n()
+const colorScheme = useColorScheme()
 const language = useLanguage()
 const { language: activeLanguage, options: languageOptions } = language
 const store = useInstancesStore()
 const { activeNameAsync } = useInstance()
+
+// The landing page is outside a vault and must always follow the operating system. This also
+// matters when the user reaches it from a workspace without restarting the webview.
+onBeforeMount(() => colorScheme.startSystem())
 
 const createSheetOpen = ref(false)
 const linkSheetOpen = ref(false)
