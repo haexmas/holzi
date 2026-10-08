@@ -5,9 +5,10 @@
 
 /// The attachment limit (FR-020): 25 MiB per attachment, checked before the file is read.
 pub const ATTACHMENT_LIMIT_BYTES: u64 = 25 * 1024 * 1024;
-/// The maximum size of a password-import source or optional key file buffered in memory. This is
-/// deliberately much larger than an attachment so normal exports remain supported, while a
-/// document provider cannot grow the parser's input without bound (spec 034, US7).
+/// The maximum size of a password-import export buffered in memory. This is deliberately much
+/// larger than an attachment so normal exports remain supported, while a document provider cannot
+/// grow the parser's input without bound (spec 034, US7). KeePass key files are not subject to this
+/// limit: KeePass supports hashing arbitrary key-file contents into the key.
 pub const IMPORT_INPUT_LIMIT_BYTES: u64 = 512 * 1024 * 1024;
 /// How long a binary stays after the last known link vanished, so a link of another device that
 /// has not arrived yet does not run into nothing (FR-022, research R4).

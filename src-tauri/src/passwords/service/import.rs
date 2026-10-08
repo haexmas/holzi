@@ -46,6 +46,18 @@ fn read_all(opener: &impl Opener, file: &PickedFile) -> Result<Zeroizing<Vec<u8>
     read_all_limited(reader, IMPORT_INPUT_LIMIT_BYTES)
 }
 
+/// Reads a KeePass key file without applying the export-file limit. KeePass accepts XML, raw and
+/// hexadecimal key files, and hashes arbitrary other contents; the parser needs the original
+/// bytes to distinguish those formats.
+fn read_key_file(opener: &impl Opener, file: &PickedFile) -> Result<Zeroizing<Vec<u8>>> {
+    let mut bytes = Zeroizing::new(Vec::new());
+    picked::open_read(opener, file)
+        .map_err(|_| failed("unreadable"))?
+        .read_to_end(&mut bytes)
+        .map_err(|_| failed("unreadable"))?;
+    Ok(bytes)
+}
+
 /// Reads at most one byte beyond the import limit, so provider streams cannot exhaust memory.
 fn read_all_limited(reader: impl Read, limit: u64) -> Result<Zeroizing<Vec<u8>>> {
     let mut bytes = Zeroizing::new(Vec::new());
@@ -94,7 +106,7 @@ async fn read_model(
         }
         let bytes = read_all(&opener, &request.file)?;
         let key_file = match &request.key_file {
-            Some(file) => Some(read_all(&opener, file)?),
+            Some(file) => Some(read_key_file(&opener, file)?),
             None => None,
         };
         let credentials = Credentials {
