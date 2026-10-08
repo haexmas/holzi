@@ -6,7 +6,7 @@
  * front, or offers its instances grouped by workspace (FR-010–FR-012); a middle click opens a new
  * one (FR-013). Right click and a long press on touch open the context menu (reka, FR-015, FR-043).
  */
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
 import {
   dockActivation,
   type DockControlId,
@@ -65,6 +65,7 @@ const testId = computed(() => {
     : `dock-control-${props.entry.id}`
 })
 
+const button = useTemplateRef<HTMLButtonElement>('button')
 const chooserOpen = ref(false)
 // An instance closed elsewhere leaves the chooser; with fewer than two there is nothing to choose.
 watch(
@@ -156,67 +157,66 @@ async function closeAll() {
 <template>
   <ShadcnPopover v-model:open="chooserOpen">
     <ShadcnContextMenu>
-      <ShadcnPopoverAnchor as-child>
-        <ShadcnContextMenuTrigger as-child :disabled="entry.kind === 'control'">
-          <button
-            type="button"
-            class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
-            :class="[
-              entry.kind === 'control' && entry.id === 'launcher'
-                ? 'bg-foreground text-background hover:opacity-90'
-                : 'text-foreground hover:bg-accent',
-              attention ? 'ring-2 ring-warning' : '',
-            ]"
-            :data-testid="testId"
-            data-dock-item
-            :data-running="instances.length > 0 || undefined"
-            :data-count="instances.length || undefined"
-            :tabindex="tabbable ? 0 : -1"
-            :aria-label="label"
-            :title="label"
-            @click="activate"
-            @auxclick="onAuxclick"
-            @mousedown.middle.prevent
+      <ShadcnContextMenuTrigger as-child :disabled="entry.kind === 'control'">
+        <button
+          ref="button"
+          type="button"
+          class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+          :class="[
+            entry.kind === 'control' && entry.id === 'launcher'
+              ? 'bg-foreground text-background hover:opacity-90'
+              : 'text-foreground hover:bg-accent',
+            attention ? 'ring-2 ring-warning' : '',
+          ]"
+          :data-testid="testId"
+          data-dock-item
+          :data-running="instances.length > 0 || undefined"
+          :data-count="instances.length || undefined"
+          :tabindex="tabbable ? 0 : -1"
+          :aria-label="label"
+          :title="label"
+          @click="activate"
+          @auxclick="onAuxclick"
+          @mousedown.middle.prevent
+        >
+          <img
+            v-if="app?.iconUrl"
+            :src="app.iconUrl"
+            alt=""
+            class="h-6 w-6 object-contain"
+          />
+          <Icon
+            v-else
+            :name="
+              entry.kind === 'control'
+                ? CONTROL_ICONS[entry.id]
+                : (app?.icon ?? '')
+            "
+            class="h-5 w-5"
+            :aria-hidden="true"
+          />
+          <span
+            v-if="instances.length > 0"
+            class="absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-foreground"
+          />
+          <span class="sr-only">
+            <template v-if="instances.length > 1">
+              {{ t('wm.dock.count', { count: instances.length }) }}
+            </template>
+            <template v-else-if="instances.length > 0">
+              {{ t('wm.dock.running') }}
+            </template>
+            <template v-if="attention">{{ t('wm.attention') }}</template>
+          </span>
+          <span
+            v-if="instances.length > 1"
+            class="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground"
+            aria-hidden="true"
           >
-            <img
-              v-if="app?.iconUrl"
-              :src="app.iconUrl"
-              alt=""
-              class="h-6 w-6 object-contain"
-            />
-            <Icon
-              v-else
-              :name="
-                entry.kind === 'control'
-                  ? CONTROL_ICONS[entry.id]
-                  : (app?.icon ?? '')
-              "
-              class="h-5 w-5"
-              :aria-hidden="true"
-            />
-            <span
-              v-if="instances.length > 0"
-              class="absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-foreground"
-            />
-            <span class="sr-only">
-              <template v-if="instances.length > 1">
-                {{ t('wm.dock.count', { count: instances.length }) }}
-              </template>
-              <template v-else-if="instances.length > 0">
-                {{ t('wm.dock.running') }}
-              </template>
-              <template v-if="attention">{{ t('wm.attention') }}</template>
-            </span>
-            <span
-              v-if="instances.length > 1"
-              class="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground"
-              aria-hidden="true"
-            >
-              {{ instances.length }}
-            </span>
-          </button>
-        </ShadcnContextMenuTrigger>
-      </ShadcnPopoverAnchor>
+            {{ instances.length }}
+          </span>
+        </button>
+      </ShadcnContextMenuTrigger>
       <ShadcnContextMenuContent class="min-w-48" data-testid="dock-item-menu">
         <ShadcnContextMenuItem data-testid="dock-menu-pin" @select="togglePin">
           {{
@@ -241,7 +241,10 @@ async function closeAll() {
         </ShadcnContextMenuItem>
       </ShadcnContextMenuContent>
     </ShadcnContextMenu>
+    <!-- Anchored by `reference`: a PopoverAnchor inside the context menu would find the menu's
+         popper instead of the popover's. -->
     <ShadcnPopoverContent
+      :reference="button ?? undefined"
       class="flex w-64 flex-col gap-2 p-2"
       data-testid="dock-instances"
       :aria-label="t('wm.dock.instances')"
