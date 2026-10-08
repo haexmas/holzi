@@ -5,6 +5,7 @@
  */
 
 const { t } = useI18n()
+const { capabilities } = useDeviceCapabilities()
 const { errString } = useErrorString()
 const { getPrefAsync } = usePreferences()
 const setDenyRules = useActionOrThrow('settings.delegate.setDenyRules')
@@ -82,6 +83,7 @@ onVaultTablesChanged(['preferences'], () => {
 
 <template>
   <section class="flex flex-col gap-2">
+    <SettingsNotOnThisDevice v-if="capabilities?.cliDelegates === false" />
     <div v-if="loading" class="text-sm text-muted-foreground">
       {{ t('onboarding.wizard.loadingDeviceInfo') }}
     </div>

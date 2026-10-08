@@ -5,9 +5,11 @@ import { formatFileSize } from '~/lib/passwords/format'
  * The category "Erweiterungen" (spec 017, US1, T049): the installed extensions with icon, name,
  * version and their state on this device, installing one from a file, and the kept data of
  * removed extensions with its size here (US7, T092), and developer mode (US12, T096). The list
- * follows `extensions-changed` through the extensions store.
+ * follows `extensions-changed` through the extensions store. Developer mode loads a project folder,
+ * so it is left out where folders cannot be chosen (spec 043 FR-016).
  */
 const { t } = useI18n()
+const { capabilities } = useDeviceCapabilities()
 const store = useExtensionsStore()
 const installing = ref(false)
 const installed = computed(() =>
@@ -89,7 +91,9 @@ function description(version: string | undefined, status: string | undefined) {
       />
     </SettingsGroup>
 
-    <SettingsExtensionsExtensionDevModeView />
+    <SettingsExtensionsExtensionDevModeView
+      v-if="capabilities?.folderPick !== false"
+    />
 
     <ExtensionsInstallDialog v-model:open="installing" />
   </section>

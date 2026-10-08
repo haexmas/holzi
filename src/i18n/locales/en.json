@@ -1050,6 +1050,7 @@
     "vaultClosed": "The vault was closed.",
     "transactionTooLarge": "The change is too large to save. Large files do not belong in the vault database.",
     "unreadable": "The chosen file cannot be read.",
+    "notAvailable": "Not available on this device.",
     "notEnoughSpace": "Not enough free space.",
     "hf": {
       "invalidInput": "Invalid input.",

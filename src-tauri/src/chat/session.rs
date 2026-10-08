@@ -22,6 +22,16 @@ use crate::chat::tools::{ApprovalDecision, Tool, ToolRegistry};
 use crate::storage::providers::ProviderKind;
 use crate::vault_gate::ChildRegistry;
 
+/// The tools that come with the host: `run_command`, where the device can run commands (spec 043
+/// FR-026); the model is never offered a tool that would only answer "not available".
+pub(crate) fn host_tools(children: &ChildRegistry, command_tool: bool) -> ToolRegistry {
+    let mut registry = ToolRegistry::new();
+    if command_tool {
+        registry.register(Arc::new(CliTool::new(children.clone())));
+    }
+    registry
+}
+
 /// Structured lifecycle state shared by the Workspace and Chat views.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "status")]
@@ -190,8 +200,7 @@ impl ChatState {
     /// Like [`ChatState::new`], with the tools registering their child processes in `children`,
     /// which is the registry of the vault gate.
     pub fn with_children(children: ChildRegistry) -> Self {
-        let mut registry = ToolRegistry::new();
-        registry.register(Arc::new(CliTool::new(children.clone())));
+        let registry = host_tools(&children, crate::platform::capabilities().command_tool);
         Self {
             operation: Arc::new(tokio::sync::Mutex::new(())),
             session: Arc::new(Mutex::new(None)),
@@ -431,8 +440,10 @@ impl ChatState {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
-        let mut host_only = ToolRegistry::new();
-        host_only.register(Arc::new(CliTool::new(self.children.clone())));
+        let host_only = host_tools(
+            &self.children,
+            crate::platform::capabilities().command_tool,
+        );
         let tools = std::mem::replace(
             &mut *self.tool_registry.lock().unwrap_or_else(|e| e.into_inner()),
             host_only,

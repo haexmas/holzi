@@ -1,6 +1,6 @@
 //! Tests for `map_spawn_error`'s not-installed distinction (tasks.md T019).
 
-use super::process::map_spawn_error;
+use super::process::{ensure_available, map_spawn_error};
 use super::DelegateVendor;
 use crate::adapters::AdapterError;
 
@@ -36,5 +36,14 @@ fn other_spawn_failures_stay_generic() {
             assert!(reason.contains("codex"), "reason: {reason}");
         }
         other => panic!("expected Http, got {other:?}"),
+    }
+}
+
+#[test]
+fn without_delegates_on_the_device_a_start_is_refused_for_the_platform() {
+    assert!(ensure_available(true).is_ok());
+    match ensure_available(false) {
+        Err(AdapterError::Unavailable { reason }) => assert!(reason.starts_with("platform")),
+        other => panic!("{other:?}"),
     }
 }
