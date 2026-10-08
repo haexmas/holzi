@@ -241,8 +241,8 @@ Föderation (`SETTINGS_CATEGORIES` in `src/lib/settings/registry.ts`). A
 category with several areas starts with an overview that leads into
 **Unteransichten**; every category and sub-view is an **Ort** of the settings
 tab. Settings apply to the vault on every device; only the Gerätename, the
-Standard-Modell and the Spracherkennungsmodell stay per device (FR-024). A
-choice saves on selection, without a save button.
+Standard-Modell, the Spracherkennungsmodell and the Dock-Position stay per
+device (FR-024). A choice saves on selection, without a save button.
 
 **Farbschema (color scheme)** (spec 023):
 Hell, Dunkel or System (`appearance.color_scheme`, vault value, default

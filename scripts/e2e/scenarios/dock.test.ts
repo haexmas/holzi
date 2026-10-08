@@ -125,6 +125,13 @@ scenario('dock', {}, async (ctx) => {
       !(await isShown(instance, '[data-testid="dock-control-windows"]')),
   )
   assert.equal(
+    await instance.exec<boolean>(
+      `return Boolean(document.querySelector('[data-testid="settings-dock-item-control:launcher"]'))`,
+    ),
+    true,
+    'the launcher entry is present',
+  )
+  assert.equal(
     await isShown(
       instance,
       '[data-testid="settings-dock-item-control:launcher"] [data-testid="settings-dock-remove"]',
