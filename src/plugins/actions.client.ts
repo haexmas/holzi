@@ -11,9 +11,10 @@ import { registerWmLayoutHandlers } from '~/stores/wmLayoutHandlers'
  * 020-tab-navigation, research R19). Tab-bound handlers register themselves
  * from their mounted app via `useWmTab().registerActionHandler`.
  *
- * On Android, the platform back button/gesture triggers `wm.system.back`
- * (research R7) instead of the webview's own history, which holzi never uses
- * as navigation state (FR-035).
+ * Where the system has a back gesture (Android, spec 043 FR-013), it triggers
+ * `wm.system.back` (research R7) instead of the webview's own history, which
+ * holzi never uses as navigation state (FR-035). The device's capability table
+ * decides, not the user agent.
  */
 export default defineNuxtPlugin((nuxtApp) => {
   const wm = useWindowManagerStore()
@@ -24,13 +25,17 @@ export default defineNuxtPlugin((nuxtApp) => {
   registerSettingsActionHandlers(wm)
   registerPasswordsActionHandlers(wm)
 
-  // ponytail: holzi has no Android target yet, so this hook is untested end to end; the decision
-  // logic behind `wm.system.back` is covered by `pnpm check:wm-navigation`.
-  if (/android/i.test(navigator.userAgent)) {
-    onBackButtonPress(() => {
-      void wm.runAction('wm.system.back')
-    }).catch((error: unknown) => {
+  // The decision logic behind `wm.system.back` is covered by `pnpm check:wm-navigation`, the
+  // gesture itself by the e2e scenario `android-back-gesture`.
+  void useDeviceCapabilities()
+    .readyAsync()
+    .then(async (table) => {
+      if (!table?.backGesture) return
+      await onBackButtonPress(() => {
+        void wm.runAction('wm.system.back')
+      })
+    })
+    .catch((error: unknown) => {
       console.error('[wm] onBackButtonPress unavailable', error)
     })
-  }
 })

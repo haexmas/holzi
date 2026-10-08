@@ -242,3 +242,14 @@ fn a_new_tool_check_ends_the_one_before_and_closing_ends_the_last() {
     chat.reset_for_close();
     assert!(third.is_cancelled());
 }
+
+#[test]
+fn run_command_is_offered_only_where_the_device_runs_commands() {
+    let children = crate::vault_gate::ChildRegistry::default();
+    assert!(super::session::host_tools(&children, true)
+        .get("run_command")
+        .is_some());
+    assert!(super::session::host_tools(&children, false)
+        .get("run_command")
+        .is_none());
+}

@@ -225,6 +225,25 @@ export const SETTINGS_ACTIONS: readonly ActionDefinition[] = [
     effect: 'write',
   }),
   setting({
+    // Lets screenshots and recordings of the window through: a guardrail, never callable by agents
+    // (spec 043 FR-011a).
+    id: 'settings.privacy.screenCapture.set',
+    description:
+      'Turn the screen capture protection of this device on or off: while it is on, the system allows no screenshots or recordings of the window and shows an empty preview among the recent apps.',
+    input: {
+      type: 'object',
+      properties: { enabled: { type: 'boolean' } },
+      required: ['enabled'],
+    },
+    result: {
+      type: 'object',
+      properties: { enabled: { type: 'boolean' } },
+      required: ['enabled'],
+    },
+    scope: 'guardrails',
+    effect: 'write',
+  }),
+  setting({
     id: 'settings.general.setLanguage',
     description:
       'Set the interface language (German or English) for the whole vault, on all its devices. It applies at once.',

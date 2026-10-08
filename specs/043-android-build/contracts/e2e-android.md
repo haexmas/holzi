@@ -76,3 +76,19 @@ oder (ab Stufe 5, Schalter in der Datei) `pending` nicht leer ist.
 
 Diese Fälle laufen nur auf Android (außer `vault-file-import`); sie stehen nicht in der
 Abdeckungsrechnung der Desktop-Fälle.
+
+## Umsetzung in Stufe 1c
+
+- Android-Fälle stehen unter `needs: { phone: true }` und werden ohne Telefon übersprungen. Was nur
+  ein Telefon hat (Zurück-Geste, Prozessende im Hintergrund, Fensterflags), liefert die
+  Plattformschicht als `instance.phone`; die Szenarien nennen so keine Plattform (Seam-Prüfung).
+- Telefonbreite: `startInstance({ phoneScreen: true })` setzt `wm size 1080x2400` und
+  `wm density 480` vor dem Start. Eine Änderung der Dichte zur Laufzeit übernimmt die WebView nicht
+  (sie meldete 540 statt 360 CSS-Pixel).
+- Fenster schließen: `cmd activity stack remove <taskId>` (wie Wegwischen aus den letzten Apps).
+- Navigation: `location.replace` statt einer Navigation des Treibers. Die WebView von Android legt
+  für eine Treiber-Navigation einen Verlaufseintrag an, den holzi selbst nie hat; `history.back()`
+  hätte ihn in `tab-content-isolation` erreicht.
+- Prozessende im Hintergrund: `kill -9` als die App selbst (`run-as`) nach `KEYCODE_HOME`;
+  `am kill` beendet einen gerade erst in den Hintergrund gegangenen Prozess nicht.
+- Der Bildschirmschutz stört die Screenshots von chromedriver nicht; er bleibt in jedem Fall an.

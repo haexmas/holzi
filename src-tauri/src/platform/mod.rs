@@ -6,6 +6,7 @@
 //! keeping its own `cfg!` check. `cfg` stays only where code does not compile on a platform.
 
 pub mod commands;
+pub mod insets;
 
 use serde::Serialize;
 use ts_rs::TS;

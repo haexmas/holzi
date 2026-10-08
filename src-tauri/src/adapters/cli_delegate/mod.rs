@@ -292,6 +292,7 @@ impl ProviderAdapter for CliDelegateAdapter {
     }
 
     async fn stream_chat(&self, req: ChatRequest) -> Result<AdapterStream, AdapterError> {
+        process::ensure_available(crate::platform::capabilities().cli_delegates)?;
         let context = self
             .chat_context
             .clone()

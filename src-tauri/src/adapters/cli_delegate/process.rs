@@ -5,6 +5,19 @@ use crate::vault_gate::{ChildGuard, ChildRegistry};
 
 use super::DelegateVendor;
 
+/// CLI delegates exist only where the device runs them (spec 043 FR-016, FR-026). Everywhere else
+/// a start ends here, before any binary is looked for, with the reason `platform`, so the person
+/// does not read "not installed" where installing is impossible.
+pub(super) fn ensure_available(available: bool) -> Result<(), AdapterError> {
+    if available {
+        Ok(())
+    } else {
+        Err(AdapterError::Unavailable {
+            reason: "platform: CLI delegates are not available on this device".to_string(),
+        })
+    }
+}
+
 /// Maps a `Command::spawn` failure to a distinct "backend not installed"
 /// error (spec 007-cli-delegate FR-008/SC-006) when the binary itself
 /// isn't found, separate from any other spawn failure (permissions,

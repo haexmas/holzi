@@ -123,50 +123,56 @@ async function onUnlocked(name: string) {
 </script>
 
 <template>
-  <main
-    class="relative min-h-screen flex flex-col items-center justify-center gap-6 p-8"
-  >
-    <SettingsSelect
-      class="absolute top-4 right-4 w-36"
-      :model-value="activeLanguage"
-      :options="languageOptions"
-      :aria-label="t('landing.language')"
-      data-testid="landing-language"
-      @update:model-value="chooseLanguage"
-    />
-    <div class="flex flex-col items-center gap-2">
-      <h1 class="text-3xl font-semibold">
-        {{ t('landing.welcome') }}
-      </h1>
+  <main class="holzi-safe-area holzi-keyboard-room flex min-h-screen flex-col">
+    <!-- Positioned inside the safe area, so the language choice stays below the status bar. -->
+    <div
+      class="relative flex w-full flex-1 flex-col items-center justify-center gap-6 p-8"
+    >
+      <SettingsSelect
+        class="absolute top-4 right-4 w-36"
+        :model-value="activeLanguage"
+        :options="languageOptions"
+        :aria-label="t('landing.language')"
+        data-testid="landing-language"
+        @update:model-value="chooseLanguage"
+      />
+      <div class="flex flex-col items-center gap-2">
+        <h1 class="text-3xl font-semibold">
+          {{ t('landing.welcome') }}
+        </h1>
+      </div>
+
+      <div class="flex flex-col gap-2 w-full max-w-md">
+        <UiButton class="w-full" @click="createSheetOpen = true">
+          {{ t('onboarding.create.title') }}
+        </UiButton>
+        <UiButton
+          class="w-full"
+          variant="outline"
+          data-testid="landing-link"
+          @click="linkSheetOpen = true"
+        >
+          {{ t('onboarding.link.title') }}
+        </UiButton>
+        <UiButton
+          class="w-full"
+          variant="ghost"
+          data-testid="landing-import"
+          @click="chooseVaultFileAsync"
+        >
+          {{ t('onboarding.import.button') }}
+        </UiButton>
+      </div>
+
+      <OnboardingInstancesList
+        :instances="store.instances"
+        @select="onSelect"
+      />
+
+      <p v-if="store.lastError" class="text-sm text-destructive" role="status">
+        {{ store.lastError }}
+      </p>
     </div>
-
-    <div class="flex flex-col gap-2 w-full max-w-md">
-      <UiButton class="w-full" @click="createSheetOpen = true">
-        {{ t('onboarding.create.title') }}
-      </UiButton>
-      <UiButton
-        class="w-full"
-        variant="outline"
-        data-testid="landing-link"
-        @click="linkSheetOpen = true"
-      >
-        {{ t('onboarding.link.title') }}
-      </UiButton>
-      <UiButton
-        class="w-full"
-        variant="ghost"
-        data-testid="landing-import"
-        @click="chooseVaultFileAsync"
-      >
-        {{ t('onboarding.import.button') }}
-      </UiButton>
-    </div>
-
-    <OnboardingInstancesList :instances="store.instances" @select="onSelect" />
-
-    <p v-if="store.lastError" class="text-sm text-destructive" role="status">
-      {{ store.lastError }}
-    </p>
 
     <OnboardingCreateSheet
       v-model:open="createSheetOpen"

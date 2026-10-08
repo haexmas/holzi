@@ -29,6 +29,16 @@ Benachrichtigungen fragt der Kern über den vorhandenen Fork von `tauri-plugin-n
 Rückkehr in den Vordergrund meldet Tauri selbst (`RunEvent::Resumed`); die Crate meldet sie
 nicht doppelt.
 
+## Umsetzung in Stufe 1c
+
+- `display_name(uri) -> Option<String>` fragt den Anbieter einer gewählten Datei
+  (`OpenableColumns.DISPLAY_NAME`, Vertrag [picked-file.md](./picked-file.md)).
+- `watch_insets(on_change)` statt CSS-Variablen aus Kotlin: Die Crate meldet die Ränder über einen
+  Kanal an den Kern (`platform/insets.rs`), der den letzten Wert hält, ihn als Ereignis
+  `device-insets` sendet und mit `device_insets` auf Anfrage liefert. Die Seite schreibt daraus
+  die Variablen unten (`plugins/deviceInsets.client.ts`). So fragt eine neu geladene Seite nach,
+  statt Werte zu verlieren, die Kotlin vor dem Laden geschrieben hätte.
+
 ## Seite (Kotlin → WebView)
 
 In `load(webView)` setzt die Crate einen `OnApplyWindowInsetsListener` und schreibt bei jeder

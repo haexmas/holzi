@@ -17,4 +17,17 @@ impl<R: Runtime> HolziAndroid<R> {
     pub fn display_name(&self, _uri: &str) -> Option<String> {
         None
     }
+
+    /// The system takes no space at the window's edges here.
+    pub fn watch_insets(
+        &self,
+        _on_change: impl Fn(crate::Insets) + Send + Sync + 'static,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Screen capture protection exists only on Android.
+    pub fn set_secure(&self, _enabled: bool) -> Result<(), String> {
+        Ok(())
+    }
 }

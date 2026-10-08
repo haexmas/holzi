@@ -76,6 +76,8 @@ function skipReasonFor(
   options: ScenarioOptions,
   env: E2EEnv,
 ): string | undefined {
+  if (options.needs?.phone && env.android === undefined)
+    return 'runs only on a phone (spec 043)'
   if (options.needs?.container && !containerRuntimeAvailable())
     return 'no container runtime (docker) answers here'
   const needed = options.needs?.closeBehavior
@@ -208,6 +210,7 @@ export async function runScenario(
           env,
           step,
           framebufferDir: instanceOptions.framebufferDir,
+          phoneScreen: instanceOptions.phoneScreen,
         })
         instances.push(instance)
         // The root is removed with the scenario, not when the instance stops, so a fresh instance can reuse it.
@@ -430,6 +433,7 @@ export function scenario(
               logFile: request.logFile,
               colorScheme: request.colorScheme,
               reuse: request.reuse,
+              phoneScreen: request.phoneScreen,
               step: request.step,
             })
           : startInstance({

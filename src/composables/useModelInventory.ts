@@ -37,6 +37,8 @@ export interface ModelInventoryDeps {
   errString: (error: unknown) => string
   /** Reports a non-fatal failure through the owning store's error state. */
   setError: (message: string) => void
+  /** Whether this device runs CLI delegates (spec 043 FR-016); without them the picker shows none. */
+  cliDelegates?: () => boolean
 }
 
 /**
@@ -47,6 +49,7 @@ export interface ModelInventoryDeps {
  */
 export function useModelInventory(deps: ModelInventoryDeps) {
   const { models, catalog, providers, t, errString, setError } = deps
+  const delegatesHere = () => deps.cliDelegates?.() ?? true
 
   const installedModels = ref<InstalledModel[]>([])
   const catalogEntries = ref<CatalogEntryWithFit[]>([])
@@ -87,7 +90,11 @@ export function useModelInventory(deps: ModelInventoryDeps) {
     // `/v1/models` API (e.g. `<uuid>:claude-opus-5`), Codex still gets one
     // synthetic `<uuid>:codex` row.
     const remoteGroups = providerList.value
-      .filter((p) => p.kind === 'api_key' || p.kind === 'cli_delegate')
+      .filter(
+        (p) =>
+          p.kind === 'api_key' ||
+          (p.kind === 'cli_delegate' && delegatesHere()),
+      )
       .map<ModelGroup>((p) => ({
         providerId: p.id,
         providerName: p.name,
@@ -105,6 +112,7 @@ export function useModelInventory(deps: ModelInventoryDeps) {
     // Settings (tasks.md T027), not from this picker.
     const notConnectedDelegateGroups: ModelGroup[] = DELEGATE_VENDORS.filter(
       (vendor) =>
+        delegatesHere() &&
         !providerList.value.some(
           (p) =>
             p.kind === 'cli_delegate' &&

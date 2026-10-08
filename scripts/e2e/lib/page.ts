@@ -317,6 +317,12 @@ export type PageOptions = {
   mapUrl?: (url: string) => string
   /** Ends the window on this platform (Android: removes the task); default: the driver's own. */
   closeWindow?: () => Promise<void>
+  /**
+   * Navigates by replacing the current history entry, as the app's own router does. Android's web
+   * view adds an entry for a driver navigation, which `history.back()` would then reach; holzi
+   * itself never has one (spec 043, scenario tab-content-isolation).
+   */
+  replaceOnNavigate?: boolean
 } & (
   | {
       /** The application process this page's session started. */
@@ -327,6 +333,30 @@ export type PageOptions = {
     }
   | { process: PageProcess }
 )
+
+/** Loads `url` in place of the current history entry and waits until it has loaded. */
+async function replaceLocation(
+  client: WebDriverClient,
+  url: string,
+  deadlineMs = 15_000,
+): Promise<void> {
+  await client.execute('location.replace(arguments[0]); return true', [url])
+  const end = Date.now() + deadlineMs
+  for (;;) {
+    // While the old document goes, a script may fail; the next try reaches the new one.
+    const loaded = await client
+      .execute<boolean>(
+        'return location.href === arguments[0] && document.readyState === "complete"',
+        [url],
+      )
+      .catch(() => false)
+    if (loaded) return
+    if (Date.now() >= end) {
+      throw new Error(`timed out after ${deadlineMs} ms loading ${url}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
 
 /** Binds the functions above to one instance's client, process and marker. */
 export function createPage(options: PageOptions): Page {
@@ -351,7 +381,10 @@ export function createPage(options: PageOptions): Page {
     press: (hook, pressOptions) =>
       press(client, hook, { ...pressOptions, step }),
     closeWindow: options.closeWindow ?? (() => client.closeWindow()),
-    navigate: (url) => client.navigate(mapUrl(url)),
+    navigate: (url) =>
+      options.replaceOnNavigate === true
+        ? replaceLocation(client, mapUrl(url))
+        : client.navigate(mapUrl(url)),
     exec: (script, args) => client.execute(script, args),
     waitForEnd: (deadlineMs) =>
       waitUntilGone(processes.alive, processes.label, deadlineMs, step),

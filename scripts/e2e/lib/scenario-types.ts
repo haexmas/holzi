@@ -60,7 +60,12 @@ export interface ScenarioResult {
 export interface ScenarioOptions {
   /** What the scenario needs; without it the scenario is skipped. `container`: a working `docker`
    * (spec 038: a local RustFS). */
-  needs?: { closeBehavior?: CloseBehavior; container?: boolean }
+  needs?: {
+    closeBehavior?: CloseBehavior
+    container?: boolean
+    /** Runs only on a phone (spec 043, the Android scenarios). */
+    phone?: boolean
+  }
   timeoutMs?: number
 }
 
@@ -75,6 +80,8 @@ export interface StartInstanceRequest {
   step: (name: string, detail?: string, device?: string) => void
   /** Keeps the screen's current XWD image at `<framebufferDir>/Xvfb_screen0` (research R11, T068). */
   framebufferDir?: string
+  /** A phone-sized screen from the start (spec 043); only a phone has one. */
+  phoneScreen?: boolean
 }
 
 export interface FailureInfo {
@@ -123,6 +130,8 @@ export interface ScenarioContext {
     reusesRoot?: string
     /** Keeps the screen's current XWD image at `<framebufferDir>/Xvfb_screen0` (research R11, T068). */
     framebufferDir?: string
+    /** A phone-sized screen, 360 CSS pixels wide, from the start (spec 043); only a phone has one. */
+    phoneScreen?: boolean
   }): Promise<Instance>
   /** Starts a stand-in model provider ([stand-in-provider.md](stand-in-provider.md)); ended with the context. */
   provider(

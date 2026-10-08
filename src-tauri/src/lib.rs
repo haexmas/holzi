@@ -15,6 +15,7 @@ pub mod model_capabilities;
 pub mod models;
 pub mod passwords;
 pub mod platform;
+pub mod privacy;
 pub mod providers;
 pub mod remote_storage;
 pub mod state;
@@ -221,6 +222,8 @@ pub fn run() {
             // Spec 043 (research R2): certificate checks need this on Android before any
             // network service starts.
             tls::init_platform_verifier()?;
+            // Spec 043 (FR-011, FR-012): the space the system bars and the keyboard take.
+            platform::insets::watch(app.handle());
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -299,6 +302,9 @@ pub fn run() {
             active_instance_name,
             platform::commands::platform_capabilities,
             files::commands::picked_file_name,
+            platform::insets::device_insets,
+            privacy::screen_capture::screen_capture_protection_get,
+            privacy::screen_capture::screen_capture_protection_set,
             list_instances,
             create_instance,
             import_instance,

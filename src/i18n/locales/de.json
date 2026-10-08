@@ -383,6 +383,12 @@
       "failed": "Die Einstellung konnte nicht geändert werden",
       "description": "Offene Fenster und Tabs beim Öffnen der Vault zurückholen"
     },
+    "screenCapture": {
+      "title": "Bildschirmschutz",
+      "description": "Keine Bildschirmfotos und Aufnahmen, leere Vorschau in der App-Übersicht",
+      "saved": "Gespeichert.",
+      "failed": "Die Einstellung konnte nicht geändert werden"
+    },
     "default": {
       "modelGroup": {
         "local": "Lokale Modelle"
@@ -1050,6 +1056,7 @@
     "vaultClosed": "Die Vault wurde geschlossen.",
     "transactionTooLarge": "Die Änderung ist zu groß zum Speichern. Große Dateien gehören nicht in die Vault-Datenbank.",
     "unreadable": "Die gewählte Datei lässt sich nicht lesen.",
+    "notAvailable": "Auf diesem Gerät nicht verfügbar.",
     "notEnoughSpace": "Nicht genug freier Speicher.",
     "hf": {
       "invalidInput": "Ungültige Eingabe.",
@@ -1219,6 +1226,11 @@
       },
       "sessionRestore": {
         "set": "Sitzung wiederherstellen ein- oder ausschalten"
+      },
+      "privacy": {
+        "screenCapture": {
+          "set": "Bildschirmschutz ein- oder ausschalten"
+        }
       },
       "appearance": {
         "removeBackground": "Workspace-Hintergrund entfernen",
