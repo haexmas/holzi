@@ -92,3 +92,38 @@ Abdeckungsrechnung der Desktop-Fälle.
 - Prozessende im Hintergrund: `kill -9` als die App selbst (`run-as`) nach `KEYCODE_HOME`;
   `am kill` beendet einen gerade erst in den Hintergrund gegangenen Prozess nicht.
 - Der Bildschirmschutz stört die Screenshots von chromedriver nicht; er bleibt in jedem Fall an.
+
+## Umsetzung in Stufe 2
+
+- Gemischte Gruppen: `GroupDeps.phoneHost` ist das Telefon, `host` Linux. Auf das Telefon kommt das
+  Gerät `phone`, sonst das erste Gerät einer Gruppe, die ohne `phone` angelegt wurde; ein später mit
+  `addDevice('…', 'phone')` hinzugefügtes Gerät läuft dann auf Linux (`sync-link`: der Laptop auf
+  dem Telefon verknüpft ein Linux-Gerät). Jedes Gerät merkt sich seinen Host.
+- iroh-Relay: pro Szenario mit Gruppe ein `iroh-relay --dev` auf einem freien Port statt fest 3340
+  (der Port steht in einer eigenen Konfiguration, Metriken aus), `adb reverse` dafür; alle Geräte
+  bekommen `http://127.0.0.1:<port>` als einzigen iroh-Relay. Der Preflight verlangt `iroh-relay`
+  (`E2E_IROH_RELAY` oder `PATH`).
+- Linux-Teil: Ein Android-Lauf prüft zusätzlich die Linux-Werkzeuge und baut die Linux-App wie ein
+  Linux-Lauf (`E2E_LINUX_APP`, `E2E_TOOLS`). Fehlen die Werkzeuge, läuft der Lauf weiter, und ein
+  Linux-Gerät scheitert beim Start mit dem, was fehlt.
+- Dateien für ein Gerät (`onDevice`) liegen nur für das Gerät auf dem Telefon im App-Speicher, alle
+  anderen bekommen den Pfad dieses Rechners.
+- Tresordatei kopieren: vom Telefon auf ein Linux-Gerät (`run-as … cat`, Größe geprüft); umgekehrt
+  braucht es noch kein Szenario.
+- Der Preflight ersetzt auch eine App mit höherer Versionsnummer (ein Release-Build auf dem
+  Emulator), wie schon eine mit fremdem Schlüssel.
+- `sync-servers-off` schaltet alle Server ab, auch die iroh-Relays: Ein Gerät kennt den Relay des
+  anderen von früher und erreichte es dort ohne Nostr-Server (Spec 033 FR-010 nennt nur die
+  Nostr-Server; unter Linux zeigen die iroh-Relays ohnehin auf einen geschlossenen Port).
+- Verknüpfen: Die erste Einladung des neuen Geräts kam ohne seinen Relay an, wenn er noch nicht
+  verbunden war; das neue Gerät wartet jetzt bis zu 3 s darauf, und das Hauptgerät wählt nach 6 s
+  ohne Verbindung die neueste Einladung (`sync/link/join_task.rs`, `host_task.rs`). Das betrifft
+  ein echtes Telefon hinter NAT genauso.
+- Stoppen eines Telefons in einer Gruppe schließt erst den Tresor (die App endet, FR-006): Nach
+  einem erzwungenen Ende hielte das andere Gerät die Sitzung über den Relay bis zur Leerlaufzeit
+  (etwa 45 s) und wiese den neuen Prozess so lange als Duplikat ab.
+- Die Linux-Geräte eines Android-Laufs binden ihren Sync-Endpunkt nur an Loopback
+  (`HOLZI_E2E_SYNC_LOOPBACK=1`, nur Debug-Builds, `sync::endpoint::app_bind_addr`): Das Netz des
+  Emulators verlor nach einem Bündel großer UDP-Pakete den direkten Weg ganz (beobachtet beim
+  Übertragen des Tresors in `sync-indirect`), und die Verbindung wich nicht auf den Relay aus. So
+  läuft alles zwischen Telefon und Linux über den iroh-Relay des Szenarios.
