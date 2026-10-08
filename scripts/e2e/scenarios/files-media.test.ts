@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 
 import { deviceFiles } from '../lib/extension-files.ts'
+import { fileFixture } from '../lib/file-fixtures.ts'
 import { createAndUnlock, type FlowInstance } from '../lib/flows.ts'
 import { scenario } from '../lib/scenario.ts'
 import { runAction } from '../lib/settings.ts'
@@ -11,11 +10,6 @@ import { runAction } from '../lib/settings.ts'
 // the server answers a range through the web view, a PDF turns to page 2, and the URL of a file
 // answers 404 once its tab is closed. The fixtures and how they were made:
 // src-tauri/tests/fixtures/files/README.md.
-
-const FIXTURES = join(
-  import.meta.dirname,
-  '../../../src-tauri/tests/fixtures/files',
-)
 
 /** Plays the viewer's player muted (no user gesture here) and returns its current time once it moves. */
 const playing = (instance: FlowInstance, hook: string) =>
@@ -66,7 +60,7 @@ scenario('files-media', { timeoutMs: 240_000 }, async (ctx) => {
 
     // After the start: on Android it clears the app's data, where the folder lives.
     for (const name of ['film.mp4', 'ton.mp3', 'brief.pdf'])
-      files.write(name, readFileSync(join(FIXTURES, name)))
+      files.write(name, fileFixture(name))
 
     await runAction(instance, 'wm.app.open', {
       appId: 'system.files',
@@ -96,7 +90,7 @@ scenario('files-media', { timeoutMs: 240_000 }, async (ctx) => {
 
     // The server answers a range through the web view (CSP, CORS and the exposed headers).
     const url = await mediaUrl(instance, 'files-viewer-video')
-    const size = readFileSync(join(FIXTURES, 'film.mp4')).byteLength
+    const size = fileFixture('film.mp4').byteLength
     assert.deepEqual(await fetchFromPage(instance, url, 'bytes=1000-1999'), {
       status: 206,
       contentRange: `bytes 1000-1999/${size}`,

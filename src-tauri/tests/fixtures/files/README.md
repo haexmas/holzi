@@ -1,6 +1,6 @@
 # File browser fixtures (spec 044, T040)
 
-Media for `scripts/e2e/scenarios/files-media.test.ts`. Generated once from synthetic sources (test
+Media for `scripts/e2e/scenarios/files-media.test.ts` (read through `scripts/e2e/lib/file-fixtures.ts`). Generated once from synthetic sources (test
 pattern, sine tone, hand-written PDF), so they carry no third-party rights; CI does not need ffmpeg.
 
 | File        | Content                                     | Made with                                                                                                                                                                                                                                 |
