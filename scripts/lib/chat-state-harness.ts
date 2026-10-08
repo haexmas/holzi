@@ -378,6 +378,12 @@ export function createChatState(
     useErrorString: () => req('~/composables/useErrorString').useErrorString(),
     usePreferences: () => preferences,
     useDevice: () => req('~/composables/useDevice').useDevice(),
+    // A desktop whose capability table has not arrived: every facility counts as present.
+    useDeviceCapabilities: () => ({
+      capabilities: { value: null },
+      isAndroid: { value: false },
+      readyAsync: async () => null,
+    }),
     parseModelIntegrityFailure: req('~/composables/useModels')
       .parseModelIntegrityFailure,
   }).useModelsStore()

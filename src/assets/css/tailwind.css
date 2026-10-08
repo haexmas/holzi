@@ -154,6 +154,18 @@
 }
 
 @layer components {
+  /* Spec 043 (FR-011, FR-012): on a phone the window is drawn edge to edge; the root of a page keeps
+   * clear of the system bars, the display cutout and the keyboard. The variables come from
+   * `plugins/deviceInsets.client.ts`; without them (a desktop) nothing changes. */
+  .holzi-safe-area {
+    padding-top: var(--holzi-inset-top, 0px);
+    padding-right: var(--holzi-inset-right, 0px);
+    padding-bottom: calc(
+      var(--holzi-inset-bottom, 0px) + var(--holzi-inset-keyboard, 0px)
+    );
+    padding-left: var(--holzi-inset-left, 0px);
+  }
+
   .chat-markdown {
     overflow-wrap: anywhere;
   }

@@ -162,7 +162,7 @@ async function consumeDeepLink(): Promise<void> {
 </script>
 
 <template>
-  <div class="flex h-screen min-h-0 flex-col">
+  <div class="holzi-safe-area flex h-screen min-h-0 flex-col">
     <SyncCopyNotice />
     <WmDesktop class="min-h-0 flex-1" />
   </div>

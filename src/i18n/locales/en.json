@@ -383,6 +383,12 @@
       "failed": "The setting could not be changed",
       "description": "Bring back open windows and tabs when the vault opens"
     },
+    "screenCapture": {
+      "title": "Screen protection",
+      "description": "No screenshots or recordings, an empty preview among the recent apps",
+      "saved": "Saved.",
+      "failed": "The setting could not be changed"
+    },
     "default": {
       "modelGroup": {
         "local": "Local models"
@@ -1220,6 +1226,11 @@
       },
       "sessionRestore": {
         "set": "Turn session restore on or off"
+      },
+      "privacy": {
+        "screenCapture": {
+          "set": "Turn the screen protection on or off"
+        }
       },
       "appearance": {
         "removeBackground": "Remove the workspace background",

@@ -196,6 +196,10 @@ pub async fn import_instance(
 ) -> Result<CreateInstanceResult> {
     let result =
         import_instance_core(&app, &state, &chat, app.clone(), args.file, args.passphrase).await?;
+    // Spec 043 FR-011a: the screen capture protection of this device, before anything shows.
+    if let Ok(db) = state.database() {
+        crate::privacy::screen_capture::apply_for_vault(&app, &db).await;
+    }
     // As after an open (`open.rs`): the session services of the vault.
     crate::vault_events::start_for_active_instance(&app, &state);
     crate::extensions::registry::lifecycle::start_for_active_instance(&app, &state);

@@ -130,6 +130,11 @@ export function registerSettingsActionHandlers(wm: WmStore): void {
     statuses: await huggingFace.checkUpdatesAsync(),
   }))
 
+  on('settings.privacy.screenCapture.set', async ({ input }) => ({
+    enabled: await invoke<boolean>('screen_capture_protection_set', {
+      enabled: input.enabled === true,
+    }),
+  }))
   on('settings.sessionRestore.set', async ({ input }) =>
     wm.setSessionRestore(input.enabled === true),
   )

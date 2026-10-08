@@ -139,6 +139,10 @@ pub async fn create_instance(
     args: CreateInstanceArgs,
 ) -> Result<CreateInstanceResult> {
     let result = create_instance_core(&app, &state, &chat, &args.name, args.passphrase).await?;
+    // Spec 043 FR-011a: the screen capture protection of this device, before anything shows.
+    if let Ok(db) = state.database() {
+        crate::privacy::screen_capture::apply_for_vault(&app, &db).await;
+    }
     // Spec 024: the sync service runs as tracked session work and ends with the close.
     crate::vault_events::start_for_active_instance(&app, &state);
     crate::extensions::registry::lifecycle::start_for_active_instance(&app, &state);

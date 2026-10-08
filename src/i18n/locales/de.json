@@ -383,6 +383,12 @@
       "failed": "Die Einstellung konnte nicht geändert werden",
       "description": "Offene Fenster und Tabs beim Öffnen der Vault zurückholen"
     },
+    "screenCapture": {
+      "title": "Bildschirmschutz",
+      "description": "Keine Bildschirmfotos und Aufnahmen, leere Vorschau in der App-Übersicht",
+      "saved": "Gespeichert.",
+      "failed": "Die Einstellung konnte nicht geändert werden"
+    },
     "default": {
       "modelGroup": {
         "local": "Lokale Modelle"
@@ -1220,6 +1226,11 @@
       },
       "sessionRestore": {
         "set": "Sitzung wiederherstellen ein- oder ausschalten"
+      },
+      "privacy": {
+        "screenCapture": {
+          "set": "Bildschirmschutz ein- oder ausschalten"
+        }
       },
       "appearance": {
         "removeBackground": "Workspace-Hintergrund entfernen",
