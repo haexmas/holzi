@@ -242,7 +242,7 @@ async function closeAll() {
           </span>
           <span
             v-if="instances.length > 1"
-            class="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground"
+            class="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground"
             aria-hidden="true"
           >
             {{ instances.length }}
