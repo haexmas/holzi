@@ -11,6 +11,10 @@
 //! can block, so a failed fetch still arrives with its reason. The probe prints one line starting
 //! with [`RESULT_MARKER`] and ends the process: 0 when every step passed, 1 when one failed, 2 when
 //! no report came within [`REPORT_TIMEOUT`].
+//!
+//! Since the media server (T041) the probe also hands the window three files served by it (a video,
+//! an audio file and a PDF, built in with [`FIXTURES`]), and the window plays, seeks and draws them
+//! the way the viewer does.
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
@@ -18,9 +22,14 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::json;
 use tauri::{AppHandle, Runtime};
+use tokio::io::AsyncRead;
+
+use crate::files::media::MediaServer;
+use crate::files::streaming::StreamingSource;
 
 /// Every result line starts with this, so the CI finds it in stdout or in logcat.
 pub const RESULT_MARKER: &str = "HOLZI_PROBE_RESULT";
@@ -119,9 +128,77 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) -> std::io::Result<u16> {
     Ok(port)
 }
 
+/// The files the window plays and draws: name, bytes, media type (`src-tauri/tests/fixtures/files`).
+pub const FIXTURES: [(&str, &[u8], &str); 3] = [
+    (
+        "video",
+        include_bytes!("../tests/fixtures/files/film.mp4"),
+        "video/mp4",
+    ),
+    (
+        "audio",
+        include_bytes!("../tests/fixtures/files/ton.mp3"),
+        "audio/mpeg",
+    ),
+    (
+        "pdf",
+        include_bytes!("../tests/fixtures/files/brief.pdf"),
+        "application/pdf",
+    ),
+];
+
+/// A file built into the probe.
+pub struct Fixture {
+    bytes: &'static [u8],
+    content_type: &'static str,
+}
+
+#[async_trait]
+impl StreamingSource for Fixture {
+    async fn size(&self) -> std::io::Result<u64> {
+        Ok(self.bytes.len() as u64)
+    }
+
+    async fn open_range(
+        &self,
+        start: u64,
+        len: u64,
+    ) -> std::io::Result<Box<dyn AsyncRead + Send + Unpin>> {
+        let start = usize::try_from(start)
+            .unwrap_or(usize::MAX)
+            .min(self.bytes.len());
+        let end = start
+            .saturating_add(usize::try_from(len).unwrap_or(usize::MAX))
+            .min(self.bytes.len());
+        Ok(Box::new(std::io::Cursor::new(&self.bytes[start..end])))
+    }
+
+    fn content_type(&self) -> &str {
+        self.content_type
+    }
+}
+
+/// Serves [`FIXTURES`] through `media`; returns their URLs by name.
+pub fn serve_fixtures(media: &MediaServer) -> serde_json::Value {
+    let urls: serde_json::Map<_, _> = FIXTURES
+        .iter()
+        .map(|(name, bytes, content_type)| {
+            let url = media.register(
+                "platform-probe",
+                std::sync::Arc::new(Fixture {
+                    bytes,
+                    content_type,
+                }),
+            );
+            ((*name).to_owned(), serde_json::Value::String(url))
+        })
+        .collect();
+    serde_json::Value::Object(urls)
+}
+
 /// The script that tells the window where to look.
-pub fn init_script(port: u16) -> String {
-    format!("window.__HOLZI_PROBE__ = Object.freeze({{ port: {port} }});")
+pub fn init_script(port: u16, media: &serde_json::Value) -> String {
+    format!("window.__HOLZI_PROBE__ = Object.freeze({{ port: {port}, media: {media} }});")
 }
 
 /// `csp` with [`LOOPBACK_SOURCE`] in its `connect-src` directive. A policy without one gets it with

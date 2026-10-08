@@ -285,26 +285,38 @@ pub fn run() {
                 .cloned()
                 .ok_or("tauri.conf.json defines no window")?;
             let host = app.state::<AppState>().extensions();
-            // Spec 044 (T007): the CI's platform probe, only in builds with the feature.
+            // Spec 044 (research R4): the media server lives as long as the vault session.
+            let media = tauri::async_runtime::block_on(files::media::MediaServer::start(
+                app.state::<AppState>().gate().token(),
+            ))?;
+            // Spec 044 (T007, T041): the CI's platform probe, only in builds with the feature.
             #[cfg(feature = "platform-probe")]
-            let probe_port = if platform_probe::requested() {
-                Some(platform_probe::start(app.handle())?)
+            let probe = if platform_probe::requested() {
+                Some((
+                    platform_probe::start(app.handle())?,
+                    platform_probe::serve_fixtures(&media),
+                ))
             } else {
                 None
             };
+            app.manage(media);
+            #[cfg(feature = "platform-probe")]
+            let probing = probe.is_some();
             let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), &window)?
                 // The frame shim for development pages, which holzi does not serve (R16).
                 .initialization_script_for_all_frames(extensions::protocol::shim::dev_init_script())
                 .on_web_resource_request(move |request, response| {
                     extensions::dev_csp::adjust(&host, request, response);
                     #[cfg(feature = "platform-probe")]
-                    if probe_port.is_some() {
+                    if probing {
                         platform_probe::allow_loopback(response);
                     }
                 });
             #[cfg(feature = "platform-probe")]
-            let builder = match probe_port {
-                Some(port) => builder.initialization_script(platform_probe::init_script(port)),
+            let builder = match &probe {
+                Some((port, media)) => {
+                    builder.initialization_script(platform_probe::init_script(*port, media))
+                }
                 None => builder,
             };
             builder.build()?;
@@ -312,11 +324,6 @@ pub fn run() {
             // without an `AppHandle`, so the emitter is set here.
             // Spec 044: the file browser's places, thumbnail cache and folder watches.
             app.manage(files::state::FilesState::from_app(app.handle()));
-            // Spec 044 (research R4): the media server lives as long as the vault session.
-            let media = tauri::async_runtime::block_on(files::media::MediaServer::start(
-                app.state::<AppState>().gate().token(),
-            ))?;
-            app.manage(media);
             // Spec 017, US9: holzi's protected places, known places and dialogs for extensions.
             app.state::<AppState>()
                 .extensions()

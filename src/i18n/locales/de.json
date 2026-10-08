@@ -2019,7 +2019,15 @@
       "previous": "Vorige Datei",
       "next": "Nächste Datei",
       "openSystem": "Mit System-App öffnen",
-      "truncated": "Nur die ersten 5 MB werden gezeigt."
+      "truncated": "Nur die ersten 5 MB werden gezeigt.",
+      "unplayable": "holzi kann diese Datei nicht abspielen oder anzeigen.",
+      "pdf": {
+        "previous": "Vorige Seite",
+        "next": "Nächste Seite",
+        "page": "Seite {page} von {pages}",
+        "zoomIn": "Vergrößern",
+        "zoomOut": "Verkleinern"
+      }
     },
     "info": {
       "name": "Name",

@@ -69,6 +69,7 @@
     "fuse.js": "^7.5.0",
     "marked": "^18.0.14",
     "nuxt": "4.5.2",
+    "pdfjs-dist": "^6.4",
     "photoswipe": "^5.4",
     "pinia": "^4.0.3",
     "reka-ui": "^2.10.5",

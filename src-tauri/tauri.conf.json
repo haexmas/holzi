@@ -23,7 +23,7 @@
     "security": {
       "csp": {
         "default-src": "'self'",
-        "connect-src": "ipc: http://ipc.localhost http://127.0.0.1:*",
+        "connect-src": "ipc: http://ipc.localhost 'self' http://127.0.0.1:*",
         "font-src": "'self' data:",
         "img-src": "'self' asset: http://asset.localhost blob: data: holzi-ext://localhost http://holzi-ext.localhost http://127.0.0.1:*",
         "frame-src": "holzi-ext://localhost http://holzi-ext.localhost",

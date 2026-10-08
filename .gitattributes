@@ -1,0 +1,2 @@
+# Binary fixtures; a PDF's xref lines end in a space by specification.
+*.pdf binary
