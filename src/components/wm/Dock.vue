@@ -10,8 +10,8 @@
  * (FR-030); its mode does not apply.
  */
 import { computed, provide, reactive, ref, useTemplateRef, watch } from 'vue'
-import { DOCK_HOLD } from '~/composables/useDock'
-import { resolveDockEntries } from '~/lib/wm/dock'
+import { DOCK_HOLD, dockEntryAt } from '~/composables/useDock'
+import { resolveDockEntries, type DockEntry } from '~/lib/wm/dock'
 
 const wm = useWindowManagerStore()
 const dock = useDock()
@@ -77,7 +77,13 @@ function hold(holder: symbol, open: boolean) {
 }
 provide(DOCK_HOLD, hold)
 
-// The bar's own menu: switching to the wheel from it removes the bar before reka closes the menu.
+// The bar's one context menu (only one menu open at a time): its content follows the entry it was
+// opened on, taken when it opens, so it does not change under the pointer while the entry changes.
+// Switching to the wheel from it removes the bar before reka closes the menu.
+const menuEntry = ref<DockEntry | null>(null)
+function pickMenuEntry(event: Event) {
+  menuEntry.value = dockEntryAt(event.target, entries.value)
+}
 const barMenu = Symbol('dockBarMenu')
 function holdBarMenu(open: boolean) {
   hold(barMenu, open)
@@ -146,6 +152,8 @@ function onPointerleave() {
           :class="shown ? '' : HIDDEN[placement.edge]"
           @pointerenter="onPointerenter"
           @pointerleave="onPointerleave"
+          @pointerdown.capture="pickMenuEntry"
+          @contextmenu.capture="pickMenuEntry"
         >
           <WmDockBar
             :entries="entries"
@@ -154,7 +162,7 @@ function onPointerleave() {
         </div>
       </ShadcnContextMenuTrigger>
       <ShadcnContextMenuContent class="min-w-48" data-testid="dock-menu">
-        <WmDockPlacementMenu />
+        <WmDockMenu :entry="menuEntry" />
       </ShadcnContextMenuContent>
     </ShadcnContextMenu>
   </div>

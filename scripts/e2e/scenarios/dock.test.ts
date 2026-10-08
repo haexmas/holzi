@@ -37,6 +37,26 @@ scenario('dock', {}, async (ctx) => {
   await instance.waitForDisplayed('dock-control-windows')
   ctx.step('default dock: launcher, workspaces, windows')
 
+  // One context menu at a time: opening it on a second entry replaces the first.
+  await contextMenu(instance, 'dock-control-workspaces')
+  await instance.waitForDisplayed('dock-menu')
+  await contextMenu(instance, 'dock-control-windows')
+  assert.equal(
+    await instance.exec<number>(
+      `return document.querySelectorAll('[data-testid="dock-menu"]').length`,
+    ),
+    1,
+    'more than one dock menu is open',
+  )
+  await instance.exec(
+    "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true",
+  )
+  await ctx.waitFor(
+    'the dock menu to close',
+    async () => !(await isShown(instance, '[data-testid="dock-menu"]')),
+  )
+  ctx.step('one dock menu at a time')
+
   async function pinFromLauncher() {
     await instance.click('open-launcher')
     await contextMenu(instance, `[data-app-id="${PASSWORDS}"]`)

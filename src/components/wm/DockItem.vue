@@ -4,7 +4,8 @@
  * FR-014) or an app (FR-004, FR-009). An app shows whether it runs, how many instances it has and
  * whether it wants attention (FR-007, FR-008). A click opens it, brings its one instance to the
  * front, or offers its instances grouped by workspace (FR-010–FR-012); a middle click opens a new
- * one (FR-013). Right click and a long press on touch open the context menu (reka, FR-015, FR-043).
+ * one (FR-013). Its context menu is the bar's or the wheel's single one (`DockMenu`), which finds
+ * the entry by `data-dock-key`.
  */
 import { computed, ref, useTemplateRef, watch } from 'vue'
 import { useDockHold } from '~/composables/useDock'
@@ -23,7 +24,6 @@ const props = defineProps<{
 }>()
 
 const wm = useWindowManagerStore()
-const dock = useDock()
 const { t } = useI18n()
 
 const CONTROL_ICONS: Record<DockControlId, string> = {
@@ -38,7 +38,6 @@ const CONTROL_ACTIONS = {
 } satisfies Record<DockControlId, unknown>
 const openApp = useAction('wm.app.open')
 const activateTab = useAction('wm.tab.activate')
-const closeTab = useAction('wm.tab.close')
 
 const app = computed(() => {
   const entry = props.entry
@@ -69,8 +68,7 @@ const testId = computed(() => {
 
 const button = useTemplateRef<HTMLButtonElement>('button')
 const chooserOpen = ref(false)
-// A hiding dock stays while this entry's menu or chooser is open (FR-025).
-const holdMenu = useDockHold()
+// A hiding dock stays while this entry's chooser is open (FR-025).
 const holdChooser = useDockHold()
 watch(chooserOpen, (open) => holdChooser(open))
 // Switching between compact and normal mode moves the dock away from the chooser (FR-034).
@@ -150,142 +148,68 @@ function onAuxclick(event: MouseEvent) {
   if (app.value?.multiInstance) newInstance()
   else activate()
 }
-
-function togglePin() {
-  if (props.entry.kind !== 'app') return
-  const appId = props.entry.appId
-  void (props.entry.pinned ? dock.unpinAsync(appId) : dock.pinAsync(appId))
-}
-
-const isLauncher = computed(
-  () => props.entry.kind === 'control' && props.entry.id === 'launcher',
-)
-
-/** An entry with its own menu keeps right click and long press to itself, so the dock's
- * placement menu around it does not open too; on the launcher, which has none, they reach it. */
-function keepToItself(event: Event) {
-  if (!isLauncher.value) event.stopPropagation()
-}
-
-/** Workspaces and windows can leave the dock; the launcher cannot (FR-006, US4). */
-function removeControl() {
-  const key = dockItemKey(props.entry)
-  const index = dock.items.value.findIndex((item) => dockItemKey(item) === key)
-  if (index >= 0 && !isLauncher.value) void dock.removeAsync(index)
-}
-
-/** Closes every instance as a click on its tab's close button would, guards included (FR-016);
- * stops at the first one the user keeps open. */
-async function closeAll() {
-  for (const instance of [...instances.value]) {
-    const outcome = await closeTab({ tabId: instance.tabId })
-    if (!outcome.ok) return
-  }
-}
 </script>
 
 <template>
   <ShadcnPopover v-model:open="chooserOpen">
-    <ShadcnContextMenu @update:open="holdMenu">
-      <ShadcnContextMenuTrigger as-child :disabled="isLauncher">
-        <button
-          ref="button"
-          type="button"
-          class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
-          :class="[
-            entry.kind === 'control' && entry.id === 'launcher'
-              ? 'bg-foreground text-background hover:opacity-90'
-              : 'text-foreground hover:bg-accent',
-            attention ? 'ring-2 ring-warning' : '',
-          ]"
-          :data-testid="testId"
-          data-dock-item
-          :data-running="instances.length > 0 || undefined"
-          :data-count="instances.length || undefined"
-          :tabindex="tabbable ? 0 : -1"
-          :aria-label="label"
-          :title="label"
-          @click="activate"
-          @auxclick="onAuxclick"
-          @pointerdown="keepToItself"
-          @contextmenu="keepToItself"
-          @mousedown.middle.prevent
-        >
-          <img
-            v-if="app?.iconUrl"
-            :src="app.iconUrl"
-            alt=""
-            class="h-6 w-6 object-contain"
-          />
-          <Icon
-            v-else
-            :name="
-              entry.kind === 'control'
-                ? CONTROL_ICONS[entry.id]
-                : (app?.icon ?? '')
-            "
-            class="h-5 w-5"
-            :aria-hidden="true"
-          />
-          <span
-            v-if="instances.length > 0"
-            class="absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-foreground"
-          />
-          <span class="sr-only">
-            <template v-if="instances.length > 1">
-              {{ t('wm.dock.count', { count: instances.length }) }}
-            </template>
-            <template v-else-if="instances.length > 0">
-              {{ t('wm.dock.running') }}
-            </template>
-            <template v-if="attention">{{ t('wm.attention') }}</template>
-          </span>
-          <span
-            v-if="instances.length > 1"
-            class="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground"
-            aria-hidden="true"
-          >
-            {{ instances.length }}
-          </span>
-        </button>
-      </ShadcnContextMenuTrigger>
-      <ShadcnContextMenuContent class="min-w-48" data-testid="dock-item-menu">
-        <ShadcnContextMenuItem
-          v-if="entry.kind === 'control'"
-          data-testid="dock-menu-remove"
-          @select="removeControl"
-        >
-          {{ t('wm.dock.remove') }}
-        </ShadcnContextMenuItem>
-        <ShadcnContextMenuItem
-          v-else
-          data-testid="dock-menu-pin"
-          @select="togglePin"
-        >
-          {{
-            entry.kind === 'app' && entry.pinned
-              ? t('wm.dock.unpin')
-              : t('wm.dock.pin')
-          }}
-        </ShadcnContextMenuItem>
-        <ShadcnContextMenuItem
-          v-if="app?.multiInstance"
-          data-testid="dock-menu-new"
-          @select="newInstance"
-        >
-          {{ t('wm.dock.newWindow') }}
-        </ShadcnContextMenuItem>
-        <ShadcnContextMenuItem
-          v-if="instances.length > 0"
-          data-testid="dock-menu-close-all"
-          @select="closeAll"
-        >
-          {{ t('wm.dock.closeAll') }}
-        </ShadcnContextMenuItem>
-      </ShadcnContextMenuContent>
-    </ShadcnContextMenu>
-    <!-- Anchored by `reference`: a PopoverAnchor inside the context menu would find the menu's
-         popper instead of the popover's. -->
+    <button
+      ref="button"
+      type="button"
+      class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+      :class="[
+        entry.kind === 'control' && entry.id === 'launcher'
+          ? 'bg-foreground text-background hover:opacity-90'
+          : 'text-foreground hover:bg-accent',
+        attention ? 'ring-2 ring-warning' : '',
+      ]"
+      :data-testid="testId"
+      data-dock-item
+      :data-dock-key="dockItemKey(entry)"
+      :data-running="instances.length > 0 || undefined"
+      :data-count="instances.length || undefined"
+      :tabindex="tabbable ? 0 : -1"
+      :aria-label="label"
+      :title="label"
+      @click="activate"
+      @auxclick="onAuxclick"
+      @mousedown.middle.prevent
+    >
+      <img
+        v-if="app?.iconUrl"
+        :src="app.iconUrl"
+        alt=""
+        class="h-6 w-6 object-contain"
+      />
+      <Icon
+        v-else
+        :name="
+          entry.kind === 'control' ? CONTROL_ICONS[entry.id] : (app?.icon ?? '')
+        "
+        class="h-5 w-5"
+        :aria-hidden="true"
+      />
+      <span
+        v-if="instances.length > 0"
+        class="absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-foreground"
+      />
+      <span class="sr-only">
+        <template v-if="instances.length > 1">
+          {{ t('wm.dock.count', { count: instances.length }) }}
+        </template>
+        <template v-else-if="instances.length > 0">
+          {{ t('wm.dock.running') }}
+        </template>
+        <template v-if="attention">{{ t('wm.attention') }}</template>
+      </span>
+      <span
+        v-if="instances.length > 1"
+        class="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground"
+        aria-hidden="true"
+      >
+        {{ instances.length }}
+      </span>
+    </button>
+    <!-- Anchored by `reference` to the entry's button. -->
     <ShadcnPopoverContent
       :reference="button ?? undefined"
       class="flex w-64 flex-col gap-2 p-2"

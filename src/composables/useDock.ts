@@ -16,8 +16,10 @@ import {
   normalizeDockItems,
   parseDockItems,
   parseDockPlacement,
+  dockItemKey,
   serializeDockItems,
   type DockControlId,
+  type DockEntry,
   type DockItem,
   type DockItemState,
   type DockPlacement,
@@ -37,6 +39,19 @@ export function useDockHold(): (open: boolean) => void {
   const holder = Symbol('dockHolder')
   onBeforeUnmount(() => hold(holder, false))
   return (open) => hold(holder, open)
+}
+
+/** The entry an event happened on (its button carries `data-dock-key`), or `null` for the dock's
+ * free area — for the one context menu of the bar and of the wheel. */
+export function dockEntryAt(
+  target: EventTarget | null,
+  entries: readonly DockEntry[],
+): DockEntry | null {
+  const key =
+    target instanceof Element
+      ? target.closest('[data-dock-key]')?.getAttribute('data-dock-key')
+      : null
+  return entries.find((entry) => dockItemKey(entry) === key) ?? null
 }
 
 /** One state per process: a process holds one vault (spec 013). `null` = nothing readable stored,
