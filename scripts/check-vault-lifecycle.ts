@@ -177,6 +177,7 @@ function loadIndexPage(
   let synced = 0
   const navigations: string[] = []
   const events: string[] = []
+  const colorScheme = { startSystem() {} }
   const store = {
     instances: [] as unknown[],
     lastError: null as string | null,
@@ -193,6 +194,7 @@ function loadIndexPage(
     onCreated: (name: string) => Promise<void>
   }>('src/pages/index.vue', ['onSelect', 'onUnlocked', 'onCreated'], {
     useInstancesStore: () => store,
+    useColorScheme: () => colorScheme,
     useInstance: () => ({
       activeNameAsync: async () => activeName,
     }),

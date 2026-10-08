@@ -8,10 +8,6 @@ const { language: activeLanguage, options: languageOptions } = language
 const store = useInstancesStore()
 const { activeNameAsync } = useInstance()
 
-// The landing page is outside a vault and must always follow the operating system. This also
-// matters when the user reaches it from a workspace without restarting the webview.
-onBeforeMount(() => colorScheme.startSystem())
-
 const createSheetOpen = ref(false)
 const linkSheetOpen = ref(false)
 const unlockSheetOpen = ref(false)
@@ -29,6 +25,9 @@ function onFocusOrVisible() {
 }
 
 onMounted(async () => {
+  // The landing page is outside a vault and must always follow the operating system. This also
+  // matters when the user reaches it from a workspace without restarting the webview.
+  colorScheme.startSystem()
   window.addEventListener('focus', onFocusOrVisible)
   document.addEventListener('visibilitychange', onFocusOrVisible)
   let listenerError: unknown

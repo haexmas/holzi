@@ -21,6 +21,7 @@ const repoRoot = resolvePath(dirname(fileURLToPath(import.meta.url)), '../..')
 /** What a case can provide to the page. Anything left out is a loud failure or a plain double. */
 export interface ScriptSetupGlobals {
   useInstance?: () => unknown
+  useColorScheme?: () => unknown
   useInstancesStore?: () => unknown
   useWindowManagerStore?: () => unknown
   useFieldLabels?: () => unknown
@@ -107,6 +108,7 @@ export function loadScriptSetup<T>(
     useI18n: () => ({ t: (key: string) => key }),
     useRoute: () => ({ params: globals.params ?? { instance: 'vault' } }),
     useInstance: globals.useInstance ?? notProvided('useInstance'),
+    useColorScheme: globals.useColorScheme ?? notProvided('useColorScheme'),
     useInstancesStore:
       globals.useInstancesStore ?? notProvided('useInstancesStore'),
     useWindowManagerStore:
