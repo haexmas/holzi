@@ -33,7 +33,7 @@ scenario('compact-tab-close', {}, async (ctx) => {
   // `compact` follows the app's own viewport (`wm/Desktop.vue`'s `useWindowSize`), not an individual
   // window's geometry (T049, `layoutState.ts`) — drive it the same way that watcher does.
   await instance.exec(
-    "document.querySelector('#__nuxt').__vue_app__.config.globalProperties.$pinia._s.get('windowManager').updateArea({ width: 600, height: 700 }); return true",
+    "document.querySelector('#__nuxt').__vue_app__.config.globalProperties.$pinia._s.get('windowManager').updateArea({ width: 600, height: 700 }, 600); return true",
   )
   await ctx.waitFor('the compact close button', () =>
     isShown(instance, '[data-testid="tab-close"]'),

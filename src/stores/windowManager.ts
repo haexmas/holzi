@@ -350,11 +350,13 @@ export const useWindowManagerStore = defineStore('windowManager', () => {
     session.saveSoon()
   }
 
-  /** Keeps `state.area`/`state.compact` in sync with the window manager's actual size (T049,
-   * `wm/Desktop.vue`'s `useWindowSize` watcher) and re-clamps every window's stored geometry
-   * into it — debounced like `updateWindowGeometry`, since a live resize can fire rapidly too. */
-  function updateArea(area: Size) {
-    if (updateAreaReducer(state, area, apps()).length > 0) session.saveSoon()
+  /** Keeps `state.area` in sync with the area windows get and `state.compact` with the app window's
+   * width (T049; spec 045 research R1, `wm/Desktop.vue`'s size watcher) and re-clamps every
+   * window's stored geometry into it — debounced like `updateWindowGeometry`, since a live resize
+   * can fire rapidly too. */
+  function updateArea(area: Size, viewportWidth: number) {
+    if (updateAreaReducer(state, area, apps(), viewportWidth).length > 0)
+      session.saveSoon()
   }
 
   /** Removes the window without asking anything — guard confirmation (FR-014) runs at the caller

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import type { PersistedLayout } from '../src/lib/wm/types.ts'
-import { hydrate } from '../src/lib/wm/layoutState.ts'
+import { hydrate, updateArea } from '../src/lib/wm/layoutState.ts'
 import {
   cascadePosition,
   clampDragPosition,
@@ -336,4 +336,38 @@ test('hydrate keeps singleton apps unique and selects a visible window in the ac
     ['w-active-visible:test.alpha', 'w-other-front:test.beta'],
   )
   assert.equal(state.activeWindowId, 'w-active-visible')
+})
+
+// ---------------------------------------------------------------------------
+// Area vs. compact (spec 045 research R1): a space-reserving dock narrows the area windows get,
+// but compact mode follows the app window's width, so the dock cannot flip it.
+// ---------------------------------------------------------------------------
+
+const EMPTY: PersistedLayout = {
+  workspaces: [],
+  windows: [],
+  activeWorkspaceId: '',
+}
+
+test('updateArea keeps normal mode when only the area is narrow, not the app window', () => {
+  const state = hydrate(EMPTY, APPS, AREA)
+  updateArea(state, { width: 700, height: 600 }, APPS, 1200)
+  assert.equal(state.compact, false)
+  assert.deepEqual(state.area, { width: 700, height: 600 })
+})
+
+test('updateArea enters compact mode when the app window is narrow, whatever the area', () => {
+  const state = hydrate(EMPTY, APPS, AREA)
+  updateArea(state, { width: 1200, height: 600 }, APPS, 700)
+  assert.equal(state.compact, true)
+})
+
+test('hydrate takes an explicit compact flag over the area width', () => {
+  const state = hydrate(EMPTY, APPS, { width: 700, height: 600 }, false)
+  assert.equal(state.compact, false)
+})
+
+test('hydrate without a compact flag derives it from the area width, as at first load', () => {
+  assert.equal(hydrate(EMPTY, APPS, { width: 700, height: 600 }).compact, true)
+  assert.equal(hydrate(EMPTY, APPS, AREA).compact, false)
 })

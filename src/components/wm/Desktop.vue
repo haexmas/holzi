@@ -22,7 +22,7 @@ const { t } = useI18n()
 const { width, height } = useWindowSize()
 
 watch([width, height], ([newWidth, newHeight]) => {
-  wm.updateArea({ width: newWidth, height: newHeight })
+  wm.updateArea({ width: newWidth, height: newHeight }, newWidth)
 })
 
 const openWorkspaces = useAction('wm.workspaces.overview')
