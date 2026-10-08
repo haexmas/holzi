@@ -106,6 +106,12 @@ async fn serve(mut stream: TcpStream, grants: Grants) -> std::io::Result<()> {
     let Some(head) = read_head(&mut stream).await? else {
         return write(&mut stream, &http::empty(400, "Bad Request")).await;
     };
+    log::debug!(
+        "files: media {} {} range {:?}",
+        head.method,
+        head.path.get(..9).unwrap_or(&head.path),
+        head.range
+    );
     if head.method == "OPTIONS" {
         return write(&mut stream, &http::empty(204, "No Content")).await;
     }

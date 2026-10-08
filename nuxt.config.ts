@@ -1,4 +1,14 @@
+import { fileURLToPath } from 'node:url'
+
 import tailwindcss from '@tailwindcss/vite'
+
+/** pdf.js data the PDF viewer loads at run time (spec 044 T038); served under `/pdfjs/`. */
+const pdfjs = (folder: string) => ({
+  dir: fileURLToPath(
+    new URL(`./node_modules/pdfjs-dist/${folder}`, import.meta.url),
+  ),
+  baseURL: `/pdfjs/${folder}`,
+})
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
@@ -42,6 +52,9 @@ export default defineNuxtConfig({
   ],
   components: [{ path: '~/components', pathPrefix: true }],
   css: ['~/assets/css/tailwind.css'],
+  nitro: {
+    publicAssets: [pdfjs('cmaps'), pdfjs('standard_fonts')],
+  },
   vite: {
     plugins: [tailwindcss()],
     clearScreen: false,

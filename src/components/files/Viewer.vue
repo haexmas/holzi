@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * The viewer over the open folder (spec 044 FR-009, FR-011, FR-014, FR-015): text and images
- * show here, images from the media server (FR-016: the URL is released when the viewer moves on or
- * closes); video, audio and PDF show the info view until their viewers come (T037, T038).
+ * The viewer over the open folder (spec 044 FR-009, FR-011, FR-014, FR-015): text shows here;
+ * images, video, audio and PDFs come from the media server (FR-016: the URL is released when the
+ * viewer moves on or closes). A file the web view cannot play falls back to the info view.
  * Arrows and the buttons move to the previous or next file of the same kind; Escape closes.
  */
 import type { Entry } from '@bindings/Entry'
@@ -25,36 +25,50 @@ const { readTextAsync, openAsync, releaseAsync, openSystemAsync } = useFiles()
 const { tabId } = useWmTab()
 
 const kind = computed(() => viewerKind(props.entry.name))
-/** What this version shows itself; the rest goes to the info view. */
-const shown = computed(() =>
-  kind.value === 'text' || kind.value === 'image' ? kind.value : 'info',
-)
+/** Set when the web view could not play or render the file. */
+const unplayable = ref(false)
+/** What the viewer shows; the rest goes to the info view. */
+const shown = computed(() => {
+  if (unplayable.value) return 'info'
+  switch (kind.value) {
+    case 'text':
+    case 'image':
+    case 'pdf':
+      return kind.value
+    case 'video':
+    case 'audio':
+      return 'media'
+    default:
+      return 'info'
+  }
+})
 
 const text = ref<TextContent | null>(null)
-const imageUrl = ref<string | null>(null)
+const url = ref<string | null>(null)
 const failed = ref<string | null>(null)
 const zoomed = ref(false)
 
-function dropImage() {
-  const url = imageUrl.value
-  imageUrl.value = null
-  if (url) void releaseAsync(url).catch(() => {})
+function dropUrl() {
+  const current = url.value
+  url.value = null
+  if (current) void releaseAsync(current).catch(() => {})
 }
 
 watch(
   () => props.entry.path,
   async (path) => {
     text.value = null
-    dropImage()
+    dropUrl()
     failed.value = null
     zoomed.value = false
+    unplayable.value = false
     try {
       if (shown.value === 'text') {
         const content = await readTextAsync(props.source, path)
         if (path === props.entry.path) text.value = content
-      } else if (shown.value === 'image') {
+      } else if (shown.value !== 'info') {
         const opened = await openAsync(props.source, path, tabId)
-        if (path === props.entry.path) imageUrl.value = opened.url
+        if (path === props.entry.path) url.value = opened.url
         else if (opened.url) void releaseAsync(opened.url).catch(() => {})
       }
     } catch (error) {
@@ -65,7 +79,7 @@ watch(
   },
   { immediate: true },
 )
-onBeforeUnmount(dropImage)
+onBeforeUnmount(dropUrl)
 
 /** The files of the same kind in folder order, for previous and next. */
 const sameKind = computed(() =>
@@ -86,6 +100,8 @@ function step(by: number) {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  // The arrows of a focused player seek; they do not move to another file.
+  if (event.target instanceof HTMLMediaElement && event.key !== 'Escape') return
   if (event.key === 'Escape') emit('close')
   else if (event.key === 'ArrowLeft') step(-1)
   else if (event.key === 'ArrowRight') step(1)
@@ -182,12 +198,12 @@ onMounted(() => panel.value?.focus())
         }}</pre>
       </div>
       <div
-        v-else-if="shown === 'image' && imageUrl"
+        v-else-if="shown === 'image' && url"
         class="flex min-h-full items-center justify-center p-2"
         data-testid="files-viewer-image"
       >
         <img
-          :src="imageUrl"
+          :src="url"
           :alt="entry.name"
           class="cursor-zoom-in"
           :class="
@@ -198,8 +214,28 @@ onMounted(() => panel.value?.focus())
           @click="zoomed = !zoomed"
         />
       </div>
+      <FilesMediaViewer
+        v-else-if="
+          shown === 'media' && url && (kind === 'video' || kind === 'audio')
+        "
+        :url="url"
+        :kind="kind"
+        @failed="unplayable = true"
+      />
+      <LazyFilesPdfViewer
+        v-else-if="shown === 'pdf' && url"
+        :url="url"
+        @failed="unplayable = true"
+      />
+      <p
+        v-if="unplayable"
+        class="border-b bg-muted px-4 py-2 text-center text-xs text-muted-foreground"
+        data-testid="files-viewer-unplayable"
+      >
+        {{ t('files.viewer.unplayable') }}
+      </p>
       <dl
-        v-else-if="shown === 'info'"
+        v-if="shown === 'info' && !failed"
         class="mx-auto grid max-w-md grid-cols-[auto_1fr] gap-x-4 gap-y-2 p-6 text-sm"
         data-testid="files-viewer-info"
       >
