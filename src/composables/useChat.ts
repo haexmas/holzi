@@ -144,6 +144,8 @@ export interface MessageErrorEvent {
   messageId: string
   threadId: string
   reason: string
+  /** Set for a failure the chat names itself (spec 043 FR-024). */
+  kind?: 'UntrustedCertificate'
 }
 
 export interface ToolCallEvent {

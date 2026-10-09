@@ -309,10 +309,13 @@ scenario('passwords-organize', { timeoutMs: 300_000 }, async (ctx) => {
   // shortcuts still work without a click.
   await instance.type(`passwords-entry-${git}`, KEY.delete)
   await instance.click('passwords-delete-confirm')
-  await ctx.waitFor('the deleted row gone and the dialog closed', async () =>
-    (await count(instance, `[data-testid="passwords-entry-${git}"]`)) === 0
-      ? dialogClosed(instance)
-      : false,
+  await ctx.waitFor(
+    'the deleted row gone and the dialog closed',
+    async () =>
+      (await count(instance, `[data-testid="passwords-entry-${git}"]`)) === 0
+        ? dialogClosed(instance)
+        : false,
+    { timeoutMs: 30_000, fixed: true },
   )
   await ctx.waitFor('the focus back in the list', () =>
     instance.exec<boolean>(

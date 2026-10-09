@@ -173,6 +173,7 @@ impl TurnRunner<'_> {
                     message_id,
                     thread_id,
                     reason,
+                    kind: step.error_kind,
                 },
             );
         } else {

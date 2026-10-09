@@ -322,6 +322,11 @@ pub enum HolziError {
     /// A vault file whose vault identity another vault of this installation already has.
     #[error("This vault is already on this device as '{name}'")]
     AlreadyOnThisDevice { name: String },
+
+    /// The server's certificate is not trusted by the system (spec 043 FR-024): the connection
+    /// was refused. `reason` names the request, for the log.
+    #[error("The server's certificate is not trusted")]
+    UntrustedCertificate { reason: String },
 }
 
 pub type Result<T> = std::result::Result<T, HolziError>;

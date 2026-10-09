@@ -140,9 +140,10 @@ pub(crate) async fn fetch_models(
                 .query(&query)
                 .header("anthropic-version", ANTHROPIC_VERSION),
         );
-        let resp = req.send().await.map_err(|e| AdapterError::Http {
-            reason: format!("GET {endpoint}: {e}"),
-        })?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| super::transport_error(format!("GET {endpoint}"), e))?;
 
         let status = resp.status();
         if !status.is_success() {
@@ -217,9 +218,7 @@ impl ProviderAdapter for AnthropicAdapter {
             .json(&body)
             .send()
             .await
-            .map_err(|e| AdapterError::Http {
-                reason: format!("POST {endpoint}: {e}"),
-            })?;
+            .map_err(|e| super::transport_error(format!("POST {endpoint}"), e))?;
 
         let status = resp.status();
         if !status.is_success() {

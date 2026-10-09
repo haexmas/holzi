@@ -1120,6 +1120,7 @@
     "unreadable": "Die gewählte Datei lässt sich nicht lesen.",
     "notAvailable": "Auf diesem Gerät nicht verfügbar.",
     "notEnoughSpace": "Nicht genug freier Speicher.",
+    "untrustedCertificate": "Zertifikat ungültig: Der Server weist sich mit einem Zertifikat aus, dem dieses Gerät nicht vertraut. Die Verbindung wurde nicht aufgebaut.",
     "hf": {
       "invalidInput": "Ungültige Eingabe.",
       "network": "Netzwerkfehler — bitte Verbindung prüfen.",
