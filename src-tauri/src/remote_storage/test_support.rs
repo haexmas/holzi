@@ -12,8 +12,8 @@ use zeroize::Zeroizing;
 
 use super::address::Resolver;
 use super::{
-    Access, Addressing, Credentials, EndpointScope, Location, ObjectInfo, ProviderKind,
-    RemoteStore, StorageError,
+    Access, Addressing, Credentials, DirListing, EndpointScope, Location, ObjectHead, ObjectInfo,
+    ProviderKind, RemoteStore, StorageError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -22,6 +22,10 @@ pub enum Op {
     Get,
     List,
     Delete,
+    Head,
+    GetRange,
+    ListDir,
+    Copy,
 }
 
 #[derive(Default)]
@@ -57,6 +61,23 @@ impl FakeStore {
             .filter(|(b, _)| b == bucket)
             .map(|(_, k)| k.clone())
             .collect()
+    }
+
+    /// Stores `body` at `key` in `bucket` without a recorded call.
+    pub fn insert(&self, bucket: &str, key: &str, body: &[u8]) {
+        self.objects
+            .lock()
+            .expect("lock")
+            .insert((bucket.to_owned(), key.to_owned()), body.to_vec());
+    }
+
+    /// The object at `key` in `bucket`.
+    pub fn object(&self, bucket: &str, key: &str) -> Option<Vec<u8>> {
+        self.objects
+            .lock()
+            .expect("lock")
+            .get(&(bucket.to_owned(), key.to_owned()))
+            .cloned()
     }
 
     /// The operations called so far with their key or prefix.
@@ -155,6 +176,102 @@ impl RemoteStore for FakeStore {
             .lock()
             .expect("lock")
             .remove(&slot(access, key));
+        Ok(())
+    }
+    async fn head(
+        &self,
+        access: &Access,
+        key: &str,
+        _deadline: Instant,
+    ) -> Result<ObjectHead, StorageError> {
+        self.enter(Op::Head, key)?;
+        let size = self
+            .objects
+            .lock()
+            .expect("lock")
+            .get(&slot(access, key))
+            .map(|body| body.len() as u64)
+            .ok_or(StorageError::NotFound)?;
+        Ok(ObjectHead {
+            size,
+            last_modified: Some("Tue, 06 Oct 2026 10:00:00 GMT".to_owned()),
+        })
+    }
+
+    async fn get_range(
+        &self,
+        access: &Access,
+        key: &str,
+        start: u64,
+        len: u64,
+        _deadline: Instant,
+    ) -> Result<Box<dyn tokio::io::AsyncRead + Send + Unpin>, StorageError> {
+        self.enter(Op::GetRange, key)?;
+        let body = self
+            .objects
+            .lock()
+            .expect("lock")
+            .get(&slot(access, key))
+            .cloned()
+            .ok_or(StorageError::NotFound)?;
+        let from = usize::try_from(start).unwrap_or(usize::MAX).min(body.len());
+        let to = from
+            .saturating_add(usize::try_from(len).unwrap_or(usize::MAX))
+            .min(body.len());
+        Ok(Box::new(std::io::Cursor::new(body[from..to].to_vec())))
+    }
+
+    async fn list_dir(
+        &self,
+        access: &Access,
+        prefix: &str,
+        max: usize,
+        _deadline: Instant,
+    ) -> Result<DirListing, StorageError> {
+        self.enter(Op::ListDir, prefix)?;
+        let mut listing = DirListing::default();
+        for ((bucket, key), body) in self.objects.lock().expect("lock").iter() {
+            if *bucket != access.location.bucket || key == prefix {
+                continue;
+            }
+            let Some(rest) = key.strip_prefix(prefix) else {
+                continue;
+            };
+            match rest.find('/') {
+                Some(slash) => {
+                    let deeper = format!("{prefix}{}", &rest[..=slash]);
+                    if listing.prefixes.last() != Some(&deeper) {
+                        listing.prefixes.push(deeper);
+                    }
+                }
+                None => listing.objects.push(ObjectInfo {
+                    key: key.clone(),
+                    size: body.len() as u64,
+                    last_modified: "2026-10-06T10:00:00.000Z".to_owned(),
+                }),
+            }
+        }
+        listing.prefixes.dedup();
+        if listing.objects.len() + listing.prefixes.len() > max {
+            return Err(StorageError::TooLarge);
+        }
+        Ok(listing)
+    }
+
+    async fn copy(
+        &self,
+        access: &Access,
+        from: &str,
+        to: &str,
+        _deadline: Instant,
+    ) -> Result<(), StorageError> {
+        self.enter(Op::Copy, from)?;
+        let mut objects = self.objects.lock().expect("lock");
+        let body = objects
+            .get(&slot(access, from))
+            .cloned()
+            .ok_or(StorageError::NotFound)?;
+        objects.insert(slot(access, to), body);
         Ok(())
     }
 }

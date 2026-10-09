@@ -59,6 +59,11 @@ const sources = useAsyncState(() => sourcesAsync(), null)
 // The start (no path yet) opens the home folder, or the first drive where there is none.
 watchEffect(() => {
   if (path.value !== null) return
+  // A storage starts at its root.
+  if (source.value.kind === 'storage') {
+    router.replace(filesLocation({ source: source.value, path: '/' }))
+    return
+  }
   const data = sources.state.value
   if (!data) return
   const home = data.known.find((known) => known.name === 'home')?.path
@@ -106,7 +111,8 @@ onMounted(() => {
   void prefs.ensureLoaded()
 })
 // FR-016: the media server URLs of this tab end with it.
-const { tabId } = useWmTab()
+const wmTab = useWmTab()
+const { tabId } = wmTab
 
 onBeforeUnmount(() => {
   void releaseTabAsync(tabId).catch(() => {})
@@ -236,6 +242,8 @@ async function startAsync(
       paths,
       to === null ? null : { source: source.value, path: to },
       tabId,
+      // A storage is not watched: its folder loads again once the transfer is through.
+      () => void folder.reload(),
     )
     return true
   } catch (cause) {
@@ -339,8 +347,9 @@ async function run(command: FilesCommand, targets: Selection | null) {
       break
     case 'delete':
       pendingDelete.value = entries.map((entry) => entry.path)
-      // Desktops move to the trash; Android deletes for good and asks first (FR-023).
-      if (isAndroid.value) deleting.value = true
+      // Desktops move to the trash; Android and storages delete for good and ask first (FR-023).
+      if (isAndroid.value || source.value.kind === 'storage')
+        deleting.value = true
       else deleteNow()
       break
   }
@@ -435,8 +444,51 @@ const sidebarClass = computed(() => [
 
 function onSidebarPick(target: string) {
   close()
-  go(target)
+  router.push(filesLocation({ source: { kind: 'device' }, path: target }))
 }
+
+function onPickStorage(storageId: string) {
+  close()
+  router.push(
+    filesLocation({ source: { kind: 'storage', storageId }, path: '/' }),
+  )
+}
+
+// --- Storages (US5) ---
+
+const storageId = computed(() =>
+  source.value.kind === 'storage' ? source.value.storageId : null,
+)
+const storageName = computed(
+  () =>
+    sources.state.value?.storages.find(
+      (storage) => storage.id === storageId.value,
+    )?.name,
+)
+
+/** A storage's credentials failed: its settings can fix them (spec 038). */
+const settingsLink = computed(
+  () =>
+    storageId.value !== null &&
+    (folder.error.value?.code === 'credentials' ||
+      folder.error.value?.code === 'noAccess'),
+)
+
+const { openApp } = useWmTab()
+function openStorageSettings() {
+  openApp('system.settings', '/storage')
+}
+
+// A storage is not watched: it loads again when its tab comes to the front.
+const wm = useWindowManagerStore()
+const tabActive = computed(
+  () =>
+    wm.windows.find((window) => window.id === wmTab.windowId)?.activeTabId ===
+    tabId,
+)
+watch(tabActive, (active) => {
+  if (active && storageId.value !== null) void folder.reload()
+})
 </script>
 
 <template>
@@ -448,6 +500,7 @@ function onSidebarPick(target: string) {
     <FilesToolbar
       class="h-13 shrink-0 px-2"
       :path="path"
+      :root-label="storageName"
       :sidebar-visible="visible"
       :can-go-up="!!path && parentPath(path) !== null"
       @toggle-sidebar="toggle"
@@ -471,8 +524,10 @@ function onSidebarPick(target: string) {
       >
         <FilesSidebar
           :sources="sources.state.value"
-          :current="path"
+          :current="storageId === null ? path : null"
+          :current-storage="storageId"
           @pick="onSidebarPick"
+          @pick-storage="onPickStorage"
         />
       </nav>
       <main
@@ -503,7 +558,7 @@ function onSidebarPick(target: string) {
         <FilesDropTarget
           v-else
           class="flex-1"
-          :disabled="folderOwned || !path"
+          :disabled="folderOwned || !path || storageId !== null"
           @drop="importDropped"
         >
           <FilesMenu :entries="menuEntries" @run="runMenu">
@@ -516,9 +571,11 @@ function onSidebarPick(target: string) {
               :folder="path ?? ''"
               :selected="selection.paths"
               :dimmed="dimmed"
+              :settings-link="settingsLink"
               @press="onPress"
               @context="onContext"
               @drop="onDrop"
+              @settings="openStorageSettings"
             />
           </FilesMenu>
         </FilesDropTarget>
@@ -538,6 +595,7 @@ function onSidebarPick(target: string) {
       :source="source"
       :folder="path ?? ''"
       :entry="renaming"
+      @done="folder.reload()"
     />
     <FilesDeleteDialog
       v-model:open="deleting"

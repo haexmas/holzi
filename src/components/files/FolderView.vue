@@ -31,12 +31,15 @@ const props = defineProps<{
   selected: readonly string[]
   /** Paths cut to holzi's clipboard, shown faded. */
   dimmed: readonly string[]
+  /** An error of a storage's credentials offers its settings (US5). */
+  settingsLink?: boolean
 }>()
 
 const emit = defineEmits<{
   press: [entry: Entry, keys: ClickKeys]
   /** The context menu opens over an entry, or over the empty area (`null`). */
   context: [entry: Entry | null]
+  settings: []
   drop: [
     payload: DragPayload,
     target: string,
@@ -173,6 +176,15 @@ const errorText = computed(() => {
     >
       <Icon name="lucide:circle-alert" class="size-8" />
       <p>{{ errorText }}</p>
+      <UiButton
+        v-if="settingsLink"
+        variant="outline"
+        size="sm"
+        data-testid="files-storage-settings"
+        @click="emit('settings')"
+      >
+        {{ t('files.storage.settings') }}
+      </UiButton>
     </div>
     <div
       v-else-if="!loading && entries.length === 0"

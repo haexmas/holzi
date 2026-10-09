@@ -59,3 +59,54 @@ impl StreamingSource for LocalFileSource {
         &self.content_type
     }
 }
+
+/// A file of a storage (spec 044 US5): each range the player asks for is its own request to the
+/// provider, so seeking needs no download up to that point.
+pub struct StorageFileSource {
+    store: std::sync::Arc<dyn crate::remote_storage::RemoteStore>,
+    access: crate::remote_storage::Access,
+    key: String,
+    size: u64,
+    content_type: String,
+}
+
+impl StorageFileSource {
+    pub fn new(
+        store: std::sync::Arc<dyn crate::remote_storage::RemoteStore>,
+        access: crate::remote_storage::Access,
+        key: String,
+        size: u64,
+        content_type: impl Into<String>,
+    ) -> Self {
+        Self {
+            store,
+            access,
+            key,
+            size,
+            content_type: content_type.into(),
+        }
+    }
+}
+
+#[async_trait]
+impl StreamingSource for StorageFileSource {
+    async fn size(&self) -> std::io::Result<u64> {
+        Ok(self.size)
+    }
+
+    async fn open_range(
+        &self,
+        start: u64,
+        len: u64,
+    ) -> std::io::Result<Box<dyn AsyncRead + Send + Unpin>> {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+        self.store
+            .get_range(&self.access, &self.key, start, len, deadline)
+            .await
+            .map_err(|error| std::io::Error::other(error.to_string()))
+    }
+
+    fn content_type(&self) -> &str {
+        &self.content_type
+    }
+}

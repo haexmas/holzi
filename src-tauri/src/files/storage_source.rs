@@ -1,0 +1,441 @@
+//! A storage of spec 038 as a source of the file browser (spec 044 US5, FR-034, FR-038). The window
+//! sees a storage like a device: paths start with `/`, `/Fotos/2026` is the prefix `Fotos/2026/`
+//! and `/Fotos/a.jpg` the key `Fotos/a.jpg`; only this module knows keys. S3 has no folders: a
+//! folder is a prefix, kept even when empty by a marker object named like the prefix. Renaming
+//! copies on the provider and deletes; a folder's objects are renamed or deleted one by one.
+//! Errors say what kind of failure it was, never the endpoint, a key of the connection or the
+//! provider's text (FR-038).
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use tokio::io::AsyncReadExt;
+use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
+
+use crate::files::kind::mime_for;
+use crate::files::local::edit::check_name;
+use crate::files::{Entry, EntryKind, FilesError, FilesErrorCode};
+use crate::remote_storage::{Access, ObjectInfo, RemoteStore, StorageError};
+
+/// How long one call to the provider may take.
+const CALL: Duration = Duration::from_secs(30);
+
+/// How long a copy may take (the provider copies up to 5 GB).
+const COPY: Duration = Duration::from_secs(10 * 60);
+
+/// The most entries of one level, and of objects under a folder that is renamed or deleted.
+const MAX_ENTRIES: usize = 100_000;
+
+/// How many keys an error about leftovers names.
+const NAMED_LEFTOVERS: usize = 5;
+
+/// The error of a provider's failure (FR-038: no text of the provider).
+pub fn storage_error(error: StorageError) -> FilesError {
+    match error {
+        StorageError::NotFound => FilesError::new(FilesErrorCode::NotFound, "not found"),
+        StorageError::AccessDenied => FilesError::new(
+            FilesErrorCode::Credentials,
+            "the storage refused the credentials",
+        ),
+        StorageError::MissingRight => FilesError::new(
+            FilesErrorCode::NoAccess,
+            "the credentials lack the right for this",
+        ),
+        StorageError::Network | StorageError::TimedOut => {
+            FilesError::new(FilesErrorCode::Unreachable, "the storage is not reachable")
+        }
+        StorageError::TooLarge => FilesError::new(FilesErrorCode::TooLarge, "too many entries"),
+    }
+}
+
+fn soon() -> Instant {
+    Instant::now() + CALL
+}
+
+/// The parts of a window path; `/` has none. `.`, `..` and empty parts are refused.
+fn parts(path: &str) -> Result<Vec<&str>, FilesError> {
+    let rest = path
+        .strip_prefix('/')
+        .ok_or_else(|| FilesError::invalid_path("a storage path starts with /"))?;
+    if rest.is_empty() {
+        return Ok(Vec::new());
+    }
+    let parts: Vec<&str> = rest.split('/').collect();
+    if parts
+        .iter()
+        .any(|part| part.is_empty() || *part == "." || *part == "..")
+    {
+        return Err(FilesError::invalid_path(
+            "the path holds an empty part, . or ..",
+        ));
+    }
+    Ok(parts)
+}
+
+/// The prefix of the folder `path` (`""` for `/`).
+pub fn folder_prefix(path: &str) -> Result<String, FilesError> {
+    Ok(parts(path)?.iter().map(|part| format!("{part}/")).collect())
+}
+
+/// The key of the file `path`.
+pub fn object_key(path: &str) -> Result<String, FilesError> {
+    let parts = parts(path)?;
+    if parts.is_empty() {
+        return Err(FilesError::invalid_path("the root is no file"));
+    }
+    Ok(parts.join("/"))
+}
+
+/// The window path of a key or a prefix.
+pub fn path_of(key: &str) -> String {
+    format!("/{}", key.trim_end_matches('/'))
+}
+
+fn name_of(key: &str) -> String {
+    key.trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn file_entry(key: &str, size: u64, modified_ms: Option<i64>) -> Entry {
+    let name = name_of(key);
+    Entry {
+        mime: mime_for(&name).map(str::to_owned),
+        hidden: name.starts_with('.'),
+        path: path_of(key),
+        name,
+        kind: EntryKind::File,
+        size: Some(size),
+        modified_ms,
+        symlink: false,
+        no_access: false,
+        holzi_owned: false,
+    }
+}
+
+fn folder_entry(prefix: &str) -> Entry {
+    let name = if prefix.is_empty() {
+        "/".to_owned()
+    } else {
+        name_of(prefix)
+    };
+    Entry {
+        hidden: name.starts_with('.'),
+        path: path_of(prefix),
+        name,
+        kind: EntryKind::Dir,
+        size: None,
+        modified_ms: None,
+        mime: None,
+        symlink: false,
+        no_access: false,
+        holzi_owned: false,
+    }
+}
+
+/// Days since 1970-01-01 of a date of the proleptic Gregorian calendar (Howard Hinnant's
+/// `days_from_civil`).
+fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year.div_euclid(400);
+    let yoe = year - era * 400;
+    let month = i64::from(month);
+    let doy = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + i64::from(day) - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+fn millis(year: i64, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Option<i64> {
+    if !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+        || hour > 23
+        || minute > 59
+        || second > 60
+    {
+        return None;
+    }
+    let seconds = days_from_civil(year, month, day) * 86_400
+        + i64::from(hour) * 3_600
+        + i64::from(minute) * 60
+        + i64::from(second);
+    Some(seconds * 1_000)
+}
+
+/// The time of a listing (`2026-10-06T10:00:00.000Z`) in milliseconds since 1970.
+pub fn parse_iso_ms(text: &str) -> Option<i64> {
+    let (date, time) = text.trim_end_matches('Z').split_once('T')?;
+    let mut date = date.split('-');
+    let year = date.next()?.parse().ok()?;
+    let month = date.next()?.parse().ok()?;
+    let day = date.next()?.parse().ok()?;
+    let mut time = time.split(':');
+    let hour = time.next()?.parse().ok()?;
+    let minute = time.next()?.parse().ok()?;
+    let second = time.next()?.split('.').next()?.parse().ok()?;
+    millis(year, month, day, hour, minute, second)
+}
+
+/// The time of an HTTP date (`Tue, 06 Oct 2026 10:00:00 GMT`) in milliseconds since 1970.
+pub fn parse_http_date_ms(text: &str) -> Option<i64> {
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    let mut words = text.split_whitespace().skip(1);
+    let day = words.next()?.parse().ok()?;
+    let month_name = words.next()?;
+    let month = MONTHS.iter().position(|m| *m == month_name)?;
+    let year = words.next()?.parse().ok()?;
+    let mut time = words.next()?.split(':');
+    let hour = time.next()?.parse().ok()?;
+    let minute = time.next()?.parse().ok()?;
+    let second = time.next()?.parse().ok()?;
+    millis(
+        year,
+        u32::try_from(month).ok()? + 1,
+        day,
+        hour,
+        minute,
+        second,
+    )
+}
+
+/// The files of one storage.
+pub struct StorageFiles {
+    store: Arc<dyn RemoteStore>,
+    access: Access,
+}
+
+impl StorageFiles {
+    pub fn new(store: Arc<dyn RemoteStore>, access: Access) -> Self {
+        Self { store, access }
+    }
+
+    pub fn store(&self) -> &Arc<dyn RemoteStore> {
+        &self.store
+    }
+
+    pub fn access(&self) -> &Access {
+        &self.access
+    }
+
+    /// Every entry of the folder `path`, unsorted (the window sorts).
+    pub async fn list(&self, path: &str) -> Result<Vec<Entry>, FilesError> {
+        let prefix = folder_prefix(path)?;
+        let listing = self
+            .store
+            .list_dir(&self.access, &prefix, MAX_ENTRIES, soon())
+            .await
+            .map_err(storage_error)?;
+        let folders = listing.prefixes.iter().map(|prefix| folder_entry(prefix));
+        let files = listing.objects.iter().map(|object| {
+            file_entry(
+                &object.key,
+                object.size,
+                parse_iso_ms(&object.last_modified),
+            )
+        });
+        Ok(folders.chain(files).collect())
+    }
+
+    /// Whether anything lies under `prefix` (a folder exists as long as it has a marker or
+    /// objects).
+    async fn has_prefix(&self, prefix: &str) -> Result<bool, FilesError> {
+        match self.store.list(&self.access, prefix, 1, soon()).await {
+            Ok(objects) => Ok(!objects.is_empty()),
+            Err(StorageError::TooLarge) => Ok(true),
+            Err(error) => Err(storage_error(error)),
+        }
+    }
+
+    /// The entry at `path`: a file when its key exists, else a folder when its prefix does.
+    pub async fn stat(&self, path: &str) -> Result<Entry, FilesError> {
+        let prefix = folder_prefix(path)?;
+        if prefix.is_empty() {
+            return Ok(folder_entry(""));
+        }
+        let key = object_key(path)?;
+        match self.store.head(&self.access, &key, soon()).await {
+            Ok(head) => {
+                let modified = head.last_modified.as_deref().and_then(parse_http_date_ms);
+                return Ok(file_entry(&key, head.size, modified));
+            }
+            Err(StorageError::NotFound) => {}
+            Err(error) => return Err(storage_error(error)),
+        }
+        if self.has_prefix(&prefix).await? {
+            Ok(folder_entry(&prefix))
+        } else {
+            Err(FilesError::new(FilesErrorCode::NotFound, "not found"))
+        }
+    }
+
+    /// Whether `path` names a file or a folder already.
+    async fn taken(&self, path: &str) -> Result<bool, FilesError> {
+        match self.stat(path).await {
+            Ok(_) => Ok(true),
+            Err(error) if error.code == FilesErrorCode::NotFound => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Creates the folder `name` in `folder` (its marker object).
+    pub async fn create_folder(&self, folder: &str, name: &str) -> Result<Entry, FilesError> {
+        check_name(name)?;
+        let prefix = format!("{}{name}/", folder_prefix(folder)?);
+        if self.taken(&path_of(&prefix)).await? {
+            return Err(FilesError::new(FilesErrorCode::Exists, "the name is taken"));
+        }
+        self.store
+            .put(&self.access, &prefix, Vec::new(), soon())
+            .await
+            .map_err(storage_error)?;
+        Ok(folder_entry(&prefix))
+    }
+
+    /// Every object under `prefix`, the marker included.
+    async fn objects_under(&self, prefix: &str) -> Result<Vec<ObjectInfo>, FilesError> {
+        self.store
+            .list(&self.access, prefix, MAX_ENTRIES, soon())
+            .await
+            .map_err(storage_error)
+    }
+
+    /// Renames the entry `path` in its folder: a file is copied on the provider and deleted, a
+    /// folder object by object.
+    pub async fn rename(&self, path: &str, new_name: &str) -> Result<Entry, FilesError> {
+        check_name(new_name)?;
+        let entry = self.stat(path).await?;
+        let parent = match path.rfind('/') {
+            Some(0) | None => "/",
+            Some(slash) => &path[..slash],
+        };
+        let target = if parent == "/" {
+            format!("/{new_name}")
+        } else {
+            format!("{parent}/{new_name}")
+        };
+        if target == path {
+            return Ok(entry);
+        }
+        if self.taken(&target).await? {
+            return Err(FilesError::new(FilesErrorCode::Exists, "the name is taken"));
+        }
+        if entry.kind == EntryKind::File {
+            let (from, to) = (object_key(path)?, object_key(&target)?);
+            self.move_object(&from, &to).await?;
+            return self.stat(&target).await;
+        }
+        let (from, to) = (folder_prefix(path)?, folder_prefix(&target)?);
+        for object in self.objects_under(&from).await? {
+            let rest = &object.key[from.len()..];
+            self.move_object(&object.key, &format!("{to}{rest}"))
+                .await?;
+        }
+        Ok(folder_entry(&to))
+    }
+
+    async fn move_object(&self, from: &str, to: &str) -> Result<(), FilesError> {
+        self.store
+            .copy(&self.access, from, to, Instant::now() + COPY)
+            .await
+            .map_err(storage_error)?;
+        self.store
+            .delete(&self.access, from, soon())
+            .await
+            .map_err(storage_error)
+    }
+
+    /// Deletes the entry `path` for good (a storage has no trash, FR-023): a folder's objects one
+    /// by one, its marker last. `progress` hears how many objects are gone; a failure names what
+    /// is left.
+    pub async fn delete(
+        &self,
+        path: &str,
+        cancel: &CancellationToken,
+        progress: &mut (dyn FnMut(u64) + Send),
+    ) -> Result<(), FilesError> {
+        if self.stat(path).await?.kind == EntryKind::File {
+            let key = object_key(path)?;
+            self.store
+                .delete(&self.access, &key, soon())
+                .await
+                .map_err(storage_error)?;
+            progress(1);
+            return Ok(());
+        }
+        let prefix = folder_prefix(path)?;
+        if prefix.is_empty() {
+            return Err(FilesError::invalid_path("the root of a storage stays"));
+        }
+        let mut keys: Vec<String> = self
+            .objects_under(&prefix)
+            .await?
+            .into_iter()
+            .map(|object| object.key)
+            .collect();
+        // The marker last, so a folder stays visible until it is empty.
+        keys.sort_by_key(|key| *key == prefix);
+        for (done, key) in keys.iter().enumerate() {
+            if cancel.is_cancelled() {
+                return Err(FilesError::new(
+                    FilesErrorCode::Unsupported,
+                    "cancelled with objects left",
+                ));
+            }
+            if let Err(error) = self.store.delete(&self.access, key, soon()).await {
+                let left = &keys[done..];
+                let named: Vec<&str> = left
+                    .iter()
+                    .take(NAMED_LEFTOVERS)
+                    .map(String::as_str)
+                    .collect();
+                let error = storage_error(error);
+                return Err(FilesError::new(
+                    error.code,
+                    format!(
+                        "{} objects are left: {}{}",
+                        left.len(),
+                        named.join(", "),
+                        if left.len() > NAMED_LEFTOVERS {
+                            ", …"
+                        } else {
+                            ""
+                        }
+                    ),
+                ));
+            }
+            progress(done as u64 + 1);
+        }
+        Ok(())
+    }
+
+    /// The first `limit + 1` bytes of the file `path` of `size` bytes (for the text viewer; one
+    /// more than `limit` says there is more).
+    pub async fn read_start(
+        &self,
+        path: &str,
+        size: u64,
+        limit: u64,
+    ) -> Result<Vec<u8>, FilesError> {
+        let key = object_key(path)?;
+        let len = size.min(limit.saturating_add(1));
+        let mut reader = self
+            .store
+            .get_range(&self.access, &key, 0, len, soon())
+            .await
+            .map_err(storage_error)?;
+        let mut bytes = Vec::new();
+        reader
+            .read_to_end(&mut bytes)
+            .await
+            .map_err(|_| storage_error(StorageError::Network))?;
+        Ok(bytes)
+    }
+}
+
+#[cfg(test)]
+#[path = "storage_source_tests.rs"]
+mod tests;

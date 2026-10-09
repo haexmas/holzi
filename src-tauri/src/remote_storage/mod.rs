@@ -20,6 +20,8 @@ pub mod probe;
 mod probe_tests;
 pub mod s3;
 #[cfg(test)]
+mod s3_ext_tests;
+#[cfg(test)]
 mod s3_tests;
 pub mod service;
 #[cfg(test)]
@@ -209,6 +211,24 @@ pub struct ObjectInfo {
     pub last_modified: String,
 }
 
+/// What a `HEAD` tells about an object (spec 044 FR-034).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectHead {
+    pub size: u64,
+    /// The provider's `Last-Modified` (an HTTP date), when it sent one.
+    pub last_modified: Option<String>,
+}
+
+/// One level of a bucket below a prefix (spec 044 FR-034): the objects right there and the
+/// prefixes of deeper ones, as S3 answers with `delimiter=/`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DirListing {
+    /// Without the folder marker (the object named like the prefix itself).
+    pub objects: Vec<ObjectInfo>,
+    /// Each ending in `/`.
+    pub prefixes: Vec<String>,
+}
+
 /// What went wrong at the provider, without its text (research R7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum StorageError {
@@ -270,6 +290,46 @@ pub trait RemoteStore: Send + Sync {
         &self,
         access: &Access,
         key: &str,
+        deadline: Instant,
+    ) -> Result<(), StorageError>;
+
+    /// Size and time of `key` (spec 044).
+    async fn head(
+        &self,
+        access: &Access,
+        key: &str,
+        deadline: Instant,
+    ) -> Result<ObjectHead, StorageError>;
+
+    /// A reader for `len` bytes of `key` from `start` (spec 044 FR-012, FR-013). `deadline` holds
+    /// until the answer starts; the body then streams without one (a film plays for hours) and is
+    /// never held whole.
+    async fn get_range(
+        &self,
+        access: &Access,
+        key: &str,
+        start: u64,
+        len: u64,
+        deadline: Instant,
+    ) -> Result<Box<dyn tokio::io::AsyncRead + Send + Unpin>, StorageError>;
+
+    /// One level below `prefix` (spec 044 FR-034), following pages up to `max` entries (more is
+    /// [`StorageError::TooLarge`]).
+    async fn list_dir(
+        &self,
+        access: &Access,
+        prefix: &str,
+        max: usize,
+        deadline: Instant,
+    ) -> Result<DirListing, StorageError>;
+
+    /// Copies `from` to `to` in the same bucket on the provider (spec 044: renaming, moving within
+    /// a storage); objects up to 5 GB, the limit of S3's `CopyObject`.
+    async fn copy(
+        &self,
+        access: &Access,
+        from: &str,
+        to: &str,
         deadline: Instant,
     ) -> Result<(), StorageError>;
 }

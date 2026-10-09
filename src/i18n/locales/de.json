@@ -2034,6 +2034,9 @@
         "year": "Letztes Jahr"
       }
     },
+    "storage": {
+      "settings": "Speicher-Einstellungen öffnen"
+    },
     "cancel": "Abbrechen",
     "drop": "Hierher kopieren",
     "actions": {
@@ -2102,7 +2105,8 @@
       "hide": "Seitenleiste ausblenden",
       "places": "Orte",
       "drives": "Laufwerke",
-      "free": "{size} frei"
+      "free": "{size} frei",
+      "storages": "Speicher"
     },
     "places": {
       "home": "Persönlicher Ordner",
@@ -2147,7 +2151,9 @@
       "exists": "Diesen Namen gibt es schon.",
       "intoItself": "Ein Ordner kann nicht in sich selbst.",
       "noSpace": "Nicht genug Platz.",
-      "invalidName": "Dieser Name ist nicht erlaubt."
+      "invalidName": "Dieser Name ist nicht erlaubt.",
+      "credentials": "Die Zugangsdaten des Speichers fehlen oder wurden abgelehnt.",
+      "unreachable": "Der Speicher ist nicht erreichbar."
     }
   }
 }

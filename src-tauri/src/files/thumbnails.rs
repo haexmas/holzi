@@ -57,16 +57,44 @@ pub fn thumbnail(
     size: u64,
     modified_ms: i64,
 ) -> Result<Vec<u8>, FilesError> {
-    let key = cache_key(source, &path.to_string_lossy(), size, modified_ms);
+    let name = path.to_string_lossy();
+    cached(cache_dir, source, &name, size, modified_ms)
+        .unwrap_or_else(|| render_into_cache(cache_dir, source, &name, size, modified_ms, path))
+}
+
+/// The thumbnail of `name` in `source` from the cache: `None` when it was not made yet, an error
+/// when the image could not be decoded before (a storage asks before it downloads, spec 044 US5).
+pub fn cached(
+    cache_dir: &Path,
+    source: &str,
+    name: &str,
+    size: u64,
+    modified_ms: i64,
+) -> Option<Result<Vec<u8>, FilesError>> {
+    let key = cache_key(source, name, size, modified_ms);
+    if let Ok(bytes) = std::fs::read(cache_dir.join(format!("{key}.jpg"))) {
+        return Some(Ok(bytes));
+    }
+    cache_dir
+        .join(format!("{key}.broken"))
+        .exists()
+        .then(|| Err(broken_error()))
+}
+
+/// Makes the thumbnail of `name` in `source` from the image in `file` and caches it (or marks it
+/// broken).
+pub fn render_into_cache(
+    cache_dir: &Path,
+    source: &str,
+    name: &str,
+    size: u64,
+    modified_ms: i64,
+    file: &Path,
+) -> Result<Vec<u8>, FilesError> {
+    let key = cache_key(source, name, size, modified_ms);
     let cached = cache_dir.join(format!("{key}.jpg"));
     let broken = cache_dir.join(format!("{key}.broken"));
-    if let Ok(bytes) = std::fs::read(&cached) {
-        return Ok(bytes);
-    }
-    if broken.exists() {
-        return Err(broken_error());
-    }
-    match render(path) {
+    match render(file) {
         Ok(bytes) => {
             if std::fs::create_dir_all(cache_dir).is_ok() {
                 if let Err(error) = write_atomically(&cached, &bytes) {
@@ -76,7 +104,7 @@ pub fn thumbnail(
             Ok(bytes)
         }
         Err(reason) => {
-            log::info!("files: no thumbnail for {}: {reason}", path.display());
+            log::info!("files: no thumbnail for {name}: {reason}");
             if std::fs::create_dir_all(cache_dir).is_ok() {
                 let _ = std::fs::write(&broken, b"");
             }

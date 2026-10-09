@@ -16,11 +16,13 @@ use async_trait::async_trait;
 use reqwest::{Method, StatusCode, Url};
 use rusty_s3::actions::ListObjectsV2;
 use rusty_s3::{Bucket, S3Action, UrlStyle};
+use tokio::io::AsyncRead;
 use tokio::time::Instant;
 
 use super::address::{self, Resolver, SystemResolver};
 use super::{
-    Access, Addressing, Credentials, EndpointScope, ObjectInfo, RemoteStore, StorageError,
+    Access, Addressing, Credentials, DirListing, EndpointScope, ObjectHead, ObjectInfo,
+    RemoteStore, StorageError,
 };
 
 /// How long a signed address stays valid; longer than any deadline of a call.
@@ -73,13 +75,15 @@ impl S3Store {
         builder.build().map_err(|_| StorageError::Network)
     }
 
-    /// Sends one signed request and returns the answer when its status is a success.
+    /// Sends one signed request and returns the answer when its status is a success. `headers`
+    /// must be the ones the address was signed with.
     async fn send(
         &self,
         access: &Access,
         method: Method,
         url: Url,
         body: Option<Vec<u8>>,
+        headers: &[(&str, String)],
         deadline: Instant,
     ) -> Result<reqwest::Response, StorageError> {
         let client = tokio::time::timeout_at(
@@ -89,6 +93,9 @@ impl S3Store {
         .await
         .map_err(|_| StorageError::TimedOut)??;
         let mut request = client.request(method.clone(), url);
+        for (name, value) in headers {
+            request = request.header(*name, value);
+        }
         if let Some(body) = body {
             request = request.body(body);
         }
@@ -224,7 +231,7 @@ impl RemoteStore for S3Store {
         let bucket = bucket(access)?;
         let credentials = signing(&access.credentials);
         let url = bucket.put_object(Some(&credentials), key).sign(SIGNED_FOR);
-        self.send(access, Method::PUT, url, Some(body), deadline)
+        self.send(access, Method::PUT, url, Some(body), &[], deadline)
             .await
             .map(drop)
     }
@@ -240,7 +247,9 @@ impl RemoteStore for S3Store {
         let bucket = bucket(access)?;
         let credentials = signing(&access.credentials);
         let url = bucket.get_object(Some(&credentials), key).sign(SIGNED_FOR);
-        let response = self.send(access, Method::GET, url, None, deadline).await?;
+        let response = self
+            .send(access, Method::GET, url, None, &[], deadline)
+            .await?;
         read_body(response, max_bytes, deadline).await
     }
 
@@ -264,7 +273,9 @@ impl RemoteStore for S3Store {
                 action.with_continuation_token(token);
             }
             let url = action.sign(SIGNED_FOR);
-            let response = self.send(access, Method::GET, url, None, deadline).await?;
+            let response = self
+                .send(access, Method::GET, url, None, &[], deadline)
+                .await?;
             let body = read_body(response, MAX_LIST_PAGE, deadline).await?;
             let text = std::str::from_utf8(&body).map_err(|_| StorageError::Network)?;
             let page = ListObjectsV2::parse_response(text).map_err(|_| {
@@ -298,8 +309,177 @@ impl RemoteStore for S3Store {
         let url = bucket
             .delete_object(Some(&credentials), key)
             .sign(SIGNED_FOR);
-        self.send(access, Method::DELETE, url, None, deadline)
+        self.send(access, Method::DELETE, url, None, &[], deadline)
             .await
             .map(drop)
     }
+
+    /// Size and time of an object through a signed HEAD request.
+    async fn head(
+        &self,
+        access: &Access,
+        key: &str,
+        deadline: Instant,
+    ) -> Result<ObjectHead, StorageError> {
+        let bucket = bucket(access)?;
+        let credentials = signing(&access.credentials);
+        let url = bucket.head_object(Some(&credentials), key).sign(SIGNED_FOR);
+        let response = self
+            .send(access, Method::HEAD, url, None, &[], deadline)
+            .await?;
+        let header = |name: &str| {
+            response
+                .headers()
+                .get(name)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned)
+        };
+        let size = header("content-length")
+            .and_then(|text| text.parse().ok())
+            .ok_or(StorageError::Network)?;
+        Ok(ObjectHead {
+            size,
+            last_modified: header("last-modified"),
+        })
+    }
+
+    /// A part of an object through a signed GET with a signed `Range`; the body streams.
+    async fn get_range(
+        &self,
+        access: &Access,
+        key: &str,
+        start: u64,
+        len: u64,
+        deadline: Instant,
+    ) -> Result<Box<dyn AsyncRead + Send + Unpin>, StorageError> {
+        if len == 0 {
+            return Ok(Box::new(tokio::io::empty()));
+        }
+        let bucket = bucket(access)?;
+        let credentials = signing(&access.credentials);
+        let range = format!("bytes={start}-{}", start + len - 1);
+        let mut action = bucket.get_object(Some(&credentials), key);
+        action.headers_mut().insert("range", range.clone());
+        let url = action.sign(SIGNED_FOR);
+        let response = self
+            .send(
+                access,
+                Method::GET,
+                url,
+                None,
+                &[("range", range)],
+                deadline,
+            )
+            .await?;
+        // A provider that ignores the range answers 200 with the whole object; only a part from
+        // the start can be cut from that.
+        if response.status() == StatusCode::OK && start > 0 {
+            log::warn!("remote storage: a range request was answered with the whole object");
+            return Err(StorageError::Network);
+        }
+        let stream = futures::TryStreamExt::map_err(response.bytes_stream(), |_| {
+            std::io::Error::other("the provider's answer broke off")
+        });
+        let reader = tokio_util::io::StreamReader::new(stream);
+        Ok(Box::new(tokio::io::AsyncReadExt::take(reader, len)))
+    }
+
+    /// One level below `prefix` with `delimiter=/`, following pages up to `max` entries.
+    async fn list_dir(
+        &self,
+        access: &Access,
+        prefix: &str,
+        max: usize,
+        deadline: Instant,
+    ) -> Result<DirListing, StorageError> {
+        let bucket = bucket(access)?;
+        let credentials = signing(&access.credentials);
+        let mut listing = DirListing::default();
+        let mut token: Option<String> = None;
+        loop {
+            let mut action = bucket.list_objects_v2(Some(&credentials));
+            action.with_prefix(prefix.to_owned());
+            action.with_delimiter("/");
+            action.with_max_keys(PAGE);
+            if let Some(token) = token.take() {
+                action.with_continuation_token(token);
+            }
+            let url = action.sign(SIGNED_FOR);
+            let response = self
+                .send(access, Method::GET, url, None, &[], deadline)
+                .await?;
+            let body = read_body(response, MAX_LIST_PAGE, deadline).await?;
+            let text = std::str::from_utf8(&body).map_err(|_| StorageError::Network)?;
+            let page = ListObjectsV2::parse_response(text).map_err(|_| {
+                log::warn!("remote storage: a listing did not parse");
+                StorageError::Network
+            })?;
+            listing.objects.extend(
+                page.contents
+                    .into_iter()
+                    .filter(|object| object.key != prefix)
+                    .map(|object| ObjectInfo {
+                        key: object.key,
+                        size: object.size,
+                        last_modified: object.last_modified,
+                    }),
+            );
+            listing
+                .prefixes
+                .extend(page.common_prefixes.into_iter().map(|common| common.prefix));
+            if listing.objects.len() + listing.prefixes.len() > max {
+                return Err(StorageError::TooLarge);
+            }
+            match page.next_continuation_token {
+                Some(next) if !next.is_empty() => token = Some(next),
+                _ => return Ok(listing),
+            }
+        }
+    }
+
+    /// A server-side copy: a signed PUT of `to` with a signed `x-amz-copy-source` (rusty-s3 0.10
+    /// has no `CopyObject` of its own).
+    async fn copy(
+        &self,
+        access: &Access,
+        from: &str,
+        to: &str,
+        deadline: Instant,
+    ) -> Result<(), StorageError> {
+        let bucket = bucket(access)?;
+        let credentials = signing(&access.credentials);
+        let source = copy_source(&access.location.bucket, from);
+        let mut action = bucket.put_object(Some(&credentials), to);
+        action
+            .headers_mut()
+            .insert("x-amz-copy-source", source.clone());
+        let url = action.sign(SIGNED_FOR);
+        self.send(
+            access,
+            Method::PUT,
+            url,
+            None,
+            &[("x-amz-copy-source", source)],
+            deadline,
+        )
+        .await
+        .map(drop)
+    }
+}
+
+/// The `x-amz-copy-source` of `key` in `bucket`: `/bucket/key`, each part percent-encoded, the
+/// slashes of the key kept.
+pub fn copy_source(bucket: &str, key: &str) -> String {
+    use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
+    const PART: &AsciiSet = &NON_ALPHANUMERIC
+        .remove(b'-')
+        .remove(b'_')
+        .remove(b'.')
+        .remove(b'~')
+        .remove(b'/');
+    format!(
+        "/{}/{}",
+        utf8_percent_encode(bucket, PART),
+        utf8_percent_encode(key, PART)
+    )
 }
