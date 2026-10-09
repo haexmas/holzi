@@ -8,6 +8,7 @@ import type { AdbRunner } from './adb.ts'
 import {
   AndroidData,
   closeVault,
+  notificationTitles,
   PACKAGE,
   createAndroidHost,
   mapAndroidUrl,
@@ -251,5 +252,18 @@ describe('stopping the phone of a group (stage 2)', () => {
       5_000,
     )
     assert.ok(Date.now() - started < 1_000)
+  })
+})
+
+describe('the notifications of the app (stage 3)', () => {
+  it('reads the titles of the notifications of the app only', () => {
+    const dump = `
+  NotificationRecord(0x1: pkg=com.android.systemui user=UserHandle{0} id=1
+      android.title=String (USB debugging connected)
+  NotificationRecord(0x2: pkg=${PACKAGE} user=UserHandle{0} id=7
+      android.title=String (Standup)
+      android.text=String (in 5 Minuten)
+`
+    assert.deepEqual(notificationTitles(dump), ['Standup'])
   })
 })

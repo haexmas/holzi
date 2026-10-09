@@ -17,8 +17,9 @@ E2E_CHROMEDRIVER=/path/to/chromedriver pnpm test:e2e --platform android --apk ap
 ```
 
 `iroh-relay` must be on `PATH` or named by `E2E_IROH_RELAY` (`cargo install iroh-relay --version
-<its version in src-tauri/Cargo.lock> --features server --locked`). With the Linux tools of a Linux run
-on this machine, the run also builds the Linux app for the other devices of a group.
+<its version in src-tauri/Cargo.lock> --features server --locked`). The run also needs the Linux tools
+of a Linux run: it builds the Linux app for the other devices of a group, and its preflight stops
+without them.
 
 - **Driver**: chromedriver attached to the web view of the app that already runs
   (`goog:chromeOptions.androidUseRunningApp`; without it chromedriver would clear the app's data). Its

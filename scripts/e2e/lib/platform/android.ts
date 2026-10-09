@@ -75,7 +75,45 @@ export function phoneControls(adb: Adb): PhoneControls {
       if (pid !== undefined) adb.runAs(PACKAGE, `kill -9 ${pid}`)
     },
     screenProtected: () => windowFlags(adb).includes('SECURE'),
+    // Granting does not end the app; a refusal only marks the permission as decided, since revoking
+    // a granted one would end the process.
+    allowNotifications: (allowed) => {
+      if (allowed) {
+        adb.shell(
+          'pm',
+          'clear-permission-flags',
+          PACKAGE,
+          NOTIFICATIONS,
+          'user-fixed',
+        )
+        adb.shell('pm', 'grant', PACKAGE, NOTIFICATIONS)
+      } else {
+        adb.shell(
+          'pm',
+          'set-permission-flags',
+          PACKAGE,
+          NOTIFICATIONS,
+          'user-set',
+          'user-fixed',
+        )
+      }
+    },
+    notificationTitles: () =>
+      notificationTitles(adb.shell('dumpsys', 'notification', '--noredact')),
   }
+}
+
+const NOTIFICATIONS = 'android.permission.POST_NOTIFICATIONS'
+
+/** The titles of the app's notifications in the output of `dumpsys notification --noredact`. */
+export function notificationTitles(dump: string): string[] {
+  return dump
+    .split('NotificationRecord(')
+    .filter((record) => record.includes(`pkg=${PACKAGE}`))
+    .flatMap((record) => {
+      const title = /android\.title=String \((.*)\)/.exec(record)
+      return title === null ? [] : [title[1]!]
+    })
 }
 
 /**

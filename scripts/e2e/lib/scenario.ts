@@ -18,6 +18,7 @@ import { createLinuxHost } from './platform/linux.ts'
 import { createAdb } from './platform/adb.ts'
 import { createAndroidHost, startAndroidInstance } from './platform/android.ts'
 import { startIrohRelay } from './iroh-relay.ts'
+import type { IrohRelay } from './iroh-relay.ts'
 import type { Tools } from './preflight.ts'
 import { containerRuntimeAvailable } from './rustfs.ts'
 import type {
@@ -244,19 +245,20 @@ export async function runScenario(
       // A phone sits behind the emulator's network: the devices reach each other through a local
       // iroh relay (spec 043).
       const phoneHost = deps.createPhoneHost?.({ scenario: name, env })
-      let irohRelays: string[] | undefined
+      let irohRelay: IrohRelay | undefined
       if (phoneHost !== undefined) {
-        const iroh = await startIrohRelay({
+        const started = await startIrohRelay({
           logFile: join(env.runDir, name, 'iroh-relay.log'),
         })
-        teardowns.push(() => iroh.stop())
-        irohRelays = [iroh.url]
+        teardowns.push(() => started.stop())
+        irohRelay = started
       }
       return createGroup(
         {
           host: deps.createHost({ scenario: name, env }),
           phoneHost,
-          irohRelays,
+          irohRelay,
+          irohRelays: irohRelay === undefined ? undefined : [irohRelay.url],
           relay: await ctx.nostrRelay(),
           credentials: ctx.credentials,
           onTeardown: ctx.onTeardown,

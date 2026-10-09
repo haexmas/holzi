@@ -2,6 +2,7 @@ import { onScopeDispose, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { toast } from 'vue-sonner'
 import type { DevModeState } from '@bindings/DevModeState'
 import { useColorScheme } from '~/composables/useColorScheme'
 import { useExtensionPermissionsStore } from '~/stores/extensionPermissions'
@@ -63,7 +64,7 @@ export function useExtensionHost() {
   const extensions = useExtensionsStore()
   const permissions = useExtensionPermissionsStore()
   const { scheme } = useColorScheme()
-  const { locale } = useI18n()
+  const { locale, t } = useI18n()
 
   watch(
     [scheme, locale],
@@ -84,24 +85,52 @@ export function useExtensionHost() {
   // scope ended is dropped at once, and a failure does not stop the start.
   const wm = useWindowManagerStore()
   let disposed = false
-  let unlistenClick: UnlistenFn | null = null
+  const unlisteners: UnlistenFn[] = []
   onScopeDispose(() => {
     disposed = true
-    unlistenClick?.()
+    for (const unlisten of unlisteners) unlisten()
   })
-  listen<{ extensionId: string }>('extension-notification-click', (event) => {
-    if (wm.showExtension(event.payload.extensionId)) void raiseWindowAsync()
-  })
-    .then((unlisten) => {
-      if (disposed) unlisten()
-      else unlistenClick = unlisten
-    })
-    .catch((error: unknown) => {
-      console.error(
-        '[extensions] listening to notification clicks failed',
-        error,
-      )
-    })
+  const keep = (listening: Promise<UnlistenFn>, what: string) => {
+    listening
+      .then((unlisten) => {
+        if (disposed) unlisten()
+        else unlisteners.push(unlisten)
+      })
+      .catch((error: unknown) => {
+        console.error(`[extensions] listening to ${what} failed`, error)
+      })
+  }
+  const showExtension = (extensionId: string) => {
+    if (wm.showExtension(extensionId)) void raiseWindowAsync()
+  }
+  keep(
+    listen<{ extensionId: string }>('extension-notification-click', (event) =>
+      showExtension(event.payload.extensionId),
+    ),
+    'notification clicks',
+  )
+  // Where the system shows no notification of an extension (Android: the person refused the
+  // permission, spec 043 FR-023), holzi shows it as a message; "open" brings the extension's tab.
+  keep(
+    listen<{
+      extensionId: string
+      title: string
+      body: string | null
+      tag: string | null
+    }>('extension-notification-in-app', (event) => {
+      const { extensionId, title, body, tag } = event.payload
+      toast(title, {
+        // Like on the system, a tagged message replaces the extension's earlier one.
+        id: tag === null ? undefined : `${extensionId}:${tag}`,
+        description: body ?? undefined,
+        action: {
+          label: t('extensions.notification.open'),
+          onClick: () => showExtension(extensionId),
+        },
+      })
+    }),
+    'notifications shown in holzi',
+  )
 
   /** Loads the extension list; the session restore waits for it, so extension tabs survive. */
   async function startAsync(): Promise<void> {

@@ -72,3 +72,14 @@ unverändert).
   Plattform die Datei per `run-as` in die Sandbox und übergibt deren Pfad über einen Test-Seam,
   weil chromedriver die System-Dateiauswahl nicht bedienen kann. Die echte Auswahl prüft der
   Quickstart (§3) von Hand.
+
+## Umsetzung in Stufe 3
+
+- Die Dateidialoge der Erweiterungen liefern gewählte Dateien. Ein Pfad (Desktop) folgt weiter den
+  Regeln aus Spec 017 (geschützte Orte, Freigabe für genau diesen Rahmen). Eine Adresse
+  (`content://`, Android) bekommt der Rahmen als Dokument freigegeben: Er gibt sie bei
+  `readFile`, `writeFile`, `exists` und `check` an, holzi liest und schreibt über das Datei-Plugin,
+  und einen Pfad erfährt die Erweiterung nie. Die Freigabe endet mit dem Rahmen.
+- `files::picked` nimmt einen `dyn Opener` (`impl Opener + ?Sized`), damit die Umgebung der
+  Erweiterungen ihn hält; die Tests vertreten den Dokumentanbieter durch einen Ordner
+  (`PathOpener::documents`).

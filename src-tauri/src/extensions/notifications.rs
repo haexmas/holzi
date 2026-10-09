@@ -32,6 +32,9 @@ pub const MODULE: &str = module_path!();
 pub const CLICK: &str = "haextension:notification:click";
 /// Event to holzi's window: bring the extension's tab forward.
 pub const CLICKED: &str = "extension-notification-click";
+/// The event that shows a notification inside holzi's window, where the system may not show it
+/// (spec 043 FR-023: the person refused Android's permission): `{extensionId, title, body?}`.
+pub const IN_APP: &str = "extension-notification-in-app";
 
 pub const MAX_TITLE_CHARS: usize = 200;
 pub const MAX_BODY_CHARS: usize = 2000;
@@ -416,6 +419,21 @@ pub fn show(ctx: &CallContext, params: &Value) -> Result<Value, BridgeError> {
     check_permission(ctx)?;
     let desktop = ctx.host.desktop().ok_or_else(BridgeError::not_available)?;
     let extension_id = ctx.session.extension_id;
+    if !desktop.notifications_allowed() {
+        // The system shows nothing: the message stays visible inside holzi, where its tag replaces
+        // the earlier one. It has no buttons there and is not remembered; a dismiss of its id
+        // finds nothing, as for any gone one.
+        ctx.emitter.emit(
+            IN_APP,
+            json!({
+                "extensionId": extension_id.to_string(),
+                "title": spec.title,
+                "body": spec.body,
+                "tag": tag,
+            }),
+        );
+        return Ok(json!({ "id": Uuid::new_v4().to_string() }));
+    }
     let state = &ctx.host.notifications;
     let id = Uuid::new_v4().to_string();
     for replaced in state.admit(extension_id, &id, tag) {

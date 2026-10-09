@@ -12,6 +12,7 @@ import {
   usableName,
 } from './group-plan.ts'
 import type { GroupSpec, PlannedDevice } from './group-plan.ts'
+import type { IrohRelay } from './iroh-relay.ts'
 import type { NostrRelay } from './nostr-relay.ts'
 import type { DeviceHost } from './platform/host.ts'
 import { createVaultOnRelay, runLink } from './sync-flows.ts'
@@ -39,6 +40,8 @@ export interface GroupDeps extends WaitContext {
   relay: NostrRelay
   /** The iroh relays the devices use; none reachable unless the run has a phone (`sync-flows.ts`). */
   irohRelays?: string[]
+  /** The group's own iroh relay, in a run with a phone. */
+  irohRelay?: IrohRelay
   credentials(): { passphrase: string }
   onTeardown(action: () => Promise<void> | void): void
   /** Keep the data of passing scenarios too. */
@@ -63,6 +66,14 @@ export class Group {
 
   get relay(): NostrRelay {
     return this.deps.relay
+  }
+
+  /**
+   * The group's iroh relay, where it has one (a run with a phone): the devices also reach each other
+   * there by an address they knew before, without any Nostr relay.
+   */
+  get irohRelay(): IrohRelay | undefined {
+    return this.deps.irohRelay
   }
 
   device(address: string): Device {

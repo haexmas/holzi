@@ -3,9 +3,8 @@
 // group uses this relay instead; the phone reaches it through `adb reverse` at the same address. The
 // program is the `iroh-relay` of the iroh release holzi uses, in its development mode (plain HTTP).
 // The relay never outlives its scenario.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { freePort } from './ports.ts'
 import { spawnMarked, stopGroup } from './processes.ts'
 import { reachFromDevice } from './platform/reach.ts'
@@ -14,9 +13,14 @@ import { reachFromDevice } from './platform/reach.ts'
 export const IROH_RELAY_VARIABLE = 'E2E_IROH_RELAY'
 
 export interface IrohRelay {
-  /** `http://127.0.0.1:<port>`, the same for every device. */
+  /** `http://127.0.0.1:<port>`, the same for every device and after a stop and a start. */
   url: string
+  /** `up` while the process runs. */
+  readonly state: 'up' | 'down'
+  /** Ends the process; safe to call twice. */
   stop(): Promise<void>
+  /** Starts the process again on the same address; an error while it is up. */
+  start(): Promise<void>
 }
 
 /** The relay's settings: the port, and no metrics server (it would take a fixed port of its own). */
@@ -33,35 +37,56 @@ export async function startIrohRelay(options: {
   const env = options.env ?? process.env
   const binary = env[IROH_RELAY_VARIABLE] || 'iroh-relay'
   const port = await freePort()
-  const folder = mkdtempSync(join(tmpdir(), 'holzi-e2e-iroh-relay-'))
-  const config = join(folder, 'relay.toml')
-  writeFileSync(config, relayConfig(port))
-  const { child } = spawnMarked(binary, ['--dev', '--config-path', config], {
-    env,
-    logFile: options.logFile,
-  })
-  const stop = async () => {
-    if (child.pid !== undefined) await stopGroup(child.pid)
-    rmSync(folder, { recursive: true, force: true })
-  }
   const url = `http://127.0.0.1:${port}`
-  const end = Date.now() + (options.limitMs ?? 15_000)
-  for (;;) {
-    if (child.exitCode !== null) {
-      await stop()
-      throw new Error(`the iroh relay ended; see ${options.logFile}`)
+  // Beside the log, in the scenario's folder of the run.
+  const config = join(dirname(options.logFile), 'iroh-relay.toml')
+  mkdirSync(dirname(config), { recursive: true })
+  writeFileSync(config, relayConfig(port))
+
+  /** One process of the relay, up once it answers its health check. */
+  const launch = async (): Promise<() => Promise<void>> => {
+    const { child } = spawnMarked(binary, ['--dev', '--config-path', config], {
+      env,
+      logFile: options.logFile,
+    })
+    const end = async () => {
+      if (child.pid !== undefined) await stopGroup(child.pid)
     }
-    try {
-      if ((await fetch(`${url}/healthz`)).ok) break
-    } catch {
-      // Not listening yet.
+    const until = Date.now() + (options.limitMs ?? 15_000)
+    for (;;) {
+      if (child.exitCode !== null) {
+        throw new Error(`the iroh relay ended; see ${options.logFile}`)
+      }
+      try {
+        if ((await fetch(`${url}/healthz`)).ok) return end
+      } catch {
+        // Not listening yet.
+      }
+      if (Date.now() >= until) {
+        await end()
+        throw new Error(
+          `the iroh relay did not come up; see ${options.logFile}`,
+        )
+      }
+      await new Promise((resolveWait) => setTimeout(resolveWait, 100))
     }
-    if (Date.now() >= end) {
-      await stop()
-      throw new Error(`the iroh relay did not come up; see ${options.logFile}`)
-    }
-    await new Promise((resolveWait) => setTimeout(resolveWait, 100))
   }
+
+  let running: (() => Promise<void>) | undefined = await launch()
   reachFromDevice(port, env)
-  return { url, stop }
+  return {
+    url,
+    get state() {
+      return running === undefined ? 'down' : 'up'
+    },
+    async start() {
+      if (running !== undefined) throw new Error('the iroh relay is already up')
+      running = await launch()
+    },
+    async stop() {
+      const end = running
+      running = undefined
+      if (end !== undefined) await end()
+    },
+  }
 }

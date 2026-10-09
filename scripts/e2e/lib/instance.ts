@@ -195,6 +195,13 @@ export interface PhoneControls {
   killInBackground(): void
   /** Whether the system keeps the window out of screenshots and recordings. */
   screenProtected(): boolean
+  /**
+   * Sets the answer to the system's notification permission as if the person had given it: allowed,
+   * or refused for good (the system then asks no more).
+   */
+  allowNotifications(allowed: boolean): void
+  /** The titles of the app's notifications the system shows now. */
+  notificationTitles(): string[]
 }
 
 export interface Instance extends Page {

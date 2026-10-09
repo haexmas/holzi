@@ -27,6 +27,7 @@ use crate::extensions::permissions::{
     evaluate, Action, Decision, PermissionKind, PermissionRequest, RequestTarget,
 };
 use crate::files::local::{known_places, OwnPlaces};
+use crate::files::picked::{Opener, PickedFile};
 use crate::vault_gate::VaultDb;
 
 pub use dialogs::FileDialogs;
@@ -70,6 +71,9 @@ pub struct FsEnvironment {
     pub scratch: PathBuf,
     /// Whether free paths exist on this platform (not on Android and iOS, FR-066).
     pub free_paths: bool,
+    /// How a chosen document without a path (Android: a `content://` address) is read and
+    /// written: the file plugin (spec 043 FR-022).
+    pub opener: Arc<dyn Opener + Send + Sync>,
 }
 
 /// The environment of the running app: holzi's own app folders are protected (resolved, so a link
@@ -94,6 +98,7 @@ pub fn environment_for<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> FsEnviro
         dialogs: Arc::new(dialogs::TauriDialogs(app.clone())),
         scratch,
         free_paths: crate::platform::capabilities().free_paths,
+        opener: Arc::new(app.clone()),
     }
 }
 
@@ -121,6 +126,10 @@ pub struct FsState {
     environment: RwLock<Option<Arc<FsEnvironment>>>,
     /// Dialog choices per frame; they end with the frame (FR-048).
     choices: Mutex<HashMap<String, Vec<Choice>>>,
+    /// Chosen documents without a path per frame (spec 043 FR-022: on Android the system hands a
+    /// `content://` address): the frame reads or writes exactly these through the file plugin and
+    /// never learns a path. They end with the frame too.
+    documents: Mutex<HashMap<String, Vec<(PickedFile, Access)>>>,
     pub(crate) watches: watch::Watches,
 }
 
@@ -157,6 +166,26 @@ impl FsState {
             });
     }
 
+    /// Lets `frame` reach the chosen document `file`.
+    fn grant_document(&self, frame: &str, file: PickedFile, access: Access) {
+        lock(&self.documents)
+            .entry(frame.to_owned())
+            .or_default()
+            .push((file, access));
+    }
+
+    /// The document `raw` names, if `frame` chose it for `access`.
+    pub fn document(&self, frame: &str, raw: &str, access: Access) -> Option<PickedFile> {
+        lock(&self.documents).get(frame).and_then(|documents| {
+            documents
+                .iter()
+                .find(|(file, granted)| {
+                    file.0 == raw && (access == Access::Read || *granted == Access::Write)
+                })
+                .map(|(file, _)| file.clone())
+        })
+    }
+
     fn chosen(&self, frame: &str, path: &Path, access: Access) -> bool {
         lock(&self.choices)
             .get(frame)
@@ -167,6 +196,7 @@ impl FsState {
     /// extension's last frame all its watches end.
     pub fn frame_closed(&self, frame: &str, extension_id: Uuid, last_frame: bool) {
         lock(&self.choices).remove(frame);
+        lock(&self.documents).remove(frame);
         self.watches.end_frame(frame);
         if last_frame {
             self.watches.end_all(extension_id);
@@ -300,6 +330,14 @@ pub fn check(
         Some("write") => Access::Write,
         _ => return Err(invalid()),
     };
+    if ctx
+        .host
+        .fs
+        .document(&ctx.session.frame, raw, access)
+        .is_some()
+    {
+        return Ok(json!({ "status": "granted" }));
+    }
     let status = match authorize(ctx, raw, access, Reach::Path) {
         Ok(_) => "granted",
         Err(error) if error.code == ExtensionErrorCode::PermissionPromptRequired => "ask",

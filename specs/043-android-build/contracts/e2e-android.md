@@ -104,8 +104,8 @@ Abdeckungsrechnung der Desktop-Fälle.
   bekommen `http://127.0.0.1:<port>` als einzigen iroh-Relay. Der Preflight verlangt `iroh-relay`
   (`E2E_IROH_RELAY` oder `PATH`).
 - Linux-Teil: Ein Android-Lauf prüft zusätzlich die Linux-Werkzeuge und baut die Linux-App wie ein
-  Linux-Lauf (`E2E_LINUX_APP`, `E2E_TOOLS`). Fehlen die Werkzeuge, läuft der Lauf weiter, und ein
-  Linux-Gerät scheitert beim Start mit dem, was fehlt.
+  Linux-Lauf (`E2E_LINUX_APP`, `E2E_TOOLS`). Fehlen die Werkzeuge, bricht der Preflight mit dem ab,
+  was fehlt (Review von #340: ein Lauf ohne die anderen Geräte wäre kein vollständiger Lauf).
 - Dateien für ein Gerät (`onDevice`) liegen nur für das Gerät auf dem Telefon im App-Speicher, alle
   anderen bekommen den Pfad dieses Rechners.
 - Tresordatei kopieren: vom Telefon auf ein Linux-Gerät (`run-as … cat`, Größe geprüft); umgekehrt
@@ -127,3 +127,16 @@ Abdeckungsrechnung der Desktop-Fälle.
   Emulators verlor nach einem Bündel großer UDP-Pakete den direkten Weg ganz (beobachtet beim
   Übertragen des Tresors in `sync-indirect`), und die Verbindung wich nicht auf den Relay aus. So
   läuft alles zwischen Telefon und Linux über den iroh-Relay des Szenarios.
+
+## Umsetzung in Stufe 3
+
+- Neuer Fall `android-notifications` (FR-023): Die Plattformschicht setzt die Antwort auf die
+  Benachrichtigungsberechtigung vorab (`instance.phone.allowNotifications`: `pm grant`, oder als
+  „abgelehnt, nicht mehr fragen“ markiert, weil ein Entzug den Prozess beendet) und liest die
+  gezeigten Benachrichtigungen (`notificationTitles`, aus `dumpsys notification`). Abgelehnt:
+  Meldung in holzi, keine Systembenachrichtigung; erlaubt: Systembenachrichtigung, keine Meldung.
+- `android-not-available` prüft zusätzlich über die Probe-Erweiterung: freier Pfad, Ordnerdialog und
+  Ordnerbeobachtung antworten 8001 (Gegenfall von `extension-files`).
+- `sync-relay-return` hält während der Pause auch den iroh-Relay der Gruppe an (`g.irohRelay`, nur in
+  einem Lauf mit Telefon): Über ihn fand ein Gerät das andere an der früher gelernten Adresse
+  ohne Nostr-Relay, wie bei `sync-servers-off`. Der Relay kommt auf derselben Adresse zurück.

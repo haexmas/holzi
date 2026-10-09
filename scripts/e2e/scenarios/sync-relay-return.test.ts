@@ -17,7 +17,10 @@ scenario('sync-relay-return', { timeoutMs: 360_000 }, async (ctx) => {
   const phone = g.device('anna/phone')
   await expectOnline(ctx, laptop, phone, true)
 
+  // Also the group's iroh relay, where it has one: through it a device reaches the other at the
+  // address it knew, without any Nostr relay (a run with a phone, spec 043).
   await g.relay.stop()
+  await g.irohRelay?.stop()
   assert.equal(g.relay.state, 'down')
   // Both are stopped before either starts: a restart beside a running device would hand it the new address.
   await laptop.stop()
@@ -39,6 +42,7 @@ scenario('sync-relay-return', { timeoutMs: 360_000 }, async (ctx) => {
   await expectOnline(ctx, phone, laptop, false)
   ctx.step('without the relay they do not find each other')
 
+  await g.irohRelay?.start()
   await g.relay.start()
   assert.equal(g.relay.state, 'up')
   const back = Date.now()

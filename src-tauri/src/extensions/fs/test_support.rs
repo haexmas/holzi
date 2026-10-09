@@ -19,6 +19,8 @@ use crate::extensions::permissions::store::{self as permission_store, NewPermiss
 use crate::extensions::permissions::VAULT_WIDE;
 use crate::extensions::registry::effective::effective_bundle;
 use crate::extensions::registry::install::install;
+use crate::files::picked::PickedFile;
+use crate::files::test_support::{picked, PathOpener};
 use crate::passwords::test_support::open_test_vault;
 use crate::storage::known_devices;
 use crate::vault_gate::{VaultDb, VaultGate};
@@ -34,22 +36,34 @@ impl Emit for Recorded {
     }
 }
 
-/// Dialogs that answer with what the test put in, and a viewer that remembers what it opened.
+/// Dialogs that answer with what the test put in, and a viewer that remembers what it opened. A
+/// `document` (an address of a provider, as on Android) is answered instead of `choice` by the
+/// open and save dialogs.
 #[derive(Default)]
 pub(crate) struct FakeDialogs {
     pub(crate) choice: Mutex<Option<PathBuf>>,
+    pub(crate) document: Mutex<Option<String>>,
     pub(crate) opened: Mutex<Vec<PathBuf>>,
 }
 
+impl FakeDialogs {
+    fn picked(&self) -> Option<PickedFile> {
+        if let Some(address) = lock(&self.document).clone() {
+            return Some(PickedFile(address));
+        }
+        lock(&self.choice).as_deref().map(picked)
+    }
+}
+
 impl FileDialogs for FakeDialogs {
-    fn save(&self, _request: DialogRequest) -> Option<PathBuf> {
-        lock(&self.choice).clone()
+    fn save(&self, _request: DialogRequest) -> Option<PickedFile> {
+        self.picked()
     }
     fn pick_folder(&self, _request: DialogRequest) -> Option<PathBuf> {
         lock(&self.choice).clone()
     }
-    fn pick_files(&self, _request: DialogRequest) -> Option<Vec<PathBuf>> {
-        lock(&self.choice).clone().map(|p| vec![p])
+    fn pick_files(&self, _request: DialogRequest) -> Option<Vec<PickedFile>> {
+        self.picked().map(|file| vec![file])
     }
     fn open(&self, path: &Path) -> Result<(), String> {
         lock(&self.opened).push(path.to_path_buf());
@@ -65,6 +79,8 @@ pub(crate) struct Setup {
     pub(crate) outside: PathBuf,
     pub(crate) protected: PathBuf,
     pub(crate) scratch: PathBuf,
+    /// Where the documents of the fake provider live (`content://provider/<name>`).
+    pub(crate) documents: PathBuf,
     pub(crate) dialogs: Arc<FakeDialogs>,
     pub(crate) recorded: Arc<Recorded>,
     pub(crate) host: Arc<ExtensionHost>,
@@ -83,7 +99,8 @@ pub(crate) fn setup() -> Setup {
     let base = std::fs::canonicalize(files.path()).unwrap();
     let (root, outside) = (base.join("granted"), base.join("outside"));
     let (protected, scratch) = (root.join("holzi-data"), base.join("scratch"));
-    for dir in [&root, &outside, &protected] {
+    let documents = base.join("provider");
+    for dir in [&root, &outside, &protected, &documents] {
         std::fs::create_dir_all(dir).unwrap();
     }
     std::fs::write(root.join("note.txt"), "inside").unwrap();
@@ -97,6 +114,10 @@ pub(crate) fn setup() -> Setup {
         dialogs: Arc::clone(&dialogs) as Arc<dyn FileDialogs>,
         scratch: scratch.clone(),
         free_paths: true,
+        opener: Arc::new(PathOpener {
+            roots: None,
+            documents: Some(documents.clone()),
+        }),
     });
     Setup {
         _vault_dir: vault_dir,
@@ -105,6 +126,7 @@ pub(crate) fn setup() -> Setup {
         outside,
         protected,
         scratch,
+        documents,
         dialogs,
         recorded: Arc::new(Recorded::default()),
         host,

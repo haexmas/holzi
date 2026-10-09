@@ -120,6 +120,7 @@ fn without_free_paths_a_path_must_lie_in_the_app_storage() {
     std::fs::write(outside.path().join("b.txt"), b"y").unwrap();
     let device = PathOpener {
         roots: Some(vec![storage.path().to_path_buf()]),
+        ..PathOpener::default()
     };
 
     assert_eq!(
