@@ -29,7 +29,8 @@ export function containerRuntimeAvailable(): boolean {
   return available
 }
 
-const sha256 = (data: string) => createHash('sha256').update(data).digest('hex')
+const sha256 = (data: string | Uint8Array) =>
+  createHash('sha256').update(data).digest('hex')
 const hmac = (key: Buffer | string, data: string) =>
   createHmac('sha256', key).update(data).digest()
 
@@ -41,6 +42,7 @@ export async function signedRequest(
   >,
   method: string,
   path: string,
+  body?: Uint8Array,
 ): Promise<Response> {
   const url = new URL(path, server.endpoint)
   const stamp = new Date()
@@ -48,7 +50,7 @@ export async function signedRequest(
     .replace(/[-:]/g, '')
     .replace(/\.\d+/, '')
   const day = stamp.slice(0, 8)
-  const payload = sha256('')
+  const payload = sha256(body ?? '')
   const headers = `host:${url.host}\nx-amz-content-sha256:${payload}\nx-amz-date:${stamp}\n`
   const signed = 'host;x-amz-content-sha256;x-amz-date'
   const canonical = [method, url.pathname, '', headers, signed, payload].join(
@@ -64,6 +66,7 @@ export async function signedRequest(
   const signature = createHmac('sha256', key).update(toSign).digest('hex')
   return fetch(url, {
     method,
+    body,
     headers: {
       'x-amz-content-sha256': payload,
       'x-amz-date': stamp,
@@ -135,4 +138,16 @@ export async function listKeys(
   const answer = await signedRequest(server, 'GET', `/${bucket}`)
   const text = await answer.text()
   return [...text.matchAll(/<Key>([^<]*)<\/Key>/g)].map((m) => m[1] ?? '')
+}
+
+/** Stores `body` at `key` in `bucket`, as another program would (spec 044, `files-storage`). */
+export async function putObject(
+  server: Rustfs,
+  bucket: string,
+  key: string,
+  body: Uint8Array | string,
+): Promise<void> {
+  const bytes = typeof body === 'string' ? new TextEncoder().encode(body) : body
+  const answer = await signedRequest(server, 'PUT', `/${bucket}/${key}`, bytes)
+  if (!answer.ok) throw new Error(`PUT ${key}: ${answer.status}`)
 }
