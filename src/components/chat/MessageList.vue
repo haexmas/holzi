@@ -48,6 +48,7 @@ function toolLabel(m: Message): string {
 const DENY_AUDIT_MARKERS = new Set([
   'gated_permissive_call_permitted',
   'denied_by_deny_rule',
+  'declined_by_user',
 ])
 
 function reasoningFor(messageId: string): string {

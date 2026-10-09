@@ -44,6 +44,7 @@ pub use state::{ActiveInstanceHandle, AppState};
 use catalog::commands::catalog_recommend_tiers;
 use catalog::list_catalog;
 use chat::action_commands::{respond_action_call, set_agent_actions};
+use chat::choices::respond_choice;
 use chat::commands::{
     abort_current_generation, inspect_attachment, respond_tool_permission, send_message,
 };
@@ -403,6 +404,7 @@ pub fn run() {
             respond_tool_permission,
             set_agent_actions,
             respond_action_call,
+            respond_choice,
             create_thread,
             list_threads,
             list_messages,

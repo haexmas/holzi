@@ -9,6 +9,7 @@ use uuid::Uuid;
 use super::action_bridge::{
     ActionBridge, ActionOutcomeWire, ActionReply, ACTION_FAILED_MESSAGE, EVENT_ACTION_CALL_REQUEST,
 };
+use super::ChoiceOption;
 
 fn bridge_with_events(
     timeout: Duration,
@@ -193,6 +194,58 @@ fn a_failed_handler_message_is_replaced_but_a_validation_message_stays() {
         wire(json!({ "ok": true })),
         ActionReply::Ok {
             result: Value::Null
+        }
+    );
+}
+
+#[test]
+fn a_needs_choice_outcome_keeps_its_message_and_candidates() {
+    let reply: ActionReply = serde_json::from_value::<ActionOutcomeWire>(json!({
+        "ok": false,
+        "code": "needs_choice",
+        "field": "appId",
+        "message": "no app matches haex unambiguously",
+        "options": [
+            { "value": "extension.mail", "label": "haex-mail" },
+            { "value": "extension.files", "label": "haex-files", "unavailable": "Wird übertragen" }
+        ]
+    }))
+    .expect("a wire outcome")
+    .into();
+    assert_eq!(
+        reply,
+        ActionReply::NeedsChoice {
+            field: "appId".into(),
+            message: "no app matches haex unambiguously".into(),
+            options: vec![
+                ChoiceOption {
+                    value: "extension.mail".into(),
+                    label: "haex-mail".into(),
+                    unavailable: None,
+                },
+                ChoiceOption {
+                    value: "extension.files".into(),
+                    label: "haex-files".into(),
+                    unavailable: Some("Wird übertragen".into()),
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn a_needs_choice_outcome_without_a_field_stays_an_error() {
+    let reply: ActionReply = serde_json::from_value::<ActionOutcomeWire>(json!({
+        "ok": false, "code": "needs_choice", "message": "pick one", "options": []
+    }))
+    .expect("a wire outcome")
+    .into();
+    assert_eq!(
+        reply,
+        ActionReply::Err {
+            code: "needs_choice".into(),
+            field: None,
+            message: "pick one".into(),
         }
     );
 }

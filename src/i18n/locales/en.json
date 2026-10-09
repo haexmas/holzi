@@ -356,13 +356,23 @@
         "workspace": "Workspace"
       }
     },
+    "choice": {
+      "title": "I could not find “{value}” unambiguously. Did you mean …?",
+      "other": "Something else …",
+      "otherPlaceholder": "What do you mean?",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "unavailable": "Not available right now: {reason}",
+      "noCandidates": "I found nothing that fits."
+    },
     "autonomy": {
       "standard": "Standard",
       "ungated": "Ungated",
       "gated_permissive": "Gated (permissive)",
       "audit": {
         "gated_permissive_call_permitted": "Permitted",
-        "denied_by_deny_rule": "Denied by deny rule"
+        "denied_by_deny_rule": "Denied by deny rule",
+        "declined_by_user": "Question declined"
       }
     }
   },
@@ -1201,7 +1211,7 @@
         "get": "Read workspaces, windows and tabs"
       },
       "apps": {
-        "list": "List apps"
+        "list": "List apps and extensions"
       },
       "actions": {
         "list": "List actions"
@@ -1230,6 +1240,7 @@
       "approval": {
         "decide": "Decide approval"
       },
+      "choice": { "answer": "Answer question" },
       "permissionMode": {
         "set": "Set permission mode"
       },

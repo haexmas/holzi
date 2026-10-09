@@ -8,6 +8,7 @@ import { test } from 'node:test'
 import { ALL_ACTIONS } from '../src/lib/actions/catalog.ts'
 import { tabCandidates } from '../src/lib/actions/handlers.ts'
 import {
+  ActionChoiceError,
   ActionInputError,
   createActionRunner,
   type ActionHandler,
@@ -291,6 +292,34 @@ test('a handler rejecting its input becomes invalid_input with message and field
     code: 'invalid_input',
     message: 'unknown app system.notes',
     field: 'appId',
+  })
+})
+
+test('a handler asking to choose becomes needs_choice with its candidates', async () => {
+  const options = [
+    { value: 'extension.mail', label: 'haex-mail' },
+    {
+      value: 'extension.files',
+      label: 'haex-files',
+      unavailable: 'Wird übertragen',
+    },
+  ]
+  const { deps } = harness({
+    globalHandler: () => () => {
+      throw new ActionChoiceError(
+        'no app matches haex unambiguously',
+        'appId',
+        options,
+      )
+    },
+  })
+  const outcome = await createActionRunner(deps).runAction(GO.id, { steps: 1 })
+  assert.deepEqual(outcome, {
+    ok: false,
+    code: 'needs_choice',
+    message: 'no app matches haex unambiguously',
+    field: 'appId',
+    options,
   })
 })
 

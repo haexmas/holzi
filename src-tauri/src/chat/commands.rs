@@ -665,6 +665,7 @@ pub fn abort_turn(chat_state: &ChatState) -> Result<()> {
         cancelled.extend(pending.keys().copied());
         pending.clear();
     }
+    chat_state.pending_choices.cancel_all();
     Ok(())
 }
 

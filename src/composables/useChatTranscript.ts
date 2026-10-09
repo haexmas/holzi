@@ -11,7 +11,7 @@ import type {
   TurnCompleteEvent,
   useChat,
 } from '~/composables/useChat'
-import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
+import type { ChoiceRequestEvent, PendingPrompt } from '~/lib/chat/prompts'
 
 type PendingStreamEvents = {
   tokens: string
@@ -50,8 +50,8 @@ export function useChatTranscript(
   busy: Ref<boolean>,
   turnSetupPending: Ref<boolean>,
   lastError: Ref<string | null>,
-  pendingApprovals: Ref<PendingApproval[]>,
-  pendingApprovalsByThread: Map<string, PendingApproval[]>,
+  pendingPrompts: Ref<PendingPrompt[]>,
+  pendingPromptsByThread: Map<string, PendingPrompt[]>,
   refreshThreads: () => Promise<void>,
   scrollToBottom: () => Promise<void>,
   errString: (e: unknown) => string,
@@ -68,8 +68,8 @@ export function useChatTranscript(
     return (
       streamingThreadId.value === threadId ||
       (turnSetupPending.value && activeThreadId.value === threadId) ||
-      pendingApprovalsByThread.has(threadId) ||
-      (activeThreadId.value === threadId && pendingApprovals.value.length > 0)
+      pendingPromptsByThread.has(threadId) ||
+      (activeThreadId.value === threadId && pendingPrompts.value.length > 0)
     )
   }
 
@@ -295,8 +295,8 @@ export function useChatTranscript(
   // span several steps, so only its one terminal event may signal "done"
   // (contracts/tauri-commands.md).
   async function applyTurnComplete(e: TurnCompleteEvent) {
-    pendingApprovalsByThread.delete(e.threadId)
-    if (activeThreadId.value === e.threadId) pendingApprovals.value = []
+    pendingPromptsByThread.delete(e.threadId)
+    if (activeThreadId.value === e.threadId) pendingPrompts.value = []
     const list = messagesByThread.value[e.threadId] ?? []
     const idx = list.findIndex((m) => m.id === e.assistantMessageId)
     const existing = list[idx]
@@ -324,24 +324,36 @@ export function useChatTranscript(
     }
   }
 
+  /** Queues a prompt of `threadId`: shown at once for the active thread (each request once),
+   * parked for another thread until it is opened. */
+  function queuePrompt(threadId: string, prompt: PendingPrompt) {
+    if (threadId !== activeThreadId.value) {
+      const queued = pendingPromptsByThread.get(threadId) ?? []
+      pendingPromptsByThread.set(threadId, [...queued, prompt])
+      return
+    }
+    if (
+      !pendingPrompts.value.some((item) => item.requestId === prompt.requestId)
+    ) {
+      pendingPrompts.value = [...pendingPrompts.value, prompt]
+    }
+  }
+
   function handleToolPermissionRequest(e: ToolPermissionRequestEvent) {
-    const approval: PendingApproval = {
+    queuePrompt(e.threadId, {
+      kind: 'approval',
       requestId: e.requestId,
       toolName: e.toolName,
       toolInput: e.toolInput,
       riskClass: e.riskClass,
       toolSource: e.toolSource,
-    }
-    if (e.threadId !== activeThreadId.value) {
-      const queued = pendingApprovalsByThread.get(e.threadId) ?? []
-      pendingApprovalsByThread.set(e.threadId, [...queued, approval])
-      return
-    }
-    if (
-      !pendingApprovals.value.some((item) => item.requestId === e.requestId)
-    ) {
-      pendingApprovals.value = [...pendingApprovals.value, approval]
-    }
+    })
+  }
+
+  /** A question of the agent (spec 046): queued like an approval, in the same order. */
+  function handleChoiceRequest(e: ChoiceRequestEvent) {
+    const { threadId, ...request } = e
+    queuePrompt(threadId, { kind: 'choice', ...request })
   }
 
   async function handleTurnComplete(e: TurnCompleteEvent) {
@@ -376,6 +388,7 @@ export function useChatTranscript(
     handleToolResult,
     applyTurnComplete,
     handleToolPermissionRequest,
+    handleChoiceRequest,
     handleTurnComplete,
     resolveTurnTerminal,
     waitForTurnTerminal,

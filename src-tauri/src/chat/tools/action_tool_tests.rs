@@ -3,11 +3,11 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
-use super::action_bridge::ActionBridge;
+use super::action_bridge::{ActionBridge, ActionReply};
 use super::action_tool::{
     is_valid_tool_name, schema_in_subset, ActionEffect, ActionTool, AgentActionDef,
 };
-use super::{RiskClass, Tool};
+use super::{ChoiceOption, ChoiceRequest, RiskClass, Tool};
 
 fn def(effect: ActionEffect) -> AgentActionDef {
     serde_json::from_value(json!({
@@ -106,4 +106,47 @@ async fn an_action_tool_without_emitter_reports_the_marker() {
     assert!(result.is_error);
     assert_eq!(result.content, "action_unavailable");
     let _registry: Arc<dyn Tool> = Arc::new(tool);
+}
+
+#[tokio::test]
+async fn an_action_asking_to_choose_carries_the_choice_to_the_tool_round() {
+    let bridge = ActionBridge::default();
+    let (sender, mut requests) = tokio::sync::mpsc::unbounded_channel();
+    bridge.set_emitter(Arc::new(move |_event: &str, payload: Value| {
+        let _ = sender.send(payload);
+    }));
+    let tool = ActionTool::new(def(ActionEffect::Write), bridge.clone());
+    let call = tokio::spawn(async move {
+        tool.execute(json!({ "tabId": "haex" }), CancellationToken::new())
+            .await
+    });
+    let request = requests.recv().await.expect("the action request");
+    let options = vec![ChoiceOption {
+        value: "tab-1".into(),
+        label: "haex-mail".into(),
+        unavailable: None,
+    }];
+    assert!(bridge.resolve(
+        serde_json::from_value(request["requestId"].clone()).expect("a request id"),
+        ActionReply::NeedsChoice {
+            field: "tabId".into(),
+            message: "no tab matches haex".into(),
+            options: options.clone(),
+        },
+    ));
+    let result = call.await.expect("the call task");
+    assert!(result.is_error);
+    assert_eq!(
+        result.choice,
+        Some(ChoiceRequest {
+            question: None,
+            field: Some("tabId".into()),
+            value: "haex".into(),
+            options,
+        })
+    );
+    let content: Value = serde_json::from_str(&result.content).expect("JSON content");
+    assert_eq!(content["error"]["code"], "needs_choice");
+    assert_eq!(content["error"]["field"], "tabId");
+    assert_eq!(content["error"]["options"][0]["label"], "haex-mail");
 }

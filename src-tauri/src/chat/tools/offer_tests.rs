@@ -5,6 +5,7 @@ use tokio_util::sync::CancellationToken;
 use super::action_bridge::ActionBridge;
 use super::action_tool::ActionTool;
 use super::action_tool::AgentActionDef;
+use super::ask_user::AskUserTool;
 use super::find_actions::FindActionsTool;
 use super::offer::{core_offer, extend_offer, found_tools, search_actions};
 use super::{Tool, ToolRegistry};
@@ -149,4 +150,85 @@ async fn find_actions_returns_bounded_search_results() {
     let value: serde_json::Value = serde_json::from_str(&result.content).expect("JSON result");
     assert_eq!(value["actions"].as_array().expect("actions").len(), 5);
     assert_eq!(value["nextCursor"], "5");
+}
+
+#[test]
+fn core_offer_always_offers_ask_user() {
+    let mut registry = ToolRegistry::new();
+    registry.register(Arc::new(ActionTool::new(
+        def("settings.get", "Read settings", false),
+        ActionBridge::default(),
+    )));
+    registry.register(Arc::new(AskUserTool));
+
+    let names = core_offer(&registry)
+        .into_iter()
+        .map(|tool| tool.name)
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["ask_user"]);
+}
+
+#[test]
+fn search_matches_singular_and_plural_of_a_word() {
+    let defs = vec![
+        def(
+            "wm.apps.list",
+            "List the installed apps and extensions (Erweiterungen)",
+            false,
+        ),
+        def("settings.get", "Read all settings", false),
+    ];
+
+    for query in ["extension", "extensions", "Erweiterung", "Erweiterungen"] {
+        let (page, _) = search_actions(&defs, Some(query), None, 5);
+        let ids = page
+            .iter()
+            .map(|action| action.action_id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(ids, ["wm.apps.list"], "query {query}");
+    }
+
+    // Below five letters a word only matches whole words.
+    let (page, _) = search_actions(&defs, Some("set"), None, 5);
+    assert!(page.is_empty());
+}
+
+#[tokio::test]
+async fn find_actions_hint_says_a_miss_is_about_actions_not_data() {
+    let tool = FindActionsTool::new(vec![def("settings.get", "Read all settings", false)]);
+    let result = tool
+        .execute(
+            json!({ "query": "erweiterungen" }),
+            CancellationToken::new(),
+        )
+        .await;
+    let value: serde_json::Value = serde_json::from_str(&result.content).expect("JSON result");
+    let hint = value["hint"].as_str().expect("hint");
+    assert!(hint.contains("not about the user's data"), "{hint}");
+    assert!(hint.contains("omit query"), "{hint}");
+}
+
+#[test]
+fn search_finds_the_app_list_for_questions_about_extensions() {
+    let defs = crate::chat::eval::embedded_tools();
+    for query in [
+        "erweiterungen",
+        "Erweiterung",
+        "installierte Erweiterungen",
+        "Erweiterungen auflisten",
+        "extensions",
+        "installed extensions",
+        "list extensions",
+        "installed apps",
+    ] {
+        let (page, _) = search_actions(&defs, Some(query), None, 5);
+        let ids = page
+            .iter()
+            .map(|action| action.action_id.as_str())
+            .collect::<Vec<_>>();
+        assert!(
+            ids.contains(&"wm.apps.list"),
+            "query {query:?} found {ids:?}"
+        );
+    }
 }

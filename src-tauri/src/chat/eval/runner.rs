@@ -13,6 +13,7 @@ use crate::adapters::types::{
 };
 use crate::adapters::ProviderAdapter;
 use crate::chat::tools::action_tool::AgentActionDef;
+use crate::chat::tools::ask_user::{AskUserTool, ASK_USER_TOOL_NAME};
 use crate::chat::tools::find_actions::{FindActionsTool, FIND_ACTIONS_TOOL_NAME};
 use crate::chat::tools::offer::{extend_offer, found_tools, tool_spec};
 use crate::chat::tools::prompt::system_prompt;
@@ -50,10 +51,11 @@ fn spec_of(def: &AgentActionDef) -> ToolSpec {
     }
 }
 
-/// What a chat turn offers first: the core tools and the search.
+/// What a chat turn offers first: the core tools, the search and `ask_user`.
 fn core_offer(tools: &[AgentActionDef]) -> Vec<ToolSpec> {
     let mut offer: Vec<ToolSpec> = tools.iter().filter(|d| d.core).map(spec_of).collect();
     offer.push(tool_spec(&FindActionsTool::new(tools.to_vec())));
+    offer.push(tool_spec(&AskUserTool));
     offer
 }
 
@@ -176,9 +178,11 @@ pub async fn run_eval(
             Expect::None => Vec::new(),
             Expect::Calls(calls) => calls.iter().map(|c| c.tool.as_str()).collect(),
         };
-        let needs_search = expected
-            .iter()
-            .any(|name| !tools.iter().any(|def| def.core && def.tool_name == *name));
+        // `ask_user` is offered from the first step on, like the core actions.
+        let needs_search = expected.iter().any(|name| {
+            *name != ASK_USER_TOOL_NAME
+                && !tools.iter().any(|def| def.core && def.tool_name == *name)
+        });
 
         let observed = if !needs_search {
             Observed {

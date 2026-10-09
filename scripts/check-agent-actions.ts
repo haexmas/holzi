@@ -107,10 +107,10 @@ test('toAgentActionDef passes the action through unchanged and adds localized ti
   })
 })
 
-test('the core offer names existing, built-in-callable actions and leaves room for find_actions', () => {
+test('the core offer names existing, built-in-callable actions and leaves room for find_actions and ask_user', () => {
   assert.ok(
     CORE_AGENT_TOOLS.length <= 9,
-    'core plus find_actions is at most 10',
+    'core plus find_actions and ask_user is at most 11',
   )
   assert.equal(new Set(CORE_AGENT_TOOLS).size, CORE_AGENT_TOOLS.length)
   for (const id of CORE_AGENT_TOOLS) {
@@ -168,6 +168,33 @@ test('toOutcomeWire never carries the raw error of a failed handler (FR-006)', (
     ok: true,
     result: { done: true },
   })
+})
+
+test('toOutcomeWire passes the candidates of needs_choice on to Rust', () => {
+  const options = [
+    { value: 'extension.mail', label: 'haex-mail' },
+    {
+      value: 'extension.files',
+      label: 'haex-files',
+      unavailable: 'Wird übertragen',
+    },
+  ]
+  assert.deepEqual(
+    toOutcomeWire({
+      ok: false,
+      code: 'needs_choice',
+      message: 'no app matches haex unambiguously',
+      field: 'appId',
+      options,
+    }),
+    {
+      ok: false,
+      code: 'needs_choice',
+      field: 'appId',
+      message: 'no app matches haex unambiguously',
+      options,
+    },
+  )
 })
 
 test('every guardrail action is refused for the built-in agent before its handler runs (FR-003, SC-003)', async () => {
@@ -339,13 +366,13 @@ test('the tool snapshot of the evaluation is the catalog as it is (run pnpm expo
 test('every sentence of the evaluation set is well formed and names tools of the snapshot', () => {
   const { version, sentences } = evalSet()
   const tools = evalTools()
-  assert.equal(version, 2)
+  assert.equal(version, 3)
   assert.equal(new Set(sentences.map((x) => x.id)).size, sentences.length)
   const runtimeIds = new Set([...Object.values(TARGET_FIELD), 'threadId'])
   for (const sentence of sentences) {
     assert.ok(['de', 'en'].includes(sentence.lang), sentence.id)
     assert.ok(
-      ['read', 'change', 'smalltalk'].includes(sentence.kind),
+      ['read', 'change', 'smalltalk', 'clarify'].includes(sentence.kind),
       sentence.id,
     )
     assert.ok(sentence.text.trim().length > 0, sentence.id)
@@ -356,8 +383,10 @@ test('every sentence of the evaluation set is well formed and names tools of the
     assert.notEqual(sentence.kind, 'smalltalk', sentence.id)
     assert.ok(sentence.expect.length > 0, sentence.id)
     for (const call of sentence.expect) {
+      // `ask_user` is a built-in tool of the chat turn, not an action of the snapshot (spec 046).
       assert.ok(
-        tools.some((tool) => tool.toolName === call.tool),
+        call.tool === 'ask_user' ||
+          tools.some((tool) => tool.toolName === call.tool),
         `${sentence.id}: ${call.tool} is not in the snapshot`,
       )
       for (const field of Object.keys(call.args ?? {}))

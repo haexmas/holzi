@@ -9,11 +9,13 @@ use serde_json::Value;
 use crate::adapters::types::ToolSpec;
 
 use super::action_tool::{AgentActionDef, ACTION_SOURCE};
+use super::ask_user::ASK_USER_TOOL_NAME;
 use super::{Tool, ToolRegistry};
 
 pub const FIND_ACTIONS_TOOL_NAME: &str = "find_actions";
 pub const MAX_SEARCH_RESULTS: usize = 5;
-pub const MAX_ACTION_OFFER: usize = 15;
+/// Core (at most 9), `find_actions`, `ask_user` and a full page of search hits.
+pub const MAX_ACTION_OFFER: usize = 16;
 
 pub fn tool_spec(tool: &dyn Tool) -> ToolSpec {
     ToolSpec {
@@ -23,13 +25,14 @@ pub fn tool_spec(tool: &dyn Tool) -> ToolSpec {
     }
 }
 
-/// Keeps all non-action tools and only the fixed core action tools plus search.
+/// Keeps all non-action tools and only the fixed core action tools plus search and `ask_user`.
 pub fn core_offer(registry: &ToolRegistry) -> Vec<ToolSpec> {
     registry
         .iter()
         .filter(|tool| {
             tool.source() != ACTION_SOURCE
                 || tool.name() == FIND_ACTIONS_TOOL_NAME
+                || tool.name() == ASK_USER_TOOL_NAME
                 || tool.action_definition().is_some_and(|def| def.core)
         })
         .map(|tool| tool_spec(tool.as_ref()))
@@ -57,7 +60,8 @@ pub fn extend_offer(
         !action_names.contains(tool.name.as_str()) || core_names.contains(tool.name.as_str())
     });
 
-    let max_found = MAX_ACTION_OFFER.saturating_sub(core_names.len() + 1);
+    // One slot each stays for `find_actions` and `ask_user`.
+    let max_found = MAX_ACTION_OFFER.saturating_sub(core_names.len() + 2);
     let mut added = 0;
     for tool in found {
         if added >= max_found
@@ -128,7 +132,23 @@ fn search_score(def: &AgentActionDef, query: &[String]) -> usize {
     .into_iter()
     .flat_map(words)
     .collect::<std::collections::HashSet<_>>();
-    query.iter().filter(|word| haystack.contains(*word)).count()
+    query
+        .iter()
+        .filter(|word| haystack.iter().any(|known| word_matches(word, known)))
+        .count()
+}
+
+/// Shortest word that may match as a prefix, so "extension" finds "extensions" and
+/// "Erweiterung" finds "Erweiterungen" without "set" finding "settings".
+const MIN_PREFIX_LEN: usize = 5;
+
+fn word_matches(query: &str, known: &str) -> bool {
+    let (shorter, longer) = if query.len() <= known.len() {
+        (query, known)
+    } else {
+        (known, query)
+    };
+    shorter == longer || (shorter.len() >= MIN_PREFIX_LEN && longer.starts_with(shorter))
 }
 
 /// Searches all registered built-in actions, with stable id ordering for ties.
