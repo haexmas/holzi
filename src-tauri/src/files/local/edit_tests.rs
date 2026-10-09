@@ -99,3 +99,13 @@ fn nothing_changes_in_holzis_own_places() {
     assert_eq!(error.code, FilesErrorCode::HolziOwned);
     assert!(real.join("eigen/a.txt").exists());
 }
+
+#[test]
+fn renaming_a_folder_that_holds_holzis_data_is_refused() {
+    let (_dir, real) = folder();
+    std::fs::create_dir_all(real.join("share/holzi")).unwrap();
+    let own = OwnPlaces::new(vec![real.join("share/holzi")]);
+    let error = rename(&real.join("share"), "weg", &own).unwrap_err();
+    assert_eq!(error.code, FilesErrorCode::HolziOwned);
+    assert!(real.join("share/holzi").is_dir());
+}

@@ -18,7 +18,7 @@ use crate::files::local::{edit, ops, resolve, resolve_entry};
 use crate::files::media::MediaServer;
 use crate::files::state::FilesState;
 use crate::files::streaming::LocalFileSource;
-use crate::files::transfer::local::{prepare, Job};
+use crate::files::transfer::local::{prepare, touches_own, Job};
 use crate::files::transfer::{
     platform_removal, same_device, ConflictChoice, TransferEvent, TransferManager, TransferOp,
 };
@@ -373,6 +373,12 @@ async fn start_transfer(
         sources,
         target,
     };
+    if touches_own(&job, &files.own) {
+        return Err(FilesError::new(
+            FilesErrorCode::HolziOwned,
+            "holzi's own data is read-only",
+        ));
+    }
     let (job, totals) = blocking(move || {
         let totals = prepare(
             &job,

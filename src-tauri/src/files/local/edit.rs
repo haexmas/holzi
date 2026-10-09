@@ -34,8 +34,10 @@ pub fn check_name(name: &str) -> Result<(), FilesError> {
     Ok(())
 }
 
+/// Refuses `path` when it is in holzi's own places or holds one (a folder that holds holzi's data
+/// does not move away under it).
 fn refuse_own(path: &Path, own: &OwnPlaces) -> Result<(), FilesError> {
-    if own.contains(path) {
+    if own.touches(path, true) {
         return Err(FilesError::new(
             FilesErrorCode::HolziOwned,
             "holzi's own data is read-only",

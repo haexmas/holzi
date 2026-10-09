@@ -3,8 +3,8 @@
 //! the progress through [`Hooks`].
 //!
 //! - A file is written to `.<name>.holzi-part-<uuid>` beside its target and renamed at the end, so a
-//!   cancelled or failed transfer never leaves half a file (FR-020). "Replace" renames over the old
-//!   file only then.
+//!   cancelled or failed transfer never leaves half a file (FR-020). "Replace" moves the old entry
+//!   aside first and removes it only once the new one is in place; otherwise it goes back.
 //! - A folder onto a folder of the same name merges; only names of files (or a file against a
 //!   folder) ask (FR-021).
 //! - Copying into the folder the entries are in keeps both without asking; moving there does
@@ -21,6 +21,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{ConflictChoice, TransferOp, TransferProgress};
 use crate::files::local::ops::io_error;
+use crate::files::local::OwnPlaces;
 use crate::files::{FilesError, FilesErrorCode};
 
 /// The most of a file held in memory at once.
@@ -113,6 +114,19 @@ pub fn prepare(
     Ok(totals)
 }
 
+/// Whether `job` would change holzi's own places (FR-037): moving or deleting a folder that holds
+/// one, or a folder merging into a folder of the same name that holds one. Reading them is allowed.
+pub fn touches_own(job: &Job, own: &OwnPlaces) -> bool {
+    job.sources.iter().any(|source| {
+        (job.op != TransferOp::Copy && own.touches(source, true))
+            || job.target.as_deref().is_some_and(|target| {
+                source
+                    .file_name()
+                    .is_some_and(|name| own.touches(&target.join(name), true))
+            })
+    })
+}
+
 /// Files and bytes below `path` (a file or link counts once).
 fn measure(path: &Path) -> Totals {
     let Ok(meta) = std::fs::symlink_metadata(path) else {
@@ -188,7 +202,7 @@ enum Placement {
     At(PathBuf),
     /// Merge into the folder there.
     Merge(PathBuf),
-    /// Write to this path, removing what is there at the end.
+    /// Write to this path in place of what is there ([`Run::replacing`]).
     Replace(PathBuf),
     Skip,
 }
@@ -257,19 +271,47 @@ impl Run<'_, '_> {
                 self.count(measure(source));
                 Ok(())
             }
-            Placement::At(target) => self.copy_to(source, &target, false),
-            Placement::Merge(target) => self.copy_to(source, &target, false),
-            Placement::Replace(target) => self.copy_to(source, &target, true),
+            Placement::At(target) | Placement::Merge(target) => self.copy_to(source, &target),
+            Placement::Replace(target) => {
+                self.replacing(&target, |run| run.copy_to(source, &target))
+            }
         }
     }
 
-    /// Copies `source` to `target`; with `replace`, what is at `target` goes at the end.
-    fn copy_to(&mut self, source: &Path, target: &Path, replace: bool) -> Result<(), Stop> {
+    /// Puts the new entry at `target` through `put`. What is there moves aside first (in its own
+    /// folder, so never across file systems) and goes for good only once `put` succeeded; after a
+    /// cancel or failure, what `put` left at `target` goes and the old entry comes back.
+    fn replacing(
+        &mut self,
+        target: &Path,
+        put: impl FnOnce(&mut Self) -> Result<(), Stop>,
+    ) -> Result<(), Stop> {
+        let folder = target
+            .parent()
+            .ok_or_else(|| FilesError::invalid_path("no target folder"))?;
+        let name = entry_name(target)?.to_string_lossy();
+        let aside = folder.join(format!(".{name}.holzi-old-{}", uuid::Uuid::new_v4()));
+        std::fs::rename(target, &aside).map_err(|error| io_error(error, target))?;
+        match put(self) {
+            Ok(()) => remove(&aside, Removal::Permanent),
+            Err(stop) => {
+                let _ = remove(target, Removal::Permanent);
+                if let Err(error) = std::fs::rename(&aside, target) {
+                    log::warn!(
+                        "files: {} could not come back from {}: {error}",
+                        target.display(),
+                        aside.display()
+                    );
+                }
+                Err(stop)
+            }
+        }
+    }
+
+    /// Copies `source` to the free `target`.
+    fn copy_to(&mut self, source: &Path, target: &Path) -> Result<(), Stop> {
         let meta = std::fs::symlink_metadata(source).map_err(|error| io_error(error, source))?;
         if meta.is_dir() {
-            if replace {
-                remove(target, Removal::Permanent)?;
-            }
             if !target.is_dir() {
                 std::fs::create_dir(target).map_err(|error| io_error(error, target))?;
             }
@@ -281,33 +323,21 @@ impl Run<'_, '_> {
             return Ok(());
         }
         if meta.file_type().is_symlink() {
-            if replace {
-                remove(target, Removal::Permanent)?;
-            }
             copy_link(source, target)?;
             self.count(Totals { items: 1, bytes: 0 });
             return Ok(());
         }
-        self.copy_file(source, &meta, target, replace)
+        self.copy_file(source, &meta, target)
     }
 
     /// One file through a part file beside `target`.
-    fn copy_file(
-        &mut self,
-        source: &Path,
-        meta: &Metadata,
-        target: &Path,
-        replace: bool,
-    ) -> Result<(), Stop> {
+    fn copy_file(&mut self, source: &Path, meta: &Metadata, target: &Path) -> Result<(), Stop> {
         let folder = target
             .parent()
             .ok_or_else(|| FilesError::invalid_path("no target folder"))?;
         let name = entry_name(target)?.to_string_lossy();
         let part = folder.join(format!(".{name}.holzi-part-{}", uuid::Uuid::new_v4()));
         let result = self.write_part(source, meta, &part).and_then(|()| {
-            if replace && target.is_dir() {
-                remove(target, Removal::Permanent)?;
-            }
             (self.hooks.rename)(&part, target).map_err(|error| Stop::from(io_error(error, target)))
         });
         if result.is_err() {
@@ -347,15 +377,19 @@ impl Run<'_, '_> {
 
     fn move_into(&mut self, source: &Path, folder: &Path) -> Result<(), Stop> {
         self.check()?;
+        // Gone: an earlier try of this transfer moved it (a retry).
+        if std::fs::symlink_metadata(source).is_err() {
+            return Ok(());
+        }
         let name = entry_name(source)?;
         if folder.join(name) == source {
             self.count(measure(source));
             return Ok(());
         }
-        let target = match self.place(source, folder, name)? {
+        match self.place(source, folder, name)? {
             Placement::Skip => {
                 self.count(measure(source));
-                return Ok(());
+                Ok(())
             }
             Placement::Merge(target) => {
                 let children =
@@ -366,22 +400,25 @@ impl Run<'_, '_> {
                 }
                 // Skipped names stay behind in the source.
                 let _ = std::fs::remove_dir(source);
-                return Ok(());
+                Ok(())
             }
-            Placement::At(target) => target,
+            Placement::At(target) => self.move_to(source, &target),
             Placement::Replace(target) => {
-                remove(&target, Removal::Permanent)?;
-                target
+                self.replacing(&target, |run| run.move_to(source, &target))
             }
-        };
+        }
+    }
+
+    /// Moves `source` to the free `target`: a rename, or across file systems a copy and a delete.
+    fn move_to(&mut self, source: &Path, target: &Path) -> Result<(), Stop> {
         let size = measure(source);
-        match (self.hooks.rename)(source, &target) {
+        match (self.hooks.rename)(source, target) {
             Ok(()) => {
                 self.count(size);
                 Ok(())
             }
             Err(error) if error.kind() == ErrorKind::CrossesDevices => {
-                self.copy_to(source, &target, false)?;
+                self.copy_to(source, target)?;
                 self.check()?;
                 remove(source, Removal::Permanent)
             }
