@@ -305,6 +305,14 @@ pub fn run() {
             let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), &window)?
                 // The frame shim for development pages, which holzi does not serve (R16).
                 .initialization_script_for_all_frames(extensions::protocol::shim::dev_init_script())
+                // Spec 044: a reloaded page cannot end the folder watches of the page before it.
+                .on_page_load(|window, payload| {
+                    if payload.event() == tauri::webview::PageLoadEvent::Started {
+                        if let Some(files) = window.try_state::<files::state::FilesState>() {
+                            files.unwatch_all();
+                        }
+                    }
+                })
                 .on_web_resource_request(move |request, response| {
                     extensions::dev_csp::adjust(&host, request, response);
                     #[cfg(feature = "platform-probe")]
