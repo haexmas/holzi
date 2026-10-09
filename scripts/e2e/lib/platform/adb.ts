@@ -26,6 +26,8 @@ export interface Adb {
   runAs(pkg: string, script: string): Buffer
   /** Copies a file of this machine to `remote` on the device (outside any app's storage). */
   push(local: string, remote: string): void
+  /** Copies the file `remote` of the device (outside any app's storage) to this machine. */
+  pull(remote: string, local: string): void
 }
 
 export function createAdb(serial: string, run: AdbRunner = realAdbRunner): Adb {
@@ -61,6 +63,9 @@ export function createAdb(serial: string, run: AdbRunner = realAdbRunner): Adb {
     },
     push(local, remote) {
       adb(['push', local, remote])
+    },
+    pull(remote, local) {
+      adb(['pull', remote, local])
     },
   }
 }
