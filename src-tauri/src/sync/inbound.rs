@@ -8,7 +8,8 @@
 //!   schema mismatch the handshake should have caught, or a device-local
 //!   table another device must never send), unless it is an extension's
 //!   table this device has not created yet: then the group is parked
-//!   ([`park`], spec 017 research R10);
+//!   ([`park`], spec 017 research R10), or, when a migration this device
+//!   applied dropped that table or column, it waits for its origin to update;
 //! - a group larger than `max_transaction_bytes` by haex-crdt's own rule
 //!   aborts the pull;
 //! - a group whose origin a known valid device list names as removed, with
@@ -124,6 +125,9 @@ pub struct Inbox {
     /// Extensions at their parking limit in this pull, and per origin the
     /// lowest group not parked because of it: progress stays below it.
     full_prefixes: HashSet<String>,
+    /// Extensions with a group in this pull from a device that still has an older version
+    /// ([`park`]): their groups are not applied, and their origins' progress stays below them.
+    waiting: HashSet<String>,
     blocked: Vector,
     /// Parking limit per extension; `None` is [`park::PARKED_LIMIT_BYTES`].
     park_limit: Option<usize>,
@@ -209,7 +213,7 @@ impl Inbox {
         }
 
         let groups = groups(join_parts(changes)?)?;
-        let mut context = query::read(db, |r| Context::read(r))?;
+        let mut context = query::read(db, |r| Context::read(r, db.device_id()))?;
         context.extend_noted(&self.noted);
         let limits = query::read(db, |r| removal_limits(r))?;
 
@@ -242,7 +246,7 @@ impl Inbox {
                 return Err(InboundError::GroupTooLarge { bytes, limit });
             }
             let sorted = park::sort(&context, &hlc, columns, |prefix| {
-                context.has_parked(prefix) || self.full_prefixes.contains(prefix)
+                self.queues(&context, prefix)
             })?;
             progress::raise(&mut group_updates, origin, hlc.clone());
             if is_removed_at(&limits, origin, &hlc) {

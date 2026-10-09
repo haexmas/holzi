@@ -31,8 +31,9 @@ impl<'a> Parking<'a> {
 }
 
 impl Inbox {
-    /// Parks `group` of transaction `hlc` from `origin`; with its extension at the limit it is left
-    /// for a later pull instead, and the progress of `origin` stays below it.
+    /// Parks `group` of transaction `hlc` from `origin`; with its extension at the limit, or waiting
+    /// for a device to update it, it is left for a later pull instead, and the progress of `origin`
+    /// stays below it.
     pub(super) fn park_group(
         &mut self,
         context: &mut Context,
@@ -56,6 +57,18 @@ impl Inbox {
             parking.parked.push((hlc, group, bytes));
             return Ok(());
         }
+        // Written by a device with an older version of the extension: no use parking it. It and
+        // the later groups of the extension in this pull come again until that device updated.
+        if group.reason == park::OUTDATED_ORIGIN || self.waiting.contains(&group.prefix) {
+            if self.waiting.insert(group.prefix.clone()) {
+                log::info!(
+                    "sync: extension {} waits for device {origin} to update it",
+                    group.prefix
+                );
+            }
+            self.block(origin, hlc);
+            return Ok(());
+        }
         let limit = self.park_limit.unwrap_or(park::PARKED_LIMIT_BYTES);
         let full = self.full_prefixes.contains(&group.prefix)
             || context.parked_bytes(&group.prefix).saturating_add(bytes) > limit;
@@ -68,13 +81,7 @@ impl Inbox {
                     group.prefix
                 );
             }
-            if self
-                .blocked
-                .get(&origin)
-                .is_none_or(|lowest| compare_hlc_strings(&hlc, lowest) == Ordering::Less)
-            {
-                self.blocked.insert(origin, hlc);
-            }
+            self.block(origin, hlc);
             return Ok(());
         }
         log::info!(
@@ -85,6 +92,24 @@ impl Inbox {
         context.add_parked(&group.prefix, &hlc, bytes);
         parking.parked.push((hlc, group, bytes));
         Ok(())
+    }
+
+    /// Keeps the progress of `origin` below its group `hlc`, which comes again in a later pull.
+    fn block(&mut self, origin: Uuid, hlc: String) {
+        if self
+            .blocked
+            .get(&origin)
+            .is_none_or(|lowest| compare_hlc_strings(&hlc, lowest) == Ordering::Less)
+        {
+            self.blocked.insert(origin, hlc);
+        }
+    }
+
+    /// Whether a group of `prefix` has to queue behind a parked or waiting one.
+    pub(super) fn queues(&self, context: &Context, prefix: &str) -> bool {
+        context.has_parked(prefix)
+            || self.full_prefixes.contains(prefix)
+            || self.waiting.contains(prefix)
     }
 
     /// Parks every group of `candidates` whose extension has parked groups, earlier ones of this
@@ -100,7 +125,7 @@ impl Inbox {
         let mut kept = Vec::with_capacity(candidates.len());
         for group in candidates {
             let sorted = park::sort(context, &group.hlc, group.columns, |prefix| {
-                context.has_parked(prefix) || self.full_prefixes.contains(prefix)
+                self.queues(context, prefix)
             })?;
             match sorted {
                 Sorted::Apply(columns) => kept.push(Group { columns, ..group }),
