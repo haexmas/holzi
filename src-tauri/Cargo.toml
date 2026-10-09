@@ -188,7 +188,7 @@ futures = "0.3"
 # `CancellationToken` for cooperative cancellation of an in-flight tool
 # execution or a pending approval wait (spec.md FR-009/FR-010) — already a
 # real (non-transitive) dependency of `rmcp`, see its `service.rs`.
-tokio-util = { version = "0.7", features = ["rt"] }
+tokio-util = { version = "0.7", features = ["rt", "io"] }
 
 # Slice b: hardware detection and model catalog / download.
 # `sysinfo` and `reqwest` are unconditional — hardware info and provider
