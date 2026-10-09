@@ -18,7 +18,8 @@ Technischer Ansatz (Begründungen in [research.md](./research.md)):
 - **Bestätigung** (R3, R4): Berechtigungsart `agentTool` in `extension_permissions`; Dialog, Update,
   Sync und Einstellungen aus 017 gelten mit. Wirkungsart aus dem Manifest; Schalter = `*`-Zeile „denied“.
 - **Transport** (R1, R2): `rmcp`-Client über ein Kanalpaar (`sink_stream`), Port-Nachricht `haexspace:mcp`,
-  Relay im Frontend, Rahmen-Sitzung als Identität; keine Client-Fähigkeiten, Server-Anfragen abgelehnt.
+  Relay im Frontend, Rahmen-Sitzung als Identität; keine Client-Fähigkeiten, Anfragen der Erweiterung
+  auf dieser Verbindung abgelehnt, bis der Nutzer einen Weg zum Agenten festlegen kann (047 und später).
 - **Aufruf** (R8–R11): `ExtensionTool` mit `origin()`, Name `x_<slug>_<tool>`, Rahmen im Hintergrund
   (`openAppInBackground`), Zeitlimit 60 s, Ergebnis ≤ 64 KiB als Daten der Erweiterung, `byAgent` bei
   Host-Abfragen, Spalte `tool_origin`.
@@ -53,7 +54,7 @@ check:extensions`, `check:chat-state`, `check:wm-state`, `check:agent-actions`, 
 **Performance Goals**: Passendes Angebot < 20 ms bei 30 Erweiterungen × 4 Werkzeugen; Aufruf ohne offenes
 Fenster ≤ 3 s langsamer als mit (SC-004)
 
-**Constraints**: Kein Weg von einer Erweiterung zum Modell (FR-015, ADR-0004); Werkzeug-Angebot ≤ 14 im
+**Constraints**: Kein Weg von einer Erweiterung zum Modell über die Werkzeug-Verbindung (FR-015); Werkzeug-Angebot ≤ 14 im
 ersten Schritt, ≤ 19 nach einer Suche (R6); Manifest ohne Gleitkommazahlen (RFC 8785); Dateien < 500
 Zeilen; Rust-Tests in `*_tests.rs`
 
@@ -77,8 +78,8 @@ _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 | Phasen                                        | 017 und 032 im täglichen Einsatz, 046 gemergt; 019 erst nach Lieferung D.                                                                                                                               |
 | PR-Pflicht, kein Squash, Conventional Commits | Je Lieferung ein PR (holzi bzw. vault-sdk).                                                                                                                                                             |
 
-Ergebnis nach Phase 1: keine Verletzung. Eine Abweichung von der Spec ist dem Operator vorzulegen: FR-002
-„geänderte Eingabe“ (research R4).
+Ergebnis nach Phase 1: keine Verletzung. Die Abweichung zu FR-002 (research R4) hat der Operator am
+2026-10-10 angenommen; die Spec ist angepasst.
 
 ## Project Structure
 
@@ -157,13 +158,13 @@ Brücken-Vertragstest bleibt unverändert.
 
 ## Lieferungen
 
-| Lieferung | Repo      | Inhalt                                                                                                   | Voraussetzung      |
-| --------- | --------- | -------------------------------------------------------------------------------------------------------- | ------------------ |
-| A         | vault-sdk | Format-Prüfung `tools`, Typen, `sdk.tools`, Mitschnitt-Tests, Release                                    | Mitschnitte aus C1 |
-| B         | holzi     | Pin auf A, Manifest `tools`, `agentTool`, Dialog, Einstellungen                                          | A gemergt          |
-| C         | holzi     | C1 Mitschnitte + R2-Vertrag; C2 Relay, `ExtensionTool`, Hintergrund-Rahmen, Herkunft, Verlauf, `byAgent` | B                  |
-| D         | holzi     | Passendes Angebot, Suche, Test-Erweiterung, Eval v4, E2E                                                 | C                  |
-| E         | holzi     | ADR-0004 ändern (Wirkungsart, Transport, rmcp 3.5)                                                       | mit B              |
+| Lieferung | Repo      | Inhalt                                                                                                                                   | Voraussetzung      |
+| --------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| A         | vault-sdk | Format-Prüfung `tools`, Typen, `sdk.tools`, Mitschnitt-Tests, Release                                                                    | Mitschnitte aus C1 |
+| B         | holzi     | Pin auf A, Manifest `tools`, `agentTool`, Dialog, Einstellungen                                                                          | A gemergt          |
+| C         | holzi     | C1 Mitschnitte + R2-Vertrag; C2 Relay, `ExtensionTool`, Hintergrund-Rahmen, Herkunft, Verlauf, `byAgent`                                 | B                  |
+| D         | holzi     | Passendes Angebot, Suche, Test-Erweiterung, Eval v4, E2E                                                                                 | C                  |
+| E         | holzi     | ADR-0004 ändern: Wirkungsart aus dem Manifest, Transport über den Port, rmcp 3.5, Modell nur über einen vom Nutzer festgelegten Weg (R2) | mit B              |
 
 C1 (Mitschnitte aufzeichnen) kann vor A laufen, weil sie nur `rmcp` gegen einen In-Memory-Server brauchen.
 

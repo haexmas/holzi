@@ -13,8 +13,9 @@
 - [ADR-0004](../../docs/adr/0004-extension-protocol-split.md): Diese Spec ist die dort geplante
   Richtung A (Agent → Erweiterung). Werkzeuge stehen im signierten Manifest, der Nutzer bestätigt sie
   bei der Installation, die Erweiterung stellt sie zur Laufzeit über MCP bereit, holzi ist der
-  Client. Die Mauer um das Modell bleibt: Keine Erweiterung erreicht über diese Spec das Modell, den
-  Chat oder eine andere Erweiterung.
+  Client. Über diese Verbindung erreicht keine Erweiterung das Modell, den Chat oder eine andere
+  Erweiterung. Der Operator will Erweiterungen künftig den Agenten nutzen lassen, mit einem Modell, das der
+  Nutzer je Anfrage festlegt (Clarification 2026-10-10); das ist nicht Teil dieser Spec.
 - [`017-extension-host`](../017-extension-host/spec.md): Installation, Signatur, Update, Deaktivieren,
   Entfernen und das Berechtigungsmodell gelten unverändert; diese Spec ergänzt das Manifest um
   Werkzeuge und den Bestätigungsdialog um sie. Eine Host-Funktion, die eine Erweiterung während eines
@@ -63,6 +64,13 @@
 - Q: Gehört der MCP-Baustein im vault-sdk in diese Spec oder in Spec 019? → A: In diese Spec, wie
   ADR-0004 die Aufteilung festhält. Die Test-Erweiterung nutzt ihn bereits; Spec 019 trägt nur noch
   Werkzeuge in die bestehenden haextensions ein.
+- Q: Muss ein Update bei geänderter Eingabe eines Werkzeugs erneut bestätigt werden? → A: Nein, nur bei
+  neuen Werkzeugen oder geänderter Wirkungsart (FR-002, research R4).
+- Q: Lehnt holzi Anfragen einer Erweiterung an das Modell grundsätzlich ab? → A: Nein. Erweiterungen sollen
+  den Agenten künftig nutzen können; der Nutzer legt fest, welche Anfragen einer Erweiterung mit welchem
+  Modell oder Agenten beantwortet werden. Das ist spätere Arbeit (Spec 047 und folgende). In dieser Spec
+  lehnt die MCP-Verbindung Anfragen der Erweiterung an holzi ab, weil es dafür noch keine Festlegung des
+  Nutzers gibt.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -207,8 +215,8 @@ Modellprüfung mit den Beispielsätzen der Test-Erweiterung laufen lassen und di
   FR-002).
 - **FR-002**: Der Bestätigungsdialog bei Installation und Update MUSS die Werkzeuge mit Titel,
   Beschreibung und Wirkungsart zeigen, zusammen mit den Berechtigungen in einem Dialog (017 FR-006).
-  Ein Update MUSS nur neue Werkzeuge und Werkzeuge mit geänderter Wirkungsart oder Eingabe zur
-  Bestätigung vorlegen.
+  Ein Update MUSS nur neue Werkzeuge und Werkzeuge mit geänderter Wirkungsart zur Bestätigung
+  vorlegen; eine geänderte Eingabe ändert nicht, was das Werkzeug tun darf.
 - **FR-003**: holzi DARF ein Werkzeug nur anbieten, wenn es im Manifest der laufenden Version steht und
   bestätigt ist. Ein Werkzeug, das die Erweiterung zur Laufzeit zusätzlich meldet, MUSS ignoriert
   werden; ein erklärtes, das sie zur Laufzeit nicht meldet, MUSS als nicht verfügbar gelten.
@@ -250,8 +258,11 @@ Modellprüfung mit den Beispielsätzen der Test-Erweiterung laufen lassen und di
 - **FR-014**: Eine Host-Funktion, die die Erweiterung während eines Aufrufs nutzt, MUSS gegen die
   Berechtigungen der Erweiterung geprüft werden; eine daraus folgende Abfrage MUSS sagen, dass ein
   Aufruf des Agenten sie ausgelöst hat.
-- **FR-015**: Keine Erweiterung DARF über diese Spec das Modell, den Chat, die Freigabe-Einstellungen
-  oder eine andere Erweiterung erreichen. Ein Vertragstest MUSS das prüfen (ADR-0004).
+- **FR-015**: Über die Verbindung dieser Spec DARF keine Erweiterung das Modell, den Chat, die
+  Freigabe-Einstellungen oder eine andere Erweiterung erreichen; Anfragen der Erweiterung an holzi auf
+  dieser Verbindung MÜSSEN abgelehnt werden. Ein Vertragstest MUSS das prüfen. Dass eine Erweiterung den
+  Agenten mit einem vom Nutzer gewählten Modell nutzt, ist eine eigene Richtung (Spec 047 und später), kein
+  Teil dieser Spec.
 
 **Kontrolle**
 
@@ -328,6 +339,7 @@ Modellprüfung mit den Beispielsätzen der Test-Erweiterung laufen lassen und di
 - Werkzeuge in den bestehenden haextensions (haex-mail, haex-notes, haex-files): Spec 019.
   Der vault-sdk-Baustein (FR-021) gehört dagegen in diese Spec.
 - Werkzeuge von Erweiterungen für externe Agenten: Spec 021.
-- Ein Kanal von einer Erweiterung zum Modell oder Chat (ADR-0004); die Gegenrichtung ist Spec 047.
+- Ein Weg von einer Erweiterung zum Agenten oder Modell: Spec 047 und spätere Specs, mit einem vom Nutzer
+  festgelegten Modell je Anfrage.
 - Werkzeuge, die eine Erweiterung erst zur Laufzeit erfindet, ohne sie im Manifest zu erklären.
 - Ein Marktplatz für Erweiterungen mit Werkzeugen.

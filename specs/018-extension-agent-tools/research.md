@@ -26,7 +26,7 @@ Schema und Abbruch, und ADR-0004 hat MCP für Richtung A festgelegt; vom Operato
 (b) `transport-async-rw` über eine `duplex`-Pipe mit zeilenweisem JSON: unnötige Serialisierung, weil die
 Nachrichten ohnehin als JSON-Werte durch das Frontend laufen.
 
-## R2 — Die Mauer um das Modell bleibt (FR-015)
+## R2 — Keine Anfragen der Erweiterung über die Werkzeug-Verbindung (FR-015)
 
 **Decision**: Der MCP-Client meldet keine Client-Fähigkeiten (kein `sampling`, keine `roots`, keine
 `elicitation`) und beantwortet jede Anfrage der Erweiterung an holzi mit „method not found“. Die
@@ -35,10 +35,17 @@ Ein Vertragstest prüft beides: dass eine Server-Anfrage (`sampling/createMessag
 `elicitation/create`) mit Fehler endet und keine Modellschicht erreicht, und dass der Brücken-Vertrag
 (`tests/extension_bridge_contract.rs`) unverändert gilt.
 
-**Rationale**: MCP erlaubt Anfragen vom Server zum Client; genau das wäre ein Weg von der Erweiterung zum
-Modell, den ADR-0004 ausschließt.
+**Rationale**: Diese Spec öffnet nur die Richtung Agent → Erweiterung. Der Operator will, dass Erweiterungen
+den Agenten künftig nutzen können, mit einem Modell, das der Nutzer je Art von Anfrage festlegt
+(Clarification 2026-10-10); Spec 047 beginnt damit über Profile. Solange es keine solche Festlegung gibt,
+hat eine Anfrage der Erweiterung auf dieser Verbindung kein Ziel und wird abgelehnt. Eine spätere Spec
+kann MCP-Sampling oder den Weg aus 047 dafür nutzen.
 
-**Alternatives considered**: Sampling mit Freigabe anbieten — ausgeschlossen durch ADR-0004 und 017 FR-009.
+**Konsequenz für ADR-0004**: Der Satz „The LLM is never reachable from an extension“ widerspricht schon
+Spec 047. Lieferung E ändert ihn in: Eine Erweiterung erreicht ein Modell nur über einen Weg, den der Nutzer
+festgelegt hat; nie über die Brücke oder die Werkzeug-Verbindung ohne eine solche Festlegung.
+
+**Alternatives considered**: Sampling jetzt mit Freigabe anbieten — vom Operator auf später gelegt.
 
 ## R3 — Wirkungsart aus dem Manifest (Clarification 2026-10-10)
 
@@ -70,7 +77,7 @@ ohne neuen Speicher:
 **Rationale**: Bestätigen, Merken, Widerrufen, Synchronisieren und Anzeigen gibt es schon; die Einstellungs-
 Ansicht `PermissionsView` listet die Werkzeuge dann je Zeile.
 
-**Abweichung von der Spec**: FR-002 verlangt auch bei geänderter **Eingabe** eine erneute Bestätigung. Mit
+**Abweichung von der Spec (vom Operator am 2026-10-10 angenommen, FR-002 geändert)**: FR-002 verlangte auch bei geänderter **Eingabe** eine erneute Bestätigung. Mit
 `target` = Name erkennt `new_declarations` nur neue Namen und geänderte Wirkungsarten. Eine geänderte
 Eingabe ändert nicht, was das Werkzeug tun darf (das bestimmen Wirkungsart und Berechtigungen). Vorschlag:
 FR-002 auf „neue Werkzeuge und Werkzeuge mit geänderter Wirkungsart“ kürzen (Entscheidung des Operators).
