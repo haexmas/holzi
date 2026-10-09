@@ -274,8 +274,9 @@ Modellprüfung mit den Beispielsätzen der Test-Erweiterung laufen lassen und di
 
 **vault-sdk**
 
-- **FR-021**: Das vault-sdk MUSS einen Baustein bereitstellen, mit dem eine Erweiterung ihre Werkzeuge
-  nur beschreibt und je Werkzeug eine Funktion angibt, ohne selbst MCP zu sprechen. Der Baustein MUSS
+- **FR-021**: Das vault-sdk MUSS einen MCP-Server-Baustein bereitstellen: Eine Erweiterung beschreibt
+  ihre Werkzeuge und gibt je Werkzeug eine Funktion an, der Baustein stellt sie holzi über MCP bereit,
+  ohne dass die Erweiterung das Protokoll selbst umsetzt. Der Baustein MUSS
   Eingaben gegen das erklärte Schema prüfen, bevor er die Funktion aufruft, und einen Abbruch durch
   holzi an die Funktion weitergeben. Erweiterungen ohne Werkzeuge MÜSSEN mit dem neuen vault-sdk
   unverändert laufen, in holzi wie in haex-vault.
