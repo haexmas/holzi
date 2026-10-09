@@ -249,3 +249,18 @@ Hinweis „no matching action“ las das Modell als „keine Erweiterungen insta
   und schlägt andere Stichworte oder die Liste aller Aktionen vor.
 
 Das Eval-Set bekommt den Satz „Welche Erweiterungen sind installiert?“ (`read-extensions-de-1`).
+
+## R16 — `wm.apps.list` zurück ins Kernangebot (beim Testen entschieden, ersetzt R13 teilweise)
+
+**Decision**: `wm.apps.list` gehört wieder zu den Kernaktionen. Das Erstangebot darf dafür 11 statt
+10 Werkzeuge haben (Kern höchstens 9, `find_actions`, `ask_user`), abweichend von Spec 032, R6; nach
+einer Suche höchstens 16 statt 15 (`MAX_ACTION_OFFER`), damit weiter alle fünf Treffer Platz haben.
+
+**Rationale**: Mit Qwen3-4B scheiterte „Welche Erweiterungen sind installiert?“ zweimal am Umweg über
+die Suche: erst las das Modell die leere Suche als „keine Erweiterungen“ (R15), nach der Korrektur
+fand es `wm_apps_list`, rief es aber nicht auf und erfand zwei Erweiterungen mit Platzhalter-Ids. Die
+Frage nach dem Installierten ist zu grundlegend, um sie vom Suchschritt eines kleinen Modells
+abhängig zu machen. Vom Operator am 2026-10-09 so gewählt.
+
+**Alternatives considered**: `settings.models.list` gegen `wm.apps.list` tauschen (Grenze bliebe
+bei 10); `wm.apps.list` nur über die Suche lassen.

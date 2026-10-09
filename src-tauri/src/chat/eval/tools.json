@@ -468,7 +468,7 @@
       "properties": {}
     },
     "effect": "read",
-    "core": false,
+    "core": true,
     "titles": {
       "de": "Apps und Erweiterungen auflisten",
       "en": "List apps and extensions"

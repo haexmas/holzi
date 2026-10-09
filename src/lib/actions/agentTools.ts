@@ -39,11 +39,13 @@ export const TOOL_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 /**
  * The fixed core offer: the same tools in every step for every model, local or cloud, chosen by
  * how often people ask for them, never from the text of a message (research R6). Together with
- * `find_actions` and `ask_user` (spec 046) this stays at or under 10 tools. `wm.apps.list` left the
- * core when app names became resolvable in `wm.app.open` (spec 046); `find_actions` still finds it.
+ * `find_actions` and `ask_user` (spec 046) this stays at or under 11 tools. `wm.apps.list` stays in
+ * the core: a small model that had to find it first answered "which extensions are installed"
+ * without calling it (spec 046, R16).
  */
 export const CORE_AGENT_TOOLS: readonly string[] = [
   'wm.state.get',
+  'wm.apps.list',
   'wm.app.open',
   'wm.tab.new',
   'wm.tab.activate',

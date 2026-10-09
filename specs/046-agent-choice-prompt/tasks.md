@@ -123,6 +123,7 @@ answer (FR-004–FR-012).
 - [ ] T038 Run the model evaluation (`cargo test --manifest-path src-tauri/Cargo.toml --test model_tool_eval -- --ignored --nocapture`, setup as in `specs/032-model-operates-holzi/quickstart.md:76`) against Qwen3-4B; record overall, `change` and `clarify` quotas and the SC-005/SC-006 verdict in new `specs/046-agent-choice-prompt/eval-results.md`
 - [x] T039 Add **Rückfrage** and **Kandidat** to the "Chat runtime" section of `CONTEXT.md` (`:89`)
 - [x] T040 Let `find_actions` find `wm.apps.list` for „Erweiterungen“ (research R15): name the extensions in its description and titles, match words of five or more letters as prefixes in `search_score` (`offer.rs`), make the empty-result hint say it is about actions, not data; tests in `offer_tests.rs`, eval sentence `read-extensions-de-1`, `pnpm export:eval-tools`
+- [x] T041 Put `wm.apps.list` back into `CORE_AGENT_TOOLS` (research R16): first offer at most 11 tools (`check-agent-actions.ts`, `eval/runner_tests.rs`), `MAX_ACTION_OFFER` 16, `pnpm export:eval-tools`
 
 ---
 

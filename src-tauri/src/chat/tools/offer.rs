@@ -14,7 +14,8 @@ use super::{Tool, ToolRegistry};
 
 pub const FIND_ACTIONS_TOOL_NAME: &str = "find_actions";
 pub const MAX_SEARCH_RESULTS: usize = 5;
-pub const MAX_ACTION_OFFER: usize = 15;
+/// Core (at most 9), `find_actions`, `ask_user` and a full page of search hits.
+pub const MAX_ACTION_OFFER: usize = 16;
 
 pub fn tool_spec(tool: &dyn Tool) -> ToolSpec {
     ToolSpec {
