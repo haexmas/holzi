@@ -51,6 +51,7 @@ export function extensionApps(
       id: extensionAppId(e.id),
       titleKey: 'wm.apps.extension',
       title: e.title,
+      ...(e.description ? { description: e.description } : {}),
       icon: 'lucide:puzzle',
       ...(icons[e.id] ? { iconUrl: icons[e.id] } : {}),
       defaultSize: { width: 960, height: 640 },

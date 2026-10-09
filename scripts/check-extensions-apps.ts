@@ -42,7 +42,7 @@ function summary(patch: Partial<ExtensionSummary>): ExtensionSummary {
 }
 
 test('every installed and enabled extension is an app with its own name and icon', () => {
-  const notes = summary({})
+  const notes = summary({ description: 'Schnelle Notizen' })
   const single = summary({
     id: 'id-2',
     title: 'Kalender',
@@ -62,6 +62,9 @@ test('every installed and enabled extension is an app with its own name and icon
     [extensionAppId(notes.id), 'extension.id-2'],
   )
   assert.equal(apps[0]?.title, 'Notizen')
+  // The agent describes an extension with it instead of its id (spec 046, R17).
+  assert.equal(apps[0]?.description, 'Schnelle Notizen')
+  assert.equal(apps[1]?.description, undefined)
   assert.equal(apps[0]?.iconUrl, 'data:image/svg+xml;base64,AA==')
   assert.equal(apps[0]?.multiInstance, true)
   assert.equal(apps[1]?.iconUrl, undefined)

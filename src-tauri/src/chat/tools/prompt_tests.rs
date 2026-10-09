@@ -59,3 +59,12 @@ fn a_turn_offering_ask_user_is_told_to_ask_instead_of_refusing() {
     let without = system_prompt(None, &[tool("find_actions")]).unwrap();
     assert!(!without.contains("ask_user"));
 }
+
+#[test]
+fn every_turn_with_tools_is_told_to_name_things_by_their_title_not_their_id() {
+    for tools in [vec![tool("find_actions")], vec![tool("run_command")]] {
+        let prompt = system_prompt(None, &tools).unwrap();
+        assert!(prompt.contains("by their title"), "{prompt}");
+        assert!(prompt.contains("never show ids"), "{prompt}");
+    }
+}

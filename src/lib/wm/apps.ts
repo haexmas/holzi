@@ -13,6 +13,9 @@ export type AppDefinition = {
   titleKey: string
   /** A name that is not translated (an extension's own name); shown instead of `titleKey`. */
   title?: string
+  /** What the app is for, untranslated (an extension's own description); `wm.apps.list` passes it
+   * to agents so they describe the app instead of naming its id (spec 046, R17). */
+  description?: string
   /** Iconify name (e.g. `lucide:message-square`). */
   icon: string
   /** An image shown instead of `icon` (an extension's own icon as a `data:` URL). */

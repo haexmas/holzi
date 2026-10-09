@@ -264,3 +264,12 @@ abhängig zu machen. Vom Operator am 2026-10-09 so gewählt.
 
 **Alternatives considered**: `settings.models.list` gegen `wm.apps.list` tauschen (Grenze bliebe
 bei 10); `wm.apps.list` nur über die Suche lassen.
+
+## R17 — Keine Ids in Antworten (beim Testen gefunden)
+
+Nach R16 listete der Agent die Erweiterungen korrekt, nannte aber zu jeder ihre App-Id
+(`extension.<UUID>`). Ids braucht das Modell für Werkzeugaufrufe, dem Nutzer sagen sie nichts. Die
+Werkzeug-Instruktion (`prompt.rs`, mit und ohne Suche) verlangt jetzt, Dinge bei ihrem Titel zu nennen
+und nie Ids wie App-Ids oder UUIDs zu zeigen; das gilt auch für Unterhaltungen, Geräte und andere
+Listen. Damit der Agent eine Erweiterung stattdessen beschreiben kann, gibt `wm.apps.list` die
+Beschreibung aus ihrem Manifest mit (`description`, nur wenn vorhanden; System-Apps haben keine).

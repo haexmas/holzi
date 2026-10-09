@@ -10,12 +10,14 @@ use crate::adapters::types::ToolSpec;
 pub const TOOL_INSTRUCTION: &str = "You operate the app holzi for the user with the tools you are offered. \
 When the user asks to look at or change something in holzi, call a tool instead of describing what you would do. \
 If none of the offered tools fits, call find_actions with a few keywords: the tools it finds are available in your next step. \
-Reply in the user's language. For questions that have nothing to do with holzi, just answer.";
+Reply in the user's language and name things by their title; never show ids such as app ids or UUIDs. \
+For questions that have nothing to do with holzi, just answer.";
 
 /// The instruction for a turn whose tools do not include the optional action search.
 const TOOL_INSTRUCTION_WITHOUT_SEARCH: &str = "You operate the app holzi for the user with the tools you are offered. \
 When the user asks to look at or change something in holzi, call one of the offered tools instead of describing what you would do. \
-Reply in the user's language. For questions that have nothing to do with holzi, just answer.";
+Reply in the user's language and name things by their title; never show ids such as app ids or UUIDs. \
+For questions that have nothing to do with holzi, just answer.";
 
 /// Added when the turn offers `ask_user` (spec 046 FR-016): small models otherwise answer that an
 /// instruction they cannot map is impossible.

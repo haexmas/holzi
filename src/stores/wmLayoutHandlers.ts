@@ -183,6 +183,7 @@ export function registerWmLayoutHandlers(wm: WmStore, t: Translate): void {
     apps: wm.apps().map((app) => ({
       appId: app.id,
       title: app.title ?? t(app.titleKey),
+      ...(app.description ? { description: app.description } : {}),
       multiInstance: app.multiInstance,
       locations: [...new Set(flattenRoutes(getAppRoutes(app.id) ?? []))],
     })),

@@ -462,7 +462,7 @@
   {
     "toolName": "wm_apps_list",
     "actionId": "wm.apps.list",
-    "description": "List every installed app that can be opened: holzi's system apps and all installed extensions, each with its id, title, whether several instances are allowed, and its location patterns.",
+    "description": "List every installed app that can be opened: holzi's system apps and all installed extensions, each with its id, title, an extension's description, whether several instances are allowed, and its location patterns.",
     "inputSchema": {
       "type": "object",
       "properties": {}
