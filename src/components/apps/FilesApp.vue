@@ -1,5 +1,22 @@
 <script lang="ts">
+import { toast } from 'vue-sonner'
 import type { Entry } from '@bindings/Entry'
+import type { SourceRef } from '@bindings/SourceRef'
+import type { TransferOp } from '@bindings/TransferOp'
+import { asFilesError } from '~/composables/useFiles'
+import {
+  clickEntry,
+  type ClickKeys,
+  type DragPayload,
+  dropOp,
+  EMPTY_SELECTION,
+  type FilesClipboard,
+  menuSelection,
+  pasteRefusal,
+  pruneSelection,
+  type Selection,
+} from '~/lib/files/clipboard'
+import { entriesMenu, type FilesCommand, folderMenu } from '~/lib/files/menus'
 import { filesLocation, parseFilesPlace } from '~/lib/files/registry'
 import { childPath, parentPath, visibleEntries } from '~/lib/files/state'
 
@@ -13,12 +30,16 @@ let openFrames = 0
  * the sidebar (known places, drives) and the open folder as list or grid, with the viewer over it.
  * Where the tab stands is its location (`lib/files/registry.ts`), so moving between folders keeps
  * this component mounted and session restore (spec 022) brings tab and open file back.
+ * Managing files (US3): selection, the context menu, holzi's clipboard, dragging inside holzi and
+ * from the system, and the transfers they start (`stores/filesTransfers.ts`).
  */
 
 const { t } = useI18n()
 const router = useTabRouter()
 const prefs = useFilesPrefs()
-const { sourcesAsync, releaseTabAsync } = useFiles()
+const { sourcesAsync, releaseTabAsync, statAsync, openSystemAsync } = useFiles()
+const transfers = useFilesTransfersStore()
+const { isAndroid } = useDeviceCapabilities()
 
 const place = computed(() => parseFilesPlace(router.route))
 const source = computed(
@@ -69,6 +90,242 @@ function go(target: string) {
 function goUp() {
   const parent = path.value ? parentPath(path.value) : null
   if (parent) go(parent)
+}
+
+// --- Managing files (US3) ---
+
+const selection = ref<Selection>(EMPTY_SELECTION)
+const selecting = computed(() => selection.value.paths.length > 0)
+watch(path, () => (selection.value = EMPTY_SELECTION))
+watch(shown, (entries) => {
+  selection.value = pruneSelection(
+    selection.value,
+    entries.map((entry) => entry.path),
+  )
+})
+
+/** The open folder is one of holzi's own places (FR-037): nothing changes in it. */
+const folderOwned = ref(false)
+watch(
+  [source, path],
+  async ([current, folderPath]) => {
+    folderOwned.value = false
+    if (folderPath === null) return
+    const entry = await statAsync(current, folderPath).catch(() => null)
+    if (path.value === folderPath)
+      folderOwned.value = entry?.holziOwned ?? false
+  },
+  { immediate: true },
+)
+
+const entryAt = (target: string) =>
+  shown.value.find((entry) => entry.path === target)
+
+function onPress(entry: Entry, keys: ClickKeys) {
+  const result = clickEntry(
+    selection.value,
+    entry.path,
+    shown.value.map((candidate) => candidate.path),
+    keys,
+  )
+  selection.value = result.selection
+  if (result.activate) activate(entry)
+}
+
+/** What the open context menu acts on: entries, or the folder's empty area (`null`). */
+const menuTargets = ref<Selection | null>(null)
+
+function onContext(entry: Entry | null) {
+  menuTargets.value = entry ? menuSelection(selection.value, entry.path) : null
+}
+
+const canPaste = computed(() => transfers.clipboard !== null && !!path.value)
+
+function entriesOf(targets: Selection): Entry[] {
+  return targets.paths.flatMap((target) => entryAt(target) ?? [])
+}
+
+const menuEntries = computed(() => {
+  const targets = menuTargets.value
+  if (!targets)
+    return folderMenu({ readOnly: folderOwned.value, canPaste: canPaste.value })
+  const entries = entriesOf(targets)
+  return entriesMenu({
+    count: entries.length,
+    singleFile: entries.length === 1 && entries[0]?.kind === 'file',
+    readOnly: folderOwned.value || entries.some((entry) => entry.holziOwned),
+    selecting: selecting.value,
+  })
+})
+
+const dimmed = computed(() =>
+  transfers.clipboard?.op === 'cut'
+    ? transfers.clipboard.items.map((item) => item.path)
+    : [],
+)
+
+function errorText(cause: unknown): string {
+  const code = asFilesError(cause)?.code
+  return code ? t(`files.error.${code}`) : String(cause)
+}
+
+async function startAsync(
+  op: TransferOp,
+  from: SourceRef,
+  paths: string[],
+  to: string | null,
+) {
+  try {
+    await transfers.startAsync(
+      op,
+      from,
+      paths,
+      to === null ? null : { source: source.value, path: to },
+      tabId,
+    )
+  } catch (cause) {
+    toast.error(errorText(cause))
+  }
+}
+
+/** Copies or moves `clip` into the folder `target` (paste, or a drop inside holzi). */
+async function placeAsync(
+  clip: FilesClipboard,
+  target: string,
+  targetOwned: boolean,
+) {
+  const refusal = pasteRefusal(clip.op, clip.folder, clip.items, {
+    path: target,
+    holziOwned: targetOwned,
+  })
+  if (refusal === 'nothing') return
+  if (refusal) {
+    toast.error(t(`files.error.${refusal}`))
+    return
+  }
+  await startAsync(
+    clip.op === 'cut' ? 'move' : 'copy',
+    clip.source as SourceRef,
+    clip.items.map((item) => item.path),
+    target,
+  )
+}
+
+const naming = ref(false)
+const renaming = ref<Entry | null>(null)
+const deleting = ref(false)
+const pendingDelete = ref<string[]>([])
+
+function remember(op: FilesClipboard['op'], entries: Entry[]) {
+  if (!path.value || !entries.length) return
+  transfers.clipboard = {
+    op,
+    source: source.value,
+    folder: path.value,
+    items: entries.map((entry) => ({ path: entry.path, kind: entry.kind })),
+  }
+  selection.value = EMPTY_SELECTION
+}
+
+function deleteNow() {
+  const paths = pendingDelete.value
+  pendingDelete.value = []
+  selection.value = EMPTY_SELECTION
+  void startAsync('delete', source.value, paths, null)
+}
+
+/** Runs a command on `targets` (the context menu's, or the selection for the action bar). */
+async function run(command: FilesCommand, targets: Selection | null) {
+  const entries = targets ? entriesOf(targets) : []
+  const [first] = entries
+  switch (command) {
+    case 'open':
+      if (first) activate(first)
+      break
+    case 'openSystem':
+      if (first)
+        await openSystemAsync(source.value, first.path).catch((cause) =>
+          toast.error(errorText(cause)),
+        )
+      break
+    case 'select':
+      selection.value = {
+        paths: [
+          ...new Set([...selection.value.paths, ...(targets?.paths ?? [])]),
+        ],
+        anchor: targets?.anchor ?? null,
+      }
+      break
+    case 'copy':
+    case 'cut':
+      remember(command, entries)
+      break
+    case 'paste': {
+      const clip = transfers.clipboard
+      if (!clip || !path.value) break
+      await placeAsync(clip, path.value, folderOwned.value)
+      if (clip.op === 'cut') transfers.clipboard = null
+      break
+    }
+    case 'rename':
+      if (first) {
+        renaming.value = first
+        naming.value = true
+      }
+      break
+    case 'newFolder':
+      renaming.value = null
+      naming.value = true
+      break
+    case 'delete':
+      pendingDelete.value = entries.map((entry) => entry.path)
+      // Desktops move to the trash; Android deletes for good and asks first (FR-023).
+      if (isAndroid.value) deleting.value = true
+      else deleteNow()
+      break
+  }
+}
+
+function runMenu(command: FilesCommand) {
+  void run(command, menuTargets.value)
+}
+
+function runBar(command: FilesCommand) {
+  void run(command, selection.value)
+}
+
+function onDrop(
+  payload: DragPayload,
+  target: string,
+  keys: { ctrl: boolean; alt: boolean },
+) {
+  // Dropped onto itself.
+  if (payload.items.some((item) => item.path === target)) return
+  const sameSource =
+    JSON.stringify(payload.source) === JSON.stringify(source.value)
+  const op = dropOp(sameSource, {
+    ...keys,
+    mac: /Mac/.test(navigator.userAgent),
+  })
+  const owned =
+    target === path.value
+      ? folderOwned.value
+      : (entryAt(target)?.holziOwned ?? false)
+  selection.value = EMPTY_SELECTION
+  void placeAsync({ ...payload, op }, target, owned)
+}
+
+async function importDropped(paths: string[]) {
+  if (!path.value) return
+  try {
+    await transfers.importAsync(
+      paths,
+      { source: source.value, path: path.value },
+      tabId,
+    )
+  } catch (cause) {
+    toast.error(errorText(cause))
+  }
 }
 
 function activate(entry: Entry) {
@@ -152,15 +409,40 @@ function onSidebarPick(target: string) {
           @pick="onSidebarPick"
         />
       </nav>
-      <main class="relative min-w-0 flex-1" data-testid="files-main">
-        <FilesFolderView
-          :source="source"
-          :entries="shown"
-          :loading="folder.loading.value"
-          :error="folder.error.value"
-          :view="prefs.view.value"
-          @activate="activate"
+      <main
+        class="relative flex min-w-0 flex-1 flex-col"
+        data-testid="files-main"
+        @keydown.esc="selection = EMPTY_SELECTION"
+      >
+        <FilesActionBar
+          v-if="selecting || canPaste"
+          :selected="selection.paths.length"
+          :can-paste="canPaste"
+          :read-only="folderOwned"
+          @run="runBar"
+          @clear="selection = EMPTY_SELECTION"
         />
+        <FilesDropTarget
+          class="flex-1"
+          :disabled="folderOwned || !path"
+          @drop="importDropped"
+        >
+          <FilesMenu :entries="menuEntries" @run="runMenu">
+            <FilesFolderView
+              :source="source"
+              :entries="shown"
+              :loading="folder.loading.value"
+              :error="folder.error.value"
+              :view="prefs.view.value"
+              :folder="path ?? ''"
+              :selected="selection.paths"
+              :dimmed="dimmed"
+              @press="onPress"
+              @context="onContext"
+              @drop="onDrop"
+            />
+          </FilesMenu>
+        </FilesDropTarget>
         <FilesViewer
           v-if="openEntry"
           :source="source"
@@ -171,5 +453,17 @@ function onSidebarPick(target: string) {
         />
       </main>
     </div>
+    <FilesTransferBar :tab-id="tabId" />
+    <FilesNameDialog
+      v-model:open="naming"
+      :source="source"
+      :folder="path ?? ''"
+      :entry="renaming"
+    />
+    <FilesDeleteDialog
+      v-model:open="deleting"
+      :count="pendingDelete.length"
+      @confirm="deleteNow"
+    />
   </div>
 </template>
