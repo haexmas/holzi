@@ -78,10 +78,11 @@ export function deviceFiles(
     write: (name, content) => {
       throughLocal((local) => {
         writeFileSync(local, content)
+        adb.shell('mkdir', '-p', folder)
         adb.push(local, path(name))
       })
-      // adb creates the file, and the folders it was missing, as the shell user: open them up so the
-      // app may read, change and remove them. The app's own entries are not the shell's to change.
+      // The shell user creates the file and its parent folders: open them up so the app may read,
+      // change and remove them. The app's own entries are not the shell's to change.
       adb.shell(
         `chmod a+rwx ${quote(ANDROID_FILES)} ${quote(ANDROID_DOWNLOADS)} 2>/dev/null;`,
         `chmod -R a+rwX ${quote(folder)} 2>/dev/null; true`,
