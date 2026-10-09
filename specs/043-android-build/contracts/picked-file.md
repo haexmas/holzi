@@ -26,8 +26,10 @@ display_name(file) -> String
   Plugin einen Dateideskriptor aus dem `ContentResolver`, am Desktop einen geöffneten Pfad.
 - Auf Android lehnen Commands, die eine gewählte Datei erwarten, Pfade außerhalb des
   app-eigenen Speichers ab (`invalid_input`), damit keine freien Pfade durch die Hintertür
-  entstehen (FR-016). Pfade im app-eigenen Speicher sind erlaubt (dort legt auch die e2e-Suite
-  ihre Testdateien ab).
+  entstehen (FR-016). Pfade im app-eigenen Speicher sind erlaubt: die privaten Ordner der App und
+  ihr eigener Download-Ordner im geteilten Speicher (`getExternalFilesDir(DIRECTORY_DOWNLOADS)`,
+  seit Android 11 für andere Apps gesperrt). Dort legt die e2e-Suite ihre Testdateien ab, denn der
+  private Speicher ist für den Dateibrowser holzis eigener Ort und nur lesbar (Spec 044 FR-037).
 - Fehler: `Unreadable` (Anbieter liefert nichts, Berechtigung entzogen, Cloud-Datei offline),
   `NotEnoughSpace` (beim Kopieren und Speichern, aus `ENOSPC`).
 - Größengrenzen prüfen die Abläufe an den Metadaten, wo der Anbieter eine echte Datei liefert, und

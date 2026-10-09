@@ -49,8 +49,10 @@ impl<R: Runtime> Opener for AppHandle<R> {
         self.fs().open(file, options)
     }
 
-    /// Without free paths (FR-016) a path must lie in the app's own storage; the e2e suite puts
-    /// its test files there, everything else arrives as an address from the dialog.
+    /// Without free paths (FR-016) a path must lie in the app's own storage: its private folders
+    /// or its own download folder (on Android in the shared storage, closed to other apps since
+    /// Android 11). The e2e suite puts its test files in the download folder, everything else
+    /// arrives as an address from the dialog.
     fn path_roots(&self) -> Option<Vec<PathBuf>> {
         if crate::platform::capabilities().free_paths {
             return None;
@@ -61,6 +63,7 @@ impl<R: Runtime> Opener for AppHandle<R> {
                 path.app_data_dir(),
                 path.app_local_data_dir(),
                 path.app_cache_dir(),
+                path.download_dir(),
             ]
             .into_iter()
             .flatten()
