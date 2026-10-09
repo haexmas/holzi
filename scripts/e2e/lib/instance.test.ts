@@ -15,6 +15,7 @@ import {
   appInGroup,
   buildInstanceEnv,
   driverCommand,
+  isPortInUseOutput,
   NEW_SESSION_ATTEMPTS,
   newSessionWithRetry,
   prepareRoot,
@@ -205,6 +206,21 @@ describe('driverCommand', () => {
     )
     assert.equal(args[1], '-s')
     assert.equal(args[2], '-screen 0 1280x800x24 -fbdir /scratch/fb')
+  })
+})
+
+describe('isPortInUseOutput', () => {
+  it("recognizes WebKitWebDriver's listen failure", () => {
+    assert.equal(
+      isPortInUseOutput(
+        'FATAL: Unable to listen for HTTP server at host 127.0.0.1 and port 44749.',
+      ),
+      true,
+    )
+  })
+
+  it('does not classify an unrelated driver failure as a port collision', () => {
+    assert.equal(isPortInUseOutput('FATAL: failed to initialize WebKit'), false)
   })
 })
 
