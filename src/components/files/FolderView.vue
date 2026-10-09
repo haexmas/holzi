@@ -71,9 +71,10 @@ const { list, containerProps, wrapperProps, scrollTo } = useVirtualList(rows, {
   overscan: 8,
 })
 
-// A new folder starts at the top.
+// A new folder starts at the top. Not on every new list: the watch and the focus load the same
+// folder again, and that keeps where the user scrolled to.
 watch(
-  () => props.entries,
+  () => `${JSON.stringify(props.source)}|${props.folder}`,
   () => scrollTo(0),
 )
 
