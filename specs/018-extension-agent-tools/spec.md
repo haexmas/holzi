@@ -71,6 +71,9 @@
   Modell oder Agenten beantwortet werden. Das ist spätere Arbeit (Spec 047 und folgende). In dieser Spec
   lehnt die MCP-Verbindung Anfragen der Erweiterung an holzi ab, weil es dafür noch keine Festlegung des
   Nutzers gibt.
+- Q: Prüft holzi die Eingabe eines Werkzeugs selbst, bevor es die Erweiterung aufruft? → A: Nein, der
+  Baustein im vault-sdk prüft sie vor dem Handler (FR-021); für Nutzer und Modell ist das Ergebnis
+  gleich, und die Prüfung gibt es nur einmal.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -194,8 +197,9 @@ Modellprüfung mit den Beispielsätzen der Test-Erweiterung laufen lassen und di
   und Nutzer.
 - Ein Werkzeug passt zur Nachricht, aber die Grenze für die Anzahl der Werkzeuge ist erreicht: holzi
   bietet die am besten passenden an; die übrigen bleiben über die Suche erreichbar.
-- Die Eingabe des Modells passt nicht zum Schema des Werkzeugs: holzi gibt den Fehler mit dem
-  betroffenen Feld an das Modell zurück, ohne die Erweiterung aufzurufen.
+- Die Eingabe des Modells passt nicht zum Schema des Werkzeugs: Der Baustein im vault-sdk prüft sie, bevor
+  er die Funktion der Erweiterung aufruft; das Modell erhält den Fehler mit dem betroffenen Feld, und der
+  Code der Erweiterung läuft nicht (FR-021).
 - Das Modell hat „Werkzeugnutzung: nicht unterstützt“ oder ein Delegate (Claude Code, Codex) ist
   gewählt: holzi bietet keine Erweiterungswerkzeuge an (032 FR-016).
 - Die Erweiterung startet auf einem Gerät ohne die Host-Funktion, die das Werkzeug braucht (z. B. ohne
