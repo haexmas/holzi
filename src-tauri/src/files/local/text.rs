@@ -29,11 +29,17 @@ pub struct TextContent {
 /// The text of the file at `path`, at most `limit` bytes; invalid UTF-8 is replaced.
 pub fn read_text(path: &Path, limit: u64) -> Result<TextContent, FilesError> {
     let file = std::fs::File::open(path).map_err(|error| io_error(error, path))?;
-    let limit = usize::try_from(limit).unwrap_or(usize::MAX);
     let mut bytes = Vec::new();
-    file.take(limit.saturating_add(1) as u64)
+    file.take(limit.saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|error| io_error(error, path))?;
+    text_from(bytes, limit)
+}
+
+/// The text of the first bytes of a file: `bytes` holds up to `limit + 1` of them, so one more
+/// than `limit` means there is more (a storage reads them the same way, spec 044 US5).
+pub fn text_from(mut bytes: Vec<u8>, limit: u64) -> Result<TextContent, FilesError> {
+    let limit = usize::try_from(limit).unwrap_or(usize::MAX);
     if bytes[..bytes.len().min(SNIFF)].contains(&0) {
         return Err(FilesError::new(FilesErrorCode::Binary, "not a text file"));
     }

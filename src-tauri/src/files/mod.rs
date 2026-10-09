@@ -12,6 +12,7 @@ pub mod media;
 pub mod picked;
 pub mod search;
 pub mod state;
+pub mod storage_source;
 pub mod streaming;
 pub mod thumbnails;
 pub mod transfer;
@@ -56,6 +57,10 @@ pub enum FilesErrorCode {
     Blocked,
     NotGranted,
     Unsupported,
+    /// A storage refused its credentials, or they are not on this device (spec 038).
+    Credentials,
+    /// A storage did not answer (network, timeout).
+    Unreachable,
 }
 
 impl FilesError {

@@ -15,6 +15,7 @@ use tauri::ipc::Channel;
 use tokio_util::sync::CancellationToken;
 use ts_rs::TS;
 
+use crate::files::storage_source::StorageFiles;
 use crate::files::{FilesError, FilesErrorCode};
 use crate::vault_gate::VaultGate;
 use local::{Hooks, Job, Outcome, Removal, Totals};
@@ -80,11 +81,25 @@ const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 /// How often a transfer waiting for an answer looks whether it was cancelled.
 const ANSWER_POLL: Duration = Duration::from_millis(100);
 
+/// What a transfer does.
+#[derive(Clone)]
+enum Work {
+    /// Copy, move or delete on this device (blocking).
+    Local {
+        job: Job,
+        totals: Totals,
+        removal: Removal,
+    },
+    /// Delete entries of a storage for good (spec 044 US5, FR-023; asked for in the window).
+    StorageDelete {
+        files: Arc<StorageFiles>,
+        paths: Vec<String>,
+    },
+}
+
 /// A transfer the manager knows: running, or failed and able to start again.
 struct Known {
-    job: Job,
-    totals: Totals,
-    removal: Removal,
+    work: Work,
     channel: Channel<TransferEvent>,
     cancel: CancellationToken,
     answers: Sender<(ConflictChoice, bool)>,
@@ -101,7 +116,7 @@ impl TransferManager {
         self.known.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Starts a prepared job; returns its id.
+    /// Starts a prepared job on this device; returns its id.
     pub fn start(
         &self,
         gate: &VaultGate,
@@ -111,7 +126,29 @@ impl TransferManager {
         channel: Channel<TransferEvent>,
     ) -> Result<String, FilesError> {
         let id = uuid::Uuid::new_v4().to_string();
-        self.launch(gate, &id, job, totals, removal, channel)?;
+        let work = Work::Local {
+            job,
+            totals,
+            removal,
+        };
+        self.launch(gate, &id, work, channel)?;
+        Ok(id)
+    }
+
+    /// Deletes `paths` of a storage for good; returns the transfer's id.
+    pub fn start_storage_delete(
+        &self,
+        gate: &VaultGate,
+        files: StorageFiles,
+        paths: Vec<String>,
+        channel: Channel<TransferEvent>,
+    ) -> Result<String, FilesError> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let work = Work::StorageDelete {
+            files: Arc::new(files),
+            paths,
+        };
+        self.launch(gate, &id, work, channel)?;
         Ok(id)
     }
 
@@ -119,9 +156,7 @@ impl TransferManager {
         &self,
         gate: &VaultGate,
         id: &str,
-        job: Job,
-        totals: Totals,
-        removal: Removal,
+        work: Work,
         channel: Channel<TransferEvent>,
     ) -> Result<(), FilesError> {
         let cancel = gate.token().child_token();
@@ -129,9 +164,7 @@ impl TransferManager {
         self.known().insert(
             id.to_owned(),
             Known {
-                job: job.clone(),
-                totals,
-                removal,
+                work: work.clone(),
                 channel: channel.clone(),
                 cancel: cancel.clone(),
                 answers,
@@ -139,10 +172,24 @@ impl TransferManager {
         );
         let manager = self.clone();
         let owned_id = id.to_owned();
-        let spawned = gate.spawn_blocking(move || {
-            let outcome = work(&job, &totals, removal, &cancel, &channel, &answered);
-            manager.finish(&owned_id, outcome, &channel);
-        });
+        let spawned = match work {
+            Work::Local {
+                job,
+                totals,
+                removal,
+            } => gate
+                .spawn_blocking(move || {
+                    let outcome = work_local(&job, &totals, removal, &cancel, &channel, &answered);
+                    manager.finish(&owned_id, outcome, &channel);
+                })
+                .map(drop),
+            Work::StorageDelete { files, paths } => gate
+                .spawn(async move {
+                    let outcome = delete_on_storage(&files, &paths, &cancel, &channel).await;
+                    manager.finish(&owned_id, outcome, &channel);
+                })
+                .map(drop),
+        };
         if let Err(error) = spawned {
             self.known().remove(id);
             log::warn!("files: a transfer could not start: {error}");
@@ -189,20 +236,44 @@ impl TransferManager {
                 "no such transfer",
             ));
         };
-        self.launch(
-            gate,
-            id,
-            known.job,
-            known.totals,
-            known.removal,
-            known.channel,
-        )
+        self.launch(gate, id, known.work, known.channel)
     }
+}
+
+/// Deletes `paths` of a storage one after the other; the progress counts the entries.
+async fn delete_on_storage(
+    files: &StorageFiles,
+    paths: &[String],
+    cancel: &CancellationToken,
+    channel: &Channel<TransferEvent>,
+) -> Outcome {
+    let total = paths.len() as u64;
+    for (done, path) in paths.iter().enumerate() {
+        if cancel.is_cancelled() {
+            return Outcome::Cancelled;
+        }
+        if let Err(error) = files.delete(path, cancel, &mut |_| {}).await {
+            return if cancel.is_cancelled() {
+                Outcome::Cancelled
+            } else {
+                Outcome::Failed(error)
+            };
+        }
+        let _ = channel.send(TransferEvent::Progress {
+            progress: TransferProgress {
+                items_done: done as u64 + 1,
+                items_total: total,
+                bytes_done: 0,
+                bytes_total: 0,
+            },
+        });
+    }
+    Outcome::Done
 }
 
 /// The blocking part: runs the job, sends progress at most every [`PROGRESS_EVERY`] and asks the
 /// window about conflicts.
-fn work(
+fn work_local(
     job: &Job,
     totals: &Totals,
     removal: Removal,

@@ -10,17 +10,19 @@ use tauri::ipc::{Channel, Response};
 use tauri::{AppHandle, State};
 use ts_rs::TS;
 
+use crate::error::HolziError;
 use crate::files::access::{check, AgentGrants, Target, Verdict, Want};
 use crate::files::kind::{viewer_kind, ViewerKind};
 use crate::files::local::drives::{drives, Drive};
-use crate::files::local::text::{read_text, TextContent, TEXT_LIMIT};
+use crate::files::local::text::{read_text, text_from, TextContent, TEXT_LIMIT};
 use crate::files::local::{edit, ops, resolve, resolve_entry};
 use crate::files::media::MediaServer;
 use crate::files::search::{
     FilesSearchEvent, SearchFilters, SearchLimits, SearchManager, SearchOptions,
 };
 use crate::files::state::FilesState;
-use crate::files::streaming::LocalFileSource;
+use crate::files::storage_source::{object_key, storage_error, StorageFiles};
+use crate::files::streaming::{LocalFileSource, StorageFileSource};
 use crate::files::transfer::local::{prepare, touches_own, Job};
 use crate::files::transfer::{
     platform_removal, same_device, ConflictChoice, TransferEvent, TransferManager, TransferOp,
@@ -45,6 +47,63 @@ pub struct KnownPlace {
 pub struct Sources {
     pub drives: Vec<Drive>,
     pub known: Vec<KnownPlace>,
+    /// The storages of spec 038 (US5).
+    pub storages: Vec<StorageSource>,
+}
+
+/// A storage for the sidebar.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub struct StorageSource {
+    pub id: String,
+    pub name: String,
+}
+
+/// The files of the storage `storage_id` (spec 044 US5), or why not. Its credentials stay inside
+/// `remote_storage`; no answer carries them (FR-038).
+async fn storage_files(
+    state: &State<'_, AppState>,
+    storage_id: &str,
+) -> Result<StorageFiles, FilesError> {
+    let service = crate::remote_storage::commands::service(state)
+        .map_err(|_| FilesError::new(FilesErrorCode::Unsupported, "no open vault"))?;
+    let access = service
+        .access_of(storage_id)
+        .await
+        .map_err(|error| match error {
+            HolziError::StorageNotFound => {
+                FilesError::new(FilesErrorCode::NotFound, "no such storage")
+            }
+            HolziError::StorageCredentialsUnavailable { .. } => FilesError::new(
+                FilesErrorCode::Credentials,
+                "the storage's credentials are not on this device",
+            ),
+            other => {
+                log::warn!("files: a storage could not be opened: {other}");
+                FilesError::new(FilesErrorCode::Unsupported, "the storage cannot be opened")
+            }
+        })?;
+    Ok(StorageFiles::new(
+        crate::remote_storage::commands::s3_store(),
+        access,
+    ))
+}
+
+/// The storage id of `source`, if it is one.
+fn storage_of(source: &SourceRef) -> Option<&str> {
+    match source {
+        SourceRef::Storage { storage_id } => Some(storage_id),
+        SourceRef::Device => None,
+    }
+}
+
+/// The answer for what storages cannot do before the transfers across sources (PR F2).
+fn later() -> FilesError {
+    FilesError::new(
+        FilesErrorCode::Unsupported,
+        "copying to and from storages comes with a later version",
+    )
 }
 
 /// A change in a watched folder; the window reloads it.
@@ -118,7 +177,10 @@ fn checked(
 
 /// Drives and known places of this device.
 #[tauri::command]
-pub async fn files_sources(files: State<'_, FilesState>) -> Result<Sources, FilesError> {
+pub async fn files_sources(
+    state: State<'_, AppState>,
+    files: State<'_, FilesState>,
+) -> Result<Sources, FilesError> {
     let known = files
         .known
         .iter()
@@ -128,16 +190,42 @@ pub async fn files_sources(files: State<'_, FilesState>) -> Result<Sources, File
         })
         .collect();
     let drives = blocking(|| Ok(drives())).await?;
-    Ok(Sources { drives, known })
+    // Without an open vault (or with a storage list that fails) the device alone shows.
+    let storages = match crate::remote_storage::commands::service(&state) {
+        Ok(service) => service
+            .overview()
+            .await
+            .map(|overview| {
+                overview
+                    .storages
+                    .into_iter()
+                    .map(|storage| StorageSource {
+                        id: storage.id,
+                        name: storage.name,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+    Ok(Sources {
+        drives,
+        known,
+        storages,
+    })
 }
 
 /// Every entry of a folder.
 #[tauri::command]
 pub async fn files_list(
+    state: State<'_, AppState>,
     files: State<'_, FilesState>,
     source: SourceRef,
     path: String,
 ) -> Result<Vec<Entry>, FilesError> {
+    if let Some(id) = storage_of(&source) {
+        return storage_files(&state, id).await?.list(&path).await;
+    }
     let real = device_path(&files, &source, &path, Want::Read)?;
     let own = files.own.clone();
     blocking(move || ops::list(&real, &own)).await
@@ -146,10 +234,14 @@ pub async fn files_list(
 /// One entry.
 #[tauri::command]
 pub async fn files_stat(
+    state: State<'_, AppState>,
     files: State<'_, FilesState>,
     source: SourceRef,
     path: String,
 ) -> Result<Entry, FilesError> {
+    if let Some(id) = storage_of(&source) {
+        return storage_files(&state, id).await?.stat(&path).await;
+    }
     let real = device_path(&files, &source, &path, Want::Read)?;
     let own = files.own.clone();
     blocking(move || ops::stat(&real, &own)).await
@@ -158,10 +250,22 @@ pub async fn files_stat(
 /// The text of a file for the viewer, at most 5 MB (FR-015).
 #[tauri::command]
 pub async fn files_read_text(
+    state: State<'_, AppState>,
     files: State<'_, FilesState>,
     source: SourceRef,
     path: String,
 ) -> Result<TextContent, FilesError> {
+    if let Some(id) = storage_of(&source) {
+        let storage = storage_files(&state, id).await?;
+        let entry = storage.stat(&path).await?;
+        if entry.kind != EntryKind::File {
+            return Err(FilesError::invalid_path("not a file"));
+        }
+        let bytes = storage
+            .read_start(&path, entry.size.unwrap_or(0), TEXT_LIMIT)
+            .await?;
+        return text_from(bytes, TEXT_LIMIT);
+    }
     let real = device_path(&files, &source, &path, Want::Read)?;
     blocking(move || read_text(&real, TEXT_LIMIT)).await
 }
@@ -181,12 +285,38 @@ pub struct Opened {
 /// server (FR-012, FR-016), text is read with [`files_read_text`], the rest is the info view.
 #[tauri::command]
 pub async fn files_open(
+    state: State<'_, AppState>,
     files: State<'_, FilesState>,
     media: State<'_, MediaServer>,
     source: SourceRef,
     path: String,
     tab_id: String,
 ) -> Result<Opened, FilesError> {
+    if let Some(id) = storage_of(&source) {
+        let storage = storage_files(&state, id).await?;
+        let entry = storage.stat(&path).await?;
+        if entry.kind != EntryKind::File {
+            return Err(FilesError::invalid_path("not a file"));
+        }
+        let kind = viewer_kind(&entry.name);
+        let url = if streams(kind) {
+            let mime = entry
+                .mime
+                .clone()
+                .unwrap_or_else(|| "application/octet-stream".to_owned());
+            let file = StorageFileSource::new(
+                storage.store().clone(),
+                storage.access().clone(),
+                object_key(&path)?,
+                entry.size.unwrap_or(0),
+                mime,
+            );
+            Some(media.register(&tab_id, Arc::new(file)))
+        } else {
+            None
+        };
+        return Ok(Opened { kind, url, entry });
+    }
     let real = device_path(&files, &source, &path, Want::Read)?;
     let own = files.own.clone();
     let stat_path = real.clone();
@@ -195,11 +325,7 @@ pub async fn files_open(
         return Err(FilesError::invalid_path("not a file"));
     }
     let kind = viewer_kind(&entry.name);
-    let url = matches!(
-        kind,
-        ViewerKind::Image | ViewerKind::Video | ViewerKind::Audio | ViewerKind::Pdf
-    )
-    .then(|| {
+    let url = streams(kind).then(|| {
         let mime = entry
             .mime
             .clone()
@@ -208,6 +334,17 @@ pub async fn files_open(
     });
     Ok(Opened { kind, url, entry })
 }
+
+/// Whether the viewer shows `kind` from the media server.
+fn streams(kind: ViewerKind) -> bool {
+    matches!(
+        kind,
+        ViewerKind::Image | ViewerKind::Video | ViewerKind::Audio | ViewerKind::Pdf
+    )
+}
+
+/// The largest image of a storage holzi downloads for a thumbnail.
+const STORAGE_THUMBNAIL_LIMIT: u64 = 50 * 1024 * 1024;
 
 /// Ends one URL of [`files_open`].
 #[tauri::command]
@@ -224,12 +361,54 @@ pub fn files_release_tab(media: State<'_, MediaServer>, tab_id: String) {
 /// The JPEG thumbnail of an image (FR-005).
 #[tauri::command]
 pub async fn files_thumbnail(
+    state: State<'_, AppState>,
     files: State<'_, FilesState>,
     source: SourceRef,
     path: String,
     size: u64,
     modified_ms: i64,
 ) -> Result<Response, FilesError> {
+    if let Some(id) = storage_of(&source) {
+        let cache = files.thumbnails.clone();
+        let label = format!("storage:{id}");
+        if let Some(hit) = thumbnails::cached(&cache, &label, &path, size, modified_ms) {
+            return hit.map(Response::new);
+        }
+        if size > STORAGE_THUMBNAIL_LIMIT {
+            return Err(FilesError::new(
+                FilesErrorCode::TooLarge,
+                "too large for a thumbnail",
+            ));
+        }
+        let storage = storage_files(&state, id).await?;
+        let key = object_key(&path)?;
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+        let mut reader = storage
+            .store()
+            .get_range(storage.access(), &key, 0, size, deadline)
+            .await
+            .map_err(storage_error)?;
+        let temp = cache.join(format!(".download-{}", uuid::Uuid::new_v4()));
+        let downloaded = async {
+            tokio::fs::create_dir_all(&cache).await?;
+            let mut file = tokio::fs::File::create(&temp).await?;
+            tokio::io::copy(&mut reader, &mut file).await?;
+            Ok::<(), std::io::Error>(())
+        }
+        .await;
+        if downloaded.is_err() {
+            let _ = tokio::fs::remove_file(&temp).await;
+            return Err(storage_error(crate::remote_storage::StorageError::Network));
+        }
+        let bytes = blocking(move || {
+            let made =
+                thumbnails::render_into_cache(&cache, &label, &path, size, modified_ms, &temp);
+            let _ = std::fs::remove_file(&temp);
+            made
+        })
+        .await?;
+        return Ok(Response::new(bytes));
+    }
     let real = device_path(&files, &source, &path, Want::Read)?;
     let cache = files.thumbnails.clone();
     let bytes =
@@ -311,11 +490,18 @@ pub fn files_open_system(
 /// Creates a folder (FR-017).
 #[tauri::command]
 pub async fn files_create_folder(
+    state: State<'_, AppState>,
     files: State<'_, FilesState>,
     source: SourceRef,
     path: String,
     name: String,
 ) -> Result<Entry, FilesError> {
+    if let Some(id) = storage_of(&source) {
+        return storage_files(&state, id)
+            .await?
+            .create_folder(&path, &name)
+            .await;
+    }
     let parent = device_path(&files, &source, &path, Want::Write)?;
     let own = files.own.clone();
     blocking(move || edit::create_folder(&parent, &name, &own)).await
@@ -324,11 +510,18 @@ pub async fn files_create_folder(
 /// Renames an entry in its folder (FR-017).
 #[tauri::command]
 pub async fn files_rename(
+    state: State<'_, AppState>,
     files: State<'_, FilesState>,
     source: SourceRef,
     path: String,
     new_name: String,
 ) -> Result<Entry, FilesError> {
+    if let Some(id) = storage_of(&source) {
+        return storage_files(&state, id)
+            .await?
+            .rename(&path, &new_name)
+            .await;
+    }
     let entry = device_entry(&files, &source, &path, Want::Write)?;
     let own = files.own.clone();
     blocking(move || edit::rename(&entry, &new_name, &own)).await
@@ -407,6 +600,20 @@ pub async fn files_transfer_start(
     to: Option<TransferTarget>,
     channel: Channel<TransferEvent>,
 ) -> Result<String, FilesError> {
+    if let Some(id) = storage_of(&from) {
+        // A storage has no trash: the window asked before (FR-023).
+        if op != TransferOp::Delete {
+            return Err(later());
+        }
+        let storage = storage_files(&state, id).await?;
+        return transfers.start_storage_delete(state.gate(), storage, paths, channel);
+    }
+    if to
+        .as_ref()
+        .is_some_and(|target| storage_of(&target.source).is_some())
+    {
+        return Err(later());
+    }
     start_transfer(&state, &files, &transfers, op, &from, &paths, to, channel).await
 }
 
@@ -420,6 +627,9 @@ pub async fn files_import_dropped(
     to: TransferTarget,
     channel: Channel<TransferEvent>,
 ) -> Result<String, FilesError> {
+    if storage_of(&to.source).is_some() {
+        return Err(later());
+    }
     start_transfer(
         &state,
         &files,
