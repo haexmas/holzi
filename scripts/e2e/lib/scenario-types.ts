@@ -6,7 +6,7 @@ import type { ColorScheme, Instance } from './instance.ts'
 import type { Tools } from './preflight.ts'
 import type { NostrRelay } from './nostr-relay.ts'
 import type { DeviceHost } from './platform/host.ts'
-import type { Behavior, Provider, StandInModel } from './provider.ts'
+import type { Behavior, Provider, ProviderOptions } from './provider.ts'
 
 export type CloseBehavior = 'exit' | 'relaunch'
 export type ScenarioStatus = 'passed' | 'failed' | 'skipped'
@@ -141,10 +141,7 @@ export interface ScenarioContext {
     phoneScreen?: boolean
   }): Promise<Instance>
   /** Starts a stand-in model provider ([stand-in-provider.md](stand-in-provider.md)); ended with the context. */
-  provider(
-    behavior?: Behavior,
-    options?: { models?: StandInModel[] },
-  ): Promise<Provider>
+  provider(behavior?: Behavior, options?: ProviderOptions): Promise<Provider>
   /** A Nostr relay (the binary built with `--features e2e`) the instances of a scenario can share; ended with the context. */
   nostrRelay(): Promise<NostrRelay>
   /**
