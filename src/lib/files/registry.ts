@@ -14,6 +14,12 @@ export type FilesPlace = {
   path: string | null
   /** The file open in the viewer, by name within `path`. */
   open?: string
+  /** The search from `path` down (FR-027). */
+  q?: string
+  /** The filter (`lib/files/filters.ts`): types, size range, time range. */
+  t?: string
+  s?: string
+  d?: string
 }
 
 /** Route patterns below `/`: the start, the device and a storage. One mounted root component reads
@@ -25,7 +31,10 @@ export const FILES_ROUTE_CHILDREN = [
 ] as const
 
 /** The query keys a place may carry; anything else is dropped. */
-const KEYS = ['p', 'open'] as const
+const KEYS = ['p', 'open', 'q', 't', 's', 'd'] as const
+
+/** The keys a place keeps as they are. */
+const PASSED = ['q', 't', 's', 'd'] as const
 
 const OPAQUE_ID = /^[A-Za-z0-9-]{1,64}$/
 
@@ -34,6 +43,10 @@ export function filesLocation(place: FilesPlace): TabLocation {
   const query: Record<string, string> = {}
   if (place.path !== null) query.p = place.path
   if (place.open) query.open = place.open
+  for (const key of PASSED) {
+    const value = place[key]
+    if (value) query[key] = value
+  }
   const path =
     place.source.kind === 'storage'
       ? `/storage/${place.source.storageId}`
@@ -53,8 +66,14 @@ export function parseFilesPlace(location: TabLocation): FilesPlace | undefined {
   if (location.path === '/' || location.path === '') {
     return { source: { kind: 'device' }, path: null }
   }
-  const withOpen = (place: FilesPlace): FilesPlace =>
-    open ? { ...place, open } : place
+  const withOpen = (place: FilesPlace): FilesPlace => {
+    const out: FilesPlace = open ? { ...place, open } : { ...place }
+    for (const key of PASSED) {
+      const value = query[key]
+      if (value) out[key] = value
+    }
+    return out
+  }
   if (location.path === '/device') {
     return withOpen({ source: { kind: 'device' }, path })
   }

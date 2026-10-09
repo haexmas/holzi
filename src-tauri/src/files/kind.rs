@@ -2,7 +2,7 @@
 //! mirrors [`viewer_kind`] in `src/lib/files/viewerKind.ts`; `scripts/check-files-viewer.ts` keeps
 //! both tables equal.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// How the viewer shows a file.
@@ -87,6 +87,40 @@ pub fn viewer_kind(name: &str) -> ViewerKind {
         ViewerKind::Text
     } else {
         ViewerKind::Info
+    }
+}
+
+/// What a filter looks for (spec 044 FR-029). The window mirrors [`category`] in
+/// `src/lib/files/filters.ts`; `scripts/check-files-filters.ts` runs the same cases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub enum FileCategory {
+    Image,
+    Video,
+    Audio,
+    Document,
+    Text,
+}
+
+/// Extensions of documents: PDF and office formats, including those holzi does not show.
+const DOCUMENTS: &[&str] = &[
+    "pdf", "doc", "docx", "odt", "rtf", "xls", "xlsx", "ods", "ppt", "pptx", "odp", "epub",
+];
+
+/// The category of a file by its name; `None` for anything else (archives, programs, …).
+pub fn category(name: &str) -> Option<FileCategory> {
+    if DOCUMENTS.contains(&extension(name).as_str()) {
+        return Some(FileCategory::Document);
+    }
+    match viewer_kind(name) {
+        ViewerKind::Image => Some(FileCategory::Image),
+        ViewerKind::Video => Some(FileCategory::Video),
+        ViewerKind::Audio => Some(FileCategory::Audio),
+        ViewerKind::Text => Some(FileCategory::Text),
+        // A photo from a phone is an image, even where the web view cannot show it.
+        ViewerKind::Info if mime_for(name) == Some("image/heic") => Some(FileCategory::Image),
+        _ => None,
     }
 }
 

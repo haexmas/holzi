@@ -326,6 +326,7 @@ pub fn run() {
             // Spec 044: the file browser's places, thumbnail cache and folder watches.
             app.manage(files::state::FilesState::from_app(app.handle()));
             app.manage(files::transfer::TransferManager::default());
+            app.manage(files::search::SearchManager::default());
             // Spec 017, US9: holzi's protected places, known places and dialogs for extensions.
             app.state::<AppState>()
                 .extensions()
@@ -359,6 +360,8 @@ pub fn run() {
             files::browser_commands::files_transfer_answer,
             files::browser_commands::files_transfer_cancel,
             files::browser_commands::files_transfer_retry,
+            files::browser_commands::files_search_start,
+            files::browser_commands::files_search_cancel,
             files::browser_commands::files_thumbnail,
             files::browser_commands::files_watch,
             files::browser_commands::files_unwatch,

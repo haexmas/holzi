@@ -227,9 +227,11 @@ rmcp = { version = "=3.5.0", default-features = false, features = ["client", "tr
 # 007-cli-delegate FR-003) — was dev-dependency-only (tests used it for
 # fixtures); cli_delegate's production code needs it too.
 tempfile = "3"
-# Spec 044 (research R6, R7): the file browser's search walk (`same_file_system`, no links) and its
+# Spec 044 (research R6, R7): the file browser's search walk (`same_file_system`, no links), its
+# typo-tolerant name matching and its
 # thumbnails (only the decoders it needs, SIMD downscaling).
 walkdir = "2.5"
+frizbee = "0.13"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
 fast_image_resize = { version = "6.1", features = ["image"] }
 

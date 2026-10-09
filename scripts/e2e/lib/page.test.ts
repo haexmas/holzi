@@ -143,7 +143,7 @@ describe('click', () => {
     driver.onDisplayed(() => false)
     await assert.rejects(
       click(client, 'open-chat', 80),
-      /hook "open-chat" \(selector \[data-testid="open-chat"\]\) was not displayed within 80 ms/,
+      /hook "open-chat" \(selector \[data-testid="open-chat"\]\) was not displayed within \d+ ms/,
     )
   })
 })

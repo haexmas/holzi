@@ -6,8 +6,10 @@ import { Channel, invoke } from '@tauri-apps/api/core'
 import type { ConflictChoice } from '@bindings/ConflictChoice'
 import type { Entry } from '@bindings/Entry'
 import type { FilesError } from '@bindings/FilesError'
+import type { FilesSearchEvent } from '@bindings/FilesSearchEvent'
 import type { FolderChanged } from '@bindings/FolderChanged'
 import type { Opened } from '@bindings/Opened'
+import type { SearchFilters } from '@bindings/SearchFilters'
 import type { SourceRef } from '@bindings/SourceRef'
 import type { Sources } from '@bindings/Sources'
 import type { TextContent } from '@bindings/TextContent'
@@ -162,6 +164,32 @@ export function useFiles() {
     await invoke('files_transfer_retry', { transferId })
   }
 
+  /** Searches `path` and below; `onEvent` hears hits in batches and the end. Resolves to the
+   * search id for `searchCancelAsync`. */
+  async function searchStartAsync(
+    source: SourceRef,
+    path: string,
+    query: string,
+    filters: SearchFilters,
+    showHidden: boolean,
+    onEvent: (event: FilesSearchEvent) => void,
+  ): Promise<string> {
+    const channel = new Channel<FilesSearchEvent>()
+    channel.onmessage = onEvent
+    return await invoke<string>('files_search_start', {
+      source,
+      path,
+      query,
+      filters,
+      showHidden,
+      channel,
+    })
+  }
+
+  async function searchCancelAsync(searchId: string): Promise<void> {
+    await invoke('files_search_cancel', { searchId })
+  }
+
   return {
     sourcesAsync,
     listAsync,
@@ -181,5 +209,7 @@ export function useFiles() {
     transferAnswerAsync,
     transferCancelAsync,
     transferRetryAsync,
+    searchStartAsync,
+    searchCancelAsync,
   }
 }
