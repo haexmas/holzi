@@ -163,6 +163,12 @@ function hasEnded(child: ChildProcess): boolean {
   )
 }
 
+export function isPortInUseOutput(output: string): boolean {
+  return /(?:eaddrinuse|(?:address|port).{0,40}(?:already in use|in use)|(?:already in use|in use).{0,40}(?:address|port)|unable to listen for http server.*\bport\b)/i.test(
+    output,
+  )
+}
+
 export interface StartInstanceOptions {
   /** The application under test, as given. */
   app: string
@@ -246,11 +252,7 @@ async function launchDriver(
         const output = readFileSync(options.logFile)
           .subarray(logOffset)
           .toString()
-        if (
-          /(?:eaddrinuse|(?:address|port).{0,40}(?:already in use|in use)|(?:already in use|in use).{0,40}(?:address|port))/i.test(
-            output,
-          )
-        ) {
+        if (isPortInUseOutput(output)) {
           throw new PortInUseError(ports.driver)
         }
         throw new Error(
