@@ -1987,6 +1987,41 @@
     "empty": "This folder is empty.",
     "symlink": "Link",
     "holziOwned": "holzi's own data, read-only",
+    "search": {
+      "placeholder": "Search in this folder",
+      "clear": "Clear search",
+      "count": "{count} hit | {count} hits",
+      "truncated": "– only the first, search more precisely for more",
+      "none": "No hits.",
+      "reveal": "Show in folder"
+    },
+    "filter": {
+      "label": "Filter",
+      "type": "Type",
+      "size": "Size",
+      "date": "Modified",
+      "clear": "Remove filter",
+      "types": {
+        "image": "Images",
+        "video": "Videos",
+        "audio": "Audio",
+        "document": "Documents",
+        "text": "Text"
+      },
+      "sizes": {
+        "any": "Any size",
+        "small": "Under 1 MB",
+        "medium": "1 to 100 MB",
+        "large": "Over 100 MB"
+      },
+      "dates": {
+        "any": "Any time",
+        "day": "Last 24 hours",
+        "week": "Last 7 days",
+        "month": "Last 30 days",
+        "year": "Last year"
+      }
+    },
     "cancel": "Cancel",
     "drop": "Copy here",
     "actions": {

@@ -1987,6 +1987,41 @@
     "empty": "Dieser Ordner ist leer.",
     "symlink": "Verknüpfung",
     "holziOwned": "Eigene Daten von holzi, nur lesen",
+    "search": {
+      "placeholder": "In diesem Ordner suchen",
+      "clear": "Suche leeren",
+      "count": "{count} Treffer | {count} Treffer",
+      "truncated": "– nur die ersten, genauer suchen für mehr",
+      "none": "Keine Treffer.",
+      "reveal": "Im Ordner zeigen"
+    },
+    "filter": {
+      "label": "Filtern",
+      "type": "Typ",
+      "size": "Größe",
+      "date": "Geändert",
+      "clear": "Filter entfernen",
+      "types": {
+        "image": "Bilder",
+        "video": "Videos",
+        "audio": "Audio",
+        "document": "Dokumente",
+        "text": "Text"
+      },
+      "sizes": {
+        "any": "Jede Größe",
+        "small": "Unter 1 MB",
+        "medium": "1 bis 100 MB",
+        "large": "Über 100 MB"
+      },
+      "dates": {
+        "any": "Jederzeit",
+        "day": "Letzte 24 Stunden",
+        "week": "Letzte 7 Tage",
+        "month": "Letzte 30 Tage",
+        "year": "Letztes Jahr"
+      }
+    },
     "cancel": "Abbrechen",
     "drop": "Hierher kopieren",
     "actions": {
