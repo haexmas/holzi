@@ -816,6 +816,10 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
 - **FR-037**: Ein Gerät MUSS die Tabellen einer Erweiterung über ihre Migrationen anlegen,
   bevor es Zeilen für diese Tabellen übernimmt. Zeilen für Tabellen, die es noch nicht hat,
   MUSS es aufbewahren und später übernehmen, ohne den Sync anderer Daten aufzuhalten.
+  Zeilen für eine Tabelle oder Spalte, die eine bereits angewendete Migration entfernt oder
+  umbenannt hat, stammen von einem Gerät mit älterer Fassung: Sie MÜSSEN warten, bis dieses
+  Gerät aktualisiert hat, und dann in der Form übernommen werden, die seine Migration ihnen
+  gegeben hat. Sie DÜRFEN den Sync der Erweiterung nicht dauerhaft anhalten.
 - **FR-038**: Kommt ein Update an, MUSS ein Gerät dessen neue Migrationen anwenden, bevor es
   die neue Fassung startet. Offene Tabs MÜSSEN neu laden oder einen Hinweis zeigen.
 - **FR-039**: Entfernen und Deaktivieren MÜSSEN auf allen eigenen Geräten wirken.

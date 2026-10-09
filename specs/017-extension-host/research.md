@@ -287,6 +287,19 @@ die geparkten Gruppen dieses Präfixes in HLC-Reihenfolge an (`apply_remote_chan
 Grenze für geparkte Bytes je Erweiterung (256 MiB): an der Grenze wird keine Gruppe verworfen, sondern der Fortschritt des Ursprungsgeräts hält vor der nächsten Gruppe dieses Präfixes an, mit einer Statusmeldung (Fehler `parked_limit` am Gerätezustand dieser Erweiterung, solange sie dort noch übertragen wird; er endet, sobald sie dort startet oder mit „Daten löschen“ entfernt wird); „Daten löschen“ verwirft die geparkten Gruppen. Nach jedem Anwenden wird geprüft, dass
 keine unbekannte Spalte übersprungen wurde.
 
+**Gerät mit älterer Fassung**: Fehlt eine Tabelle oder Spalte, obwohl die Erweiterung hier `ready` oder
+`disabled` ist, jede bekannte Migration angewendet ist und im laufenden Pull keine neue ankommt, hat eine
+Migration sie entfernt oder umbenannt; geschrieben hat sie ein Gerät, das noch die ältere Fassung hat. Geparkt würde
+diese Gruppe nie anwendbar und hielte alle späteren der Erweiterung fest. Sie wird daher nicht geparkt,
+sondern wartet (`outdated_origin`): Der Fortschritt ihres Ursprungs bleibt unter ihr, spätere Gruppen
+der Erweiterung im selben Pull warten mit, anderes wird übernommen. Der Absender liest beim Ausliefern
+den aktuellen Stand seiner Tabellen; sobald er aktualisiert hat, kommt die Gruppe in der Form an, die
+seine eigene Migration ihr gegeben hat (umbenannte Spalte unter neuem Namen, umgewandelte Daten mit
+neuer HLC). Ist die Erweiterung hier nicht bereit (Übertragung, Signatur- oder Migrationsfehler), wird
+wie oben geparkt. Eine falsche Einordnung kostet nur ein erneutes Abholen. Verworfen: eine
+Spalten-Historie, die Zellen entfernter Spalten verwirft und umbenannte umleitet — sie verlöre Daten,
+die die Migration des Absenders umgewandelt hätte.
+
 Regel für holzi: synchronisierte Zeilen von Kern- und Erweiterungstabellen werden nie in einer Schreibgruppe
 geschrieben (sonst warten Kerndaten mit einer geparkten Gruppe). Lokale Journalzeilen (`_no_sync`) dürfen mit in
 der Transaktion stehen.
