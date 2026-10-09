@@ -207,3 +207,28 @@ async fn find_actions_hint_says_a_miss_is_about_actions_not_data() {
     assert!(hint.contains("not about the user's data"), "{hint}");
     assert!(hint.contains("omit query"), "{hint}");
 }
+
+#[test]
+fn search_finds_the_app_list_for_questions_about_extensions() {
+    let defs = crate::chat::eval::embedded_tools();
+    for query in [
+        "erweiterungen",
+        "Erweiterung",
+        "installierte Erweiterungen",
+        "Erweiterungen auflisten",
+        "extensions",
+        "installed extensions",
+        "list extensions",
+        "installed apps",
+    ] {
+        let (page, _) = search_actions(&defs, Some(query), None, 5);
+        let ids = page
+            .iter()
+            .map(|action| action.action_id.as_str())
+            .collect::<Vec<_>>();
+        assert!(
+            ids.contains(&"wm.apps.list"),
+            "query {query:?} found {ids:?}"
+        );
+    }
+}
