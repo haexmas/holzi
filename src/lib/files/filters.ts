@@ -3,8 +3,17 @@
 // `src-tauri/src/files/kind.rs`; `scripts/check-files-filters.ts` runs the same cases as its tests.
 // A tab keeps its filter in its location (`t`, `s`, `d`), so session restore brings it back.
 import type { FileCategory } from '../../types/bindings/FileCategory.ts'
-import type { SearchFilters } from '../../types/bindings/SearchFilters.ts'
 import { extensionOf, viewerKind } from './viewerKind.ts'
+
+/** The filter as Rust's search takes it (`SearchFilters` in the bindings, written out here: the
+ * scripts' type check cannot follow the generated binding's import of `FileCategory`). */
+export type SearchFilters = {
+  types?: FileCategory[]
+  sizeMin?: number
+  sizeMax?: number
+  modifiedFrom?: number
+  modifiedTo?: number
+}
 
 export const CATEGORIES: readonly FileCategory[] = [
   'image',
