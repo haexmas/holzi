@@ -273,3 +273,13 @@ Werkzeug-Instruktion (`prompt.rs`, mit und ohne Suche) verlangt jetzt, Dinge bei
 und nie Ids wie App-Ids oder UUIDs zu zeigen; das gilt auch für Unterhaltungen, Geräte und andere
 Listen. Damit der Agent eine Erweiterung stattdessen beschreiben kann, gibt `wm.apps.list` die
 Beschreibung aus ihrem Manifest mit (`description`, nur wenn vorhanden; System-Apps haben keine).
+
+## R18 — `run_command` ist kein Ausweg für holzi-Daten (beim Testen gefunden)
+
+Auf „Wie viele ungelesene Mails habe ich?“ wollte Qwen3-4B `run_command` mit dem erfundenen Befehl
+`mail count unread` ausführen; nur die Freigabe hielt es auf. An die Daten einer Erweiterung kommt der
+Agent erst mit den geplanten Specs 018 (Werkzeuge über MCP) und 019 (Werkzeuge in den haextensions).
+Bis dahin grenzt die Beschreibung von `run_command` (`chat/tools/cli.rs`) das Werkzeug ein: nur wenn
+der Nutzer etwas auf dem Gerät ausführen lassen will, es erreicht Programme und Dateien des Geräts,
+nicht holzis Apps oder Erweiterungen oder deren Daten, und nie einen erfundenen Befehl. Das Eval-Set
+bietet `run_command` nicht an; ob das Modell der Beschreibung folgt, zeigt nur der Test in der App.
