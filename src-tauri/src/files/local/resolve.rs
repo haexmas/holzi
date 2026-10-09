@@ -41,6 +41,19 @@ pub fn resolve(path: &Path) -> Result<PathBuf, FilesError> {
     }
 }
 
+/// Where the entry `path` itself lives: its folder resolved, its own name kept. A link stays the
+/// link, so renaming, moving or deleting it never reaches its target (spec 044 FR-017 to FR-023).
+pub fn resolve_entry(path: &Path) -> Result<PathBuf, FilesError> {
+    let name = match path.components().next_back() {
+        Some(Component::Normal(name)) => name,
+        _ => return Err(FilesError::invalid_path("path must name an entry")),
+    };
+    let parent = path
+        .parent()
+        .ok_or_else(|| FilesError::invalid_path("path must name an entry"))?;
+    Ok(resolve(parent)?.join(name))
+}
+
 #[cfg(test)]
 #[path = "resolve_tests.rs"]
 mod tests;

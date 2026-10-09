@@ -2,6 +2,7 @@
 //! places. Extensions (`extensions::fs`), the file browser and agents share these rules.
 
 pub mod drives;
+pub mod edit;
 pub mod ops;
 pub mod places;
 pub mod resolve;
@@ -10,4 +11,4 @@ pub mod text;
 pub mod watch;
 
 pub use places::{known_places, OwnPlaces, Place};
-pub use resolve::resolve;
+pub use resolve::{resolve, resolve_entry};

@@ -324,6 +324,7 @@ pub fn run() {
             // without an `AppHandle`, so the emitter is set here.
             // Spec 044: the file browser's places, thumbnail cache and folder watches.
             app.manage(files::state::FilesState::from_app(app.handle()));
+            app.manage(files::transfer::TransferManager::default());
             // Spec 017, US9: holzi's protected places, known places and dialogs for extensions.
             app.state::<AppState>()
                 .extensions()
@@ -350,6 +351,13 @@ pub fn run() {
             files::browser_commands::files_open,
             files::browser_commands::files_release,
             files::browser_commands::files_release_tab,
+            files::browser_commands::files_create_folder,
+            files::browser_commands::files_rename,
+            files::browser_commands::files_transfer_start,
+            files::browser_commands::files_import_dropped,
+            files::browser_commands::files_transfer_answer,
+            files::browser_commands::files_transfer_cancel,
+            files::browser_commands::files_transfer_retry,
             files::browser_commands::files_thumbnail,
             files::browser_commands::files_watch,
             files::browser_commands::files_unwatch,

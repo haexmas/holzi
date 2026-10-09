@@ -57,3 +57,25 @@ fn a_link_resolves_to_where_it_points() {
         real.join("elsewhere").join("new.txt")
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn an_entry_keeps_its_own_name_even_when_it_is_a_link() {
+    let dir = tempfile::tempdir().unwrap();
+    let real = std::fs::canonicalize(dir.path()).unwrap();
+    std::fs::create_dir(real.join("target")).unwrap();
+    std::os::unix::fs::symlink(real.join("target"), real.join("link")).unwrap();
+    let spelled = format!("{}/target/../link", real.display());
+    assert_eq!(
+        resolve_entry(Path::new(&spelled)).unwrap(),
+        real.join("link")
+    );
+    assert_eq!(resolve(Path::new(&spelled)).unwrap(), real.join("target"));
+}
+
+#[test]
+fn an_entry_must_have_a_name() {
+    assert!(resolve_entry(Path::new("/")).is_err());
+    assert!(resolve_entry(Path::new("/tmp/..")).is_err());
+    assert!(resolve_entry(Path::new("relative")).is_err());
+}

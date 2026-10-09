@@ -13,6 +13,7 @@ pub mod picked;
 pub mod state;
 pub mod streaming;
 pub mod thumbnails;
+pub mod transfer;
 
 pub use picked::PickedFile;
 
@@ -40,6 +41,8 @@ pub struct FilesError {
 pub enum FilesErrorCode {
     /// The path is not absolute, holds `.`/`..` after its existing part, or a broken link.
     InvalidPath,
+    /// A name that is empty, too long or holds a character some system refuses.
+    InvalidName,
     Exists,
     IntoItself,
     NoSpace,
