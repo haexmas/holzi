@@ -4,6 +4,15 @@ Stand der Quellen (2026-10-10): holzi `main` @ `1a213107`; vault-sdk `origin/mai
 `40ea29ce5ee2c913a541e97033e9e885fa6372bb` (Release 4.2.0); holzi pinnt `haex-bundle` auf vault-sdk
 @ `36bf6e98f36c2362d42aa2d92c85288a3d91e775` (4.0.0; `crates/` unverändert bis 4.2.0); `rmcp =3.5.0`.
 
+**Nachprüfung (T002, 2026-10-10, `graphify update .` → 20 665 Knoten, je Abfrage Budget 1000)**:
+
+| Neues Artefakt                   | Abfrage                                                       | Kandidaten und warum keiner passt                                                                                                                                                                                       |
+| -------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extensions/agent_tools/link.rs` | „mcp client transport channel server request handler link“    | Android-Plugin (`Channel` für Insets/Netz) und dieser Vertrag; der bestehende MCP-Client `chat/tools/mcp.rs` startet Kindprozesse über stdio und bleibt dafür, `link.rs` nutzt dasselbe `rmcp`, aber das Kanalpaar (R1) |
+| `chat/tools/extension_offer.rs`  | „match user message to tools offer score idf keyword“         | `offer.rs` (`search_score`, `words`, `word_matches`) und `appMatch.ts`: Bausteine, die R6 wiederverwendet; keine Bewertung der Nachricht gegen Werkzeuge vorhanden                                                      |
+| `src/lib/extensions/mcpRelay.ts` | „relay port message postMessage frame invoke event extension“ | nur `vault_gate/invoke.rs` und Android-`Invoke`; der Ort bleibt `useExtensionFrame.ts` (Port-Handshake)                                                                                                                 |
+| `openAppInBackground`            | „open app window minimized background without focus“          | Passwort-Import `open.rs`, `useWorkspaceBackground`; vorhanden ist nur `minimizeWindow` in `layoutState.ts`, das R9 nutzt                                                                                               |
+
 ## R1 — Transport: `rmcp` über ein Kanalpaar, das Frontend reicht JSON-RPC durch
 
 **Decision**: holzi bleibt MCP-Client mit `rmcp`. Die Verbindung zu einer Erweiterung ist ein Paar aus

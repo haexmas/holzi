@@ -23,8 +23,8 @@ afterwards).
 
 ## Phase 1: Setup
 
-- [ ] T001 Rebase `018-extension-agent-tools` on `origin/main`; confirm PR #347 (spec 046) is merged and `src-tauri/src/chat/tools/offer.rs` has `MAX_ACTION_OFFER = 16` and `word_matches`; confirm `rmcp = "=3.5.0"` in `src-tauri/Cargo.toml` and that `rmcp-3.5.0/src/transport/sink_stream.rs` exists in the cargo registry
-- [ ] T002 Refresh the graph (`graphify` on the worktree) and run one bounded `graphify query "<intent>" --budget 1000` each for `src-tauri/src/extensions/agent_tools/link.rs`, `src-tauri/src/chat/tools/extension_offer.rs`, `src/lib/extensions/mcpRelay.ts`, `openAppInBackground` in `src/lib/wm/layoutState.ts`; record candidates and why each did not match in the head section of `specs/018-extension-agent-tools/research.md`. If a near-identical candidate appears, stop and ask the operator
+- [x] T001 Rebase `018-extension-agent-tools` on `origin/main`; confirm PR #347 (spec 046) is merged and `src-tauri/src/chat/tools/offer.rs` has `MAX_ACTION_OFFER = 16` and `word_matches`; confirm `rmcp = "=3.5.0"` in `src-tauri/Cargo.toml` and that `rmcp-3.5.0/src/transport/sink_stream.rs` exists in the cargo registry
+- [x] T002 Refresh the graph (`graphify` on the worktree) and run one bounded `graphify query "<intent>" --budget 1000` each for `src-tauri/src/extensions/agent_tools/link.rs`, `src-tauri/src/chat/tools/extension_offer.rs`, `src/lib/extensions/mcpRelay.ts`, `openAppInBackground` in `src/lib/wm/layoutState.ts`; record candidates and why each did not match in the head section of `specs/018-extension-agent-tools/research.md`. If a near-identical candidate appears, stop and ask the operator
 
 ---
 
