@@ -1987,6 +1987,54 @@
     "empty": "This folder is empty.",
     "symlink": "Link",
     "holziOwned": "holzi's own data, read-only",
+    "cancel": "Cancel",
+    "drop": "Copy here",
+    "actions": {
+      "open": "Open",
+      "openSystem": "Open with system app",
+      "select": "Select",
+      "copy": "Copy",
+      "cut": "Cut",
+      "paste": "Paste",
+      "rename": "Rename",
+      "delete": "Delete",
+      "newFolder": "New folder"
+    },
+    "selection": {
+      "count": "{count} selected | {count} selected",
+      "clear": "Clear selection"
+    },
+    "clipboard": {
+      "waiting": "In holzi's clipboard"
+    },
+    "name": {
+      "newFolder": "New folder",
+      "rename": "Rename",
+      "label": "Name",
+      "create": "Create",
+      "renameAction": "Rename"
+    },
+    "conflict": {
+      "title": "Name already taken",
+      "body": "“{name}” already exists at the target.",
+      "forAll": "Apply to all further names",
+      "replace": "Replace",
+      "keepBoth": "Keep both",
+      "skip": "Skip",
+      "answer": "Answer question"
+    },
+    "delete": {
+      "title": "Delete for good?",
+      "body": "{count} entry will be deleted for good. This cannot be undone. | {count} entries will be deleted for good. This cannot be undone.",
+      "confirm": "Delete"
+    },
+    "transfer": {
+      "copy": "Copying",
+      "move": "Moving",
+      "delete": "Deleting",
+      "retry": "Try again",
+      "cancel": "Cancel"
+    },
     "view": {
       "list": "Show as list",
       "grid": "Show as grid"
@@ -2051,7 +2099,8 @@
       "unsupported": "Not available here yet.",
       "exists": "This name exists already.",
       "intoItself": "A folder cannot go into itself.",
-      "noSpace": "Not enough space."
+      "noSpace": "Not enough space.",
+      "invalidName": "This name is not allowed."
     }
   }
 }

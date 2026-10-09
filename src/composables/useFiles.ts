@@ -3,6 +3,7 @@
  * user; paths are checked in Rust. Errors come back as `FilesError` (`{ code, message }`).
  */
 import { Channel, invoke } from '@tauri-apps/api/core'
+import type { ConflictChoice } from '@bindings/ConflictChoice'
 import type { Entry } from '@bindings/Entry'
 import type { FilesError } from '@bindings/FilesError'
 import type { FolderChanged } from '@bindings/FolderChanged'
@@ -10,6 +11,9 @@ import type { Opened } from '@bindings/Opened'
 import type { SourceRef } from '@bindings/SourceRef'
 import type { Sources } from '@bindings/Sources'
 import type { TextContent } from '@bindings/TextContent'
+import type { TransferEvent } from '@bindings/TransferEvent'
+import type { TransferOp } from '@bindings/TransferOp'
+import type { TransferTarget } from '@bindings/TransferTarget'
 
 /** A `FilesError` from a rejected command, or `undefined` for anything else. */
 export function asFilesError(error: unknown): FilesError | undefined {
@@ -95,6 +99,69 @@ export function useFiles() {
     await invoke('files_open_system', { source, path })
   }
 
+  async function createFolderAsync(
+    source: SourceRef,
+    path: string,
+    name: string,
+  ): Promise<Entry> {
+    return await invoke<Entry>('files_create_folder', { source, path, name })
+  }
+
+  async function renameAsync(
+    source: SourceRef,
+    path: string,
+    newName: string,
+  ): Promise<Entry> {
+    return await invoke<Entry>('files_rename', { source, path, newName })
+  }
+
+  /** Starts a copy, move or delete; `onEvent` hears its progress, conflicts and end. Refusals
+   * before the start (`intoItself`, `noSpace`, …) reject. Resolves to the transfer id. */
+  async function transferStartAsync(
+    op: TransferOp,
+    from: SourceRef,
+    paths: string[],
+    to: TransferTarget | null,
+    onEvent: (event: TransferEvent) => void,
+  ): Promise<string> {
+    const channel = new Channel<TransferEvent>()
+    channel.onmessage = onEvent
+    return await invoke<string>('files_transfer_start', {
+      op,
+      from,
+      paths,
+      to,
+      channel,
+    })
+  }
+
+  /** Copies paths dropped from the system into a folder (FR-024). */
+  async function importDroppedAsync(
+    paths: string[],
+    to: TransferTarget,
+    onEvent: (event: TransferEvent) => void,
+  ): Promise<string> {
+    const channel = new Channel<TransferEvent>()
+    channel.onmessage = onEvent
+    return await invoke<string>('files_import_dropped', { paths, to, channel })
+  }
+
+  async function transferAnswerAsync(
+    transferId: string,
+    choice: ConflictChoice,
+    forAll: boolean,
+  ): Promise<void> {
+    await invoke('files_transfer_answer', { transferId, choice, forAll })
+  }
+
+  async function transferCancelAsync(transferId: string): Promise<void> {
+    await invoke('files_transfer_cancel', { transferId })
+  }
+
+  async function transferRetryAsync(transferId: string): Promise<void> {
+    await invoke('files_transfer_retry', { transferId })
+  }
+
   return {
     sourcesAsync,
     listAsync,
@@ -107,5 +174,12 @@ export function useFiles() {
     watchAsync,
     unwatchAsync,
     openSystemAsync,
+    createFolderAsync,
+    renameAsync,
+    transferStartAsync,
+    importDroppedAsync,
+    transferAnswerAsync,
+    transferCancelAsync,
+    transferRetryAsync,
   }
 }

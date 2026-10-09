@@ -1987,6 +1987,54 @@
     "empty": "Dieser Ordner ist leer.",
     "symlink": "Verknüpfung",
     "holziOwned": "Eigene Daten von holzi, nur lesen",
+    "cancel": "Abbrechen",
+    "drop": "Hierher kopieren",
+    "actions": {
+      "open": "Öffnen",
+      "openSystem": "Mit System-App öffnen",
+      "select": "Auswählen",
+      "copy": "Kopieren",
+      "cut": "Ausschneiden",
+      "paste": "Einfügen",
+      "rename": "Umbenennen",
+      "delete": "Löschen",
+      "newFolder": "Neuer Ordner"
+    },
+    "selection": {
+      "count": "{count} ausgewählt | {count} ausgewählt",
+      "clear": "Auswahl aufheben"
+    },
+    "clipboard": {
+      "waiting": "In der Ablage von holzi"
+    },
+    "name": {
+      "newFolder": "Neuer Ordner",
+      "rename": "Umbenennen",
+      "label": "Name",
+      "create": "Anlegen",
+      "renameAction": "Umbenennen"
+    },
+    "conflict": {
+      "title": "Name schon vorhanden",
+      "body": "Am Ziel gibt es „{name}“ schon.",
+      "forAll": "Für alle weiteren übernehmen",
+      "replace": "Ersetzen",
+      "keepBoth": "Beide behalten",
+      "skip": "Überspringen",
+      "answer": "Frage beantworten"
+    },
+    "delete": {
+      "title": "Endgültig löschen?",
+      "body": "{count} Eintrag wird endgültig gelöscht. Das lässt sich nicht rückgängig machen. | {count} Einträge werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
+      "confirm": "Löschen"
+    },
+    "transfer": {
+      "copy": "Kopieren",
+      "move": "Verschieben",
+      "delete": "Löschen",
+      "retry": "Erneut versuchen",
+      "cancel": "Abbrechen"
+    },
     "view": {
       "list": "Als Liste zeigen",
       "grid": "Als Raster zeigen"
@@ -2051,7 +2099,8 @@
       "unsupported": "Hier noch nicht verfügbar.",
       "exists": "Diesen Namen gibt es schon.",
       "intoItself": "Ein Ordner kann nicht in sich selbst.",
-      "noSpace": "Nicht genug Platz."
+      "noSpace": "Nicht genug Platz.",
+      "invalidName": "Dieser Name ist nicht erlaubt."
     }
   }
 }

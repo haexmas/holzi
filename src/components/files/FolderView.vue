@@ -2,12 +2,21 @@
 /**
  * The open folder as list or grid (spec 044 FR-003, FR-008): both scroll virtually, so a folder
  * with 50 000 entries mounts only the rows on screen. Loading, empty and error states replace the
- * list; a folder the system denies shows why.
+ * list; a folder the system denies shows why. A press reports the entry with the keys held (the
+ * frame decides between opening and selecting, `lib/files/clipboard.ts`); entries drag onto a
+ * folder row or the open folder (FR-018).
  */
 import type { Entry } from '@bindings/Entry'
 import type { FilesError } from '@bindings/FilesError'
 import type { SourceRef } from '@bindings/SourceRef'
 import type { FilesView } from '~/composables/useFilesPrefs'
+import {
+  type ClickKeys,
+  type DragPayload,
+  dragPayload,
+  ENTRIES_MIME,
+  parseDragPayload,
+} from '~/lib/files/clipboard'
 import { formatFileSize } from '~/lib/passwords/format'
 
 const props = defineProps<{
@@ -16,9 +25,24 @@ const props = defineProps<{
   loading: boolean
   error: FilesError | null
   view: FilesView
+  /** The open folder, where a drop on the empty area goes. */
+  folder: string
+  /** Selected paths. */
+  selected: readonly string[]
+  /** Paths cut to holzi's clipboard, shown faded. */
+  dimmed: readonly string[]
 }>()
 
-const emit = defineEmits<{ activate: [entry: Entry] }>()
+const emit = defineEmits<{
+  press: [entry: Entry, keys: ClickKeys]
+  /** The context menu opens over an entry, or over the empty area (`null`). */
+  context: [entry: Entry | null]
+  drop: [
+    payload: DragPayload,
+    target: string,
+    keys: { ctrl: boolean; alt: boolean },
+  ]
+}>()
 
 const { t, d } = useI18n()
 
@@ -65,6 +89,66 @@ function size(entry: Entry): string {
     : formatFileSize(entry.size)
 }
 
+function press(entry: Entry, event: MouseEvent) {
+  emit('press', entry, {
+    toggle: event.ctrlKey || event.metaKey,
+    range: event.shiftKey,
+  })
+}
+
+function onContextMenu(event: MouseEvent) {
+  const row = (event.target as HTMLElement | null)?.closest('[data-path]')
+  const path = row?.getAttribute('data-path')
+  emit('context', props.entries.find((entry) => entry.path === path) ?? null)
+}
+
+function rowClass(entry: Entry): string[] {
+  return [
+    entry.hidden || props.dimmed.includes(entry.path) ? 'opacity-60' : '',
+    props.selected.includes(entry.path) ? 'bg-primary/15' : '',
+    dropOver.value === entry.path ? 'ring-2 ring-primary ring-inset' : '',
+  ]
+}
+
+/** The folder a drag hovers over (a folder row, or the open folder). */
+const dropOver = ref<string | null>(null)
+
+function onDragStart(entry: Entry, event: DragEvent) {
+  const paths = props.selected.includes(entry.path)
+    ? props.selected
+    : [entry.path]
+  const items = props.entries
+    .filter((candidate) => paths.includes(candidate.path))
+    .map((candidate) => ({ path: candidate.path, kind: candidate.kind }))
+  event.dataTransfer?.setData(
+    ENTRIES_MIME,
+    dragPayload({ source: props.source, folder: props.folder, items }),
+  )
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copyMove'
+}
+
+/** Accepts a drag of holzi's entries over a folder row (`entry`) or the open folder (`null`). */
+function onDragOver(entry: Entry | null, event: DragEvent) {
+  if (!event.dataTransfer?.types.includes(ENTRIES_MIME)) return
+  if (entry && entry.kind !== 'dir') return
+  event.preventDefault()
+  event.stopPropagation()
+  dropOver.value = entry?.path ?? props.folder
+}
+
+function onDrop(entry: Entry | null, event: DragEvent) {
+  dropOver.value = null
+  if (entry && entry.kind !== 'dir') return
+  const payload = parseDragPayload(event.dataTransfer?.getData(ENTRIES_MIME))
+  if (!payload) return
+  event.preventDefault()
+  event.stopPropagation()
+  emit('drop', payload, entry?.path ?? props.folder, {
+    ctrl: event.ctrlKey,
+    alt: event.altKey,
+  })
+}
+
 const errorText = computed(() => {
   if (!props.error) return ''
   const key = `files.error.${props.error.code}`
@@ -73,7 +157,15 @@ const errorText = computed(() => {
 </script>
 
 <template>
-  <div ref="container" class="h-full min-h-0">
+  <div
+    ref="container"
+    class="h-full min-h-0"
+    :class="dropOver === folder ? 'ring-2 ring-primary ring-inset' : ''"
+    @contextmenu="onContextMenu"
+    @dragover="onDragOver(null, $event)"
+    @dragleave="dropOver = null"
+    @drop="onDrop(null, $event)"
+  >
     <div
       v-if="error"
       class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground"
@@ -105,10 +197,16 @@ const errorText = computed(() => {
             type="button"
             role="listitem"
             class="flex w-full items-center gap-3 px-3 text-left text-sm hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-            :class="entry?.hidden ? 'opacity-60' : ''"
+            :class="entry ? rowClass(entry) : ''"
             :style="{ height: `${ROW_HEIGHT}px` }"
             :data-testid="`files-entry-${entry?.name}`"
-            @click="entry && emit('activate', entry)"
+            :data-path="entry?.path"
+            :aria-selected="entry ? selected.includes(entry.path) : undefined"
+            :draggable="!!entry"
+            @click="entry && press(entry, $event)"
+            @dragstart="entry && onDragStart(entry, $event)"
+            @dragover="entry && onDragOver(entry, $event)"
+            @drop="entry && onDrop(entry, $event)"
           >
             <template v-if="entry">
               <span class="size-5 shrink-0">
@@ -153,10 +251,16 @@ const errorText = computed(() => {
               type="button"
               role="listitem"
               class="flex flex-col items-center gap-1 rounded p-2 text-xs hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-              :class="entry.hidden ? 'opacity-60' : ''"
+              :class="rowClass(entry)"
               :style="{ width: `${TILE_WIDTH}px` }"
               :data-testid="`files-entry-${entry.name}`"
-              @click="emit('activate', entry)"
+              :data-path="entry.path"
+              :aria-selected="selected.includes(entry.path)"
+              draggable="true"
+              @click="press(entry, $event)"
+              @dragstart="onDragStart(entry, $event)"
+              @dragover="onDragOver(entry, $event)"
+              @drop="onDrop(entry, $event)"
             >
               <span class="size-24">
                 <FilesEntryIcon :source="source" :entry="entry" thumbnail />

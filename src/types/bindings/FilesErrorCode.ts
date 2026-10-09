@@ -3,4 +3,4 @@
 /**
  * The kinds of [`FilesError`].
  */
-export type FilesErrorCode = "invalidPath" | "exists" | "intoItself" | "noSpace" | "holziOwned" | "noAccess" | "notFound" | "binary" | "broken" | "tooLarge" | "blocked" | "notGranted" | "unsupported";
+export type FilesErrorCode = "invalidPath" | "invalidName" | "exists" | "intoItself" | "noSpace" | "holziOwned" | "noAccess" | "notFound" | "binary" | "broken" | "tooLarge" | "blocked" | "notGranted" | "unsupported";
