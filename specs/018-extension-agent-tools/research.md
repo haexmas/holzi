@@ -67,8 +67,9 @@ ohne neuen Speicher:
 
 - Installation und Update zeigen die Werkzeuge im bestehenden `InstallDialog`, ein Update nur neue
   Werkzeuge und solche mit geänderter Wirkungsart (`new_declarations`, `install.rs:197`).
-- Status `granted` (angehakt): Die Wirkungsart gilt. Status `ask` (nicht angehakt): Jeder Aufruf braucht
-  eine Zustimmung, auch im Modus „Auto“. Status `denied`: Das Werkzeug wird nicht angeboten.
+- Status `granted` (angehakt): Die Wirkungsart gilt. Status `ask` (nicht angehakt): Jeder Aufruf braucht eine Zustimmung, in jedem Modus, auch in „Plan“
+  (`Tool::always_ask()`, ausgewertet in `plan_calls`, nicht über die Risikoklasse, die in „Plan“ ablehnen
+  würde). Status `denied`: Das Werkzeug wird nicht angeboten.
 - Der Schalter „Für den Agenten verfügbar“ (FR-016) ist eine Zeile `agentTool / * / denied`; „verweigert
   vor erteilt“ (017 FR-017) schaltet damit alle Werkzeuge der Erweiterung ab.
 - Zeilen gelten für die Vault und werden synchronisiert (`SYNCED_TABLES`); Entwicklungsversionen nutzen

@@ -32,13 +32,13 @@ Rust: `extensions/bundle/manifest.rs` → `Manifest.tools: Vec<ManifestTool>`; `
 
 Wirkung je Werkzeug (R4):
 
-| Zeilen                        | Angebot | Freigabe                                |
-| ----------------------------- | ------- | --------------------------------------- |
-| `*` denied                    | nein    | —                                       |
-| Werkzeug denied               | nein    | —                                       |
-| Werkzeug granted              | ja      | nach Wirkungsart und Modus (032 FR-007) |
-| Werkzeug ask                  | ja      | immer Zustimmung (auch „Auto“)          |
-| keine Zeile (nicht bestätigt) | nein    | —                                       |
+| Zeilen                        | Angebot | Freigabe                                       |
+| ----------------------------- | ------- | ---------------------------------------------- |
+| `*` denied                    | nein    | —                                              |
+| Werkzeug denied               | nein    | —                                              |
+| Werkzeug granted              | ja      | nach Wirkungsart und Modus (032 FR-007)        |
+| Werkzeug ask                  | ja      | immer Zustimmung, in jedem Modus (auch „Plan“) |
+| keine Zeile (nicht bestätigt) | nein    | —                                              |
 
 Update: `new_declarations` legt nur neue `(agentTool, effect, name)` vor; eine geänderte Wirkungsart ist eine
 neue Zeile, die alte fällt mit `apply_declarations` weg. Entwicklungsversionen:
@@ -50,7 +50,8 @@ neue Zeile, die alte fällt mit `apply_declarations` weg. Entwicklungsversionen:
   Modell (`x_<slug>_<tool>`, R8), effektive Freigabe (`granted`/`ask`), Entwicklungsversion.
   Entsteht aus Manifest + Berechtigungen beim Laden der Vault und bei `extensions-changed`.
 - **`ExtensionTool`** (`impl Tool`): `source() = "haextension"`, `origin() = Some(ToolOrigin)`,
-  `risk_class()` aus der Wirkungsart (oder `Risky`, wenn Status `ask`), `execute` über die MCP-Verbindung.
+  `risk_class()` aus der Wirkungsart (`read` → `Safe`, `change` → `Change` (holzis `ActionEffect::Write`),
+  `destructive` → `Risky`); `always_ask()` = Status `ask`; `execute` über die MCP-Verbindung.
 - **`McpLink`** je Rahmen-Sitzung: `rmcp`-Client über Kanalpaar, Zustand
   `connecting → ready(tools/list) → closed`; Zähler laufender Aufrufe (für `byAgent`, R11).
 - **`ToolOrigin`**: `{extensionId, extensionName, toolTitle: {de, en}, dev: bool}`.
