@@ -16,12 +16,13 @@ import { runAction } from '../lib/settings.ts'
 const measuredSearch = (instance: FlowInstance, query: string, hit: string) =>
   instance.exec<{ first: number; done: number }>(
     `const input = document.querySelector('[data-testid="files-search"]')
+     const hitHook = arguments[1]
      const find = (hook) => document.querySelector('[data-testid="' + hook + '"]')
      const start = performance.now()
      return new Promise((resolve) => {
        let first = -1
        const seen = () => {
-         if (first < 0 && find(arguments[1])) first = performance.now() - start
+         if (first < 0 && find(hitHook)) first = performance.now() - start
        }
        const observer = new MutationObserver(seen)
        observer.observe(document.body, { childList: true, subtree: true, attributes: true })

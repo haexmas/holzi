@@ -216,6 +216,10 @@ pub fn search(
             score: matched.score,
         });
         found += 1;
+        if last.is_none() {
+            last = Some(Instant::now());
+            emit(std::mem::take(&mut batch));
+        }
         if found >= options.limits.max_hits {
             end = SearchEnd::Done { truncated: true };
             break;
