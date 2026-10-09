@@ -169,12 +169,13 @@ function errorText(cause: unknown): string {
   return code ? t(`files.error.${code}`) : String(cause)
 }
 
+/** Starts a transfer; a refusal shows as a message. Whether it started. */
 async function startAsync(
   op: TransferOp,
   from: SourceRef,
   paths: string[],
   to: string | null,
-) {
+): Promise<boolean> {
   try {
     await transfers.startAsync(
       op,
@@ -183,27 +184,32 @@ async function startAsync(
       to === null ? null : { source: source.value, path: to },
       tabId,
     )
+    return true
   } catch (cause) {
     toast.error(errorText(cause))
+    return false
   }
 }
 
-/** Copies or moves `clip` into the folder `target` (paste, or a drop inside holzi). */
+/**
+ * Copies or moves `clip` into the folder `target` (paste, or a drop inside holzi). Whether the
+ * transfer started.
+ */
 async function placeAsync(
   clip: FilesClipboard,
   target: string,
   targetOwned: boolean,
-) {
+): Promise<boolean> {
   const refusal = pasteRefusal(clip.op, clip.folder, clip.items, {
     path: target,
     holziOwned: targetOwned,
   })
-  if (refusal === 'nothing') return
+  if (refusal === 'nothing') return false
   if (refusal) {
     toast.error(t(`files.error.${refusal}`))
-    return
+    return false
   }
-  await startAsync(
+  return await startAsync(
     clip.op === 'cut' ? 'move' : 'copy',
     clip.source as SourceRef,
     clip.items.map((item) => item.path),
@@ -263,8 +269,9 @@ async function run(command: FilesCommand, targets: Selection | null) {
     case 'paste': {
       const clip = transfers.clipboard
       if (!clip || !path.value) break
-      await placeAsync(clip, path.value, folderOwned.value)
-      if (clip.op === 'cut') transfers.clipboard = null
+      // A refused cut stays on the clipboard, so it can go elsewhere.
+      const started = await placeAsync(clip, path.value, folderOwned.value)
+      if (started && clip.op === 'cut') transfers.clipboard = null
       break
     }
     case 'rename':

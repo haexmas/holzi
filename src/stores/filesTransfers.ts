@@ -8,6 +8,7 @@ import type { TransferOp } from '@bindings/TransferOp'
 import type { TransferProgress } from '@bindings/TransferProgress'
 import type { TransferTarget } from '@bindings/TransferTarget'
 import type { FilesClipboard } from '~/lib/files/clipboard'
+import { asFilesError } from '~/composables/useFiles'
 
 /** A transfer as the transfer bar shows it (FR-019). */
 export type TransferView = {
@@ -73,16 +74,11 @@ export const useFilesTransfersStore = defineStore('filesTransfers', () => {
     }
   }
 
-  /**
-   * Starts a transfer; refusals before the start (`intoItself`, `noSpace`, …) reject, so the
-   * caller shows them. `onDone` runs once it finished.
-   */
-  async function startAsync(
+  /** Shows a transfer from its start on; `begin` invokes the command with the view's events. */
+  async function track(
     op: TransferOp,
-    from: SourceRef,
-    paths: string[],
-    to: TransferTarget | null,
     tabId: string,
+    begin: (onEvent: (event: TransferEvent) => void) => Promise<string>,
     onDone?: () => void,
   ): Promise<void> {
     const key = nextKey++
@@ -96,9 +92,7 @@ export const useFilesTransfersStore = defineStore('filesTransfers', () => {
       state: 'running',
       error: null,
     })
-    const started = files.transferStartAsync(op, from, paths, to, (event) =>
-      onEvent(key, event, onDone),
-    )
+    const started = begin((event) => onEvent(key, event, onDone))
     ids.set(
       key,
       started.catch(() => null),
@@ -113,38 +107,35 @@ export const useFilesTransfersStore = defineStore('filesTransfers', () => {
     }
   }
 
+  /**
+   * Starts a transfer; refusals before the start (`intoItself`, `noSpace`, …) reject, so the
+   * caller shows them. `onDone` runs once it finished.
+   */
+  function startAsync(
+    op: TransferOp,
+    from: SourceRef,
+    paths: string[],
+    to: TransferTarget | null,
+    tabId: string,
+    onDone?: () => void,
+  ): Promise<void> {
+    return track(
+      op,
+      tabId,
+      (onEvent) => files.transferStartAsync(op, from, paths, to, onEvent),
+      onDone,
+    )
+  }
+
   /** Copies paths dropped from the system into a folder (FR-024). */
-  async function importAsync(
+  function importAsync(
     paths: string[],
     to: TransferTarget,
     tabId: string,
   ): Promise<void> {
-    const key = nextKey++
-    transfers.value.push({
-      key,
-      id: null,
-      op: 'copy',
-      tabId,
-      progress: null,
-      conflict: null,
-      state: 'running',
-      error: null,
-    })
-    const started = files.importDroppedAsync(paths, to, (event) =>
-      onEvent(key, event),
+    return track('copy', tabId, (onEvent) =>
+      files.importDroppedAsync(paths, to, onEvent),
     )
-    ids.set(
-      key,
-      started.catch(() => null),
-    )
-    try {
-      const id = await started
-      const transfer = view(key)
-      if (transfer) transfer.id = id
-    } catch (error) {
-      drop(key)
-      throw error
-    }
   }
 
   async function answerAsync(
@@ -172,7 +163,16 @@ export const useFilesTransfersStore = defineStore('filesTransfers', () => {
     transfer.state = 'running'
     transfer.error = null
     transfer.progress = null
-    await files.transferRetryAsync(id)
+    try {
+      await files.transferRetryAsync(id)
+    } catch (error) {
+      // Not started again: the bar shows why, and the transfer can only be dismissed.
+      transfer.state = 'failed'
+      transfer.error = asFilesError(error) ?? {
+        code: 'unsupported',
+        message: String(error),
+      }
+    }
   }
 
   return {
