@@ -491,6 +491,9 @@ pub(crate) fn map_adapter_error(err: AdapterError) -> HolziError {
         AdapterError::Unavailable { reason } => HolziError::InvalidInput {
             reason: format!("backend unavailable: {reason}"),
         },
+        AdapterError::UntrustedCertificate { reason } => {
+            HolziError::UntrustedCertificate { reason }
+        }
     }
 }
 

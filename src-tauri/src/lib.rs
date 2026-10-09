@@ -44,6 +44,7 @@ pub use state::{ActiveInstanceHandle, AppState};
 use catalog::commands::catalog_recommend_tiers;
 use catalog::list_catalog;
 use chat::action_commands::{respond_action_call, set_agent_actions};
+use chat::choices::respond_choice;
 use chat::commands::{
     abort_current_generation, inspect_attachment, respond_tool_permission, send_message,
 };
@@ -325,6 +326,7 @@ pub fn run() {
             // Spec 044: the file browser's places, thumbnail cache and folder watches.
             app.manage(files::state::FilesState::from_app(app.handle()));
             app.manage(files::transfer::TransferManager::default());
+            app.manage(files::search::SearchManager::default());
             // Spec 017, US9: holzi's protected places, known places and dialogs for extensions.
             app.state::<AppState>()
                 .extensions()
@@ -358,6 +360,8 @@ pub fn run() {
             files::browser_commands::files_transfer_answer,
             files::browser_commands::files_transfer_cancel,
             files::browser_commands::files_transfer_retry,
+            files::browser_commands::files_search_start,
+            files::browser_commands::files_search_cancel,
             files::browser_commands::files_thumbnail,
             files::browser_commands::files_watch,
             files::browser_commands::files_unwatch,
@@ -403,6 +407,7 @@ pub fn run() {
             respond_tool_permission,
             set_agent_actions,
             respond_action_call,
+            respond_choice,
             create_thread,
             list_threads,
             list_messages,

@@ -356,13 +356,23 @@
         "workspace": "Arbeitsbereich"
       }
     },
+    "choice": {
+      "title": "Ich habe „{value}“ nicht eindeutig gefunden. Meintest du …?",
+      "other": "Etwas anderes …",
+      "otherPlaceholder": "Was meinst du?",
+      "confirm": "Bestätigen",
+      "cancel": "Abbrechen",
+      "unavailable": "Gerade nicht verfügbar: {reason}",
+      "noCandidates": "Ich habe nichts Passendes gefunden."
+    },
     "autonomy": {
       "standard": "Standard",
       "ungated": "Ungegated",
       "gated_permissive": "Gegated (permissiv)",
       "audit": {
         "gated_permissive_call_permitted": "Erlaubt",
-        "denied_by_deny_rule": "Durch Verbotsregel abgelehnt"
+        "denied_by_deny_rule": "Durch Verbotsregel abgelehnt",
+        "declined_by_user": "Rückfrage abgelehnt"
       }
     }
   },
@@ -1110,6 +1120,7 @@
     "unreadable": "Die gewählte Datei lässt sich nicht lesen.",
     "notAvailable": "Auf diesem Gerät nicht verfügbar.",
     "notEnoughSpace": "Nicht genug freier Speicher.",
+    "untrustedCertificate": "Zertifikat ungültig: Der Server weist sich mit einem Zertifikat aus, dem dieses Gerät nicht vertraut. Die Verbindung wurde nicht aufgebaut.",
     "hf": {
       "invalidInput": "Ungültige Eingabe.",
       "network": "Netzwerkfehler — bitte Verbindung prüfen.",
@@ -1201,7 +1212,7 @@
         "get": "Zustand von Arbeitsbereichen, Fenstern und Tabs lesen"
       },
       "apps": {
-        "list": "Apps auflisten"
+        "list": "Apps und Erweiterungen auflisten"
       },
       "actions": {
         "list": "Aktionen auflisten"
@@ -1230,6 +1241,7 @@
       "approval": {
         "decide": "Freigabe entscheiden"
       },
+      "choice": { "answer": "Rückfrage beantworten" },
       "permissionMode": {
         "set": "Berechtigungsmodus setzen"
       },
@@ -1987,6 +1999,41 @@
     "empty": "Dieser Ordner ist leer.",
     "symlink": "Verknüpfung",
     "holziOwned": "Eigene Daten von holzi, nur lesen",
+    "search": {
+      "placeholder": "In diesem Ordner suchen",
+      "clear": "Suche leeren",
+      "count": "{count} Treffer | {count} Treffer",
+      "truncated": "– nur die ersten, genauer suchen für mehr",
+      "none": "Keine Treffer.",
+      "reveal": "Im Ordner zeigen"
+    },
+    "filter": {
+      "label": "Filtern",
+      "type": "Typ",
+      "size": "Größe",
+      "date": "Geändert",
+      "clear": "Filter entfernen",
+      "types": {
+        "image": "Bilder",
+        "video": "Videos",
+        "audio": "Audio",
+        "document": "Dokumente",
+        "text": "Text"
+      },
+      "sizes": {
+        "any": "Jede Größe",
+        "small": "Unter 1 MB",
+        "medium": "1 bis 100 MB",
+        "large": "Über 100 MB"
+      },
+      "dates": {
+        "any": "Jederzeit",
+        "day": "Letzte 24 Stunden",
+        "week": "Letzte 7 Tage",
+        "month": "Letzte 30 Tage",
+        "year": "Letztes Jahr"
+      }
+    },
     "cancel": "Abbrechen",
     "drop": "Hierher kopieren",
     "actions": {

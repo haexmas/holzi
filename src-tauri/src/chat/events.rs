@@ -26,6 +26,8 @@ pub(crate) const EVENT_CHAT_TOOL_CALL: &str = "chat-tool-call";
 pub(crate) const EVENT_CHAT_TOOL_RESULT: &str = "chat-tool-result";
 pub(crate) const EVENT_CHAT_TURN_COMPLETE: &str = "chat-turn-complete";
 pub(crate) const EVENT_TOOL_PERMISSION_REQUEST: &str = "tool-permission-request";
+/// A question the tool round asks the user (spec 046), answered via `respond_choice`.
+pub(crate) const EVENT_CHOICE_REQUEST: &str = "chat-choice-request";
 pub(crate) const EVENT_CHAT_RETRY: &str = "chat-retry";
 /// Once per turn: whether the model got tools (spec 032 US4, `ToolAvailabilityEvent`).
 pub(crate) const EVENT_CHAT_TOOL_AVAILABILITY: &str = "chat-tool-availability";
@@ -138,6 +140,16 @@ pub(crate) struct MessageErrorEvent {
     pub(crate) message_id: Uuid,
     pub(crate) thread_id: Uuid,
     pub(crate) reason: String,
+    /// What kind of failure it was, where the chat says more than `reason` (spec 043 FR-024).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) kind: Option<MessageErrorKind>,
+}
+
+/// A failure the chat names in the person's language instead of showing its technical reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub(crate) enum MessageErrorKind {
+    /// The provider's certificate is not trusted.
+    UntrustedCertificate,
 }
 
 /// Payload for `chat-tool-call` (contracts/tauri-commands.md). Emitted at
@@ -176,6 +188,17 @@ pub(crate) struct ToolPermissionRequestEvent {
     pub(crate) risk_class: &'static str,
     /// `mcp`, `cli` or `action`: the dialog words an action in plain language (spec 032 FR-008).
     pub(crate) tool_source: &'static str,
+}
+
+/// Payload for `chat-choice-request` (spec 046, contracts/choice-contract.md).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ChoiceRequestEvent {
+    pub(crate) request_id: Uuid,
+    pub(crate) thread_id: Uuid,
+    pub(crate) tool_name: String,
+    #[serde(flatten)]
+    pub(crate) choice: crate::chat::tools::ChoiceRequest,
 }
 
 pub(crate) fn risk_class_str(risk: crate::chat::tools::RiskClass) -> &'static str {

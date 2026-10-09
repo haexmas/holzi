@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import { scenario } from '../lib/scenario.ts'
-import { createAndUnlock, openChat, connectProvider } from '../lib/flows.ts'
+import {
+  createAndUnlock,
+  openChat,
+  connectProvider,
+  unwrap,
+} from '../lib/flows.ts'
 import { KEY, isShown } from '../lib/settings.ts'
 
 const MODELS = [
@@ -48,6 +53,18 @@ scenario('chat-model-search', {}, async (ctx) => {
     ),
   )
   ctx.step('all models shown before searching')
+
+  // The CLI delegates are offered only where the device runs them (spec 043 FR-026): on a desktop
+  // as entries to connect, on a phone not at all.
+  const { cliDelegates } = unwrap<{ cliDelegates: boolean }>(
+    'platform_capabilities',
+    await instance.invoke('platform_capabilities'),
+  )
+  assert.equal(
+    await isShown(instance, '[role="option"][data-value^="delegate-"]'),
+    cliDelegates,
+    `delegates offered: ${String(!cliDelegates)}`,
+  )
 
   // Typed to wherever focus is, as a user does, not sent to the search field by hook.
   await instance.typeToFocused('gpt4o')

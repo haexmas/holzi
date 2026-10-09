@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::adapters::{AbortHandle, ProviderAdapter};
+use crate::chat::choices::PendingChoices;
 use crate::chat::tools::action_bridge::ActionBridge;
 use crate::chat::tools::cli::CliTool;
 use crate::chat::tools::mcp::{self, McpServerConfig};
@@ -164,6 +165,8 @@ pub struct ChatState {
     pub pending_tool_approvals: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>>,
     /// Session-lifetime tombstones make late replies to cancelled prompts harmless.
     pub cancelled_tool_approvals: Arc<Mutex<HashSet<Uuid>>>,
+    /// Open `chat-choice-request`s of the running turn (spec 046).
+    pub pending_choices: Arc<PendingChoices>,
     pub turn_cancellation: Arc<Mutex<Option<CancellationToken>>>,
     /// The background check of a local model's tool use (spec 032 FR-018b), at most one.
     tool_check: Arc<Mutex<Option<CancellationToken>>>,
@@ -182,6 +185,7 @@ impl Clone for ChatState {
             action_bridge: self.action_bridge.clone(),
             pending_tool_approvals: Arc::clone(&self.pending_tool_approvals),
             cancelled_tool_approvals: Arc::clone(&self.cancelled_tool_approvals),
+            pending_choices: Arc::clone(&self.pending_choices),
             turn_cancellation: Arc::clone(&self.turn_cancellation),
             tool_check: Arc::clone(&self.tool_check),
             model_load: Arc::clone(&self.model_load),
@@ -209,6 +213,7 @@ impl ChatState {
             action_bridge: ActionBridge::default(),
             pending_tool_approvals: Arc::new(Mutex::new(HashMap::new())),
             cancelled_tool_approvals: Arc::new(Mutex::new(HashSet::new())),
+            pending_choices: Arc::new(PendingChoices::default()),
             turn_cancellation: Arc::new(Mutex::new(None)),
             tool_check: Arc::new(Mutex::new(None)),
             model_load: Arc::new(Mutex::new(ModelLoadRuntime {
@@ -440,6 +445,7 @@ impl ChatState {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
+        self.pending_choices.reset();
         let host_only = host_tools(&self.children, crate::platform::capabilities().command_tool);
         let tools = std::mem::replace(
             &mut *self.tool_registry.lock().unwrap_or_else(|e| e.into_inner()),

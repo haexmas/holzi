@@ -438,7 +438,7 @@ test('turn completion restores persisted step order and removes cancelled approv
     finishReason: 'cancelled',
   })
   assert.deepEqual(state.messagesByThread.value.a, persisted)
-  assert.deepEqual(state.pendingApprovals.value, [])
+  assert.deepEqual(state.pendingPrompts.value, [])
   assert.equal(state.busy.value, false)
   assert.equal(state.streamingMessageId.value, null)
 })
@@ -459,7 +459,7 @@ test('completion clears approvals queued on a background conversation', async ()
     finishReason: 'cancelled',
   })
   await state.selectThread('a')
-  assert.deepEqual(state.pendingApprovals.value, [])
+  assert.deepEqual(state.pendingPrompts.value, [])
 })
 
 test('a slower thread selection cannot restore approvals after a newer selection', async () => {
@@ -474,8 +474,9 @@ test('a slower thread selection cannot restore approvals after a newer selection
     },
   })
   state.activeThreadId.value = 'a'
-  state.pendingApprovals.value = [
+  state.pendingPrompts.value = [
     {
+      kind: 'approval',
       requestId: 'approval-a',
       toolName: 'run_command',
       toolInput: {},
@@ -488,7 +489,7 @@ test('a slower thread selection cannot restore approvals after a newer selection
   await state.selectThread('a')
   assert.equal(state.activeThreadId.value, 'a')
   assert.deepEqual(
-    state.pendingApprovals.value.map((approval) => approval.requestId),
+    state.pendingPrompts.value.map((approval) => approval.requestId),
     ['approval-a'],
   )
 
@@ -496,7 +497,7 @@ test('a slower thread selection cannot restore approvals after a newer selection
   await selectingB
   assert.equal(state.activeThreadId.value, 'a')
   assert.deepEqual(
-    state.pendingApprovals.value.map((approval) => approval.requestId),
+    state.pendingPrompts.value.map((approval) => approval.requestId),
     ['approval-a'],
   )
 })
@@ -588,6 +589,77 @@ test('leaving a chat with an approval pending aborts its active turn', async () 
     requestId: 'approval',
     toolName: 'run_command',
   })
+  await state.unmount()
+  assert.equal(aborted, 1)
+})
+
+const CHOICE = {
+  requestId: 'choice',
+  toolName: 'wm_app_open',
+  question: null,
+  field: 'appId',
+  value: 'haex',
+  options: [{ value: 'extension.mail', label: 'haex-mail' }],
+}
+
+test('an agent question queues after an approval of the active conversation, once', async () => {
+  const state = createChatState()
+  state.input.value = 'Open haex'
+  await state.send()
+  state.handleToolPermissionRequest({
+    threadId: 'a',
+    requestId: 'approval',
+    toolName: 'run_command',
+  })
+  state.handleChoiceRequest({ threadId: 'a', ...CHOICE })
+  state.handleChoiceRequest({ threadId: 'a', ...CHOICE })
+  assert.deepEqual(
+    state.pendingPrompts.value.map((prompt) => [prompt.kind, prompt.requestId]),
+    [
+      ['approval', 'approval'],
+      ['choice', 'choice'],
+    ],
+  )
+  assert.deepEqual(state.pendingPrompts.value[1], { kind: 'choice', ...CHOICE })
+})
+
+test('a question of a background conversation waits until it is opened', async () => {
+  const state = createChatState()
+  state.input.value = 'Open haex'
+  await state.send()
+  await state.selectThread('b')
+  state.handleChoiceRequest({ threadId: 'a', ...CHOICE })
+  assert.deepEqual(state.pendingPrompts.value, [])
+  await state.selectThread('a')
+  assert.deepEqual(
+    state.pendingPrompts.value.map((prompt) => prompt.requestId),
+    ['choice'],
+  )
+})
+
+test('the end of the turn clears its open question', async () => {
+  const state = createChatState()
+  state.input.value = 'Open haex'
+  await state.send()
+  state.handleChoiceRequest({ threadId: 'a', ...CHOICE })
+  await state.handleTurnComplete({
+    threadId: 'a',
+    assistantMessageId: 'answer',
+    finishReason: 'cancelled',
+  })
+  assert.deepEqual(state.pendingPrompts.value, [])
+})
+
+test('leaving a chat with a question open aborts its active turn', async () => {
+  let aborted = 0
+  const state = createChatState({
+    abortAsync: async () => {
+      aborted++
+    },
+  })
+  state.input.value = 'Open haex'
+  await state.send()
+  state.handleChoiceRequest({ threadId: 'a', ...CHOICE })
   await state.unmount()
   assert.equal(aborted, 1)
 })

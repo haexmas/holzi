@@ -16,6 +16,13 @@ import {
   pruneSelection,
   type Selection,
 } from '~/lib/files/clipboard'
+import {
+  admits,
+  type FilesFilter,
+  formatFilter,
+  isFiltering,
+  parseFilter,
+} from '~/lib/files/filters'
 import { entriesMenu, type FilesCommand, folderMenu } from '~/lib/files/menus'
 import { filesLocation, parseFilesPlace } from '~/lib/files/registry'
 import { childPath, parentPath, visibleEntries } from '~/lib/files/state'
@@ -61,13 +68,38 @@ watchEffect(() => {
 })
 
 const folder = useFilesFolder(source, path)
-const shown = computed(() =>
-  visibleEntries(
+// --- Search and filter (US4): both live in the tab's location ---
+
+const searchQuery = computed(() => place.value?.q ?? '')
+const filter = computed(() =>
+  parseFilter({ t: place.value?.t, s: place.value?.s, d: place.value?.d }),
+)
+const search = useFilesSearch(
+  source,
+  path,
+  searchQuery,
+  filter,
+  prefs.showHidden,
+)
+
+function onSearch(query: string) {
+  router.setQuery({ q: query.trim() || null })
+}
+
+function onFilter(next: FilesFilter) {
+  router.setQuery(formatFilter(next))
+}
+
+const shown = computed(() => {
+  const visible = visibleEntries(
     folder.entries.value,
     prefs.sort.value,
     prefs.showHidden.value,
-  ),
-)
+  )
+  if (!isFiltering(filter.value)) return visible
+  const now = Date.now()
+  return visible.filter((entry) => admits(entry, filter.value, now))
+})
 
 onMounted(() => {
   openFrames += 1
@@ -83,8 +115,29 @@ onBeforeUnmount(() => {
   clearFilesThumbnails()
 })
 
-function go(target: string) {
-  router.push(filesLocation({ source: source.value, path: target }))
+/** Opens a folder, with the filter kept and the search ended. */
+function go(target: string, open?: string) {
+  const { t: types, s: size, d: date } = place.value ?? {}
+  router.push(
+    filesLocation({
+      source: source.value,
+      path: target,
+      open,
+      t: types,
+      s: size,
+      d: date,
+    }),
+  )
+}
+
+/** A search hit: a folder opens, a file opens in its folder's viewer. */
+function openHit(entry: Entry) {
+  if (entry.kind === 'dir') {
+    go(entry.path)
+    return
+  }
+  const parent = parentPath(entry.path)
+  if (parent) go(parent, entry.name)
 }
 
 function goUp() {
@@ -402,6 +455,12 @@ function onSidebarPick(target: string) {
       @up="goUp"
       @reload="folder.reload()"
     />
+    <FilesSearchBar
+      :query="searchQuery"
+      :filter="filter"
+      @search="onSearch"
+      @filter="onFilter"
+    />
     <div class="relative flex min-h-0 flex-1 overflow-hidden">
       <nav
         id="files-sidebar"
@@ -429,7 +488,20 @@ function onSidebarPick(target: string) {
           @run="runBar"
           @clear="selection = EMPTY_SELECTION"
         />
+        <FilesSearchResults
+          v-if="searchQuery && path"
+          class="flex-1"
+          :source="source"
+          :root="path"
+          :hits="search.hits.value"
+          :running="search.running.value"
+          :truncated="search.truncated.value"
+          :error="search.error.value"
+          @open="openHit"
+          @reveal="go"
+        />
         <FilesDropTarget
+          v-else
           class="flex-1"
           :disabled="folderOwned || !path"
           @drop="importDropped"

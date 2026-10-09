@@ -19,6 +19,7 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use super::ChoiceOption;
 use crate::adapters::cli_delegate::EventEmitter;
 
 /// Event a model's action call goes out on (contracts/tauri-commands.md).
@@ -43,6 +44,12 @@ pub enum ActionReply {
         code: String,
         field: Option<String>,
         message: String,
+    },
+    /// The action could not resolve `field` and offers candidates (`needs_choice`, spec 046).
+    NeedsChoice {
+        field: String,
+        message: String,
+        options: Vec<ChoiceOption>,
     },
 }
 
@@ -71,6 +78,9 @@ pub struct ActionOutcomeWire {
     pub field: Option<String>,
     #[serde(default)]
     pub message: Option<String>,
+    /// The candidates of `needs_choice`.
+    #[serde(default)]
+    pub options: Option<Vec<ChoiceOption>>,
 }
 
 impl From<ActionOutcomeWire> for ActionReply {
@@ -82,6 +92,16 @@ impl From<ActionOutcomeWire> for ActionReply {
             };
         }
         let code = wire.code.unwrap_or_else(|| "failed".to_owned());
+        // A choice needs the field the answer goes into; without one it is an ordinary error.
+        if code == "needs_choice" {
+            if let Some(field) = wire.field.clone() {
+                return Self::NeedsChoice {
+                    field,
+                    message: wire.message.unwrap_or_default(),
+                    options: wire.options.unwrap_or_default(),
+                };
+            }
+        }
         // A failed handler's message is replaced; the other codes carry validation text the model
         // needs to correct its input.
         let message = if code == "failed" {

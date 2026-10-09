@@ -10,6 +10,7 @@
  * into a type-only `useChatTypes.ts` re-exported from here, leaving the
  * command and event wrappers in `useChat()`.
  */
+import type { RiskClass } from '~/lib/chat/prompts'
 import type { ToolAvailability } from '~/lib/chat/toolNotice'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
@@ -143,6 +144,8 @@ export interface MessageErrorEvent {
   messageId: string
   threadId: string
   reason: string
+  /** Set for a failure the chat names itself (spec 043 FR-024). */
+  kind?: 'UntrustedCertificate'
 }
 
 export interface ToolCallEvent {
@@ -170,8 +173,6 @@ export interface AgentActivityEvent {
   activeCount: number
   batchSize?: number
 }
-
-export type RiskClass = 'safe' | 'change' | 'risky'
 
 /** Fires when the Manual/Auto/Plan gate needs a human decision (contracts/
  * tauri-commands.md). Answered via `respondToolPermissionAsync`. */

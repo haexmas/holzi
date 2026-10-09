@@ -61,7 +61,7 @@ fn modified_ms(meta: &Metadata) -> Option<i64> {
     i64::try_from(since.as_millis()).ok()
 }
 
-fn is_hidden(name: &str, _meta: &Metadata) -> bool {
+pub(crate) fn is_hidden(name: &str, _meta: &Metadata) -> bool {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;

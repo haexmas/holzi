@@ -101,7 +101,7 @@
       "properties": {
         "appId": {
           "type": "string",
-          "description": "App id exactly as wm.apps.list returns it, e.g. 'system.chat', 'system.settings'. An installed extension's id is 'extension.' followed by a UUID: look it up, never build it from the extension's name."
+          "description": "The app to open: its name as the user said it, e.g. 'haex-mail' or 'Einstellungen', or its id from wm.apps.list, e.g. 'system.chat'. Never invent an id; an extension's id is 'extension.' followed by a UUID."
         },
         "at": {
           "type": "string",
@@ -130,7 +130,7 @@
         },
         "appId": {
           "type": "string",
-          "description": "App id exactly as wm.apps.list returns it, e.g. 'system.chat', 'system.settings'. An installed extension's id is 'extension.' followed by a UUID: look it up, never build it from the extension's name."
+          "description": "The app to open: its name as the user said it, e.g. 'haex-mail' or 'Einstellungen', or its id from wm.apps.list, e.g. 'system.chat'. Never invent an id; an extension's id is 'extension.' followed by a UUID."
         },
         "at": {
           "type": "string",
@@ -462,7 +462,7 @@
   {
     "toolName": "wm_apps_list",
     "actionId": "wm.apps.list",
-    "description": "List the apps that can be opened, with their title, whether several instances are allowed, and their location patterns.",
+    "description": "List every installed app that can be opened: holzi's system apps and all installed extensions, each with its id, title, an extension's description, whether several instances are allowed, and its location patterns.",
     "inputSchema": {
       "type": "object",
       "properties": {}
@@ -470,8 +470,8 @@
     "effect": "read",
     "core": true,
     "titles": {
-      "de": "Apps auflisten",
-      "en": "List apps"
+      "de": "Apps und Erweiterungen auflisten",
+      "en": "List apps and extensions"
     }
   },
   {

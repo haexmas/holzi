@@ -276,12 +276,12 @@ async function launchDriver(
 /**
  * The driver's own port can answer (satisfying `launchDriver`'s poll) before its connection to the
  * native webview driver is ready behind it: seen for real, under load, as `POST /session got no answer`
- * - a `SessionGoneError`, even though the port itself was open a moment before. Several short retries
+ * - a `SessionGoneError`, even though the port itself was open a moment before. Repeated retries
  * cover it in practice (a scenario with several devices starts several drivers at once, and the native
- * backend can take a few seconds to catch up under CI load); any other error, or a failure on the last
+ * backend can take tens of seconds to catch up under CI load); any other error, or a failure on the last
  * attempt, is not retried and reaches the caller as is.
  */
-export const NEW_SESSION_ATTEMPTS = 8
+export const NEW_SESSION_ATTEMPTS = 16
 
 export async function newSessionWithRetry(
   client: WebDriverClient,

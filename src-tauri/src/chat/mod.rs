@@ -5,6 +5,7 @@
 
 pub mod action_commands;
 pub mod attachments;
+pub mod choices;
 pub mod commands;
 pub mod default_model;
 pub mod eval;

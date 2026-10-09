@@ -140,3 +140,18 @@ Abdeckungsrechnung der Desktop-Fälle.
 - `sync-relay-return` hält während der Pause auch den iroh-Relay der Gruppe an (`g.irohRelay`, nur in
   einem Lauf mit Telefon): Über ihn fand ein Gerät das andere an der früher gelernten Adresse
   ohne Nostr-Relay, wie bei `sync-servers-off`. Der Relay kommt auf derselben Adresse zurück.
+
+## Umsetzung in Stufe 4
+
+- Der Ersatz-Anbieter kann HTTPS mit einem selbst signierten Zertifikat sprechen
+  (`selfSignedTls`, Zertifikat pro Lauf von `openssl`, nichts im Repository). Ohne Befehl zum
+  Ändern der Basisadresse eines Anbieters prüft `chat-provider-untrusted-cert` das Anlegen eines
+  Anbieters an diesem Server; das Senden mit ungültigem Zertifikat prüfen die Rust-Tests.
+- `chat-model-search` prüft plattformneutral, dass die Delegates genau dort angeboten werden, wo
+  `platform_capabilities.cliDelegates` gilt.
+- `sync-link` war in der CI auf `main` einmal rot: Das neue Linux-Gerät sendete seine Anwesenheit,
+  bevor sein Relay verbunden war, also nur mit Loopback-Adressen; die nächste Meldung wäre erst nach
+  60 s gekommen. Die Anwesenheit geht jetzt sofort neu hinaus, wenn sich der eigene Relay ändert
+  (`presence_loop`, `SyncNode::addr_changes`). Das betrifft echte Geräte hinter NAT genauso.
+- Die Fehlerunterlagen des Telefons enthalten zusätzlich `logcat.txt` (die letzten 20 000 Zeilen):
+  Die Logdatei der App bricht auf dem Gerät manchmal früh ab.

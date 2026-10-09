@@ -10,6 +10,7 @@ pub mod kind;
 pub mod local;
 pub mod media;
 pub mod picked;
+pub mod search;
 pub mod state;
 pub mod streaming;
 pub mod thumbnails;

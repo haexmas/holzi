@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
 use super::action_bridge::{ActionBridge, ActionReply};
-use super::{RiskClass, Tool, ToolResult};
+use super::{ChoiceRequest, RiskClass, Tool, ToolResult};
 
 /// Registry `source` of these tools, persisted into `chat_messages.tool_source`.
 pub const ACTION_SOURCE: &str = "action";
@@ -112,14 +112,18 @@ impl Tool for ActionTool {
 
     /// Dispatches through the bridge and converts its reply into model-visible tool content.
     async fn execute(&self, input: Value, cancel: CancellationToken) -> ToolResult {
-        into_tool_result(self.bridge.call(&self.def.action_id, input, &cancel).await)
+        let reply = self
+            .bridge
+            .call(&self.def.action_id, input.clone(), &cancel)
+            .await;
+        into_tool_result(reply, &input)
     }
 }
 
 /// Bridge-level failures come back as the plain markers the tool loop already uses
 /// (`denied_by_user`, `tool_call_cancelled`); everything the runner reports is a small JSON the
 /// model can act on: `code`, the offending `field` and a `message`.
-fn into_tool_result(reply: ActionReply) -> ToolResult {
+fn into_tool_result(reply: ActionReply, input: &Value) -> ToolResult {
     match reply {
         ActionReply::Ok { result } => ToolResult::ok(result.to_string()),
         ActionReply::Err { code, .. }
@@ -140,6 +144,34 @@ fn into_tool_result(reply: ActionReply) -> ToolResult {
                 error["field"] = Value::String(field);
             }
             ToolResult::error(json!({ "error": error }).to_string())
+        }
+        // The tool round asks the user; the JSON is what a caller without a chat would see.
+        ActionReply::NeedsChoice {
+            field,
+            message,
+            options,
+        } => {
+            let content = json!({ "error": {
+                "code": "needs_choice",
+                "message": message,
+                "field": field,
+                "options": options,
+            }})
+            .to_string();
+            let value = match input.get(&field) {
+                Some(Value::String(text)) => text.clone(),
+                Some(other) => other.to_string(),
+                None => String::new(),
+            };
+            ToolResult::needs_choice(
+                content,
+                ChoiceRequest {
+                    question: None,
+                    field: Some(field),
+                    value,
+                    options,
+                },
+            )
         }
     }
 }

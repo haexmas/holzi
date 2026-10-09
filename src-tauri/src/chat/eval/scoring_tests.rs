@@ -4,8 +4,10 @@ use super::scoring::{
     report, score, valid_against, EvalSet, Expect, Observed, ObservedCall, Scored, Sentence,
     SentenceResult::{self, *},
 };
+use super::scoring::{Kind, Lang};
 use super::{embedded_set, embedded_tools};
 use crate::chat::tools::action_tool::AgentActionDef;
+use crate::chat::tools::ask_user::ASK_USER_TOOL_NAME;
 
 fn defs() -> Vec<AgentActionDef> {
     serde_json::from_value(json!([
@@ -278,15 +280,26 @@ fn an_expectation_must_be_none_or_a_non_empty_list() {
 fn the_embedded_set_and_snapshot_are_well_formed() {
     let set = embedded_set();
     let tools = embedded_tools();
-    assert_eq!(set.version, 2);
+    assert_eq!(set.version, 3);
     assert!(!tools.is_empty());
+    for lang in [Lang::De, Lang::En] {
+        assert!(
+            set.sentences
+                .iter()
+                .filter(|s| s.kind == Kind::Clarify && s.lang == lang)
+                .count()
+                >= 3,
+            "ambiguous sentences in {lang:?}"
+        );
+    }
     let mut ids = std::collections::HashSet::new();
     for sentence in &set.sentences {
         assert!(ids.insert(&sentence.id), "duplicate id {}", sentence.id);
         if let Expect::Calls(calls) = &sentence.expect {
             for call in calls {
                 assert!(
-                    tools.iter().any(|t| t.tool_name == call.tool),
+                    call.tool == ASK_USER_TOOL_NAME
+                        || tools.iter().any(|t| t.tool_name == call.tool),
                     "{}: unknown tool {}",
                     sentence.id,
                     call.tool
@@ -294,4 +307,25 @@ fn the_embedded_set_and_snapshot_are_well_formed() {
             }
         }
     }
+}
+
+#[test]
+fn an_expected_question_of_the_agent_is_checked_against_ask_user() {
+    let ask: Sentence = serde_json::from_value(json!({
+        "id": "q", "lang": "en", "kind": "clarify", "text": "Make it darker.",
+        "expect": [{ "tool": "ask_user" }],
+    }))
+    .unwrap();
+    let asked = |args| observed(vec![call("ask_user", args)]);
+    assert_eq!(
+        result_of(
+            &ask,
+            &asked(json!({ "question": "Which?", "options": ["A", "B"] }))
+        ),
+        Pass
+    );
+    assert_eq!(
+        result_of(&ask, &asked(json!({ "options": ["A", "B"] }))),
+        BadArgs
+    );
 }
