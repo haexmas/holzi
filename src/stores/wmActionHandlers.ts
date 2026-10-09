@@ -59,6 +59,20 @@ export function registerWmActionHandlers(wm: WmStore, t: Translate): void {
         })),
       )
     }
+    const app = apps.find((candidate) => candidate.id === match.appId)
+    if (app?.unavailableKey) {
+      throw new ActionChoiceError(
+        `${requested} is not available on this device`,
+        'appId',
+        [
+          {
+            value: app.id,
+            label: app.title ?? t(app.titleKey),
+            unavailable: t(app.unavailableKey),
+          },
+        ],
+      )
+    }
     return {
       appId: match.appId,
       at: typeof input.at === 'string' ? input.at : match.at,
