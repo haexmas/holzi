@@ -9,6 +9,8 @@ const props = defineProps<{
   path: string | null
   sidebarVisible: boolean
   canGoUp: boolean
+  /** The name the root shows in the path bar (a storage's name instead of `/`). */
+  rootLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -106,7 +108,7 @@ function pickSort(key: SortKey) {
               :data-testid="`files-crumb-${index}`"
               @click="emit('go', crumb.path)"
             >
-              {{ crumb.name }}
+              {{ index === 0 && rootLabel ? rootLabel : crumb.name }}
             </ShadcnBreadcrumbLink>
           </ShadcnBreadcrumbItem>
         </template>

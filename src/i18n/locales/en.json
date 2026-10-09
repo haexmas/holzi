@@ -2034,6 +2034,9 @@
         "year": "Last year"
       }
     },
+    "storage": {
+      "settings": "Open storage settings"
+    },
     "cancel": "Cancel",
     "drop": "Copy here",
     "actions": {
@@ -2102,7 +2105,8 @@
       "hide": "Hide sidebar",
       "places": "Places",
       "drives": "Drives",
-      "free": "{size} free"
+      "free": "{size} free",
+      "storages": "Storages"
     },
     "places": {
       "home": "Home",
@@ -2147,7 +2151,9 @@
       "exists": "This name exists already.",
       "intoItself": "A folder cannot go into itself.",
       "noSpace": "Not enough space.",
-      "invalidName": "This name is not allowed."
+      "invalidName": "This name is not allowed.",
+      "credentials": "The storage's credentials are missing or were refused.",
+      "unreachable": "The storage cannot be reached."
     }
   }
 }

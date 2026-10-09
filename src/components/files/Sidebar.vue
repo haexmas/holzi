@@ -1,17 +1,20 @@
 <script setup lang="ts">
 /**
- * The sidebar of the file browser (spec 044 FR-002): the known places of the device, then its
- * drives with free space where known. Storages (US5) join later.
+ * The sidebar of the file browser (spec 044 FR-002): the known places of the device, its drives
+ * with free space where known, and the storages of spec 038 (US5).
  */
 import type { Sources } from '@bindings/Sources'
 import { formatFileSize } from '~/lib/passwords/format'
 
 defineProps<{
   sources: Sources | null
+  /** The open folder of the device, `null` while a storage is open. */
   current: string | null
+  /** The open storage. */
+  currentStorage: string | null
 }>()
 
-const emit = defineEmits<{ pick: [path: string] }>()
+const emit = defineEmits<{ pick: [path: string]; pickStorage: [id: string] }>()
 
 const { t } = useI18n()
 
@@ -72,6 +75,27 @@ const PLACE_ICONS: Record<string, string> = {
                 t('files.sidebar.free', { size: formatFileSize(drive.free) })
               }}
             </span>
+          </button>
+        </li>
+      </ul>
+    </section>
+    <section v-if="sources?.storages.length">
+      <h2 class="px-2 pb-1 text-xs font-medium text-muted-foreground">
+        {{ t('files.sidebar.storages') }}
+      </h2>
+      <ul>
+        <li v-for="storage in sources.storages" :key="storage.id">
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+            :class="
+              currentStorage === storage.id ? 'bg-accent font-medium' : ''
+            "
+            :data-testid="`files-storage-${storage.name}`"
+            @click="emit('pickStorage', storage.id)"
+          >
+            <Icon name="lucide:cloud" class="size-4 shrink-0" />
+            <span class="truncate">{{ storage.name }}</span>
           </button>
         </li>
       </ul>
