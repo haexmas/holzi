@@ -9,6 +9,8 @@ struct StartAdapter {
     attempts: std::sync::atomic::AtomicUsize,
     entered: tokio::sync::Notify,
     error: Option<u16>,
+    /// Refuse the provider's certificate instead (spec 043 FR-024).
+    untrusted: bool,
 }
 
 #[async_trait::async_trait]
@@ -28,6 +30,11 @@ impl crate::adapters::ProviderAdapter for StartAdapter {
         self.attempts
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.entered.notify_one();
+        if self.untrusted {
+            return Err(crate::adapters::AdapterError::UntrustedCertificate {
+                reason: "POST https://127.0.0.1/v1/messages: invalid peer certificate".into(),
+            });
+        }
         match self.error {
             Some(status) => Err(crate::adapters::AdapterError::Status {
                 status,
@@ -45,6 +52,7 @@ async fn initial_http_failures_use_the_same_bounded_retry_budget() {
             attempts: Default::default(),
             entered: Default::default(),
             error: Some(status),
+            untrusted: false,
         });
         let session = ActiveSession {
             model_id: "test".into(),
@@ -97,6 +105,7 @@ async fn initial_request_can_be_cancelled_before_response_headers() {
         attempts: Default::default(),
         entered: Default::default(),
         error: None,
+        untrusted: false,
     });
     let session = ActiveSession {
         model_id: "test".into(),
@@ -142,4 +151,58 @@ async fn initial_request_can_be_cancelled_before_response_headers() {
         task.await.unwrap(),
         Err(StreamStartError::Cancelled)
     ));
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_untrusted_certificate_is_reported_as_such_and_never_retried() {
+    let adapter = Arc::new(StartAdapter {
+        attempts: Default::default(),
+        entered: Default::default(),
+        error: None,
+        untrusted: true,
+    });
+    let session = ActiveSession {
+        model_id: "test".into(),
+        provider_id: None,
+        provider_kind: ProviderKind::ApiKey,
+        adapter: adapter.clone(),
+        tokenizer_repo: String::new(),
+        context_window: None,
+    };
+    let request = ChatRequest {
+        sampling: Default::default(),
+        model_id: "test".into(),
+        thread_id: None,
+        system_prompt: None,
+        messages: Vec::new(),
+        reasoning_requested: false,
+        max_new_tokens: None,
+        tools: Vec::new(),
+        autonomy_mode: Default::default(),
+        reasoning_option: Default::default(),
+        capabilities: Default::default(),
+    };
+    let mut attempts = 0;
+    let mut events = Vec::new();
+    let result = start_step_stream(
+        &session,
+        &ChatState::new(),
+        &request,
+        &CancellationToken::new(),
+        &mut attempts,
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        &mut |name, payload| events.push((name, payload)),
+    )
+    .await;
+
+    assert!(matches!(
+        result,
+        Err(StreamStartError::UntrustedCertificate(_))
+    ));
+    assert_eq!(
+        adapter.attempts.load(std::sync::atomic::Ordering::SeqCst),
+        1
+    );
+    assert!(events.is_empty(), "no retry was announced");
 }

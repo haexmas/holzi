@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::chat::tools::action_tool::AgentActionDef;
+use crate::chat::tools::ask_user::{AskUserTool, ASK_USER_TOOL_NAME};
+use crate::chat::tools::Tool;
 
 /// Language of an evaluation sentence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -23,6 +25,8 @@ pub enum Kind {
     Read,
     Change,
     Smalltalk,
+    /// Ambiguous instructions where the agent should ask instead of acting (spec 046).
+    Clarify,
 }
 
 /// One expected tool call and the argument fields that matter for scoring.
@@ -198,6 +202,11 @@ fn names_of<'a>(names: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
     names
 }
 
+/// The schema of a built-in tool that is not an action of the catalog snapshot (`ask_user`).
+fn builtin_schema(tool: &str) -> Option<Value> {
+    (tool == ASK_USER_TOOL_NAME).then(|| AskUserTool.input_schema())
+}
+
 /// How one sentence counts (contracts/eval-format.md, "Bewertung je Satz").
 pub fn score(sentence: &Sentence, observed: &Observed, defs: &[AgentActionDef]) -> SentenceResult {
     let expected = match &sentence.expect {
@@ -227,8 +236,9 @@ pub fn score(sentence: &Sentence, observed: &Observed, defs: &[AgentActionDef]) 
         let schema = defs
             .iter()
             .find(|def| def.tool_name == call.tool)
-            .map(|def| &def.input_schema);
-        if !schema.is_some_and(|schema| valid_against(schema, &call.args)) {
+            .map(|def| def.input_schema.clone())
+            .or_else(|| builtin_schema(&call.tool));
+        if !schema.is_some_and(|schema| valid_against(&schema, &call.args)) {
             return SentenceResult::BadArgs;
         }
         // Calls of one tool are matched to expectations of that tool in any order.

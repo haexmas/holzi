@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
-import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 import type { Message, Thread, useChat } from '~/composables/useChat'
+import type { ChoiceAnswer, PendingPrompt } from '~/lib/chat/prompts'
+import { respondChoiceAsync } from '~/composables/useChatChoices'
 import { useChatNavigation } from '~/composables/useChatNavigation'
 import type { WmTabApi } from '~/composables/useWmTab'
 import type { TabRouter } from '~/composables/useTabRouter'
@@ -36,7 +37,7 @@ export function useChatTab(deps: {
     activeThreadId: Ref<string | null>
     threads: Ref<Thread[]>
     input: Ref<string>
-    pendingApprovals: Ref<PendingApproval[]>
+    pendingPrompts: Ref<PendingPrompt[]>
     lastError: Ref<string | null>
     streamingMessageId: Ref<string | null>
     turnSetupPending: Ref<boolean>
@@ -77,10 +78,23 @@ export function useChatTab(deps: {
   ) {
     try {
       await deps.chat.respondToolPermissionAsync(requestId, decision)
-      state.pendingApprovals.value = state.pendingApprovals.value.filter(
+      state.pendingPrompts.value = state.pendingPrompts.value.filter(
         (a) => a.requestId !== requestId,
       )
-      if (state.pendingApprovals.value.length === 0) wmTab.clearAttention()
+      if (state.pendingPrompts.value.length === 0) wmTab.clearAttention()
+    } catch (e: unknown) {
+      state.lastError.value = deps.errString(e)
+    }
+  }
+
+  /** Answers the agent's question (spec 046) and takes it off the queue. */
+  async function respondToChoice(requestId: string, answer: ChoiceAnswer) {
+    try {
+      await respondChoiceAsync(requestId, answer)
+      state.pendingPrompts.value = state.pendingPrompts.value.filter(
+        (p) => p.requestId !== requestId,
+      )
+      if (state.pendingPrompts.value.length === 0) wmTab.clearAttention()
     } catch (e: unknown) {
       state.lastError.value = deps.errString(e)
     }
@@ -92,7 +106,7 @@ export function useChatTab(deps: {
     const hasActiveReply =
       state.streamingMessageId.value !== null ||
       state.turnSetupPending.value ||
-      state.pendingApprovals.value.length > 0
+      state.pendingPrompts.value.length > 0
     if (!hasActiveReply) return null
     return {
       reasonKey: 'wm.close.activeReply',
@@ -180,6 +194,18 @@ export function useChatTab(deps: {
     )
     return done
   })
+  handle('chat.choice.answer', async (input) => {
+    const value = String(input.value ?? '')
+    await respondToChoice(
+      String(input.requestId),
+      input.kind === 'option'
+        ? { kind: 'option', value }
+        : input.kind === 'text'
+          ? { kind: 'text', text: value }
+          : { kind: 'cancel' },
+    )
+    return done
+  })
   handle('chat.permissionMode.set', async (input) => {
     await deps.updatePermissionMode(input.mode as PermissionMode)
     return done
@@ -210,6 +236,17 @@ export function useChatTab(deps: {
       abort: () => run('chat.reply.cancel'),
       respondApproval: (requestId: string, decision: 'allow' | 'deny') =>
         run('chat.approval.decide', { requestId, decision }),
+      answerChoice: (requestId: string, answer: ChoiceAnswer) =>
+        run('chat.choice.answer', {
+          requestId,
+          kind: answer.kind,
+          value:
+            answer.kind === 'option'
+              ? answer.value
+              : answer.kind === 'text'
+                ? answer.text
+                : '',
+        }),
       setPermissionMode: (mode: PermissionMode) =>
         run('chat.permissionMode.set', { mode }),
     },

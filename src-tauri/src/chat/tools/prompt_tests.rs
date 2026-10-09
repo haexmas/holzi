@@ -50,3 +50,21 @@ fn a_turn_without_search_does_not_mention_an_unavailable_tool() {
 fn the_instruction_names_the_search_tool_it_relies_on() {
     assert!(TOOL_INSTRUCTION.contains(crate::chat::tools::offer::FIND_ACTIONS_TOOL_NAME));
 }
+
+#[test]
+fn a_turn_offering_ask_user_is_told_to_ask_instead_of_refusing() {
+    let with = system_prompt(None, &[tool("find_actions"), tool("ask_user")]).unwrap();
+    assert!(with.contains("ask_user"));
+    assert!(with.contains("instead of refusing"));
+    let without = system_prompt(None, &[tool("find_actions")]).unwrap();
+    assert!(!without.contains("ask_user"));
+}
+
+#[test]
+fn every_turn_with_tools_is_told_to_name_things_by_their_title_not_their_id() {
+    for tools in [vec![tool("find_actions")], vec![tool("run_command")]] {
+        let prompt = system_prompt(None, &tools).unwrap();
+        assert!(prompt.contains("by their title"), "{prompt}");
+        assert!(prompt.contains("never show ids"), "{prompt}");
+    }
+}

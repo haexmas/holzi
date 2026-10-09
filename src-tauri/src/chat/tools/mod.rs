@@ -12,6 +12,9 @@ mod action_bridge_tests;
 pub mod action_tool;
 #[cfg(test)]
 mod action_tool_tests;
+pub mod ask_user;
+#[cfg(test)]
+mod ask_user_tests;
 pub mod availability;
 pub mod cli;
 #[cfg(test)]
@@ -35,6 +38,7 @@ pub mod selftest;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
@@ -57,6 +61,9 @@ pub enum RiskClass {
 pub struct ToolResult {
     pub content: String,
     pub is_error: bool,
+    /// Set when the call needs the user to choose first (spec 046): the tool round asks in the
+    /// chat and replaces this result; `content` is what the model would see if nobody asked.
+    pub choice: Option<ChoiceRequest>,
 }
 
 impl ToolResult {
@@ -64,6 +71,7 @@ impl ToolResult {
         Self {
             content: content.into(),
             is_error: false,
+            choice: None,
         }
     }
 
@@ -71,8 +79,44 @@ impl ToolResult {
         Self {
             content: content.into(),
             is_error: true,
+            choice: None,
         }
     }
+
+    /// A result that asks the user to choose before the call can finish.
+    pub fn needs_choice(content: impl Into<String>, choice: ChoiceRequest) -> Self {
+        Self {
+            content: content.into(),
+            is_error: true,
+            choice: Some(choice),
+        }
+    }
+}
+
+/// A question the tool round puts to the user (spec 046, data-model.md): asked by an action that
+/// could not resolve `field` (then the answer runs the action again) or by the agent itself
+/// (`ask_user`, then the answer is the result).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChoiceRequest {
+    /// The agent's own question; `None` for an action, whose question the chat words itself.
+    pub question: Option<String>,
+    /// The input field of the action that gets the answer; `None` for `ask_user`.
+    pub field: Option<String>,
+    /// What was asked for (`"haex"`); empty for `ask_user`.
+    pub value: String,
+    pub options: Vec<ChoiceOption>,
+}
+
+/// One proposed answer of a [`ChoiceRequest`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChoiceOption {
+    pub value: String,
+    pub label: String,
+    /// Why it cannot be picked right now; the chat shows it disabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unavailable: Option<String>,
 }
 
 /// One callable tool, regardless of source (host-CLI, MCP). `execute` takes

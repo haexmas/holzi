@@ -411,6 +411,13 @@ impl SyncNode {
         }
     }
 
+    /// This endpoint's address now and whenever it changes: the relay connects only some time
+    /// after the session started (spec 043), and the others need it to reach a device behind a NAT.
+    pub fn addr_changes(&self) -> impl futures::Stream<Item = EndpointAddr> + Send + 'static {
+        use iroh::Watcher;
+        self.inner.endpoint.watch_addr().stream()
+    }
+
     /// Tells iroh the network may have changed, which it cannot see by itself on Android
     /// (spec 043, research R5); harmless when nothing changed.
     pub async fn network_change(&self) {

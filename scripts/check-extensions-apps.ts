@@ -15,11 +15,7 @@ import {
   tabsOfStoppedExtensions,
 } from '../src/lib/extensions/apps.ts'
 import { readConsoleForward } from '../src/lib/extensions/devConsole.ts'
-import {
-  WM_APPS,
-  unknownAppMessage,
-  type AppDefinition,
-} from '../src/lib/wm/apps.ts'
+import { WM_APPS, type AppDefinition } from '../src/lib/wm/apps.ts'
 import { openApp } from '../src/lib/wm/layoutState.ts'
 import { snapshotSession } from '../src/lib/wm/session.ts'
 import {
@@ -46,7 +42,7 @@ function summary(patch: Partial<ExtensionSummary>): ExtensionSummary {
 }
 
 test('every installed and enabled extension is an app with its own name and icon', () => {
-  const notes = summary({})
+  const notes = summary({ description: 'Schnelle Notizen' })
   const single = summary({
     id: 'id-2',
     title: 'Kalender',
@@ -66,6 +62,9 @@ test('every installed and enabled extension is an app with its own name and icon
     [extensionAppId(notes.id), 'extension.id-2'],
   )
   assert.equal(apps[0]?.title, 'Notizen')
+  // The agent describes an extension with it instead of its id (spec 046, R17).
+  assert.equal(apps[0]?.description, 'Schnelle Notizen')
+  assert.equal(apps[1]?.description, undefined)
   assert.equal(apps[0]?.iconUrl, 'data:image/svg+xml;base64,AA==')
   assert.equal(apps[0]?.multiInstance, true)
   assert.equal(apps[1]?.iconUrl, undefined)
@@ -240,16 +239,4 @@ test('only a console.forward message of the SDK is a console line', () => {
   )
   assert.equal(readConsoleForward({ type: 'haexspace:port:ready' }), null)
   assert.equal(readConsoleForward('console.forward'), null)
-})
-
-test('an unknown app id is answered with every valid id, extensions with their title', () => {
-  const apps = allApps(extensionApps([summary({ title: 'haex-mail' })], {}))
-  assert.equal(
-    unknownAppMessage('extension.haex-mail', apps),
-    'unknown app extension.haex-mail; valid app ids: ' +
-      [
-        ...WM_APPS.map((app) => app.id),
-        `${extensionAppId(summary({}).id)} (haex-mail)`,
-      ].join(', '),
-  )
 })

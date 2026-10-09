@@ -74,7 +74,10 @@ impl Tool for FindActionsTool {
             "nextCursor": next_cursor,
         });
         if defs.is_empty() && input.query.is_some() {
-            result["hint"] = json!("no matching action");
+            result["hint"] = json!(
+                "no action matches these keywords; this is about actions, not about the user's data. \
+                 Try other keywords, e.g. in English, or omit query to list every action."
+            );
         }
         ToolResult::ok(result.to_string())
     }

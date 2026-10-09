@@ -5,6 +5,8 @@
 // first. Pure, so `scripts/check-passwords-search.ts` runs it without vue.
 import Fuse from 'fuse.js'
 
+import { fold } from '../search/fold.ts'
+
 /** What the search looks at; an `ItemHeader` satisfies it, and so does nothing that carries more. */
 export type SearchableHeader = {
   id: string
@@ -12,15 +14,6 @@ export type SearchableHeader = {
   username: string | null
   url: string | null
   tags: { id: string; name: string }[]
-}
-
-/** Case- and accent-insensitive, and a decomposed umlaut equals a composed one: "bank" finds
- * "Bänk". */
-export function fold(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
 }
 
 const collator = new Intl.Collator()

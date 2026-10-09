@@ -1,0 +1,311 @@
+//! Searching by name from a folder down (spec 044 FR-027 to FR-030, research R6). A blocking walk
+//! with `walkdir`: it never follows links (no loops), stays on the file system it starts on (so a
+//! search from `/` skips `/proc`, `/sys`, `/dev`), and skips folders the system denies without a
+//! word. Names match typo-tolerant with `frizbee`. Hits go out in batches while the walk runs; the
+//! window sorts them by score. Agents search with tighter limits and never see holzi's own places.
+
+use std::path::Path;
+use std::time::{Duration, Instant};
+
+use frizbee::{Config, Matcher, Pattern, PatternConfig};
+use serde::{Deserialize, Serialize};
+use tokio_util::sync::CancellationToken;
+use ts_rs::TS;
+use walkdir::WalkDir;
+
+use crate::files::kind::{category, FileCategory};
+use crate::files::local::ops::{is_hidden, stat};
+use crate::files::local::OwnPlaces;
+use crate::files::{Entry, EntryKind};
+
+/// What a search keeps to (FR-029). Size and type only let files through.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub struct SearchFilters {
+    #[ts(optional)]
+    pub types: Option<Vec<FileCategory>>,
+    #[ts(optional, type = "number")]
+    pub size_min: Option<u64>,
+    #[ts(optional, type = "number")]
+    pub size_max: Option<u64>,
+    /// Milliseconds since 1970.
+    #[ts(optional, type = "number")]
+    pub modified_from: Option<i64>,
+    #[ts(optional, type = "number")]
+    pub modified_to: Option<i64>,
+}
+
+impl SearchFilters {
+    fn files_only(&self) -> bool {
+        self.types.is_some() || self.size_min.is_some() || self.size_max.is_some()
+    }
+
+    fn admits(&self, entry: &Entry) -> bool {
+        if entry.kind == EntryKind::Dir && self.files_only() {
+            return false;
+        }
+        if let Some(types) = &self.types {
+            if !category(&entry.name).is_some_and(|found| types.contains(&found)) {
+                return false;
+            }
+        }
+        let size = entry.size.unwrap_or(0);
+        if self.size_min.is_some_and(|min| size < min)
+            || self.size_max.is_some_and(|max| size > max)
+        {
+            return false;
+        }
+        let modified = entry.modified_ms;
+        if let Some(from) = self.modified_from {
+            if modified.is_none_or(|at| at < from) {
+                return false;
+            }
+        }
+        if let Some(to) = self.modified_to {
+            if modified.is_none_or(|at| at > to) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+/// When a search stops early.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SearchLimits {
+    pub max_hits: usize,
+    pub max_time: Option<Duration>,
+}
+
+impl SearchLimits {
+    /// The window: enough to scroll, few enough to stay quick; a sharper query finds the rest.
+    pub const USER: Self = Self {
+        max_hits: 1_000,
+        max_time: None,
+    };
+    /// Agents (contracts/agent-actions.md `files.search`): 500 hits or 30 seconds.
+    pub const AGENT: Self = Self {
+        max_hits: 500,
+        max_time: Some(Duration::from_secs(30)),
+    };
+}
+
+/// How a search runs.
+#[derive(Debug, Clone)]
+pub struct SearchOptions {
+    pub filters: SearchFilters,
+    pub show_hidden: bool,
+    /// holzi's own places: hits in them are marked read-only.
+    pub own: OwnPlaces,
+    /// Leaves the own places out with all below (agents, FR-033).
+    pub hide_own: bool,
+    pub limits: SearchLimits,
+}
+
+/// One hit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub struct SearchHit {
+    pub entry: Entry,
+    /// Higher is better.
+    pub score: u16,
+}
+
+/// How a search ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchEnd {
+    /// `truncated`: a limit stopped it before the walk was through.
+    Done {
+        truncated: bool,
+    },
+    Cancelled,
+}
+
+/// The typos a needle may hold: one up to five characters, else two (research R6).
+pub fn max_typos(needle: &str) -> u16 {
+    if needle.chars().count() <= 5 {
+        1
+    } else {
+        2
+    }
+}
+
+/// How often hits go out at most.
+const BATCH_EVERY: Duration = Duration::from_millis(100);
+
+/// Searches `root` and below for names like `query`; hands hits to `emit` in batches.
+pub fn search(
+    root: &Path,
+    query: &str,
+    options: &SearchOptions,
+    cancel: &CancellationToken,
+    emit: &mut dyn FnMut(Vec<SearchHit>),
+) -> SearchEnd {
+    let query = query.trim();
+    if query.is_empty() {
+        return SearchEnd::Done { truncated: false };
+    }
+    let pattern = Pattern::new(
+        query,
+        PatternConfig::default().max_typos(Some(max_typos(query))),
+    );
+    let mut matcher = Matcher::new(
+        pattern,
+        &Config {
+            casing: frizbee::CaseMatching::Ignore,
+            ..Config::default()
+        },
+    );
+    let started = Instant::now();
+    // `None` until the first hit went out: that one goes at once (SC-004).
+    let mut last: Option<Instant> = None;
+    let mut batch = Vec::new();
+    let mut found = 0;
+    let walk = WalkDir::new(root)
+        .follow_links(false)
+        .same_file_system(true)
+        .min_depth(1)
+        // A folder's files before its sub folders: hits close to the start come first (SC-004).
+        .sort_by(|a, b| {
+            let dir = |item: &walkdir::DirEntry| item.file_type().is_dir();
+            dir(a)
+                .cmp(&dir(b))
+                .then_with(|| a.file_name().cmp(b.file_name()))
+        })
+        .into_iter()
+        .filter_entry(|item| {
+            let hidden = !options.show_hidden
+                && item
+                    .metadata()
+                    .is_ok_and(|meta| is_hidden(&item.file_name().to_string_lossy(), &meta));
+            let off_limits = options.hide_own && options.own.contains(item.path());
+            !hidden && !off_limits
+        });
+    let mut end = SearchEnd::Done { truncated: false };
+    // Folders the system denies come as errors; they are skipped (FR-030).
+    for item in walk.flatten() {
+        if cancel.is_cancelled() {
+            return SearchEnd::Cancelled;
+        }
+        if options
+            .limits
+            .max_time
+            .is_some_and(|limit| started.elapsed() >= limit)
+        {
+            end = SearchEnd::Done { truncated: true };
+            break;
+        }
+        if !batch.is_empty() && last.is_none_or(|at| at.elapsed() >= BATCH_EVERY) {
+            last = Some(Instant::now());
+            emit(std::mem::take(&mut batch));
+        }
+        let name = item.file_name().to_string_lossy();
+        let Some(matched) = matcher.match_one(name.as_ref(), 0) else {
+            continue;
+        };
+        let Ok(entry) = stat(item.path(), &options.own) else {
+            continue;
+        };
+        if !options.filters.admits(&entry) {
+            continue;
+        }
+        batch.push(SearchHit {
+            entry,
+            score: matched.score,
+        });
+        found += 1;
+        if last.is_none() {
+            last = Some(Instant::now());
+            emit(std::mem::take(&mut batch));
+        }
+        if found >= options.limits.max_hits {
+            end = SearchEnd::Done { truncated: true };
+            break;
+        }
+    }
+    if cancel.is_cancelled() {
+        return SearchEnd::Cancelled;
+    }
+    if !batch.is_empty() {
+        emit(batch);
+    }
+    end
+}
+
+/// What the window hears of a search.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub enum FilesSearchEvent {
+    Hits {
+        hits: Vec<SearchHit>,
+    },
+    /// The walk is through, or a limit stopped it (`truncated`).
+    Done {
+        truncated: bool,
+    },
+}
+
+/// The running searches of this session; a Tauri managed state. Each has its own token below the
+/// gate's, so closing the vault ends it; a new search of a tab cancels the old one from the window
+/// (FR-028).
+#[derive(Clone, Default)]
+pub struct SearchManager {
+    running: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, CancellationToken>>>,
+}
+
+impl SearchManager {
+    fn running(
+        &self,
+    ) -> std::sync::MutexGuard<'_, std::collections::HashMap<String, CancellationToken>> {
+        self.running
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Starts a search on the blocking pool; returns its id.
+    pub fn start(
+        &self,
+        gate: &crate::vault_gate::VaultGate,
+        root: std::path::PathBuf,
+        query: String,
+        options: SearchOptions,
+        channel: tauri::ipc::Channel<FilesSearchEvent>,
+    ) -> Result<String, crate::files::FilesError> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let cancel = gate.token().child_token();
+        self.running().insert(id.clone(), cancel.clone());
+        let manager = self.clone();
+        let owned_id = id.clone();
+        let spawned = gate.spawn_blocking(move || {
+            let end = search(&root, &query, &options, &cancel, &mut |hits| {
+                let _ = channel.send(FilesSearchEvent::Hits { hits });
+            });
+            manager.running().remove(&owned_id);
+            if let SearchEnd::Done { truncated } = end {
+                let _ = channel.send(FilesSearchEvent::Done { truncated });
+            }
+        });
+        if let Err(error) = spawned {
+            self.running().remove(&id);
+            log::warn!("files: a search could not start: {error}");
+            return Err(crate::files::FilesError::new(
+                crate::files::FilesErrorCode::Unsupported,
+                "the vault is closing",
+            ));
+        }
+        Ok(id)
+    }
+
+    pub fn cancel(&self, id: &str) {
+        if let Some(cancel) = self.running().remove(id) {
+            cancel.cancel();
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "search_tests.rs"]
+mod tests;

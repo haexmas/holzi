@@ -2,8 +2,13 @@
 // POST /v1/messages exactly as the application's own adapter expects (src-tauri/src/adapters/anthropic.rs),
 // so a reply can run, stall or fail without the internet and without any application change
 // (contracts/stand-in-provider.md).
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import http from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import https from 'node:https'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { reachFromDevice } from './platform/reach.ts'
 
 const MODEL_ID = 'stand-in-model'
@@ -38,8 +43,19 @@ export interface WaitForOpenOptions {
   timeoutMs?: number
 }
 
+export interface ProviderOptions {
+  models?: StandInModel[]
+  /**
+   * Serve HTTPS with a certificate nobody trusts, made fresh for the run (spec 043 FR-024): a
+   * client that checks certificates refuses it in the handshake, before any request.
+   */
+  selfSignedTls?: boolean
+}
+
 export interface Provider {
   baseUrl: string
+  /** TLS handshakes the client broke off (only with `selfSignedTls`). */
+  refusedHandshakes(): number
   modelId: string
   behave(behavior: Behavior): void
   connections(): Connection[]
@@ -160,9 +176,43 @@ function errorBody(behavior: { status?: number; body?: unknown }) {
  * Starts the stand-in on `127.0.0.1`, on a port the operating system chooses. Started and closed by the
  * scenario context; it never outlives its scenario.
  */
+/** A key and a self-signed certificate for `127.0.0.1`, valid for a day, made with `openssl`. */
+export function selfSignedCertificate(): { key: Buffer; cert: Buffer } {
+  const folder = mkdtempSync(join(tmpdir(), 'holzi-e2e-tls-'))
+  try {
+    const [key, cert] = [join(folder, 'key.pem'), join(folder, 'cert.pem')]
+    execFileSync(
+      'openssl',
+      [
+        'req',
+        '-x509',
+        '-newkey',
+        'ec',
+        '-pkeyopt',
+        'ec_paramgen_curve:prime256v1',
+        '-nodes',
+        '-subj',
+        '/CN=127.0.0.1',
+        '-addext',
+        'subjectAltName=IP:127.0.0.1',
+        '-days',
+        '1',
+        '-keyout',
+        key,
+        '-out',
+        cert,
+      ],
+      { stdio: 'ignore' },
+    )
+    return { key: readFileSync(key), cert: readFileSync(cert) }
+  } finally {
+    rmSync(folder, { recursive: true, force: true })
+  }
+}
+
 export async function startProvider(
   initial?: Behavior,
-  options?: { models?: StandInModel[] },
+  options?: ProviderOptions,
 ): Promise<Provider> {
   let behavior: Behavior = initial ?? { kind: 'stream-then-finish' }
   const models = options?.models ?? DEFAULT_MODELS
@@ -172,70 +222,75 @@ export async function startProvider(
   let nextConnectionId = 1
   let openWaiter: ((connection: Connection) => void) | undefined
 
-  const server = http.createServer(
-    (req: IncomingMessage, res: ServerResponse) => {
-      const chunks: Buffer[] = []
-      req.on('data', (chunk: Buffer) => chunks.push(chunk))
-      req.on('end', () => {
-        const raw = Buffer.concat(chunks).toString('utf8')
-        let body: unknown
-        try {
-          body = raw ? JSON.parse(raw) : undefined
-        } catch {
-          body = raw
-        }
-        const method = req.method ?? ''
-        const url = req.url ?? ''
-        requests.push({
-          id: nextRequestId++,
-          at: Date.now(),
+  const handle = (req: IncomingMessage, res: ServerResponse) => {
+    const chunks: Buffer[] = []
+    req.on('data', (chunk: Buffer) => chunks.push(chunk))
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8')
+      let body: unknown
+      try {
+        body = raw ? JSON.parse(raw) : undefined
+      } catch {
+        body = raw
+      }
+      const method = req.method ?? ''
+      const url = req.url ?? ''
+      requests.push({
+        id: nextRequestId++,
+        at: Date.now(),
+        method,
+        path: url,
+        body,
+      })
+
+      if (method === 'GET' && url.startsWith('/v1/models')) {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify(modelsBody(models)))
+        return
+      }
+      if (method === 'POST' && url === '/v1/messages') {
+        const connection: Connection = {
+          id: nextConnectionId++,
+          openedAt: Date.now(),
           method,
           path: url,
-          body,
+        }
+        connections.push(connection)
+        // The socket's own close, not the response's, so an aborted stream is recorded when the
+        // application drops the connection rather than when this server finishes writing.
+        req.socket.on('close', () => {
+          connection.closedAt = Date.now()
         })
+        const waiter = openWaiter
+        openWaiter = undefined
+        waiter?.(connection)
 
-        if (method === 'GET' && url.startsWith('/v1/models')) {
-          res.writeHead(200, { 'content-type': 'application/json' })
-          res.end(JSON.stringify(modelsBody(models)))
-          return
-        }
-        if (method === 'POST' && url === '/v1/messages') {
-          const connection: Connection = {
-            id: nextConnectionId++,
-            openedAt: Date.now(),
-            method,
-            path: url,
-          }
-          connections.push(connection)
-          // The socket's own close, not the response's, so an aborted stream is recorded when the
-          // application drops the connection rather than when this server finishes writing.
-          req.socket.on('close', () => {
-            connection.closedAt = Date.now()
+        const current = behavior
+        if (current.kind === 'error') {
+          res.writeHead(current.status ?? 500, {
+            'content-type': 'application/json',
           })
-          const waiter = openWaiter
-          openWaiter = undefined
-          waiter?.(connection)
-
-          const current = behavior
-          if (current.kind === 'error') {
-            res.writeHead(current.status ?? 500, {
-              'content-type': 'application/json',
-            })
-            res.end(JSON.stringify(errorBody(current)))
-            return
-          }
-          if (current.kind === 'stream-forever') {
-            streamForever(res, connection.id, current)
-            return
-          }
-          streamThenFinish(res, connection.id, current)
+          res.end(JSON.stringify(errorBody(current)))
           return
         }
-        res.writeHead(404, { 'content-type': 'application/json' })
-        res.end(JSON.stringify({ error: 'not found' }))
-      })
-    },
-  )
+        if (current.kind === 'stream-forever') {
+          streamForever(res, connection.id, current)
+          return
+        }
+        streamThenFinish(res, connection.id, current)
+        return
+      }
+      res.writeHead(404, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ error: 'not found' }))
+    })
+  }
+  let refusedHandshakes = 0
+  const server = options?.selfSignedTls
+    ? https.createServer(selfSignedCertificate(), handle)
+    : http.createServer(handle)
+  server.on('tlsClientError', () => {
+    refusedHandshakes += 1
+  })
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
@@ -245,7 +300,8 @@ export async function startProvider(
   reachFromDevice(address.port)
 
   return {
-    baseUrl: `http://127.0.0.1:${address.port}`,
+    baseUrl: `${options?.selfSignedTls ? 'https' : 'http'}://127.0.0.1:${address.port}`,
+    refusedHandshakes: () => refusedHandshakes,
     modelId: models[0]!.id,
     behave: (next) => {
       behavior = next

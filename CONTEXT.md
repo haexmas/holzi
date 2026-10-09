@@ -104,6 +104,19 @@ The chain `last_active_model → default_model (device) → default_model
 loads on chat-page mount. Only the terminal load runs — no
 preference-write happens along this chain.
 
+**Rückfrage** (choice prompt, spec 046):
+A question the tool round puts to the user while the turn waits: either
+an action that could not resolve an input (an ambiguous app name) or the
+agent's own `ask_user`. The user picks a **Kandidat**, writes something
+else, or declines. Shown in the chat queue next to tool approvals
+(`pendingPrompts`); never times out; a cancelled turn drops it.
+
+**Kandidat** (candidate):
+One proposed answer of a Rückfrage: a label the user reads and the value
+the action runs with again (for apps: title and app id). At most five per
+Rückfrage; one that cannot be picked on this device is shown disabled
+with its reason.
+
 ### Sprachkonventionen im UI
 
 **Workspace / Arbeitsbereich**:

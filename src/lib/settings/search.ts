@@ -6,6 +6,7 @@ import {
   SETTINGS_LOCATIONS,
   type SettingsLocation,
 } from './registry.ts'
+import { fold } from '../search/fold.ts'
 
 export type SettingsSearchHit = {
   location: SettingsLocation
@@ -18,14 +19,6 @@ export type SettingsSearchHit = {
 }
 
 type Entry = SettingsSearchHit & { text: string; order: number }
-
-/** Case- and accent-insensitive: "gerat" finds "Gerät". */
-function fold(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-}
 
 function ancestors(location: SettingsLocation): SettingsLocation[] {
   const parent = SETTINGS_LOCATIONS.find(

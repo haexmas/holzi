@@ -201,3 +201,20 @@ async fn ending_the_registry_ends_a_running_command_without_the_tools_own_cancel
         .expect("the tool task ends");
     assert!(result.is_error, "a killed command is not a success");
 }
+
+#[test]
+fn the_description_keeps_the_model_from_reaching_holzi_data_through_the_shell() {
+    let description = CliTool::default().description().to_owned();
+    assert!(
+        description.contains("only when the user asks"),
+        "{description}"
+    );
+    assert!(
+        description.contains("not holzi's apps or extensions"),
+        "{description}"
+    );
+    assert!(
+        description.contains("Never invent a command"),
+        "{description}"
+    );
+}

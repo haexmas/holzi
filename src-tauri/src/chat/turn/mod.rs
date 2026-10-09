@@ -16,6 +16,7 @@
 //! - [`tool_round`] — plan, execute, persist one round of tool calls
 //! - [`persist`] — row writes, the shared event helpers, the logical clock
 
+mod choices;
 mod persist;
 mod step;
 mod tool_round;
@@ -172,6 +173,7 @@ impl TurnRunner<'_> {
                     message_id,
                     thread_id,
                     reason,
+                    kind: step.error_kind,
                 },
             );
         } else {

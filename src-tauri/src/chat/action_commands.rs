@@ -14,6 +14,7 @@ use super::tools::action_bridge::ActionOutcomeWire;
 use super::tools::action_tool::{
     is_valid_tool_name, schema_in_subset, ActionTool, AgentActionDef, ACTION_SOURCE,
 };
+use super::tools::ask_user::{AskUserTool, ASK_USER_TOOL_NAME};
 use super::tools::find_actions::{FindActionsTool, FIND_ACTIONS_TOOL_NAME};
 use crate::error::{HolziError, Result};
 
@@ -51,7 +52,7 @@ pub fn register_agent_actions(chat: &ChatState, actions: Vec<AgentActionDef>) ->
                 reason: format!("duplicate tool name: {}", def.tool_name),
             });
         }
-        if def.tool_name == FIND_ACTIONS_TOOL_NAME {
+        if def.tool_name == FIND_ACTIONS_TOOL_NAME || def.tool_name == ASK_USER_TOOL_NAME {
             return Err(HolziError::InvalidInput {
                 reason: format!("reserved tool name: {}", def.tool_name),
             });
@@ -77,6 +78,7 @@ pub fn register_agent_actions(chat: &ChatState, actions: Vec<AgentActionDef>) ->
     }
     if !search_defs.is_empty() {
         registry.register(Arc::new(FindActionsTool::new(search_defs)));
+        registry.register(Arc::new(AskUserTool));
     }
     Ok(count)
 }

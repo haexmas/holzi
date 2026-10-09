@@ -356,13 +356,23 @@
         "workspace": "Workspace"
       }
     },
+    "choice": {
+      "title": "I could not find “{value}” unambiguously. Did you mean …?",
+      "other": "Something else …",
+      "otherPlaceholder": "What do you mean?",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "unavailable": "Not available right now: {reason}",
+      "noCandidates": "I found nothing that fits."
+    },
     "autonomy": {
       "standard": "Standard",
       "ungated": "Ungated",
       "gated_permissive": "Gated (permissive)",
       "audit": {
         "gated_permissive_call_permitted": "Permitted",
-        "denied_by_deny_rule": "Denied by deny rule"
+        "denied_by_deny_rule": "Denied by deny rule",
+        "declined_by_user": "Question declined"
       }
     }
   },
@@ -1110,6 +1120,7 @@
     "unreadable": "The chosen file cannot be read.",
     "notAvailable": "Not available on this device.",
     "notEnoughSpace": "Not enough free space.",
+    "untrustedCertificate": "Invalid certificate: the server identifies itself with a certificate this device does not trust. No connection was made.",
     "hf": {
       "invalidInput": "Invalid input.",
       "network": "Network error — please check your connection.",
@@ -1201,7 +1212,7 @@
         "get": "Read workspaces, windows and tabs"
       },
       "apps": {
-        "list": "List apps"
+        "list": "List apps and extensions"
       },
       "actions": {
         "list": "List actions"
@@ -1230,6 +1241,7 @@
       "approval": {
         "decide": "Decide approval"
       },
+      "choice": { "answer": "Answer question" },
       "permissionMode": {
         "set": "Set permission mode"
       },
@@ -1987,6 +1999,41 @@
     "empty": "This folder is empty.",
     "symlink": "Link",
     "holziOwned": "holzi's own data, read-only",
+    "search": {
+      "placeholder": "Search in this folder",
+      "clear": "Clear search",
+      "count": "{count} hit | {count} hits",
+      "truncated": "– only the first, search more precisely for more",
+      "none": "No hits.",
+      "reveal": "Show in folder"
+    },
+    "filter": {
+      "label": "Filter",
+      "type": "Type",
+      "size": "Size",
+      "date": "Modified",
+      "clear": "Remove filter",
+      "types": {
+        "image": "Images",
+        "video": "Videos",
+        "audio": "Audio",
+        "document": "Documents",
+        "text": "Text"
+      },
+      "sizes": {
+        "any": "Any size",
+        "small": "Under 1 MB",
+        "medium": "1 to 100 MB",
+        "large": "Over 100 MB"
+      },
+      "dates": {
+        "any": "Any time",
+        "day": "Last 24 hours",
+        "week": "Last 7 days",
+        "month": "Last 30 days",
+        "year": "Last year"
+      }
+    },
     "cancel": "Cancel",
     "drop": "Copy here",
     "actions": {

@@ -6,12 +6,12 @@ import { test } from 'node:test'
 
 import {
   filterHeaders,
-  fold,
   matchesQuery,
   placeholderParts,
   sortByTitle,
   type SearchableHeader,
 } from '../src/lib/passwords/search.ts'
+import { fold } from '../src/lib/search/fold.ts'
 
 function header(
   overrides: Partial<SearchableHeader> & { id: string },

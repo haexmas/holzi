@@ -95,9 +95,10 @@ impl Tool for McpTool {
                 match result {
                     Ok(result) => {
                         let content = content_to_string(&result.content);
-                        ToolResult {
-                            content,
-                            is_error: result.is_error.unwrap_or(false),
+                        if result.is_error.unwrap_or(false) {
+                            ToolResult::error(content)
+                        } else {
+                            ToolResult::ok(content)
                         }
                     }
                     Err(e) => ToolResult::error(format!("mcp tools/call failed: {e}")),

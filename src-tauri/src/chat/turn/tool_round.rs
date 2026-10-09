@@ -19,6 +19,7 @@ use crate::chat::events::{
 };
 use crate::chat::session::ChatState;
 use crate::chat::tools::action_tool::ACTION_SOURCE;
+use crate::chat::tools::ask_user::ASK_USER_TOOL_NAME;
 use crate::chat::tools::offer::{extend_offer, found_tools};
 use crate::chat::tools::permission;
 use crate::chat::tools::{ApprovalDecision, Tool, ToolResult as ToolExecResult};
@@ -38,7 +39,7 @@ pub const MAX_TOOL_ROUNDS: usize = 8;
 
 /// One executed call: the request, its result, and the source string
 /// recorded on the persisted row.
-type ExecutedCall = (LlmToolCall, ToolExecResult, &'static str);
+pub(super) type ExecutedCall = (LlmToolCall, ToolExecResult, &'static str);
 
 /// What the turn loop should do after a round.
 pub(super) enum RoundOutcome {
@@ -81,7 +82,8 @@ impl TurnRunner<'_> {
         }
 
         let plans = self.plan_calls(step.tool_calls).await;
-        let executed = Self::execute_plans(self.chat_state, &self.cancel, plans).await;
+        let mut executed = Self::execute_plans(self.chat_state, &self.cancel, plans).await;
+        self.resolve_choices(&mut executed).await;
 
         // Aborted mid-round (either an in-flight `execute()` was cut
         // short, or a pending approval's sender was dropped): none of
@@ -183,7 +185,14 @@ impl TurnRunner<'_> {
             // made for an earlier call, but the very next tool use
             // must observe it (T024B).
             let mode = permission::read_from_vault(self.db).await;
-            match permission::decide(mode, tool.risk_class()) {
+            // `ask_user` changes nothing and is itself a question to the user: asking for an
+            // approval first would ask twice (spec 046 FR-015).
+            let decision = if call.name == ASK_USER_TOOL_NAME {
+                permission::Decision::Allow
+            } else {
+                permission::decide(mode, tool.risk_class())
+            };
+            match decision {
                 permission::Decision::Allow => plans.push((call, ToolPlan::Allow(tool))),
                 permission::Decision::Deny => plans.push((call, ToolPlan::Deny(tool))),
                 permission::Decision::Ask => {

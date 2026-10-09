@@ -338,6 +338,14 @@ export class AndroidData implements DataHandle {
     } catch {
       // Diagnostics must never hide the failure they describe.
     }
+    try {
+      // The app also logs to logcat, and its own log file sometimes stops early on the device.
+      const logcat = this.adb.shell('logcat', '-d', '-v', 'time', '-t', '20000')
+      mkdirSync(folder, { recursive: true })
+      writeFileSync(join(folder, 'logcat.txt'), logcat)
+    } catch {
+      // As above.
+    }
   }
 
   dispose(): void {

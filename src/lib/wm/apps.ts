@@ -13,6 +13,9 @@ export type AppDefinition = {
   titleKey: string
   /** A name that is not translated (an extension's own name); shown instead of `titleKey`. */
   title?: string
+  /** What the app is for, untranslated (an extension's own description); `wm.apps.list` passes it
+   * to agents so they describe the app instead of naming its id (spec 046, R17). */
+  description?: string
   /** Iconify name (e.g. `lucide:message-square`). */
   icon: string
   /** An image shown instead of `icon` (an extension's own icon as a `data:` URL). */
@@ -101,20 +104,6 @@ export function getAppDefinition(
   apps: readonly AppDefinition[] = WM_APPS,
 ): AppDefinition | undefined {
   return apps.find((app) => app.id === appId)
-}
-
-/** The error for an `appId` no app has, naming every valid id: an extension's id is a UUID no agent
- * can guess from its title, and a small model corrects its call from this message far more often
- * than it takes the extra `wm.apps.list` round. An extension carries its title; holzi's own ids
- * speak for themselves. */
-export function unknownAppMessage(
-  appId: string,
-  apps: readonly AppDefinition[],
-): string {
-  const valid = apps.map((app) =>
-    app.title ? `${app.id} (${app.title})` : app.id,
-  )
-  return `unknown app ${appId}; valid app ids: ${valid.join(', ')}`
 }
 
 export type TitleRef = {

@@ -35,3 +35,23 @@ fn unknown_types_have_no_mime() {
     assert_eq!(mime_for("x.unknownext"), None);
     assert_eq!(mime_for("brief.pdf"), Some("application/pdf"));
 }
+
+#[test]
+fn categories_follow_the_kind_with_documents_and_phone_photos() {
+    for (name, category) in [
+        ("notiz.txt", Some(FileCategory::Text)),
+        ("daten.json", Some(FileCategory::Text)),
+        ("brief.pdf", Some(FileCategory::Document)),
+        ("bericht.docx", Some(FileCategory::Document)),
+        ("tabelle.ODS", Some(FileCategory::Document)),
+        ("vortrag.pptx", Some(FileCategory::Document)),
+        ("foto.JPG", Some(FileCategory::Image)),
+        ("handy.heic", Some(FileCategory::Image)),
+        ("film.mkv", Some(FileCategory::Video)),
+        ("lied.opus", Some(FileCategory::Audio)),
+        ("archiv.zip", None),
+        ("ohne-endung", None),
+    ] {
+        assert_eq!(super::category(name), category, "{name}");
+    }
+}

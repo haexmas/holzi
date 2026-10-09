@@ -1,7 +1,7 @@
 import { ref, type Ref } from 'vue'
 import type { Message, Thread, useChat } from '~/composables/useChat'
+import type { PendingPrompt } from '~/lib/chat/prompts'
 import type { useChatTranscript } from '~/composables/useChatTranscript'
-import type { PendingApproval } from '~/components/chat/PermissionPrompt.vue'
 
 type HistoryDurationUnit = 'min' | 'h' | 'd'
 
@@ -35,8 +35,8 @@ export function useThreadSidebar(
   streamingBuffer: Ref<string>,
   reasoningByMessage: Ref<Record<string, string>>,
   expandedReasoning: Ref<Set<string>>,
-  pendingApprovals: Ref<PendingApproval[]>,
-  pendingApprovalsByThread: Map<string, PendingApproval[]>,
+  pendingPrompts: Ref<PendingPrompt[]>,
+  pendingPromptsByThread: Map<string, PendingPrompt[]>,
   resetTextarea: () => Promise<void>,
   scrollToBottom: () => Promise<void>,
 ) {
@@ -227,7 +227,7 @@ export function useThreadSidebar(
     messagesByThread.value = Object.fromEntries(
       Object.entries(messagesByThread.value).filter(([id]) => id !== threadId),
     )
-    pendingApprovalsByThread.delete(threadId)
+    pendingPromptsByThread.delete(threadId)
     pendingToolEvents.delete(threadId)
     pendingTurnCompletions.delete(threadId)
     if (editingThreadId.value === threadId) cancelEditing()
@@ -280,14 +280,14 @@ export function useThreadSidebar(
     if (
       previousThreadId &&
       previousThreadId !== id &&
-      pendingApprovals.value.length > 0
+      pendingPrompts.value.length > 0
     ) {
-      const queued = pendingApprovalsByThread.get(previousThreadId) ?? []
-      pendingApprovalsByThread.set(previousThreadId, [
+      const queued = pendingPromptsByThread.get(previousThreadId) ?? []
+      pendingPromptsByThread.set(previousThreadId, [
         ...queued,
-        ...pendingApprovals.value,
+        ...pendingPrompts.value,
       ])
-      pendingApprovals.value = []
+      pendingPrompts.value = []
     }
     activeThreadId.value = id
     const existing = messagesByThread.value[id]
@@ -301,14 +301,14 @@ export function useThreadSidebar(
       activeThreadId.value !== id
     )
       return
-    const queuedApprovals = pendingApprovalsByThread.get(id)
+    const queuedApprovals = pendingPromptsByThread.get(id)
     if (queuedApprovals) {
       // Merge, don't overwrite: a `tool-permission-request` for `id` may
-      // have already landed directly in `pendingApprovals` during the
+      // have already landed directly in `pendingPrompts` during the
       // `listMessagesAsync` await above (its gate matches on
       // `activeThreadId`, which was set synchronously before that await).
-      pendingApprovals.value = [...queuedApprovals, ...pendingApprovals.value]
-      pendingApprovalsByThread.delete(id)
+      pendingPrompts.value = [...queuedApprovals, ...pendingPrompts.value]
+      pendingPromptsByThread.delete(id)
     }
     const queuedToolEvents = pendingToolEvents.get(id)
     if (queuedToolEvents) {

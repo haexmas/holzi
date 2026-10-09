@@ -228,6 +228,7 @@ async fn a_failed_handler_shows_the_model_a_fixed_text_not_its_message() {
         code: Some("failed".into()),
         field: None,
         message: Some("cannot read /home/someone/vault.db".into()),
+        options: None,
     };
     answer(&turn.chat_state, &payload, wire.into());
     (&mut turn.handle).await.unwrap();

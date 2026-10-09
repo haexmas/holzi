@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use haex_crdt::{Database, DatabaseConfig, NoopSignatureProvider, SqlCipherKey};
 use serde_json::Value;
@@ -19,8 +19,15 @@ use crate::storage::query;
 use crate::vault_gate::VaultGate;
 
 const PASSPHRASE: &str = "approval-bridge-posture-test";
+static OPEN_VAULT: OnceLock<Mutex<()>> = OnceLock::new();
 
 fn open_vault(dir: &Path) -> Database {
+    // SQLCipher's PRAGMA setup is process-global in the CI build. Keep the
+    // independent fixture opens in this module from racing during startup.
+    let _open_guard = OPEN_VAULT
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("vault-open lock");
     let installation_id = installation_id_path(dir);
     Database::open(DatabaseConfig {
         path: dir.join("vault.db"),

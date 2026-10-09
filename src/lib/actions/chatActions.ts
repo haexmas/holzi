@@ -156,6 +156,25 @@ export const CHAT_ACTIONS: readonly ActionDefinition[] = [
     effect: 'write',
   }),
   inChat({
+    id: 'chat.choice.answer',
+    description:
+      "Answer the agent's pending question (spec 046): one of its options, own words, or cancel. User only.",
+    input: {
+      type: 'object',
+      properties: {
+        requestId: { type: 'string' },
+        kind: { type: 'string', enum: ['option', 'text', 'cancel'] },
+        value: {
+          type: 'string',
+          description: "The option's value or the own words.",
+        },
+      },
+      required: ['requestId', 'kind'],
+    },
+    scope: 'guardrails',
+    effect: 'write',
+  }),
+  inChat({
     id: 'chat.permissionMode.set',
     description:
       'Set the tool permission mode (manual, auto, plan). User only.',

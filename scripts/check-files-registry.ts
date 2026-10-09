@@ -52,3 +52,15 @@ test('an unknown location or a strange storage id is not a place', () => {
   assert.equal(parseFilesPlace({ path: '/elsewhere', query: {} }), undefined)
   assert.equal(parseFilesPlace({ path: '/storage/a b', query: {} }), undefined)
 })
+
+test('a search and its filter round-trip with the place', () => {
+  const place = {
+    source: { kind: 'device' as const },
+    path: '/home/anna',
+    q: 'urlaub',
+    t: 'image,video',
+    s: 'large',
+    d: 'year',
+  }
+  assert.deepEqual(parseFilesPlace(filesLocation(place)), place)
+})

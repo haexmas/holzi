@@ -24,6 +24,7 @@ pub mod local;
 pub mod request;
 #[cfg(test)]
 mod request_tests;
+pub mod tls;
 pub mod types;
 
 pub use types::{
@@ -87,6 +88,21 @@ pub enum AdapterError {
     /// so never worth retrying.
     #[error("backend unavailable: {reason}")]
     Unavailable { reason: String },
+    /// The provider's certificate is not trusted by the system (spec 043 FR-024): a self-signed
+    /// or otherwise unknown certificate. The same on every attempt, so never retried.
+    #[error("certificate not trusted: {reason}")]
+    UntrustedCertificate { reason: String },
+}
+
+/// A failure to reach the provider: an untrusted certificate is told apart, everything else is a
+/// transport failure. `context` names the request (`POST <endpoint>`).
+pub fn transport_error(context: String, error: reqwest::Error) -> AdapterError {
+    let reason = format!("{context}: {error}");
+    if tls::is_untrusted_certificate(&error) {
+        AdapterError::UntrustedCertificate { reason }
+    } else {
+        AdapterError::Http { reason }
+    }
 }
 
 impl AdapterError {
@@ -102,7 +118,8 @@ impl AdapterError {
             AdapterError::Status { status, .. } => *status == 429 || (500..600).contains(status),
             AdapterError::InvalidCredentials
             | AdapterError::Parse { .. }
-            | AdapterError::Unavailable { .. } => false,
+            | AdapterError::Unavailable { .. }
+            | AdapterError::UntrustedCertificate { .. } => false,
         }
     }
 }

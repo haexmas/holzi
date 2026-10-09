@@ -532,9 +532,10 @@ pub async fn send_message(
     {
         Ok(stream) => stream,
         Err(error) => {
-            let error = match error {
-                StreamStartError::Cancelled => "generation cancelled".to_string(),
-                StreamStartError::Failed(reason) => reason,
+            let (error, untrusted) = match error {
+                StreamStartError::Cancelled => ("generation cancelled".to_string(), false),
+                StreamStartError::Failed(reason) => (reason, false),
+                StreamStartError::UntrustedCertificate(reason) => (reason, true),
             };
             if let Err(cleanup_error) =
                 cleanup_staged_send(db.clone(), user_message_id, thread_id, is_new_thread).await
@@ -542,6 +543,9 @@ pub async fn send_message(
                 return Err(HolziError::CrdtInit {
                     reason: format!("adapter start: {error}; {cleanup_error}"),
                 });
+            }
+            if untrusted {
+                return Err(HolziError::UntrustedCertificate { reason: error });
             }
             return Err(HolziError::InvalidInput {
                 reason: format!("adapter start: {error}"),
@@ -665,6 +669,7 @@ pub fn abort_turn(chat_state: &ChatState) -> Result<()> {
         cancelled.extend(pending.keys().copied());
         pending.clear();
     }
+    chat_state.pending_choices.cancel_all();
     Ok(())
 }
 

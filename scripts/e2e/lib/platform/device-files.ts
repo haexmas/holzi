@@ -2,7 +2,13 @@
 // picked-file.md, test seam): on Linux a temporary folder of this machine, on Android a folder in the
 // app's own download folder, written and read with `adb push` and `adb pull`. Chromedriver cannot
 // work the system file picker, so scenarios hand the app such a path where a user would pick a file.
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -16,6 +22,9 @@ export interface DeviceFiles {
   write: (name: string, content: string | Uint8Array) => void
   read: (name: string) => string
   readBytes: (name: string) => Buffer
+  /** Empty files `sub/d<i>/f<i>-<j>.txt` for `i < folders`, `j < files`: a large tree in one go
+   * (on the phone one shell loop, not a push per file). */
+  tree: (sub: string, folders: number, files: number) => void
   remove: () => void
 }
 
@@ -53,6 +62,14 @@ export function deviceFiles(
       write: (name, content) => writeFileSync(path(name), content),
       read: (name) => readFileSync(path(name), 'utf8'),
       readBytes: (name) => readFileSync(path(name)),
+      tree: (sub, folders, files) => {
+        for (let i = 0; i < folders; i++) {
+          const dir = join(folder, sub, `d${i}`)
+          mkdirSync(dir, { recursive: true })
+          for (let j = 0; j < files; j++)
+            writeFileSync(join(dir, `f${i}-${j}.txt`), '')
+        }
+      },
       remove: () => rmSync(folder, { recursive: true, force: true }),
     }
   }
@@ -90,6 +107,14 @@ export function deviceFiles(
     },
     read: (name) => pull(name).toString(),
     readBytes: pull,
+    tree: (sub, folders, files) =>
+      void adb.shell(
+        'sh',
+        '-c',
+        `mkdir -p ${quote(folder)} && cd ${quote(folder)} && i=0; while [ $i -lt ${folders}; do ` +
+          `mkdir -p ${quote(sub)}/d$i && j=0; while [ $j -lt ${files}; do ` +
+          `: > ${quote(sub)}/d$i/f$i-$j.txt; j=$((j+1)); done; i=$((i+1)); done`,
+      ),
     remove: () => void adb.shell('rm', '-rf', quote(folder)),
   }
 }
