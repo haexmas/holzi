@@ -36,16 +36,16 @@ Die erste Anwendung ist die Papiernotiz-Erkennung in haex-notes.
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
-| Regel | Status | Begründung |
-|---|---|---|
-| Keine Secrets | ✅ | Task-Payloads enthalten Bilddaten und Kennungen, aber keine Zugangsdaten; Provider-Secrets bleiben im Host. |
-| Keine lokalen absoluten Pfade | ✅ | Die Extension übergibt Bytes oder hostseitig autorisierte Referenzen; Verträge verwenden keine Maschinenpfade. |
-| Cross-Repo-Referenzen gepinnt | ✅ | Diese Spezifikation definiert den Host-Vertrag; SDK-/haex-notes-Änderungen werden in eigenen Worktrees über denselben Vertrag umgesetzt. |
-| Relay blockiert lokale Arbeit nicht | ✅ | Lokale Profile benötigen weder Relay noch Cloud-Fallback. |
-| Worktree/PR/Testtrennung | ✅ | Arbeit erfolgt auf `feat/structured-agent-tasks`; Tests liegen in separaten Rust-Testdateien; Merge nur per PR. |
-| ADR-Pflicht | ✅ | Die Task-Grenze berührt keine bestehende Core-Principle-Ausnahme; Consent und Locality sind im Vertrag dokumentiert. |
+| Regel                               | Status | Begründung                                                                                                                               |
+| ----------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Keine Secrets                       | ✅     | Task-Payloads enthalten Bilddaten und Kennungen, aber keine Zugangsdaten; Provider-Secrets bleiben im Host.                              |
+| Keine lokalen absoluten Pfade       | ✅     | Die Extension übergibt Bytes oder hostseitig autorisierte Referenzen; Verträge verwenden keine Maschinenpfade.                           |
+| Cross-Repo-Referenzen gepinnt       | ✅     | Diese Spezifikation definiert den Host-Vertrag; SDK-/haex-notes-Änderungen werden in eigenen Worktrees über denselben Vertrag umgesetzt. |
+| Relay blockiert lokale Arbeit nicht | ✅     | Lokale Profile benötigen weder Relay noch Cloud-Fallback.                                                                                |
+| Worktree/PR/Testtrennung            | ✅     | Arbeit erfolgt auf `feat/structured-agent-tasks`; Tests liegen in separaten Rust-Testdateien; Merge nur per PR.                          |
+| ADR-Pflicht                         | ✅     | Die Task-Grenze berührt keine bestehende Core-Principle-Ausnahme; Consent und Locality sind im Vertrag dokumentiert.                     |
 
 ## Project Structure
 

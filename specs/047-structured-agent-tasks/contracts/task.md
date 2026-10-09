@@ -30,7 +30,7 @@ request never contains provider credentials.
 The immediate response is:
 
 ```text
-taskId: string
+taskId?: string  # absent when the start is refused (unsupported_capability, profile_unavailable): no run exists
 status: "running" | "consent_required" | "unsupported_capability"
 processing?:
   mode: "local" | "remote"

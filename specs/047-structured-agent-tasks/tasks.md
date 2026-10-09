@@ -2,18 +2,18 @@
 
 ## Phase 1: Setup
 
-- [x] T001 [P] Create the `agent_tasks` module skeleton and register it from `src-tauri/src/lib.rs`, keeping task lifecycle, bridge handlers, validation, and provider execution in separate files below the 500-LoC project limit.
-- [x] T002 [P] Add deterministic fixture types and test helpers for `paper-note-recognition` in `src-tauri/src/agent_tasks/fixture.rs` and `src-tauri/src/agent_tasks/fixture_tests.rs`, with no network or real model dependency.
+- [ ] T001 [P] Create the `agent_tasks` module skeleton and register it from `src-tauri/src/lib.rs`, keeping task lifecycle, bridge handlers, validation, and provider execution in separate files below the 500-LoC project limit.
+- [ ] T002 [P] Add deterministic fixture types and test helpers for `paper-note-recognition` in `src-tauri/src/agent_tasks/fixture.rs` and `src-tauri/src/agent_tasks/fixture_tests.rs`, with no network or real model dependency.
 - [x] T003 [P] Add the public task contract examples and status/error vocabulary to `specs/047-structured-agent-tasks/contracts/task.md`, including the asynchronous start, completion, and cancellation messages consumed by extensions.
 
 ## Phase 2: Foundational host infrastructure
 
-- [x] T004 Define versioned task input, processing provenance, lifecycle status, structured error, and task-result types in `src-tauri/src/agent_tasks/model.rs`, with serde round-trip tests in `src-tauri/src/agent_tasks/model_tests.rs`.
-- [x] T005 Define the in-memory task registry, ownership key, cancellation token, timeout metadata, and bounded-per-extension concurrency policy in `src-tauri/src/agent_tasks/state.rs`, with transition tests in `src-tauri/src/agent_tasks/state_tests.rs`.
-- [x] T006 Add the task-definition registry for `paper-note-recognition` in `src-tauri/src/agent_tasks/definitions.rs`, including schema version, required capabilities, allowed input fields, and the absence of general tools or arbitrary file access.
-- [x] T007 Extend the extension-host state and frame lifecycle so an extension bridge handler can access the task manager without receiving provider credentials or bypassing frame-session ownership checks in `src-tauri/src/extensions/host.rs`, `src-tauri/src/extensions/bridge/dispatch.rs`, and `src-tauri/src/extensions/commands/frames.rs`.
-- [x] T008 Add a host-side result validator in `src-tauri/src/agent_tasks/validation.rs` for the paper-note region schema, rejecting malformed JSON, missing required fields, invalid confidence/range values, unsupported region kinds, and schema-version mismatches; cover rejection cases in `src-tauri/src/agent_tasks/validation_tests.rs`.
-- [x] T009 Add structured-task error mapping in `src-tauri/src/agent_tasks/errors.rs` so profile, capability, timeout, cancellation, consent, provider, and invalid-result failures never escape as raw provider text or unstructured bridge failures.
+- [ ] T004 Define versioned task input, processing provenance, lifecycle status, structured error, and task-result types in `src-tauri/src/agent_tasks/model.rs`, with serde round-trip tests in `src-tauri/src/agent_tasks/model_tests.rs`.
+- [ ] T005 Define the in-memory task registry, ownership key, cancellation token, timeout metadata, and bounded-per-extension concurrency policy in `src-tauri/src/agent_tasks/state.rs`, with transition tests in `src-tauri/src/agent_tasks/state_tests.rs`.
+- [ ] T006 Add the task-definition registry for `paper-note-recognition` in `src-tauri/src/agent_tasks/definitions.rs`, including schema version, required capabilities, allowed input fields, and the absence of general tools or arbitrary file access.
+- [ ] T007 Extend the extension-host state and frame lifecycle so an extension bridge handler can access the task manager without receiving provider credentials or bypassing frame-session ownership checks in `src-tauri/src/extensions/host.rs`, `src-tauri/src/extensions/bridge/dispatch.rs`, and `src-tauri/src/extensions/commands/frames.rs`.
+- [ ] T008 Add a host-side result validator in `src-tauri/src/agent_tasks/validation.rs` for the paper-note region schema, rejecting malformed JSON, missing required fields, invalid confidence/range values, unsupported region kinds, and schema-version mismatches; cover rejection cases in `src-tauri/src/agent_tasks/validation_tests.rs`.
+- [ ] T009 Add structured-task error mapping in `src-tauri/src/agent_tasks/errors.rs` so profile, capability, timeout, cancellation, consent, provider, and invalid-result failures never escape as raw provider text or unstructured bridge failures.
 
 ## Phase 3: User Story 1 — Extensions start and receive structured tasks
 
@@ -25,12 +25,12 @@
 
 ### Implementation
 
-- [x] T013 [US1] Implement request decoding and definition lookup in `src-tauri/src/agent_tasks/bridge.rs`, accepting only `paper-note-recognition`, schema version 1, declared image metadata, locale, and supported options.
-- [x] T014 [US1] Implement `extension_ai_task_start` as an asynchronous bridge entry point in `src-tauri/src/agent_tasks/bridge.rs` and `src-tauri/src/extensions/bridge/dispatch.rs`, returning a task ID immediately while scheduling work outside the blocking bridge call.
-- [x] T015 [US1] Implement the fixture-backed task runner in `src-tauri/src/agent_tasks/bridge.rs` with start, success, structured failure, and cancellation transitions, never mutating the submitted image bytes.
-- [x] T016 [US1] Implement completion-event emission through `src-tauri/src/extensions/bridge/events.rs`, routing `haextension:ai-task:completed` only to frames of the originating extension and preserving the task ID and processing provenance.
+- [ ] T013 [US1] Implement request decoding and definition lookup in `src-tauri/src/agent_tasks/bridge.rs`, accepting only `paper-note-recognition`, schema version 1, declared image metadata, locale, and supported options.
+- [ ] T014 [US1] Implement `extension_ai_task_start` as an asynchronous bridge entry point in `src-tauri/src/agent_tasks/bridge.rs` and `src-tauri/src/extensions/bridge/dispatch.rs`, returning a task ID immediately while scheduling work outside the blocking bridge call.
+- [ ] T015 [US1] Implement the fixture-backed task runner in `src-tauri/src/agent_tasks/bridge.rs` with start, success, structured failure, and cancellation transitions, never mutating the submitted image bytes.
+- [ ] T016 [US1] Implement completion-event emission through `src-tauri/src/extensions/bridge/events.rs`, routing `haextension:ai-task:completed` only to frames of the originating extension and preserving the task ID and processing provenance.
 - [ ] T017 [US1] Implement `extension_ai_task_cancel` and cleanup hooks for originating-frame close, extension disable/remove, and vault shutdown in `src-tauri/src/agent_tasks/bridge.rs`, `src-tauri/src/extensions/commands/frames.rs`, and the relevant extension-host lifecycle module.
-- [x] T018 [US1] Register the two bridge methods and their request validation in `src-tauri/src/extensions/bridge/dispatch.rs` and wire the task registry into the extension host state.
+- [ ] T018 [US1] Register the two bridge methods and their request validation in `src-tauri/src/extensions/bridge/dispatch.rs` and wire the task registry into the extension host state.
 
 ## Phase 4: User Story 2 — Profile, harness, model, and capability selection
 
@@ -42,7 +42,7 @@
 
 ### Implementation
 
-- [ ] T022 [US2] Extend `ModelCapabilities` in `src-tauri/src/model_capabilities.rs` with explicit image-input, OCR, structured-output, and layout-region capability fields that remain backward-compatible with persisted capability JSON.
+- [ ] T022 [US2] Extend `ModelCapabilities` in `src-tauri/src/model_capabilities.rs` with OCR, structured-output, and layout-region capability fields that remain backward-compatible with persisted capability JSON; image input reuses the existing `accepted_attachment_kinds` (`AttachmentKind::Image`) instead of a second field.
 - [ ] T023 [US2] Implement task profile resolution in `src-tauri/src/agent_tasks/profile.rs` using the existing provider/model/harness preferences and model catalog, returning a non-secret profile snapshot plus a clear unavailable-profile error.
 - [ ] T024 [US2] Implement preflight capability checks in `src-tauri/src/agent_tasks/runner.rs` and `src-tauri/src/agent_tasks/profile.rs`, rejecting unsupported image/OCR/structured-output combinations before constructing a provider request.
 - [ ] T025 [US2] Add the structured provider request path in `src-tauri/src/agent_tasks/provider.rs`, reusing `ProviderAdapter` and the existing session/model selection while adding image attachments, schema-constrained instructions, task timeout, and no general tool registry.
