@@ -11,7 +11,8 @@ import { runAction } from '../lib/settings.ts'
 // is a test of `files/search_tests.rs` (a link needs a platform's own tools here).
 
 /** Types `query` into the search field and measures, in the page, when `hit` shows and when the
- * search ended. */
+ * search ended: the hit through a `MutationObserver` (animation frames are throttled in a window
+ * nobody sees, as on the CI's virtual screen), the end by polling. */
 const measuredSearch = (instance: FlowInstance, query: string, hit: string) =>
   instance.exec<{ first: number; done: number }>(
     `const input = document.querySelector('[data-testid="files-search"]')
@@ -19,19 +20,26 @@ const measuredSearch = (instance: FlowInstance, query: string, hit: string) =>
      const start = performance.now()
      return new Promise((resolve) => {
        let first = -1
-       const check = () => {
+       const seen = () => {
          if (first < 0 && find(arguments[1])) first = performance.now() - start
+       }
+       const observer = new MutationObserver(seen)
+       observer.observe(document.body, { childList: true, subtree: true, attributes: true })
+       const poll = () => {
+         seen()
          if (first >= 0 && !find('files-search-running')) {
+           observer.disconnect()
            resolve({ first, done: performance.now() - start })
          } else if (performance.now() - start > 20000) {
+           observer.disconnect()
            resolve({ first, done: -1 })
          } else {
-           requestAnimationFrame(check)
+           setTimeout(poll, 20)
          }
        }
        input.value = arguments[0]
        input.dispatchEvent(new Event('input', { bubbles: true }))
-       requestAnimationFrame(check)
+       setTimeout(poll, 20)
      })`,
     [query, hit],
   )

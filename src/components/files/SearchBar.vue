@@ -62,31 +62,34 @@ function pickDate(picked: unknown) {
 
 <template>
   <div class="flex h-11 shrink-0 items-center gap-1 px-2">
-    <div class="relative min-w-0 flex-1">
-      <Icon
-        name="lucide:search"
-        class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-      />
-      <input
-        v-model="text"
-        type="search"
-        class="h-8 w-full rounded-md border bg-background pr-8 pl-8 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        :placeholder="t('files.search.placeholder')"
-        :aria-label="t('files.search.placeholder')"
-        data-testid="files-search"
-        @keydown.esc="clear"
-      />
-      <button
-        v-if="text"
-        type="button"
-        class="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-        :aria-label="t('files.search.clear')"
-        data-testid="files-search-clear"
-        @click="clear"
-      >
-        <Icon name="lucide:x" class="size-4" />
-      </button>
-    </div>
+    <UiInput
+      v-model="text"
+      class="min-w-0 flex-1"
+      type="search"
+      :placeholder="t('files.search.placeholder')"
+      :aria-label="t('files.search.placeholder')"
+      data-testid="files-search"
+      @keydown.esc="clear"
+    >
+      <template #prepend>
+        <ShadcnInputGroupAddon align="inline-start">
+          <Icon name="lucide:search" class="size-4" />
+        </ShadcnInputGroupAddon>
+      </template>
+      <template #append>
+        <ShadcnInputGroupAddon v-if="text" align="inline-end">
+          <button
+            type="button"
+            class="text-muted-foreground hover:text-foreground"
+            :aria-label="t('files.search.clear')"
+            data-testid="files-search-clear"
+            @click="clear"
+          >
+            <Icon name="lucide:x" class="size-4" />
+          </button>
+        </ShadcnInputGroupAddon>
+      </template>
+    </UiInput>
     <ShadcnDropdownMenu>
       <ShadcnDropdownMenuTrigger as-child>
         <UiButton
