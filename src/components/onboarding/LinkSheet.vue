@@ -52,6 +52,17 @@ const running = computed(
     state.value.state !== 'failed',
 )
 
+// Keep template expressions narrowed when vue-tsc checks the ref across branches.
+const stateKind = computed(() => state.value?.state ?? '')
+const doneVaultName = computed(() => {
+  const current = state.value
+  return current?.state === 'done' ? current.vaultName : ''
+})
+const failureReason = computed(() => {
+  const current = state.value
+  return current?.state === 'failed' ? current.reason : 'openFailed'
+})
+
 function reset() {
   code.value = ''
   vaultName.value = ''
@@ -269,33 +280,33 @@ function onOpenVault() {
         class="flex flex-col items-center gap-3 px-6 py-6 text-center"
         role="status"
         data-testid="link-progress"
-        :data-state="state.state"
+        :data-state="stateKind"
       >
         <template v-if="running">
           <Icon name="lucide:loader-circle" class="size-8 animate-spin" />
           <p class="font-medium">
-            {{ t(`onboarding.link.state.${state.state}`) }}
+            {{ t(`onboarding.link.state.${stateKind}`) }}
           </p>
           <p
-            v-if="state.state === 'searching'"
+            v-if="stateKind === 'searching'"
             class="text-sm text-muted-foreground"
           >
             {{ t('onboarding.link.searchingHint') }}
           </p>
         </template>
-        <template v-else-if="state.state === 'done'">
+        <template v-else-if="stateKind === 'done'">
           <Icon name="lucide:circle-check" class="size-8 text-primary" />
           <p class="font-medium">
-            {{ t('onboarding.link.done', { name: state.vaultName }) }}
+            {{ t('onboarding.link.done', { name: doneVaultName }) }}
           </p>
           <p class="text-sm text-muted-foreground">
             {{ t('onboarding.link.doneHint') }}
           </p>
         </template>
-        <template v-else-if="state.state === 'failed'">
+        <template v-else-if="stateKind === 'failed'">
           <Icon name="lucide:circle-alert" class="size-8 text-destructive" />
           <p class="font-medium" role="alert">
-            {{ t(`onboarding.link.failed.${state.reason}`) }}
+            {{ t(`onboarding.link.failed.${failureReason}`) }}
           </p>
           <p class="text-sm text-muted-foreground">
             {{ t('onboarding.link.failedHint') }}
