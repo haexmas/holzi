@@ -10,9 +10,10 @@ use uuid::Uuid;
 use crate::adapters::types::{
     AdapterStream, ChatRequest, StreamChunk, StreamError, ToolCall as LlmToolCall,
 };
+use crate::adapters::AdapterError;
 use crate::chat::events::{
-    AgentActivityEvent, RetryEvent, TokenEvent, EVENT_CHAT_AGENT_ACTIVITY, EVENT_CHAT_RETRY,
-    EVENT_CHAT_TOKEN,
+    AgentActivityEvent, MessageErrorKind, RetryEvent, TokenEvent, EVENT_CHAT_AGENT_ACTIVITY,
+    EVENT_CHAT_RETRY, EVENT_CHAT_TOKEN,
 };
 use crate::chat::session::{ActiveSession, ChatState};
 
@@ -47,7 +48,11 @@ enum StepOutcome {
     Cancelled(String),
     /// Not retryable, or the retry budget was spent. Carries whatever
     /// text the final attempt had already produced before it failed.
-    Error { reason: String, partial: String },
+    Error {
+        reason: String,
+        partial: String,
+        kind: Option<MessageErrorKind>,
+    },
 }
 
 /// A [`StepOutcome`] flattened into the shape the turn loop consumes.
@@ -59,6 +64,8 @@ pub(super) struct StepResult {
     pub(super) completion_tokens: Option<usize>,
     pub(super) ttft_ms: Option<u64>,
     pub(super) error_reason: Option<String>,
+    /// What kind of failure `error_reason` is, where the person is told more than its text.
+    pub(super) error_kind: Option<MessageErrorKind>,
     pub(super) saw_done: bool,
 }
 
@@ -87,6 +94,7 @@ impl From<StepOutcome> for StepResult {
                 completion_tokens,
                 ttft_ms,
                 error_reason: None,
+                error_kind: None,
                 saw_done: true,
             },
             StepOutcome::Cancelled(partial) => Self {
@@ -96,15 +104,21 @@ impl From<StepOutcome> for StepResult {
                 completion_tokens: None,
                 ttft_ms: None,
                 error_reason: None,
+                error_kind: None,
                 saw_done: false,
             },
-            StepOutcome::Error { reason, partial } => Self {
+            StepOutcome::Error {
+                reason,
+                partial,
+                kind,
+            } => Self {
                 assembled: partial,
                 tool_calls: Vec::new(),
                 prompt_tokens: None,
                 completion_tokens: None,
                 ttft_ms: None,
                 error_reason: Some(reason),
+                error_kind: kind,
                 saw_done: false,
             },
         }
@@ -157,6 +171,8 @@ async fn retry_or_bail(
 pub(crate) enum StreamStartError {
     Cancelled,
     Failed(String),
+    /// The provider's certificate is not trusted (spec 043 FR-024); never retried.
+    UntrustedCertificate(String),
 }
 
 /// Shared by the initial send and subsequent steps; retries share the
@@ -189,6 +205,9 @@ pub(crate) async fn start_step_stream(
                     .lock()
                     .unwrap_or_else(|e| e.into_inner()) = Some(stream.abort_handle());
                 return Ok(stream);
+            }
+            Err(AdapterError::UntrustedCertificate { reason }) => {
+                return Err(StreamStartError::UntrustedCertificate(reason))
             }
             Err(error) => match retry_or_bail(
                 error.is_transient(),
@@ -265,6 +284,15 @@ impl TurnRunner<'_> {
                         return StepOutcome::Error {
                             reason,
                             partial: String::new(),
+                            kind: None,
+                        }
+                        .into()
+                    }
+                    Err(StreamStartError::UntrustedCertificate(reason)) => {
+                        return StepOutcome::Error {
+                            reason,
+                            partial: String::new(),
+                            kind: Some(MessageErrorKind::UntrustedCertificate),
                         }
                         .into()
                     }
@@ -297,6 +325,7 @@ impl TurnRunner<'_> {
                         return StepOutcome::Error {
                             reason,
                             partial: pass.assembled,
+                            kind: None,
                         }
                         .into()
                     }

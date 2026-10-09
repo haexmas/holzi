@@ -138,6 +138,16 @@ pub(crate) struct MessageErrorEvent {
     pub(crate) message_id: Uuid,
     pub(crate) thread_id: Uuid,
     pub(crate) reason: String,
+    /// What kind of failure it was, where the chat says more than `reason` (spec 043 FR-024).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) kind: Option<MessageErrorKind>,
+}
+
+/// A failure the chat names in the person's language instead of showing its technical reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub(crate) enum MessageErrorKind {
+    /// The provider's certificate is not trusted.
+    UntrustedCertificate,
 }
 
 /// Payload for `chat-tool-call` (contracts/tauri-commands.md). Emitted at

@@ -88,6 +88,11 @@ pub async fn run(
 
     let mut notifications = client.notifications();
     let mut publish_tick = tokio::time::interval(PUBLISH_INTERVAL);
+    // The relay usually connects after the first presence went out, which then names only direct
+    // addresses: a device behind a NAT (a phone) is reachable only through its relay, so a new
+    // relay is told at once instead of on the next tick (spec 043).
+    let mut addr_changes = Box::pin(node.addr_changes());
+    let mut announced_relay = node.addr().relay_urls().next().cloned();
     let mut subscribed: Option<Subscription> = None;
     let mut asking_since = now_ms();
 
@@ -129,6 +134,17 @@ pub async fn run(
                     publish_own(&client, node, replica, keys, vault, day, asking_since).await
                 {
                     log::warn!("sync: publishing presence failed: {error}");
+                }
+            }
+            Some(addr) = addr_changes.next() => {
+                let relay = addr.relay_urls().next().cloned();
+                if relay != announced_relay {
+                    announced_relay = relay;
+                    if let Err(error) =
+                        publish_own(&client, node, replica, keys, vault, day, asking_since).await
+                    {
+                        log::warn!("sync: publishing presence failed: {error}");
+                    }
                 }
             }
             notification = notifications.next() => {

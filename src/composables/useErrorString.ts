@@ -54,6 +54,9 @@ export function useErrorString() {
       // Spec 043 (contract picked-file.md): a chosen file that gives nothing back, a full device.
       if (kind === 'Unreadable') return t('errors.unreadable')
       if (kind === 'NotEnoughSpace') return t('errors.notEnoughSpace')
+      // Spec 043 FR-024: the server's certificate is not trusted; the connection was refused.
+      if (kind === 'UntrustedCertificate')
+        return t('errors.untrustedCertificate')
       // Spec 034 (contracts/tauri-commands.md §Fehlerarten): the password manager's own kinds. They
       // carry a reason or numbers, never a value, so they must not reach `JSON.stringify` below.
       if (kind === 'PasswordsNotFound') return t('errors.passwords.notFound')

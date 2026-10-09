@@ -1110,6 +1110,7 @@
     "unreadable": "The chosen file cannot be read.",
     "notAvailable": "Not available on this device.",
     "notEnoughSpace": "Not enough free space.",
+    "untrustedCertificate": "Invalid certificate: the server identifies itself with a certificate this device does not trust. No connection was made.",
     "hf": {
       "invalidInput": "Invalid input.",
       "network": "Network error — please check your connection.",

@@ -197,7 +197,10 @@ export function useChatTranscript(
   }
 
   function applyError(e: MessageErrorEvent) {
-    lastError.value = e.reason
+    // A failure with its own kind is named in the person's language (spec 043: an untrusted
+    // certificate); every other one shows its reason.
+    lastError.value =
+      e.kind === undefined ? e.reason : errString({ kind: e.kind })
     const list = messagesByThread.value[e.threadId] ?? []
     const idx = list.findIndex((m) => m.id === e.messageId)
     const existing = list[idx]
