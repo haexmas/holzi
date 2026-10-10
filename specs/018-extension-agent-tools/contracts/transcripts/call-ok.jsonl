@@ -1,0 +1,2 @@
+{"dir":"c2s","message":{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"_meta":{"progressToken":0},"name":"echo","arguments":{"text":"hallo"}}}}
+{"dir":"s2c","message":{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"hallo"}],"isError":false}}}

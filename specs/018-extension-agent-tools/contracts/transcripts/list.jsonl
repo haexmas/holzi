@@ -1,0 +1,2 @@
+{"dir":"c2s","message":{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"progressToken":0}}}}
+{"dir":"s2c","message":{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"echo","description":"Echoes the given text back","inputSchema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}},{"name":"slow","description":"Waits until it is cancelled","inputSchema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}},{"name":"fail","description":"Always fails","inputSchema":{"type":"object"}}]}}}
