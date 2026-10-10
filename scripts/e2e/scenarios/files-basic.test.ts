@@ -104,10 +104,19 @@ scenario('files-basic', { timeoutMs: 180_000 }, async (ctx) => {
       files.write(`zeile-${String(i).padStart(3, '0')}.txt`, `${i}`)
     }
     await instance.waitForDisplayed('files-entry-zeile-000.txt', 15_000)
-    await instance.exec(
-      `document.querySelector('[data-testid="files-entries"]').scrollTop = 1e6`,
+    // The list may have loaded while the files were still being written (each write is a few adb
+    // calls on the phone): scroll to the end until the last one is there.
+    await ctx.waitFor(
+      'the last row at the end of the list',
+      () =>
+        instance.exec<boolean>(
+          `const list = document.querySelector('[data-testid="files-entries"]')
+           list.scrollTop = 1e6
+           const row = document.querySelector('[data-testid="files-entry-zeile-079.txt"]')
+           return Boolean(row && row.getClientRects().length)`,
+        ),
+      { timeoutMs: 15_000 },
     )
-    await instance.waitForDisplayed('files-entry-zeile-079.txt')
     files.write('zeile-999.txt', 'ende')
     await instance.waitForDisplayed('files-entry-zeile-999.txt', 15_000)
     assert.ok((await scrollTop(instance)) > 0, 'the list stayed scrolled')
