@@ -27,6 +27,9 @@ Test-Erweiterung `src-tauri/tests/fixtures/extension_e2e/agent-tools.xt`.
 10. **Update (US2/2)**: Version mit zusätzlichem Werkzeug installieren → der Dialog fragt nur danach.
 11. **Entwicklungsversion (US4)**: Test-Erweiterung im Entwicklermodus laden → Aufruf im Verlauf als
     Entwicklungsversion gekennzeichnet.
-12. **Messung (FR-019)**: `cargo test --manifest-path src-tauri/Cargo.toml --test model_tool_eval -- --ignored
---nocapture` mit Qwen3-4B → Bericht mit `offered`/`called` je Satz der Art `extension`; SC-001 bis SC-003
-    in `eval-results.md` eintragen.
+12. **Messung (FR-019)**: Die Modellprüfung mit Qwen3-4B laufen lassen → Bericht mit `offered`/`called` je
+    Satz der Art `extension`; SC-001 bis SC-003 in `eval-results.md` eintragen.
+
+    ```sh
+    cargo test --manifest-path src-tauri/Cargo.toml --test model_tool_eval -- --ignored --nocapture
+    ```

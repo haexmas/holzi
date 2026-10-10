@@ -43,8 +43,8 @@ Laufzeitabhängigkeit
 
 **Testing**: `cargo test` (neu `extensions/agent_tools/*_tests.rs`, `chat/tools/extension_offer_tests.rs`,
 Erweiterungen in `offer_tests.rs`, `install_tests.rs`, `manifest_tests.rs`, `eval/*_tests.rs`; Integration
-`tests/extension_agent_tools.rs`, Vertrag `tests/extension_mcp_contract.rs`, Mitschnitte), `pnpm
-check:extensions`, `check:chat-state`, `check:wm-state`, `check:agent-actions`, E2E-Szenario
+`tests/extension_agent_tools.rs`; Vertrag und Mitschnitte in `extensions/agent_tools/contract_tests.rs`),
+`pnpm check:extensions`, `check:chat-state`, `check:wm-state`, `check:agent-actions`, E2E-Szenario
 `extension-agent-tools.test.ts`; vault-sdk: vitest (Mitschnitte, Schema-Prüfer, Vektoren)
 
 **Target Platform**: Linux, macOS, Windows, Android (kompaktes Layout, R9), iOS
@@ -112,6 +112,8 @@ src-tauri/src/
 │   ├── agent_tools/                  # NEU
 │   │   ├── mod.rs                    # ExtensionToolDef aus Manifest + Berechtigungen
 │   │   ├── link.rs                   # McpLink: rmcp über Kanalpaar, R2-Handler
+│   │   ├── contract_tests.rs         # R2 + Mitschnitte aufzeichnen (C1)
+│   │   ├── test_support.rs           # In-Memory-Server für Link- und Vertragstests
 │   │   ├── tool.rs                   # ExtensionTool (impl Tool), Ergebnis, Zeitlimit
 │   │   ├── frame_request.rs          # Rahmen im Hintergrund anfordern (R9)
 │   │   └── commands.rs               # extension_mcp_send, extension_agent_frame_ready, extension_agent_tools_set
@@ -139,7 +141,6 @@ src/
 
 src-tauri/tests/
 ├── extension_agent_tools.rs          # Integration: Installation → Angebot → Aufruf
-├── extension_mcp_contract.rs         # R2 + Mitschnitte aufzeichnen
 └── fixtures/extension_e2e/agent-tools.xt (+ Quellen)
 
 scripts/e2e/scenarios/extension-agent-tools.test.ts

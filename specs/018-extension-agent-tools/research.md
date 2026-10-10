@@ -16,7 +16,7 @@ Stand der Quellen (2026-10-10): holzi `main` @ `1a213107`; vault-sdk `origin/mai
 ## R1 — Transport: `rmcp` über ein Kanalpaar, das Frontend reicht JSON-RPC durch
 
 **Decision**: holzi bleibt MCP-Client mit `rmcp`. Die Verbindung zu einer Erweiterung ist ein Paar aus
-`tokio::sync::mpsc`-Kanälen, das `rmcp` über `impl IntoTransport for (Sink, Stream)` (`transport/sink_stream.rs`,
+ungebundenen `futures::channel::mpsc`-Kanälen, das `rmcp` über `impl IntoTransport for (Sink, Stream)` (`transport/sink_stream.rs`,
 ohne eigenes Cargo-Feature) annimmt. Rust schickt Nachrichten an das Frontend per Event
 `extension-mcp-message {frame, message}`; das Frontend legt sie als Port-Nachricht
 `{type: "haexspace:mcp", message}` auf den `MessagePort` des Rahmens. Antworten der Erweiterung nimmt
@@ -38,7 +38,7 @@ Nachrichten ohnehin als JSON-Werte durch das Frontend laufen.
 ## R2 — Keine Anfragen der Erweiterung über die Werkzeug-Verbindung (FR-015)
 
 **Decision**: Der MCP-Client meldet keine Client-Fähigkeiten (kein `sampling`, keine `roots`, keine
-`elicitation`) und beantwortet jede Anfrage der Erweiterung an holzi mit „method not found“. Die
+`elicitation`) und beantwortet jede Anfrage der Erweiterung an holzi außer `ping` mit „method not found“. Die
 MCP-Verbindung liegt in `extensions/agent_tools/`, nicht im Chat; der Chat sieht nur ein `Tool`.
 Ein Vertragstest prüft beides: dass eine Server-Anfrage (`sampling/createMessage`, `roots/list`,
 `elicitation/create`) mit Fehler endet und keine Modellschicht erreicht, und dass der Brücken-Vertrag

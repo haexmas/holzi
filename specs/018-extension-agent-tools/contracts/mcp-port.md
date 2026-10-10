@@ -27,8 +27,8 @@ sie an, der Server antwortet mit derselben). `clientInfo` ist `{name: "holzi", v
 | `notifications/cancelled`   | Client → Server | ja      | `AbortSignal` des laufenden Aufrufs auslösen                                                       |
 | jede andere Anfrage         | beide           | —       | Fehler `-32601` (method not found)                                                                 |
 
-holzi meldet in `initialize` **keine** Client-Fähigkeiten und beantwortet jede Anfrage des Servers mit
-`-32601` (R2).
+holzi meldet in `initialize` **keine** Client-Fähigkeiten und beantwortet jede Anfrage des Servers außer
+`ping` mit `-32601` (R2).
 
 ## Ergebnis eines Aufrufs
 
