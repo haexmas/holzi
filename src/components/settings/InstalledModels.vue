@@ -77,6 +77,24 @@ async function checkUpdatesNowAsync() {
   }
 }
 
+/**
+ * The model whose update waits for the confirmation (spec 043 FR-028); the update is the same file
+ * in a newer revision, so the installed size stands in for its size.
+ */
+const confirmingUpdate = ref<(typeof installed.value)[number] | null>(null)
+const confirmUpdateOpen = computed({
+  get: () => confirmingUpdate.value !== null,
+  set: (value: boolean) => {
+    if (!value) confirmingUpdate.value = null
+  },
+})
+
+function updateConfirmed() {
+  const model = confirmingUpdate.value
+  confirmingUpdate.value = null
+  if (model) void installUpdateForAsync(model.id)
+}
+
 async function installUpdateForAsync(modelId: string) {
   installingUpdateId.value = modelId
   updateErrorKey.value = null
@@ -255,7 +273,7 @@ onMounted(async () => {
           size="sm"
           variant="outline"
           :loading="installingUpdateId === model.id"
-          @click="installUpdateForAsync(model.id)"
+          @click="confirmingUpdate = model"
         >
           {{ t('models.update.install') }}
         </UiButton>
@@ -272,6 +290,18 @@ onMounted(async () => {
         </UiButton>
       </SettingsRow>
     </SettingsGroup>
+
+    <ModelsDownloadConfirmStep
+      v-model:open="confirmUpdateOpen"
+      :target="
+        confirmingUpdate && {
+          kind: 'file',
+          sizeBytes: confirmingUpdate.sizeBytes,
+        }
+      "
+      :name="confirmingUpdate?.name ?? ''"
+      @confirm="updateConfirmed"
+    />
 
     <ModelsModelIntegrityDialog
       v-if="integrityDialog"

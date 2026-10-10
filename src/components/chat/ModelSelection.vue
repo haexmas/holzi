@@ -11,7 +11,7 @@
  * Reads `useModelsStore` directly for its state (`catalogEntries`,
  * `downloadingId`, `downloadProgressBytes`/`downloadTotalBytes`,
  * `modelGroups`); downloads run the `chat.model.downloadRecommended` action
- * (spec 020).
+ * (spec 020) once the person confirmed the size (spec 043 FR-028).
  */
 const { t } = useI18n()
 const modelStore = useModelsStore()
@@ -23,6 +23,21 @@ const {
   modelGroups,
 } = storeToRefs(modelStore)
 const downloadRecommended = useAction('chat.model.downloadRecommended')
+
+/** The entry whose download waits for the confirmation (spec 043 FR-028). */
+const confirming = ref<(typeof catalogEntries.value)[number] | null>(null)
+const confirmOpen = computed({
+  get: () => confirming.value !== null,
+  set: (value: boolean) => {
+    if (!value) confirming.value = null
+  },
+})
+
+function confirmed() {
+  const entry = confirming.value
+  confirming.value = null
+  if (entry) void downloadRecommended({ entryId: entry.id })
+}
 
 /** Maps a hardware-fit verdict to its localized display label. */
 function fitLabel(f: (typeof catalogEntries.value)[number]['fit']): string {
@@ -131,7 +146,7 @@ function downloadProgressPercent(
           <UiButton
             size="sm"
             :disabled="downloadingId !== null"
-            @click="downloadRecommended({ entryId: e.id })"
+            @click="confirming = e"
           >
             <template v-if="downloadingId === e.id">
               {{ humanBytes(downloadProgressBytes) }} /
@@ -144,6 +159,12 @@ function downloadProgressPercent(
         </div>
       </div>
     </div>
+    <ModelsDownloadConfirmStep
+      v-model:open="confirmOpen"
+      :target="confirming && { kind: 'catalog', id: confirming.id }"
+      :name="confirming?.name ?? ''"
+      @confirm="confirmed"
+    />
     <div v-if="modelGroups.length > 0" class="mt-6 space-y-2">
       <div
         v-for="group in modelGroups"
