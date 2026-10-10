@@ -2005,6 +2005,7 @@
       "count": "{count} Treffer | {count} Treffer",
       "truncated": "– nur die ersten, genauer suchen für mehr",
       "none": "Keine Treffer.",
+      "dirs": "· {count} Ordner durchsucht | · {count} Ordner durchsucht",
       "reveal": "Im Ordner zeigen"
     },
     "filter": {
