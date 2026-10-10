@@ -266,3 +266,91 @@ async fn a_missing_object_is_not_found() {
     let result = store().head(&access(&server), "weg.txt", soon()).await;
     assert_eq!(result, Err(StorageError::NotFound));
 }
+
+#[tokio::test]
+async fn an_upload_in_parts_creates_uploads_completes_and_aborts() {
+    let server = MockServer::start().await;
+    let object = format!("/{BUCKET}/gross.bin");
+    Mock::given(method("POST"))
+        .and(path(object.as_str()))
+        // `?uploads` has no value; complete differs by its `uploadId`.
+        .and(query_param_is_missing("uploadId"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+             <InitiateMultipartUploadResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\
+             <Bucket>{BUCKET}</Bucket><Key>gross.bin</Key><UploadId>upload-1</UploadId>\
+             </InitiateMultipartUploadResult>"
+        )))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path(object.as_str()))
+        .and(query_param("partNumber", "1"))
+        .and(query_param("uploadId", "upload-1"))
+        .respond_with(ResponseTemplate::new(200).insert_header("etag", "\"teil-1\""))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(object.as_str()))
+        .and(query_param("uploadId", "upload-1"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string("<CompleteMultipartUploadResult/>"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path(object.as_str()))
+        .and(query_param("uploadId", "upload-2"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let store = store();
+    let access = access(&server);
+    let id = store
+        .create_multipart(&access, "gross.bin", soon())
+        .await
+        .expect("create");
+    assert_eq!(id, "upload-1");
+    let etag = store
+        .upload_part(&access, "gross.bin", &id, 1, b"teil".to_vec(), soon())
+        .await
+        .expect("part");
+    assert_eq!(etag, "\"teil-1\"");
+    store
+        .complete_multipart(&access, "gross.bin", &id, &[etag], soon())
+        .await
+        .expect("complete");
+    store
+        .abort_multipart(&access, "gross.bin", "upload-2", soon())
+        .await
+        .expect("abort");
+
+    let requests = server.received_requests().await.expect("recorded");
+    let completed = requests
+        .iter()
+        .find(|r| {
+            r.method.as_str() == "POST" && r.url.query().is_some_and(|q| q.contains("uploadId"))
+        })
+        .expect("the complete request");
+    let body = String::from_utf8_lossy(&completed.body);
+    assert!(body.contains("<PartNumber>1</PartNumber>"), "{body}");
+    assert!(body.contains("teil-1"), "{body}");
+}
+
+#[tokio::test]
+async fn a_part_without_an_etag_fails() {
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+    let result = store()
+        .upload_part(&access(&server), "a", "u", 1, Vec::new(), soon())
+        .await;
+    assert_eq!(result, Err(StorageError::Network));
+}

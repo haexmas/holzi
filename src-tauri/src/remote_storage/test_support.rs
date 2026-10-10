@@ -26,7 +26,14 @@ pub enum Op {
     GetRange,
     ListDir,
     Copy,
+    CreateMultipart,
+    UploadPart,
+    CompleteMultipart,
+    AbortMultipart,
 }
+
+/// An upload in parts that is not complete yet: bucket, key and its parts by number.
+type Upload = (String, String, BTreeMap<u16, Vec<u8>>);
 
 #[derive(Default)]
 pub struct FakeStore {
@@ -35,6 +42,7 @@ pub struct FakeStore {
     /// Errors for the next call of an operation only.
     once: Mutex<HashMap<Op, StorageError>>,
     calls: Mutex<Vec<(Op, String)>>,
+    uploads: Mutex<HashMap<String, Upload>>,
 }
 
 impl FakeStore {
@@ -78,6 +86,16 @@ impl FakeStore {
             .expect("lock")
             .get(&(bucket.to_owned(), key.to_owned()))
             .cloned()
+    }
+
+    /// The keys of uploads in parts that were started and neither completed nor aborted.
+    pub fn open_uploads(&self) -> Vec<String> {
+        self.uploads
+            .lock()
+            .expect("lock")
+            .values()
+            .map(|(_, key, _)| key.clone())
+            .collect()
     }
 
     /// The operations called so far with their key or prefix.
@@ -272,6 +290,79 @@ impl RemoteStore for FakeStore {
             .cloned()
             .ok_or(StorageError::NotFound)?;
         objects.insert(slot(access, to), body);
+        Ok(())
+    }
+
+    async fn create_multipart(
+        &self,
+        access: &Access,
+        key: &str,
+        _deadline: Instant,
+    ) -> Result<String, StorageError> {
+        self.enter(Op::CreateMultipart, key)?;
+        let id = uuid::Uuid::new_v4().to_string();
+        self.uploads.lock().expect("lock").insert(
+            id.clone(),
+            (
+                access.location.bucket.clone(),
+                key.to_owned(),
+                BTreeMap::new(),
+            ),
+        );
+        Ok(id)
+    }
+
+    async fn upload_part(
+        &self,
+        _access: &Access,
+        key: &str,
+        upload_id: &str,
+        number: u16,
+        body: Vec<u8>,
+        _deadline: Instant,
+    ) -> Result<String, StorageError> {
+        self.enter(Op::UploadPart, key)?;
+        let mut uploads = self.uploads.lock().expect("lock");
+        let (_, _, parts) = uploads.get_mut(upload_id).ok_or(StorageError::NotFound)?;
+        parts.insert(number, body);
+        Ok(format!("\"etag-{number}\""))
+    }
+
+    async fn complete_multipart(
+        &self,
+        _access: &Access,
+        key: &str,
+        upload_id: &str,
+        etags: &[String],
+        _deadline: Instant,
+    ) -> Result<(), StorageError> {
+        self.enter(Op::CompleteMultipart, key)?;
+        let (bucket, key, parts) = self
+            .uploads
+            .lock()
+            .expect("lock")
+            .remove(upload_id)
+            .ok_or(StorageError::NotFound)?;
+        if parts.len() != etags.len() {
+            return Err(StorageError::Network);
+        }
+        let body = parts.into_values().flatten().collect();
+        self.objects
+            .lock()
+            .expect("lock")
+            .insert((bucket, key), body);
+        Ok(())
+    }
+
+    async fn abort_multipart(
+        &self,
+        _access: &Access,
+        key: &str,
+        upload_id: &str,
+        _deadline: Instant,
+    ) -> Result<(), StorageError> {
+        self.enter(Op::AbortMultipart, key)?;
+        self.uploads.lock().expect("lock").remove(upload_id);
         Ok(())
     }
 }
