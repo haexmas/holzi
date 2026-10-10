@@ -30,7 +30,7 @@ aber zulassen. Die Sync-Regeln und der Umbau 027/029 sollen dasselbe Format nutz
 - **Inhaltsobjekt**: der verschlüsselte Inhalt einer Datei als ein Objekt im Speicher, in Blöcken
   verschlüsselt, sodass holzi beliebige Teilbereiche lesen kann.
 - **Begleitdatei**: ein kleines verschlüsseltes Objekt je Eintrag mit dem, was der Dateibrowser über
-  ihn wissen muss (Pfad im Ordner, Art, Größe, Änderungszeit, Inhaltstyp, Prüfsumme) und dem
+  ihn wissen muss (Elterneintrag und Name, Art, Größe, Änderungszeit, Inhaltstyp, Prüfsumme) und dem
   verschlüsselten Dateischlüssel. Aus den Begleitdateien baut holzi die Ordneransicht auf; sie sind
   die einzige Quelle für die Zuordnung von Pfaden zu Inhaltsobjekten.
 - **Kopf des Ordners**: ein Objekt im verschlüsselten Ordner, das ihn als solchen kennzeichnet und
@@ -324,8 +324,12 @@ wieder nichts.
   die entschlüsselten Namen der verschlüsselten Ordner und die gewöhnlichen Ordner und Dateien im
   selben Elternordner und lehnt einen doppelten Namen ab. Legen zwei Geräte gleichzeitig denselben
   Namen an, erscheinen beide, einer als Konfliktkopie.
+- **Gewöhnlicher Name, der wie ein verschlüsselter Ordner aussieht** (26 Zeichen Base32 und
+  `.hxef`): holzi legt einen solchen gewöhnlichen Ordner oder eine solche Datei nicht an und meldet
+  einen ungültigen Namen, damit er nicht als beschädigter verschlüsselter Ordner erscheint.
 - **Ordner einer anderen Vault**: Weil holzi seinen Namen nicht entschlüsseln kann, zeigt es ihn mit
-  einer neutralen Bezeichnung („Verschlüsselter Ordner einer anderen Vault“) und seiner Erstellzeit.
+  einer neutralen Bezeichnung („Verschlüsselter Ordner einer anderen Vault“) und der Änderungszeit
+  seines Kopfes beim Anbieter.
 - **Gerät entfernt, neue Schlüsselgeneration** (Spec 024, D22): Bestehende Ordner bleiben über ihre
   Generation lesbar, neue nutzen die aktuelle. Ein entferntes Gerät, das einen Ordnerschlüssel schon
   kannte, behält ihn; Entzug ist nicht im Umfang.
@@ -385,10 +389,12 @@ wieder nichts.
   nicht (FR-032, FR-039).
 - **FR-010**: Unter einem verschlüsselten Ordner DÜRFEN beim Anbieter nur der Kopf, Inhaltsobjekte
   und Begleitdateien liegen. Ihre Namen MÜSSEN zufällig sein und DÜRFEN weder Namen, Pfade, Struktur,
-  Inhaltstyp, Größe noch Prüfsummen der Einträge verraten; alle Objekte liegen auf einer Ebene.
+  Inhaltstyp, Größe noch Prüfsummen der Einträge verraten; die Objekte bilden die innere Struktur
+  nicht nach.
 - **FR-011**: Objektinhalte und Metadaten beim Anbieter DÜRFEN keinen Klartext der Einträge enthalten.
   Inhaltstyp und Metadaten der Objekte MÜSSEN neutral sein.
-- **FR-012**: Begleitdateien MÜSSEN Pfad im Ordner, Art (Datei oder Ordner), Größe, Änderungszeit,
+- **FR-012**: Begleitdateien MÜSSEN Elterneintrag und Name (nicht den ganzen Pfad, damit Umbenennen
+  eines Unterordners nur seine eigene Begleitdatei ändert), Art (Datei oder Ordner), Größe, Änderungszeit,
   Inhaltstyp und Prüfsumme des Klartexts sowie den verschlüsselten Dateischlüssel tragen, alles
   verschlüsselt mit dem Ordnerschlüssel. Leere Unterordner MÜSSEN eine eigene Begleitdatei haben.
 - **FR-013**: Die Ansicht eines verschlüsselten Ordners MUSS sich allein aus dem Bucket aufbauen
@@ -511,7 +517,7 @@ wieder nichts.
 
 - **Verschlüsselter Ordner**: Speicher, Elternordner, zufälliges Präfix, verschlüsselter Name,
   Formatversion, verschlüsselter Ordnerschlüssel (je Empfänger, in dieser Spec nur die eigene Vault), Zustand für die Anzeige.
-- **Eintrag**: Pfad im Ordner, Art, Größe, Änderungszeit, Inhaltstyp, Prüfsumme; nur in seiner
+- **Eintrag**: Elterneintrag, Name, Art, Größe, Änderungszeit, Inhaltstyp, Prüfsumme; nur in seiner
   Begleitdatei, nie im Klartext beim Anbieter.
 - **Inhaltsobjekt**: zufälliger Name, verschlüsselter Inhalt in Blöcken, gehört zu genau einer
   Begleitdatei.
@@ -565,12 +571,16 @@ wieder nichts.
   das Identitätsgeheimnis der Vault liegt dagegen nur auf Hauptgeräten (D27) und taugt deshalb nicht
   (research R1). Ein Backup der Vault enthält die Inhaltsschlüssel.
 - Der Anbieter darf sehen: dass es einen verschlüsselten Ordner gibt und in welchem gewöhnlichen
-  Ordner er liegt, die Zahl der Objekte, ihre ungefähre
-  Größe, wann sie entstanden sind und wann auf sie zugegriffen wird. Das ist dieselbe Grenze wie bei
+  Ordner er liegt, die Zahl der Objekte, wann sie entstanden sind und wann auf sie zugegriffen wird.
+  Daraus folgen auch: die genaue Größe jeder Datei (Länge des Inhaltsobjekts), die ungefähre Länge
+  der Namen (Länge von Kopf und Begleitdateien), die Zahl der Dateien und Unterordner (Begleitdateien
+  ohne Inhaltsobjekt), welche Begleitdatei zu welchem Inhaltsobjekt gehört (zeitliche Nähe beim
+  Schreiben) und dass zwei Inhaltsobjekte Kopien voneinander sind. Das ist dieselbe Grenze wie bei
   Cryptomator, ohne dessen sichtbaren Ordnernamen; Auffüllen auf feste Größen ist nicht vorgesehen.
 - Ein Anbieter, der ein altes Objekt wiederherstellt (Zurückspielen einer früheren Fassung), wird
   nicht in jedem Fall erkannt; holzi erkennt Veränderung und Vertauschen, nicht jedes Zurückspielen
-  einer ganzen früheren Fassung.
+  einer ganzen früheren Fassung. Ebenso wenig erkennt holzi, wenn der Anbieter ganze Einträge
+  (Begleitdatei samt Inhaltsobjekt) entfernt; es gibt kein signiertes Verzeichnis des Ordners.
 - Verfahren und Blockgröße legt der Plan fest (research R2, R4: XChaCha20-Poly1305, Blöcke zu
   64 KiB); das Modell kommt aus haex-vault, das Format nicht (research R3).
 - Ein Speicher hat keine Benachrichtigung über Änderungen; Änderungen anderer Geräte erscheinen wie in

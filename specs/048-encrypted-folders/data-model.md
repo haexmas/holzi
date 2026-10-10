@@ -5,11 +5,11 @@ liegen nur Zwischenspeicher, die jedes Gerät aus dem Bucket neu aufbauen kann, 
 
 ## Im Bucket
 
-| Entität                | Objekt                 | Felder (verschlüsselt, soweit nicht anders gesagt)                                                                                   |
-| ---------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Verschlüsselter Ordner | `…/<fid>.hxef/h`       | sichtbar: `fid`, Formatversion, Empfänger-Arten und `key_id`; verschlüsselt: `FK` je Empfänger, Name                                 |
-| Begleitdatei           | `…/<fid>.hxef/m/<sid>` | `entry`, `parent`, `name`, `kind`, `revision`, `base`, `written`; bei Dateien `size`, `modified`, `type`, `sha256`, `content`, `dek` |
-| Inhaltsobjekt          | `…/<fid>.hxef/c/<cid>` | sichtbar: `cid`, Länge; verschlüsselt: Inhalt in Blöcken                                                                             |
+| Entität                | Objekt                 | Felder (verschlüsselt, soweit nicht anders gesagt)                                                                                          |
+| ---------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Verschlüsselter Ordner | `…/<fid>.hxef/h`       | sichtbar: `fid`, Formatversion, Empfänger-Arten und `key_id`; verschlüsselt: `FK` je Empfänger, Name                                        |
+| Begleitdatei           | `…/<fid>.hxef/m/<sid>` | `entry`, `parent`, `name`, `kind`, `revision`, `base`, `written`; bei Dateien `size`, `modified`, `type`, `sha256`, `content`, `cid`, `dek` |
+| Inhaltsobjekt          | `…/<fid>.hxef/c/<oid>` | sichtbar: `cid`, Länge; verschlüsselt: Inhalt in Blöcken                                                                                    |
 
 **Zustände eines verschlüsselten Ordners** (aus dem Kopf, für die Anzeige):
 
@@ -49,27 +49,32 @@ bekommen keine CRDT-Trigger und brauchen keine neue Trigger-Version.
 
 PRIMARY KEY (`storage_id`, `object_key`).
 
+`open_ack` ist eine Gerätepräferenz, kein Zwischenspeicher: Neuladen aus dem Bucket (neues ETag,
+Umbenennen) lässt sie stehen; beim Verschieben des Ordners (neuer `object_key`, gleiche `folder_id`)
+zieht sie mit.
+
 ### `encrypted_folder_entries_no_sync`
 
-| Spalte         | Typ              | Regel                        |
-| -------------- | ---------------- | ---------------------------- |
-| `storage_id`   | TEXT NOT NULL    |                              |
-| `folder_id`    | TEXT NOT NULL    |                              |
-| `sidecar`      | TEXT NOT NULL    | `sid` (Base32)               |
-| `etag`         | TEXT NOT NULL    |                              |
-| `entry_id`     | TEXT NOT NULL    |                              |
-| `parent_id`    | TEXT NOT NULL    |                              |
-| `name`         | TEXT NOT NULL    |                              |
-| `kind`         | TEXT NOT NULL    | `file`, `folder`             |
-| `revision`     | INTEGER NOT NULL |                              |
-| `base`         | TEXT             |                              |
-| `written`      | INTEGER NOT NULL | ms                           |
-| `size`         | INTEGER          | nur Dateien                  |
-| `modified`     | INTEGER          | nur Dateien                  |
-| `content_type` | TEXT             | nur Dateien                  |
-| `sha256`       | TEXT             | nur Dateien                  |
-| `content_id`   | TEXT             | nur Dateien                  |
-| `wrapped_dek`  | BLOB             | nur Dateien; bleibt verpackt |
+| Spalte         | Typ              | Regel                          |
+| -------------- | ---------------- | ------------------------------ |
+| `storage_id`   | TEXT NOT NULL    |                                |
+| `folder_id`    | TEXT NOT NULL    |                                |
+| `sidecar`      | TEXT NOT NULL    | `sid` (Base32)                 |
+| `etag`         | TEXT NOT NULL    |                                |
+| `entry_id`     | TEXT NOT NULL    |                                |
+| `parent_id`    | TEXT NOT NULL    |                                |
+| `name`         | TEXT NOT NULL    |                                |
+| `kind`         | TEXT NOT NULL    | `file`, `folder`               |
+| `revision`     | INTEGER NOT NULL |                                |
+| `base`         | TEXT             |                                |
+| `written`      | INTEGER NOT NULL | ms                             |
+| `size`         | INTEGER          | nur Dateien                    |
+| `modified`     | INTEGER          | nur Dateien                    |
+| `content_type` | TEXT             | nur Dateien                    |
+| `sha256`       | TEXT             | nur Dateien                    |
+| `object_id`    | TEXT             | nur Dateien; `oid` (`content`) |
+| `content_id`   | TEXT             | nur Dateien; `cid`             |
+| `wrapped_dek`  | BLOB             | nur Dateien; bleibt verpackt   |
 
 PRIMARY KEY (`storage_id`, `folder_id`, `sidecar`); INDEX (`storage_id`, `folder_id`, `parent_id`).
 

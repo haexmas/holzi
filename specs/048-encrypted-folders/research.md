@@ -10,7 +10,11 @@ haex-vault auf Repository `https://github.com/haex-space/haex-vault`, Revision
   **Inhaltsschlüssel der Vault** (`sync::content_keys`, Bereich „vault“) abgeleitet, Info
   `holzi/encrypted-folder/kek/v1`. Der Kopf eines Ordners nennt die `key_id` der Generation, mit der er
   verpackt ist. Neue Ordner nutzen `current_key`, Leser suchen die Generation über `key_id` in allen
-  Generationen des Geräts (`listening_keys`).
+  Generationen des Geräts (`vault_content_keys_no_sync`, wie `envelopes::held_keys`, ohne Grenze).
+  `listening_keys` taugt dafür nicht: es liefert für die Presence nur bis zu `limit` Generationen je
+  Richtung und keine `key_id`. holzi löscht heute keine Generation aus `vault_content_keys_no_sync`;
+  ein späteres Aufräumen alter Generationen MUSS Ordner berücksichtigen, die noch mit ihnen verpackt
+  sind (sonst werden sie unlesbar).
 - **Rationale**:
   - Das Identitätsgeheimnis der Vault (`vault_identity_secret_no_sync`, `src-tauri/src/sync/keys.rs:3-5`,
     `:169`) liegt nach D27 nur auf Hauptgeräten
@@ -83,8 +87,9 @@ Prüfung von `file_sync/crypto` (5 420 Zeilen, 86 Tests) gegen den Anbieter als 
 - **Rationale**: Der Medienserver liest in 256 KiB (`files/media/server.rs:25`), der PDF-Viewer und
   der Textviewer in kleinen Bereichen (`storage_source.rs:417`). Mit 1 MiB je Block müsste holzi bei
   jeder kleinen Anfrage bis zu 1 MiB laden und entschlüsseln. Mehraufwand 16 Byte je 64 KiB = 0,024 %
-  (SC-005: ≤ 1 %). Eine Multipart-Teil-Grenze von 8 MiB (`transfer/remote.rs:32`) fällt mit 128 Blöcken
-  zusammen.
+  (SC-005: ≤ 1 %). Die Teile eines mehrteiligen Uploads (8 MiB, `transfer/remote.rs:32`) schneiden den
+  verschlüsselten Strom ohne Rücksicht auf Blockgrenzen (128 Blöcke sind 8 MiB + 2 048 Byte); das ist
+  ohne Belang, weil Teile nur Bytebereiche sind und ein neuer Versuch dieselben Bytes schickt.
 - **Alternatives considered**: 1 MiB wie haex-vault (grobe Teilbereiche, mehr Last bei Sprüngen);
   32 KiB wie Cryptomator (doppelt so viele Tags, kein spürbarer Vorteil bei S3-Latenzen).
 
@@ -162,9 +167,10 @@ Prüfung von `file_sync/crypto` (5 420 Zeilen, 86 Tests) gegen den Anbieter als 
   verschlüsselten Ordner gehen, gibt es an `encrypted` weiter. `side_of`/`Side`
   (`transfer/remote_plan.rs:24`) bekommt `Side::Encrypted`, damit Transfers die Lese- und
   Schreibschritte (`upload`, `fetch`, `fill`) mit Ver- und Entschlüsseln umhüllen. Kopieren beim
-  Anbieter (`transfer/remote.rs:300-311`) gilt nur innerhalb desselben verschlüsselten Ordners
-  (FR-018); zwischen zwei verschlüsselten Ordnern wird der Dateischlüssel neu verpackt und der Inhalt
-  beim Anbieter kopiert (FR-020).
+  Anbieter (`transfer/remote.rs:300-311`) gilt innerhalb eines verschlüsselten Ordners (FR-018) und
+  zwischen zwei verschlüsselten Ordnern derselben Vault (FR-020): das Inhaltsobjekt bekommt eine neue
+  `oid` und behält `cid` und Dateischlüssel, der Dateischlüssel wird für den neuen Eintrag neu
+  verpackt ([contracts/format.md](./contracts/format.md), „Kopieren beim Anbieter“).
 
 - **Rationale**: Es gibt keinen Quellen-Trait; die Befehle verzweigen über `storage_of`
   (`browser_commands.rs:95-100`). Eine Weiche in `StorageFiles` hält Fenster, Suche
