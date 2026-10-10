@@ -1937,6 +1937,16 @@
         "remoteStorage": "Entfernter Speicher",
         "mail": "Mail",
         "shell": "Programme ausführen"
+      },
+      "everyMethod": "alle Anfragen",
+      "everything": {
+        "filesystem": "Alle Dateien und Ordner",
+        "web": "Jede Website und jeder Server im Internet",
+        "passwords": "Alle Passwörter",
+        "remoteStorage": "Alle Speicher",
+        "remoteStorageAdd": "Speicher auf jedem Server",
+        "mail": "Alle Mail-Server",
+        "shell": "Jedes Programm"
       }
     },
     "permissionRequest": {

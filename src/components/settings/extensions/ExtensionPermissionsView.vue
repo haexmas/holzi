@@ -101,16 +101,11 @@ onMounted(loadAsync)
       :data-permission-target="permission.target"
     >
       <div class="flex min-w-48 flex-1 flex-col">
-        <span class="text-sm">
-          {{
-            t(
-              `extensions.permissions.kinds.${permission.kind}`,
-              permission.kind,
-            )
-          }}
-          · {{ permission.action }}
-        </span>
-        <span class="font-mono text-xs break-all">{{ permission.target }}</span>
+        <ExtensionsPermissionSummary
+          :kind="permission.kind"
+          :action="permission.action"
+          :target="permission.target"
+        />
         <span class="text-xs text-muted-foreground">
           {{ scopeText(permission) }}
           <template v-if="!permission.declared">

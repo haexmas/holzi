@@ -1937,6 +1937,16 @@
         "remoteStorage": "Remote storage",
         "mail": "Mail",
         "shell": "Run programs"
+      },
+      "everyMethod": "all requests",
+      "everything": {
+        "filesystem": "All files and folders",
+        "web": "Every website and server on the internet",
+        "passwords": "All passwords",
+        "remoteStorage": "All storages",
+        "remoteStorageAdd": "Storages on any server",
+        "mail": "All mail servers",
+        "shell": "Any program"
       }
     },
     "permissionRequest": {
