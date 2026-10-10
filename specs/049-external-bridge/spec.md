@@ -78,8 +78,9 @@ auszuschließen."
   ist ein weiterer Eingang mit eigenem Aufrufer; der Aufrufer ergibt sich aus der Verbindung,
   nie aus einer Angabe im Inhalt einer Anfrage.
 - **ADR-0009**: Dort steht, dass der Passkey-Dienst weder UP noch UV setzt, bis es einen
-  vertrauenswürdigen, zeremoniegebundenen Nachweis gibt. Diese Spec liefert ihn für UP; der Plan
-  hält die Änderung als neues ADR fest, das ADR-0009 in diesem Punkt ablöst.
+  vertrauenswürdigen, zeremoniegebundenen Nachweis gibt. Diese Spec liefert ihn für UP und, mit
+  erneuter Eingabe des Vault-Passworts, für UV (FR-033); der Plan hält die Änderung als neues ADR
+  fest, das ADR-0009 in diesem Punkt ablöst.
 - **ADR-0001** und **ADR-0003**: Gemerkte Zulassungen sind geräteeigene Daten der Vault. Die Bridge
   läuft in der einen Vault-Sitzung des Prozesses und nur, solange sie offen ist.
 - **Spec 043** (Android): Auf Android gibt es keine External Bridge (FR-043).
@@ -109,8 +110,8 @@ auszuschließen."
 
 ### Session 2026-10-10
 
-Die Antworten sind Vorschläge dieser Spec, begründet aus dem Freigabemodell von holzi und dem
-Verhalten von haex-vault; sie stehen zur Bestätigung durch den Betreiber.
+Die Antworten sind aus dem Freigabemodell von holzi und dem Verhalten von haex-vault begründet;
+der Betreiber hat sie am 2026-10-10 bestätigt.
 
 - Q: Gehört die Lesezeichen-Synchronisation der Erweiterung dazu? → A: Nein. Sie läuft über
   dieselbe Verbindung (Methoden `bookmarks-*`), braucht aber Lesezeichen-Tabellen und eine
@@ -141,8 +142,11 @@ Verhalten von haex-vault; sie stehen zur Bestätigung durch den Betreiber.
   Zeremonie, ohne „Merken“ (FR-030). Die Auswahl in der Erweiterung („über haex-vault oder den
   Browser“, merkbar je Seite) zählt nicht als Nachweis: holzi kann sie nicht prüfen, und gemerkt
   ist sie nicht an eine Zeremonie gebunden.
-- Q: Setzt holzi nach der Anwesenheitsbestätigung auch UV (Nutzer verifiziert)? → A: Offen, siehe
-  FR-033.
+- Q: Setzt holzi nach der Anwesenheitsbestätigung auch UV (Nutzer verifiziert)? → A: Nur, wenn
+  die Gegenstelle UV verlangt (`userVerification: "required"`) und der Nutzer in der
+  Anwesenheitsbestätigung das Passwort der Vault erneut eingibt. Ein Klick auf „Bestätigen“ zeigt
+  nur, dass jemand am entsperrten Gerät war, nicht wer; UV ohne erneute Prüfung wäre eine falsche
+  Behauptung gegenüber der Gegenstelle (FR-033).
 - Q: Gibt es die Bridge auf Android? → A: Nein. holzi läuft auf Android nicht im Hintergrund
   (043 FR-007), und haex-vault startet sie dort ebenfalls nicht.
 - Q: Leitet holzi Anfragen an installierte haextensions weiter (in haex-vault `requestedExtensions`
@@ -540,11 +544,12 @@ einen Dialog oder eine Antwort mit Daten auslöst.
 - **FR-032**: Anfragen ohne Herkunft oder mit einer Herkunft, die nicht zur Kennung der Gegenstelle
   passt (036 FR-025), MUSS holzi ablehnen, bevor es eine Anwesenheitsbestätigung zeigt. holzi DARF
   die Herkunft nicht aus der Kennung der Gegenstelle ableiten.
-- **FR-033**: UV (Nutzer verifiziert) MUSS holzi [NEEDS CLARIFICATION: nie setzen (Vorschlag dieser
-  Spec; Gegenstellen mit `userVerification: "required"` lehnen dann ab, und die Erweiterung fällt
-  auf den Browser zurück), nach jeder Anwesenheitsbestätigung setzen (wie haex-vault, das UP und UV
-  immer setzt, obwohl niemand verifiziert wird), oder nur, wenn die Bestätigung eine erneute
-  Prüfung verlangt, etwa Systemanmeldung oder Passwort der Vault?].
+- **FR-033**: UV (Nutzer verifiziert) DARF holzi nur setzen, wenn die Gegenstelle UV verlangt
+  (`userVerification: "required"`) und der Nutzer in derselben Anwesenheitsbestätigung das Passwort
+  der Vault erneut richtig eingegeben hat; nur dann MUSS die Anwesenheitsbestätigung danach fragen.
+  Bei `"preferred"` und `"discouraged"` MUSS holzi UV nicht setzen und DARF nicht nach dem Passwort
+  fragen. Ein falsches Passwort oder ein Abbruch der Eingabe MUSS wie Ablehnen wirken (FR-031).
+  Anders als haex-vault, das UV immer setzt, behauptet holzi UV nie ohne Prüfung.
 - **FR-034**: Für „Neuer Eintrag“ MUSS holzi zuerst einen Eintrag mit dem Namen der Gegenstelle als
   Titel, der Herkunft als Adresse, dem Benutzer als Benutzername und dem Standard-Tag der Zulassung
   anlegen und den Passkey daran; scheitert das Anlegen des Passkeys, MUSS auch der Eintrag
@@ -696,6 +701,7 @@ Port, Protokollversion, Schlüsselablage, Umschläge und Methodennamen bleiben, 
 - Eine Änderung des Protokolls (Nachweis des Client-Schlüssels, Schlüsselableitung, TLS); sie
   bräuchte eine abgestimmte Änderung an der Erweiterung und an haex-vault.
 - Benachrichtigungen an Clients über geänderte Einträge (FR-026).
-- Ein Anwesenheitsnachweis mit Biometrie oder Systemanmeldung, außer FR-033 entscheidet anders.
+- Ein Anwesenheitsnachweis mit Biometrie oder Systemanmeldung; UV prüft holzi nur über das Passwort
+  der Vault (FR-033).
 - Andere Beglaubigungsformate als `none` und ein Zähler ungleich 0 (036, Folgearbeiten).
 - Änderungen an der Erweiterung selbst; diese Spec nennt sie nur (Abschnitt oben).

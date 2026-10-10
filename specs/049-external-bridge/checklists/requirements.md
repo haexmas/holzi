@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,8 +31,8 @@
 
 ## Notes
 
-- One marker remains: FR-033 (whether holzi sets UV after a presence confirmation). The spec
-  proposes "never"; the operator decides in `/speckit-clarify` before planning.
+- FR-033 (UV) was decided by the operator on 2026-10-10: UV only when the relying party requires
+  it and the user re-enters the vault password in the presence confirmation.
 - The spec names the wire protocol, method names and error codes of `haex-pass-browser` and
   haex-vault (repository, full revision, path). That is the compatibility contract the feature
   exists for, in the house style of 034, 036 and 048; the requirements stay at the level of
