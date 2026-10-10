@@ -1,5 +1,6 @@
 import { onBackButtonPress } from '@tauri-apps/api/app'
 import { registerChatActionHandlers } from '~/stores/chatActionHandlers'
+import { registerFilesActionHandlers } from '~/stores/filesActionHandlers'
 import { registerPasswordsActionHandlers } from '~/stores/passwordsActionHandlers'
 import { registerSettingsActionHandlers } from '~/stores/settingsActionHandlers'
 import type { Translate } from '~/composables/useModelInventory'
@@ -24,6 +25,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   registerChatActionHandlers(wm)
   registerSettingsActionHandlers(wm)
   registerPasswordsActionHandlers(wm)
+  registerFilesActionHandlers(wm)
 
   // The decision logic behind `wm.system.back` is covered by `pnpm check:wm-navigation`, the
   // gesture itself by the e2e scenario `android-back-gesture`.

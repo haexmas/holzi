@@ -174,6 +174,7 @@ async function consumeDeepLink(): Promise<void> {
     :class="{ 'holzi-keyboard-room': wm.compact }"
   >
     <SyncCopyNotice />
+    <FilesAgentPermissionDialog />
     <WmDesktop class="min-h-0 flex-1" />
   </div>
 </template>

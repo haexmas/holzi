@@ -20,7 +20,9 @@ erhöht.
 | `status`     | TEXT NOT NULL    | `device`: `granted` oder `denied`; `storage`: `read`, `readWrite` oder `denied`            |
 | `updated_at` | INTEGER NOT NULL | Millisekunden                                                                              |
 
-- UNIQUE (`agent_id`, `kind`, `target`).
+- Kein UNIQUE-Constraint (er würde die Synchronisierung bei einem Konflikt anhalten, wie bei den
+  anderen synchronisierten Tabellen); die abgeleitete `id` sorgt dafür, dass (`agent_id`, `kind`,
+  `target`) eine Zeile bleibt.
 - Kein Fremdschlüssel auf `haex_storages` (CRDT-Tabellen); `remote_storage::store::remove_storage`
   löscht die Zeilen eines Speichers im selben Vorgang.
 - **Auswertung**:

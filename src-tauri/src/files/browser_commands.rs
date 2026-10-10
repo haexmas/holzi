@@ -63,8 +63,8 @@ pub struct StorageSource {
 
 /// The files of the storage `storage_id` (spec 044 US5), or why not. Its credentials stay inside
 /// `remote_storage`; no answer carries them (FR-038).
-async fn storage_files(
-    state: &State<'_, AppState>,
+pub(crate) async fn storage_files(
+    state: &AppState,
     storage_id: &str,
 ) -> Result<StorageFiles, FilesError> {
     let service = crate::remote_storage::commands::service(state)

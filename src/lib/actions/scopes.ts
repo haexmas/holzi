@@ -12,6 +12,8 @@ export const ACTION_SCOPE_IDS = [
   'settings.device',
   'settings.models',
   'passwords.read',
+  'files.read',
+  'files.write',
   'guardrails',
 ] as const
 
@@ -37,6 +39,10 @@ const DESCRIPTIONS: Record<ActionScopeId, string> = {
   'settings.models': 'Choose, download and delete models.',
   'passwords.read':
     'Search the titles, tags and folders of the password manager. Never usernames, addresses or secrets.',
+  'files.read':
+    'List, search and read files of this device and of the storages granted, never holzi\'s own data.',
+  'files.write':
+    'Create folders, copy, rename, move and delete files of this device and of the storages granted for writing.',
   guardrails:
     'Autonomy mode, delegate deny rules, provider connections, approvals and permission mode. Never callable by agents.',
 }

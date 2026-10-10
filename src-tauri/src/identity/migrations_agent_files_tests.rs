@@ -1,0 +1,72 @@
+//! Migration tests for `0029_agent_file_permissions` (spec 044, data-model.md): a genesis vault and
+//! a vault upgraded from the schema before it both end with the table, tracked by haex-crdt and
+//! without a UNIQUE constraint.
+
+// These tests read `sqlite_master` and `pragma_*` directly, which the CRDT write path does not
+// expose.
+#![allow(clippy::disallowed_methods)]
+
+use haex_crdt::Database;
+
+use super::migrations_extensions_tests::{has_hlc_column, unique_indexes};
+use super::migrations_tests::{migration_source_before, open, own_columns, table_exists};
+use crate::identity::holzi_migration_source;
+
+const TABLE: &str = "agent_file_permissions";
+
+fn assert_schema(db: &Database) {
+    assert!(table_exists(db, TABLE));
+    assert_eq!(
+        own_columns(db, TABLE),
+        ["id", "agent_id", "kind", "target", "status", "updated_at"]
+    );
+    assert!(
+        has_hlc_column(db, TABLE),
+        "a revoked grant must reach every own device"
+    );
+    assert_eq!(
+        unique_indexes(db, TABLE),
+        0,
+        "a UNIQUE constraint would halt the sync"
+    );
+}
+
+#[tokio::test]
+async fn migration_0029_gives_a_fresh_vault_the_table() {
+    tokio::task::spawn_blocking(|| {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = open(
+            dir.path(),
+            "agent-files-fresh",
+            true,
+            holzi_migration_source(),
+        );
+        assert_schema(&db);
+    })
+    .await
+    .expect("join");
+}
+
+#[tokio::test]
+async fn migration_0029_upgrades_a_vault_from_the_schema_before_it() {
+    tokio::task::spawn_blocking(|| {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let old = open(
+            dir.path(),
+            "agent-files-upgrade",
+            true,
+            migration_source_before("0029_agent_file_permissions"),
+        );
+        assert!(!table_exists(&old, TABLE));
+        drop(old);
+        let db = open(
+            dir.path(),
+            "agent-files-upgrade",
+            false,
+            holzi_migration_source(),
+        );
+        assert_schema(&db);
+    })
+    .await
+    .expect("join");
+}

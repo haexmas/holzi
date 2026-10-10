@@ -22,6 +22,13 @@ export type Behavior =
       text?: string
     }
   | { kind: 'error'; status?: number; body?: unknown }
+  /** A model that calls tools: each request that offers tools gets the next step, a request
+   * without tools (a thread title) a short text. */
+  | { kind: 'script'; steps: ScriptStep[] }
+
+/** One answer of a scripted model: a call of `tool` with `input`, or a closing text. */
+export type ScriptStep =
+  { tool: string; input: Record<string, unknown> } | { text: string }
 
 export interface Connection {
   id: number
@@ -163,6 +170,51 @@ function streamThenFinish(
   res.on('close', () => clearInterval(timer))
 }
 
+function scripted(
+  res: ServerResponse,
+  connectionId: number,
+  step: ScriptStep,
+): void {
+  res.writeHead(200, { 'content-type': 'text/event-stream' })
+  if ('text' in step) {
+    res.write(messageStartEvents(connectionId))
+    res.write(textDelta(step.text))
+    res.end(messageEndEvents(1))
+    return
+  }
+  res.end(
+    sseEvent('message_start', {
+      type: 'message_start',
+      message: { id: `msg_${connectionId}`, usage: { input_tokens: 1 } },
+    }) +
+      sseEvent('content_block_start', {
+        type: 'content_block_start',
+        index: 0,
+        content_block: {
+          type: 'tool_use',
+          id: `toolu_${connectionId}`,
+          name: step.tool,
+          input: {},
+        },
+      }) +
+      sseEvent('content_block_delta', {
+        type: 'content_block_delta',
+        index: 0,
+        delta: {
+          type: 'input_json_delta',
+          partial_json: JSON.stringify(step.input),
+        },
+      }) +
+      sseEvent('content_block_stop', { type: 'content_block_stop', index: 0 }) +
+      sseEvent('message_delta', {
+        type: 'message_delta',
+        delta: { stop_reason: 'tool_use' },
+        usage: { output_tokens: 1 },
+      }) +
+      sseEvent('message_stop', { type: 'message_stop' }),
+  )
+}
+
 function errorBody(behavior: { status?: number; body?: unknown }) {
   return (
     behavior.body ?? {
@@ -215,6 +267,8 @@ export async function startProvider(
   options?: ProviderOptions,
 ): Promise<Provider> {
   let behavior: Behavior = initial ?? { kind: 'stream-then-finish' }
+  /** The next step of a `script`. */
+  let scriptAt = 0
   const models = options?.models ?? DEFAULT_MODELS
   const connections: Connection[] = []
   const requests: RecordedRequest[] = []
@@ -277,6 +331,14 @@ export async function startProvider(
           streamForever(res, connection.id, current)
           return
         }
+        if (current.kind === 'script') {
+          const tools = (body as { tools?: unknown[] } | undefined)?.tools
+          const step = tools?.length
+            ? (current.steps[scriptAt++] ?? { text: 'done' })
+            : { text: 'title' }
+          scripted(res, connection.id, step)
+          return
+        }
         streamThenFinish(res, connection.id, current)
         return
       }
@@ -305,6 +367,7 @@ export async function startProvider(
     modelId: models[0]!.id,
     behave: (next) => {
       behavior = next
+      scriptAt = 0
     },
     connections: () => connections,
     requests: () => requests,

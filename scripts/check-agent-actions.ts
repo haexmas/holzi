@@ -124,8 +124,9 @@ test('the core offer names existing, built-in-callable actions and leaves room f
 })
 
 test('every built-in-callable read action runs for a built-in agent naming its target', async () => {
+  // Native actions run in Rust (ADR 0011); `cargo test files::agent` covers them.
   const reads = ALL_ACTIONS.filter(
-    (a) => a.effect === 'read' && isBuiltinAgentAction(a),
+    (a) => a.effect === 'read' && isBuiltinAgentAction(a) && !a.runner,
   )
   assert.ok(reads.length > 0)
   for (const action of reads) {
@@ -134,6 +135,40 @@ test('every built-in-callable read action runs for a built-in agent naming its t
     const outcome = await catalogRunner([]).runAction(action.id, input, BUILTIN)
     assert.equal(outcome.ok, true, action.id)
   }
+})
+
+/** The ids of the Rust executor of the file actions (`FILE_ACTION_IDS`). */
+function nativeExecutorIds(): string[] {
+  const source = readFileSync(
+    new URL('../src-tauri/src/files/agent/exec.rs', import.meta.url),
+    'utf8',
+  )
+  const list = /FILE_ACTION_IDS: &\[&str\] = &\[([^\]]*)\]/.exec(source)?.[1]
+  assert.ok(list, 'FILE_ACTION_IDS not found')
+  return [...list.matchAll(/"([^"]+)"/g)].map((match) => match[1] ?? '')
+}
+
+test('every native action has its Rust executor and every executor its action (ADR 0011)', () => {
+  const native = ALL_ACTIONS.filter((a) => a.runner === 'native')
+  assert.deepEqual(
+    native.map((a) => a.id).sort(),
+    nativeExecutorIds().sort(),
+  )
+  for (const action of native) {
+    // No window is involved: nothing to wait for, nothing to target.
+    assert.equal(action.binding, 'global', action.id)
+    assert.equal(action.target, 'none', action.id)
+    assert.ok(isBuiltinAgentAction(action), action.id)
+    assert.ok(!CORE_AGENT_TOOLS.includes(action.id), action.id)
+    assert.equal(toAgentActionDef(action, titleOf).runner, 'native', action.id)
+  }
+  const show = ALL_ACTIONS.find((a) => a.id === 'files.show')
+  assert.ok(show && !show.runner, 'files.show opens a window and runs there')
+  assert.equal(
+    toAgentActionDef(show, titleOf).runner,
+    undefined,
+    'a window action carries no runner',
+  )
 })
 
 test('wm.state.get tells the model which ids serve as action targets (FR-004)', () => {

@@ -45,6 +45,13 @@ pub struct ActionTitles {
     pub en: String,
 }
 
+/// Where an action runs (ADR 0011): in the window, or in Rust without one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ActionRunner {
+    Native,
+}
+
 /// One action as the frontend pushes it (data-model.md §2).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,6 +67,9 @@ pub struct AgentActionDef {
     pub core: bool,
     #[serde(default)]
     pub titles: ActionTitles,
+    /// `native`: a Rust executor runs it ([`super::native_action`]); absent: the window does.
+    #[serde(default)]
+    pub runner: Option<ActionRunner>,
 }
 
 pub struct ActionTool {
@@ -138,13 +148,7 @@ fn into_tool_result(reply: ActionReply, input: &Value) -> ToolResult {
             code,
             field,
             message,
-        } => {
-            let mut error = json!({ "code": code, "message": message });
-            if let Some(field) = field {
-                error["field"] = Value::String(field);
-            }
-            ToolResult::error(json!({ "error": error }).to_string())
-        }
+        } => ToolResult::error(error_content(&code, field.as_deref(), &message)),
         // The tool round asks the user; the JSON is what a caller without a chat would see.
         ActionReply::NeedsChoice {
             field,
@@ -174,6 +178,15 @@ fn into_tool_result(reply: ActionReply, input: &Value) -> ToolResult {
             )
         }
     }
+}
+
+/// What the model sees of a failed action: `{"error": {code, message, field?}}`.
+pub(super) fn error_content(code: &str, field: Option<&str>, message: &str) -> String {
+    let mut error = json!({ "code": code, "message": message });
+    if let Some(field) = field {
+        error["field"] = Value::String(field.to_owned());
+    }
+    json!({ "error": error }).to_string()
 }
 
 /// Whether a schema uses only what the action runner's validator knows (`src/lib/actions/schema.ts`):
