@@ -41,6 +41,21 @@ function isInstalled(entry: CatalogEntryWithFit): boolean {
   return installed.value.some((model) => model.id === entry.id)
 }
 
+/** The entry whose download waits for the confirmation (spec 043 FR-028). */
+const confirming = ref<CatalogEntryWithFit | null>(null)
+const confirmOpen = computed({
+  get: () => confirming.value !== null,
+  set: (value: boolean) => {
+    if (!value) confirming.value = null
+  },
+})
+
+function confirmed() {
+  const entry = confirming.value
+  confirming.value = null
+  if (entry) void downloadAsync(entry)
+}
+
 async function downloadAsync(entry: CatalogEntryWithFit) {
   busyModelId.value = entry.id
   errorKey.value = null
@@ -128,7 +143,8 @@ onMounted(reloadAsync)
           size="sm"
           :disabled="isInstalled(entry)"
           :loading="busyModelId === entry.id"
-          @click="downloadAsync(entry)"
+          :data-testid="`models-download-${entry.id}`"
+          @click="confirming = entry"
         >
           {{
             isInstalled(entry)
@@ -138,5 +154,11 @@ onMounted(reloadAsync)
         </UiButton>
       </SettingsRow>
     </SettingsGroup>
+    <ModelsDownloadConfirmStep
+      v-model:open="confirmOpen"
+      :target="confirming && { kind: 'catalog', id: confirming.id }"
+      :name="confirming?.name ?? ''"
+      @confirm="confirmed"
+    />
   </section>
 </template>

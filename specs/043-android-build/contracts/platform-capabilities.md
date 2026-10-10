@@ -44,3 +44,10 @@ platform_capabilities() -> PlatformCapabilities
 - Rust: Tabelle pro `cfg` (Desktop-Test im normalen Lauf, Android-Werte als Konstante geprüft);
   jede Leser-Stelle hat einen Test, dass sie bei `false` „nicht verfügbar“ liefert.
 - e2e Android: Gegenfälle der Ausnahmeliste ([e2e-android.md](./e2e-android.md)).
+
+## Umsetzung in Stufe 5
+
+- Neues Feld `modelPresets` (`'desktop' | 'phone'`, FR-027, FR-030): Unter `phone` schlägt der
+  Modellkatalog nur die beiden Telefon-Profile aus `_meta.profiles` vor (`catalog/profiles.rs`),
+  zwischen denen die Passung zum Arbeitsspeicher entscheidet, und der Vorschlag der
+  Spracherkennung ist das kleinste Modell (`whisper-tiny`); die größeren bleiben wählbar.

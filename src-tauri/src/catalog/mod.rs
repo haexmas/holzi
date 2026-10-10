@@ -24,6 +24,7 @@ const CATALOG_JSON: &str = include_str!("model_catalog.json");
 #[cfg(test)]
 mod catalog_tests;
 pub mod commands;
+pub mod profiles;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CatalogEntry {
@@ -67,9 +68,12 @@ pub fn entries() -> &'static [CatalogEntry] {
         .as_slice()
 }
 
-/// Fetches one entry by id.
+/// Fetches one entry by id, the e2e suite's stand-ins included (`models::stand_in`).
 pub fn get(id: &str) -> Option<&'static CatalogEntry> {
-    entries().iter().find(|e| e.id == id)
+    entries()
+        .iter()
+        .chain(crate::models::stand_in::entries())
+        .find(|e| e.id == id)
 }
 
 /// Builds the HuggingFace resolve URL for a repo + filename. Uses the
@@ -99,6 +103,7 @@ pub async fn list_catalog() -> Vec<CatalogEntryWithFit> {
     let hw = crate::hardware::probe_async().await;
     entries()
         .iter()
+        .chain(crate::models::stand_in::entries())
         .cloned()
         .map(|entry| {
             let fit = classify(
@@ -137,11 +142,20 @@ pub struct TierRecommendation {
 /// 5. Missing tiers reuse their fallback so the return is always three
 ///    recommendations for a non-empty catalog.
 ///
+/// Under the phone presets the candidates are only the two phone profiles
+/// (`profiles.rs`, spec 043 FR-027); the fit to the memory chooses between
+/// them.
+///
 /// Returns `None` only when the catalog is empty (which never happens
 /// in production because `entries()` reads the built-in JSON blob).
-pub fn recommend_tiers(hw: &HardwareInfo) -> Option<[TierRecommendation; 3]> {
+pub fn recommend_tiers(
+    hw: &HardwareInfo,
+    presets: crate::platform::ModelPresets,
+) -> Option<[TierRecommendation; 3]> {
+    let allowed = profiles::profiles().candidates(presets);
     let candidates: Vec<(CatalogEntry, Fit)> = entries()
         .iter()
+        .filter(|entry| allowed.is_none_or(|ids| ids.contains(&entry.id.as_str())))
         .cloned()
         .map(|entry| {
             let fit = classify(

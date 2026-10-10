@@ -180,8 +180,9 @@ pub enum HolziError {
     ModelIntegrityError { model_id: String, reason: String },
 
     // --- Voice control (spec 008) -----------------------------------------
+    /// The person refused the microphone (spec 043 FR-029); the composer explains how to allow it.
     #[error("Microphone permission is required")]
-    PermissionDenied,
+    MicrophoneDenied,
 
     #[error("A voice recording is already in progress")]
     AlreadyRecording,

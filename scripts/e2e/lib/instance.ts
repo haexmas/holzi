@@ -206,6 +206,8 @@ export interface PhoneControls {
    * or refused for good (the system then asks no more).
    */
   allowNotifications(allowed: boolean): void
+  /** Refuses the microphone for good, as the person's second "Don't allow" does (FR-029). */
+  refuseMicrophone(): void
   /** The titles of the app's notifications the system shows now. */
   notificationTitles(): string[]
 }

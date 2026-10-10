@@ -125,6 +125,8 @@ function describeError(e: unknown): string {
   switch (structuredVoiceError(e)?.kind) {
     case 'DeviceUnavailable':
       return t('voiceControl.error.deviceUnavailable')
+    case 'MicrophoneDenied':
+      return t('voiceControl.error.microphoneDenied')
     case 'AlreadyRecording':
       return t('voiceControl.error.alreadyRecording')
     case 'TranscriptionFailed':
@@ -259,6 +261,7 @@ async function cancelRecording() {
         :disabled="state === 'transcribing'"
         :aria-label="t('voiceControl.mic.start')"
         :title="t('voiceControl.mic.start')"
+        data-testid="voice-start"
         @click="startRecording"
       >
         <Icon
@@ -275,7 +278,12 @@ async function cancelRecording() {
     >
       {{ t('voiceControl.noSpeechDetected') }}
     </span>
-    <span v-if="errorMessage" class="text-xs text-destructive" role="alert">
+    <span
+      v-if="errorMessage"
+      class="text-xs text-destructive"
+      role="alert"
+      data-testid="voice-error"
+    >
       {{ errorMessage }}
     </span>
   </div>
