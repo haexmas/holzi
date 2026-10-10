@@ -200,3 +200,41 @@ fn a_reconcile_that_read_the_registry_before_an_enable_keeps_what_the_extension_
     assert_eq!(node.host.notifications.of_extension(ext).len(), 1);
     assert_eq!(node.host.permissions.held(ext).len(), 1);
 }
+
+#[test]
+fn a_device_with_an_older_version_shows_as_behind_until_it_updated() {
+    let (a, b) = (Node::new(), Node::new());
+    let ext = a.install(&bundle("1.0.0", &[INIT]));
+    a.follow();
+    b.pull(&a);
+    b.follow();
+    b.install(&bundle("1.1.0", &[INIT, TAG]));
+    b.follow();
+
+    let devices = |node: &Node| {
+        listed(node, ext)
+            .expect("listed")
+            .devices
+            .into_iter()
+            .map(|d| (d.this_device, d.version, d.behind))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        devices(&b),
+        vec![
+            (true, Some("1.1.0".to_owned()), false),
+            (false, Some("1.0.0".to_owned()), true),
+        ]
+    );
+
+    a.pull(&b);
+    a.follow();
+    b.pull(&a);
+    assert_eq!(
+        devices(&b),
+        vec![
+            (true, Some("1.1.0".to_owned()), false),
+            (false, Some("1.1.0".to_owned()), false),
+        ]
+    );
+}

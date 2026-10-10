@@ -19,4 +19,13 @@ status: string,
 /**
  * The error kind (`migration_changed`, …), never data of the extension.
  */
-error?: string, };
+error?: string,
+/**
+ * Version of the bundle the device runs or is getting; none while disabled there.
+ */
+version?: string,
+/**
+ * Another device with an older version than this one: what it still writes in the older
+ * form arrives here only once it updated (research R10).
+ */
+behind: boolean, };

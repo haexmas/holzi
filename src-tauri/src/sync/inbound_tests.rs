@@ -6,7 +6,8 @@ use uuid::Uuid;
 use super::*;
 use crate::storage::query::Query;
 use crate::sync::change::PAGE_BUDGET;
-use crate::sync::device_list::{DeviceList, RemovedDevice};
+use crate::sync::device_list::{self, DeviceList, RemovedDevice};
+use crate::sync::keys;
 use crate::sync::outbound::serve_pull_with_budget;
 use crate::sync::test_support::{open_vault, open_vault_with_limit, pull_into, Device};
 

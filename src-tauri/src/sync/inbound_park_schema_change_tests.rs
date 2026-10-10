@@ -190,3 +190,115 @@ fn a_column_whose_migration_arrives_in_the_same_pull_is_parked() {
         "this device is behind: the group is replayed after its migration"
     );
 }
+
+/// Sets the state of the own extension on `device`, registered by [`mark`].
+fn set_status(device: &Device, status: DeviceStatus) {
+    device
+        .db()
+        .write(|tx| {
+            tx.execute(
+                "UPDATE extension_device_status SET status = ?1",
+                params![status.as_str()],
+            )
+            .map(drop)
+        })
+        .expect("status");
+}
+
+const RENAME: &str = "ALTER TABLE t:pages RENAME COLUMN tag TO label";
+
+/// A writes `tag` (its version adds it); B, still without it, parks that group. B then updates
+/// past a later version that renames `tag` and replays: the group can never apply here and is
+/// marked to be fetched again. Returns both.
+fn parked_then_overtaken() -> (Device, Device) {
+    let (a, b) = (Device::new(), Device::new());
+    ddl(&a, PAGES);
+    ddl(&b, PAGES);
+    mark(&b, DeviceStatus::Transferring);
+    ddl(&a, "ALTER TABLE t:pages ADD COLUMN tag TEXT");
+    write(
+        &a,
+        "INSERT INTO t:pages (id, body, tag) VALUES ('p1', 'one', 'red')",
+    );
+    b.pull_from(&a);
+    assert_eq!(
+        parked(&b),
+        vec![(own().to_string(), MISSING_COLUMN.to_owned())]
+    );
+
+    ddl(&b, "ALTER TABLE t:pages ADD COLUMN tag TEXT");
+    ddl(&b, RENAME);
+    set_status(&b, DeviceStatus::Ready);
+    replay_ready(b.db(), &|| false).expect("replay");
+    assert_eq!(
+        parked(&b),
+        vec![(own().to_string(), refetch::REFETCH.to_owned())]
+    );
+    (a, b)
+}
+
+#[test]
+fn a_group_parked_before_a_rename_arrives_renamed_once_fetched_again() {
+    let (a, b) = parked_then_overtaken();
+    ddl(&a, RENAME);
+    b.pull_from(&a);
+    assert_eq!(parked(&b), vec![], "the mark is gone");
+    assert_eq!(
+        count(&b, "SELECT COUNT(*) FROM t:pages WHERE label = 'red'"),
+        1
+    );
+}
+
+#[test]
+fn a_group_fetched_again_waits_while_its_device_has_the_older_version() {
+    let (a, b) = parked_then_overtaken();
+    b.pull_from(&a);
+    assert_eq!(
+        parked(&b),
+        vec![(own().to_string(), refetch::REFETCH.to_owned())],
+        "the mark stays until that device updated"
+    );
+    assert_eq!(count(&b, "SELECT COUNT(*) FROM t:pages"), 0);
+
+    ddl(&a, RENAME);
+    b.pull_from(&a);
+    assert_eq!(parked(&b), vec![]);
+    assert_eq!(
+        count(&b, "SELECT COUNT(*) FROM t:pages WHERE label = 'red'"),
+        1
+    );
+}
+
+#[test]
+fn the_mark_of_a_group_overwritten_meanwhile_goes() {
+    let (a, b) = parked_then_overtaken();
+    ddl(&a, RENAME);
+    write(
+        &a,
+        "UPDATE t:pages SET body = 'uno', label = 'rot' WHERE id = 'p1'",
+    );
+    b.pull_from(&a);
+    assert_eq!(parked(&b), vec![]);
+    assert_eq!(
+        count(
+            &b,
+            "SELECT COUNT(*) FROM t:pages WHERE body = 'uno' AND label = 'rot'"
+        ),
+        1
+    );
+}
+
+#[test]
+fn a_pull_from_a_device_not_past_the_group_keeps_the_mark() {
+    let (a, b) = parked_then_overtaken();
+    ddl(&a, RENAME);
+    // C has nothing of A: it cannot bring the group again.
+    let c = Device::new();
+    b.pull_from(&c);
+    assert_eq!(
+        parked(&b),
+        vec![(own().to_string(), refetch::REFETCH.to_owned())]
+    );
+    b.pull_from(&a);
+    assert_eq!(parked(&b), vec![]);
+}

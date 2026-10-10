@@ -300,6 +300,23 @@ wie oben geparkt. Eine falsche Einordnung kostet nur ein erneutes Abholen. Verwo
 Spalten-Historie, die Zellen entfernter Spalten verwirft und umbenannte umleitet — sie verlöre Daten,
 die die Migration des Absenders umgewandelt hätte.
 
+**Überholte geparkte Gruppe**: Parkt ein Gerät eine Gruppe, solange es selbst zurückliegt, und wendet es
+danach eine Migration an, die genau deren Spalte entfernt oder umbenennt, wird die Gruppe nie anwendbar.
+Das Nachspielen erkennt das (`outdated_origin` bei einer jetzt aktuellen Erweiterung) und markiert sie
+`refetch`. Jeder Pull fragt ihren Ursprung dann ab knapp vor ihr an (`Replica::pull_vector`); der
+gespeicherte Fortschritt sinkt nicht, Ausliefern und Anwesenheit nutzen ihn weiter. Die frische Kopie
+ersetzt die Markierung und wird wie jede Gruppe einsortiert. Die Markierung fällt, sobald ein Pull, der
+von unter ihr gefragt hat, den Ursprung bis zu ihr bekommen hat und keine Gruppe davon wartet: Dann ist
+die Kopie übernommen oder neu geparkt, oder spätere Änderungen haben die Gruppe ganz überschrieben. Ein
+Pull, der vor der Markierung begann, lässt sie stehen; gleichzeitige Pulls verlieren sie so nicht.
+Antwortet der Sender auf den abgesenkten Stand mit Resync, gilt dasselbe für den Snapshot. Verworfen:
+den gespeicherten Fortschritt senken — ein gleichzeitiger Pull hebt ihn wieder über die Gruppe.
+
+**Hinweis in den Einstellungen**: Jede Zeile der Geräteliste einer Erweiterung nennt die Fassung des
+Bundles, das das Gerät dort hat (`extension_device_status.bundle_id`); ist sie älter als die hier
+wirksame, heißt es „älter als hier: Daten von diesem Gerät kommen teils erst nach seinem Update an“. Der
+Zustand dieses Geräts selbst steht schon darüber („wird übertragen“).
+
 Regel für holzi: synchronisierte Zeilen von Kern- und Erweiterungstabellen werden nie in einer Schreibgruppe
 geschrieben (sonst warten Kerndaten mit einer geparkten Gruppe). Lokale Journalzeilen (`_no_sync`) dürfen mit in
 der Transaktion stehen.

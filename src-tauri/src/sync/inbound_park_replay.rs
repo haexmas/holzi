@@ -8,7 +8,7 @@ use std::sync::PoisonError;
 use haex_crdt::rusqlite::params;
 use haex_crdt::{compare_hlc_strings, ColumnChange, Database};
 
-use super::{sort, Context, Sorted, PARKED_TABLE};
+use super::{refetch, sort, Context, Sorted, OUTDATED_ORIGIN, PARKED_TABLE};
 use crate::storage::query::{self, Query};
 
 /// What [`replay_ready`] did.
@@ -75,6 +75,14 @@ pub fn replay_ready(db: &Database, stop: &dyn Fn() -> bool) -> haex_crdt::Result
                         })
                 };
                 match sort(&context, &hlc, group, waits) {
+                    // Written by a device with an older version, and a migration applied here
+                    // since dropped or renamed what it writes: it can never apply, fetch it again.
+                    Ok(Sorted::Park(parked)) if parked.reason == OUTDATED_ORIGIN => {
+                        if db.write(|tx| refetch::mark(tx, id))? {
+                            log::info!("sync: parked group {hlc} of {prefix} is fetched again");
+                        }
+                        break;
+                    }
                     // Still missing something, or behind another extension's earlier group: the
                     // globally earliest waiting group never waits, so this cannot cycle.
                     Ok(Sorted::Park(_)) => break,
