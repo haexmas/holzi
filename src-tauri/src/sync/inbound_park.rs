@@ -12,7 +12,8 @@
 //! migration dropped or renamed, written by a device that still has the older version. Such a
 //! group is not parked: it could never apply. It waits instead, with the progress of its origin
 //! below it, and comes again in later pulls; once that device updated, its own migration shaped
-//! the rows, and they arrive in the new form.
+//! the rows, and they arrive in the new form. A group parked before this device applied such a
+//! migration is fetched again instead ([`refetch`]).
 //!
 //! Changes to the tables of an extension removed with "delete data" that are older than its
 //! `purge_hlc` are dropped (R11). Newer ones are parked until this device has cleared up for that
@@ -198,7 +199,8 @@ pub(super) fn sort(
     }))
 }
 
-/// Stores parked groups; one already parked (the same origin and HLC, fetched again) is skipped.
+/// Stores parked groups; one already parked (the same origin and HLC, fetched again) is skipped,
+/// a group marked to be fetched again ([`refetch`]) is replaced by its fresh copy.
 pub(super) fn store(
     tx: &mut CrdtTransaction<'_>,
     parked: &[(String, Parked, usize)],
@@ -214,8 +216,12 @@ pub(super) fn store(
             .map_err(|e| haex_crdt::Error::consumer(format!("parked tables: {e}")))?;
         tx.execute(
             &format!(
-                "INSERT OR IGNORE INTO {PARKED_TABLE} (origin, hlc, extension_prefix, tables, \
-                 group_blob, bytes, reason, parked_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
+                "INSERT INTO {PARKED_TABLE} (origin, hlc, extension_prefix, tables, \
+                 group_blob, bytes, reason, parked_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
+                 ON CONFLICT(origin, hlc) DO UPDATE SET extension_prefix = excluded.extension_prefix, \
+                 tables = excluded.tables, group_blob = excluded.group_blob, bytes = excluded.bytes, \
+                 reason = excluded.reason, parked_at = excluded.parked_at WHERE reason = '{}'",
+                refetch::REFETCH
             ),
             params![
                 origin,
@@ -232,15 +238,18 @@ pub(super) fn store(
     Ok(())
 }
 
-/// Whether the group of `origin` at `hlc` is parked already (fetched again).
+/// Whether the group of `origin` at `hlc` is parked already (fetched again). A group marked to be
+/// fetched again ([`refetch`]) is not: its fresh copy is sorted anew.
 pub(super) fn is_stored(
     q: &mut impl crate::storage::query::Query,
     origin: &str,
     hlc: &str,
 ) -> haex_crdt::Result<bool> {
     Ok(q.query_row(
-        &format!("SELECT COUNT(*) FROM {PARKED_TABLE} WHERE origin = ?1 AND hlc = ?2"),
-        params![origin, hlc],
+        &format!(
+            "SELECT COUNT(*) FROM {PARKED_TABLE} WHERE origin = ?1 AND hlc = ?2 AND reason != ?3"
+        ),
+        params![origin, hlc, refetch::REFETCH],
         |r| r.get::<_, i64>(0),
     )?
     .unwrap_or(0)
@@ -302,6 +311,9 @@ pub fn discard(
 #[path = "inbound_park_replay.rs"]
 mod replay;
 pub use replay::{replay_ready, Replayed};
+
+#[path = "inbound_park_refetch.rs"]
+pub mod refetch;
 
 #[cfg(test)]
 #[path = "inbound_park_tests.rs"]

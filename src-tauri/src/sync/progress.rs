@@ -92,6 +92,14 @@ pub fn raise(vector: &mut Vector, origin: Uuid, hlc: String) {
     }
 }
 
+/// The cursor right before `hlc` of the same origin, so a pull from it brings `hlc` again;
+/// `None` when nothing lies before it.
+pub fn just_below(hlc: &str) -> Option<String> {
+    let (time, node) = hlc.split_once('/')?;
+    let before = time.parse::<u64>().ok()?.checked_sub(1)?;
+    Some(format!("{before}/{node}"))
+}
+
 /// Raises `current` to `hlc` if that is further.
 pub fn raise_option(current: &mut Option<String>, hlc: String) {
     if is_beyond(&hlc, current.as_ref()) {

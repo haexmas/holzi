@@ -12,6 +12,7 @@ use super::park::{self, Context, Parked, Sorted};
 use super::{InboundError, Inbox};
 use crate::storage::query;
 use crate::sync::change::group_bytes;
+use crate::sync::progress::Vector;
 
 /// The groups a page parks, and the extensions that reached their limit in it.
 pub(super) struct Parking<'a> {
@@ -31,6 +32,30 @@ impl<'a> Parking<'a> {
 }
 
 impl Inbox {
+    /// This pull asks for the parked groups `floors` again ([`park::refetch`]).
+    pub fn refetching(mut self, floors: Vec<park::refetch::Floor>) -> Self {
+        self.refetch = floors;
+        self
+    }
+
+    /// On the last page, the groups asked for again that this pull got past: the sender served
+    /// their origin up to them at least, and no group of it waits.
+    pub(super) fn refetched(&self, last: bool, served: &Vector) -> Vec<park::refetch::Floor> {
+        if !last {
+            return Vec::new();
+        }
+        self.refetch
+            .iter()
+            .filter(|(origin, hlc)| {
+                !self.blocked.contains_key(origin)
+                    && served
+                        .get(origin)
+                        .is_some_and(|up_to| compare_hlc_strings(up_to, hlc) != Ordering::Less)
+            })
+            .cloned()
+            .collect()
+    }
+
     /// Parks `group` of transaction `hlc` from `origin`; with its extension at the limit, or waiting
     /// for a device to update it, it is left for a later pull instead, and the progress of `origin`
     /// stays below it.

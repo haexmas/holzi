@@ -79,9 +79,9 @@ pub fn pull_into(
     from: &Device,
     budget: usize,
 ) -> Result<Vec<Received>, InboundError> {
-    let theirs = replica.progress()?;
+    let (theirs, floors) = replica.pull_vector()?;
     let mut outbox = serve_pull_with_budget(&from.replica, &theirs, budget)?;
-    let mut inbox = Inbox::new();
+    let mut inbox = Inbox::new().refetching(floors);
     let mut received = Vec::new();
     while let Some(page) = outbox.next_page() {
         received.push(inbox.receive(replica, page)?);
