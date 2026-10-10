@@ -53,6 +53,7 @@ logcat_loop=$!
   done
 ) >"$health/emulator-health.txt" 2>&1 &
 health_loop=$!
-trap 'pkill -P "$logcat_loop" 2>/dev/null; kill "$logcat_loop" "$health_loop" 2>/dev/null || true' EXIT
+# The adb server's own log tells transport drops (adb "device offline") apart from the app's faults.
+trap 'pkill -P "$logcat_loop" 2>/dev/null; kill "$logcat_loop" "$health_loop" 2>/dev/null; cp "${TMPDIR:-/tmp}/adb.$(id -u).log" "$health/adb-server.log" 2>/dev/null || true' EXIT
 
 corepack pnpm test:e2e --platform android --apk "$apk" --shard "$shard/$shards"

@@ -271,6 +271,19 @@ export async function startAndroidInstance(
   }
 }
 
+/** Writes `<what>-note.txt` beside the material that could not be kept. */
+function keptNote(folder: string, what: string, error: unknown): void {
+  try {
+    mkdirSync(folder, { recursive: true })
+    writeFileSync(
+      join(folder, `${what}-note.txt`),
+      `not kept: ${error instanceof Error ? error.message : String(error)}\n`,
+    )
+  } catch {
+    // Nothing more to say.
+  }
+}
+
 /** The app's data on the device; the device holds one at a time. */
 export class AndroidData implements DataHandle {
   readonly adb: Adb
@@ -347,16 +360,17 @@ export class AndroidData implements DataHandle {
       )
       mkdirSync(folder, { recursive: true })
       writeFileSync(join(folder, 'android-data.tar'), tar)
-    } catch {
-      // Diagnostics must never hide the failure they describe.
+    } catch (error) {
+      // Diagnostics must never hide the failure they describe, but say why they are missing.
+      keptNote(folder, 'android-data', error)
     }
     try {
       // The app also logs to logcat, and its own log file sometimes stops early on the device.
       const logcat = this.adb.shell('logcat', '-d', '-v', 'time', '-t', '20000')
       mkdirSync(folder, { recursive: true })
       writeFileSync(join(folder, 'logcat.txt'), logcat)
-    } catch {
-      // As above.
+    } catch (error) {
+      keptNote(folder, 'logcat', error)
     }
   }
 
@@ -434,8 +448,12 @@ export function createAndroidHost(options: AndroidHostOptions): DeviceHost {
         own.running = false
       }
       const stop = async () => {
-        await closeVault(instance, options.adb)
-        await kill()
+        try {
+          await closeVault(instance, options.adb)
+        } finally {
+          // Ended either way: an app left running would hold the device for the next scenario.
+          await kill()
+        }
       }
       return { ...instance, stop, kill }
     },
