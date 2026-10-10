@@ -36,12 +36,18 @@ onMounted(async () => {
         queue.value.push(request)
         requestTimeouts.set(
           request.requestId,
-          setTimeout(() => removeRequest(request.requestId), PERMISSION_REQUEST_TIMEOUT_MS),
+          setTimeout(
+            () => removeRequest(request.requestId),
+            PERMISSION_REQUEST_TIMEOUT_MS,
+          ),
         )
       },
     )
   } catch (error) {
-    console.error('[files] listening for agent permission requests failed', error)
+    console.error(
+      '[files] listening for agent permission requests failed',
+      error,
+    )
   } finally {
     emit('ready')
   }
