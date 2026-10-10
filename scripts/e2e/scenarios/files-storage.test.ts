@@ -1,16 +1,20 @@
 import assert from 'node:assert/strict'
 
+import { deviceFiles } from '../lib/extension-files.ts'
 import { fileFixture } from '../lib/file-fixtures.ts'
-import { createAndUnlock, unwrap, type FlowInstance } from '../lib/flows.ts'
+import { createAndUnlock, type FlowInstance } from '../lib/flows.ts'
 import { contextMenu } from '../lib/passwords.ts'
 import { listKeys, putObject, startRustfs } from '../lib/rustfs.ts'
 import { scenario } from '../lib/scenario.ts'
+import { connectStorage, filesGo } from '../lib/storage-setup.ts'
 import { runAction } from '../lib/settings.ts'
 
 // Spec 044, US5, quickstart §5 (T068): a storage of RustFS in the file browser. Its prefixes are
 // folders, a new folder is a marker object, renaming a folder moves every object under it, a text
-// shows and a film plays and seeks from the storage through the media server, and deleting asks
-// first (no trash) and leaves nothing of the folder. The bucket is checked directly each time.
+// shows and a film plays and seeks from the storage through the media server, a search with a typo
+// finds a file in it, a file goes up from the device (holzi's clipboard across tabs), and deleting
+// asks first (no trash) and leaves nothing of the folder. Downloading is `files-storage-down`.
+// The bucket is checked directly each time.
 // Needs Docker for RustFS; skipped without it.
 
 const BUCKET = 'holzi-files-e2e'
@@ -47,33 +51,15 @@ scenario(
 
     const instance = await ctx.startInstance()
     await createAndUnlock(instance, { name: 'e2e-files-storage' })
-    const connection = unwrap<{ id: string }>(
-      'storage_connection_save',
-      await instance.invoke('storage_connection_save', {
-        input: {
-          providerName: 'RustFS',
-          providerKind: 'rustfs',
-          endpoint: rustfs.endpoint,
-          region: rustfs.region,
-          addressing: 'path',
-          credentials: {
-            accessKeyId: rustfs.accessKeyId,
-            secretAccessKey: rustfs.secretAccessKey,
-          },
-          bucketForTest: BUCKET,
-        },
-      }),
-    )
-    const storage = unwrap<{ id: string }>(
-      'storage_save',
-      await instance.invoke('storage_save', {
-        input: { connectionId: connection.id, name: 'Fotos', bucket: BUCKET },
-      }),
-    )
+    // After the start: on Android it clears the app's data, where the folder lives.
+    const device = deviceFiles('holzi-storage-')
+    ctx.onTeardown(() => device.remove())
+    device.write('hoch.txt', 'vom Gerät')
+    const storageId = await connectStorage(instance, rustfs, BUCKET, 'Fotos')
 
     await runAction(instance, 'wm.app.open', {
       appId: 'system.files',
-      at: `/storage/${storage.id}?p=${encodeURIComponent('/')}`,
+      at: `/storage/${storageId}?p=${encodeURIComponent('/')}`,
     })
     await instance.waitForDisplayed('files-entry-Alt')
     await instance.waitForDisplayed('files-entry-notiz.txt')
@@ -123,6 +109,25 @@ scenario(
     )
     await instance.click('files-viewer-close')
     ctx.step('a text shows and a film plays and seeks from the storage')
+
+    // A search with a typo finds a file of the storage.
+    await instance.type('files-search', 'notz')
+    await instance.waitForDisplayed('files-hit-notiz.txt')
+    await instance.click('files-search-clear')
+    await instance.waitForDisplayed('files-entry-notiz.txt')
+    ctx.step('a search in the storage')
+
+    // Up: a file of the device into the storage, through holzi's clipboard.
+    await filesGo(instance, `/device?p=${encodeURIComponent(device.folder)}`)
+    await instance.waitForDisplayed('files-entry-hoch.txt')
+    await contextMenu(instance, 'files-entry-hoch.txt')
+    await instance.click('files-menu-copy')
+    await instance.click('files-storage-Fotos')
+    await instance.waitForDisplayed('files-entry-notiz.txt')
+    await instance.click('files-action-paste')
+    await instance.waitForDisplayed('files-entry-hoch.txt')
+    assert.ok((await listKeys(rustfs, BUCKET)).includes('hoch.txt'))
+    ctx.step('a file went up')
 
     // Deleting asks first: a storage has no trash.
     await contextMenu(instance, 'files-entry-Archiv')
