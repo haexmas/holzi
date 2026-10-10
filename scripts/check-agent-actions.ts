@@ -150,10 +150,7 @@ function nativeExecutorIds(): string[] {
 
 test('every native action has its Rust executor and every executor its action (ADR 0011)', () => {
   const native = ALL_ACTIONS.filter((a) => a.runner === 'native')
-  assert.deepEqual(
-    native.map((a) => a.id).sort(),
-    nativeExecutorIds().sort(),
-  )
+  assert.deepEqual(native.map((a) => a.id).sort(), nativeExecutorIds().sort())
   for (const action of native) {
     // No window is involved: nothing to wait for, nothing to target.
     assert.equal(action.binding, 'global', action.id)

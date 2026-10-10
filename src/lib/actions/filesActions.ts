@@ -192,7 +192,10 @@ export const FILES_ACTIONS: readonly ActionDefinition[] = [
       type: 'object',
       properties: {
         source: SOURCE,
-        path: { ...PATH, description: `The parent folder. ${PATH.description}` },
+        path: {
+          ...PATH,
+          description: `The parent folder. ${PATH.description}`,
+        },
         name: { type: 'string' },
       },
       required: ['source', 'path', 'name'],
