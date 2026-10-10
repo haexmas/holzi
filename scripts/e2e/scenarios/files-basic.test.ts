@@ -42,7 +42,12 @@ const scrollTo = (instance: FlowInstance, name: string) =>
          list.scrollTop += list.clientHeight
          requestAnimationFrame(() => requestAnimationFrame(step))
        }
-       step()
+       if (!list) return resolve(false)
+       // The folder view keeps its scroll offset while the new parent folder is loading. Start at
+       // the top so the search works in either direction, then let the virtual list render before
+       // measuring its bounds.
+       list.scrollTop = 0
+       requestAnimationFrame(() => requestAnimationFrame(step))
      })`,
     [name],
   )
