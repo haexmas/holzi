@@ -651,6 +651,12 @@ als Härtung); lexikalischer Abgleich wie HV.
   mit seiner Kennung, beide mit holzis Kennung der Benachrichtigung; das Klicksignal des Servers wurde dafür mit
   `gdbus emit` gesendet, nachdem der frühere Klick von Hand gezeigt hatte, dass COSMIC es sendet. Windows und macOS
   sind in der CI des Forks gebaut und geprüft (Clippy), aber nicht angeklickt; T099 bleibt bis dahin offen.
+- **Nachtrag (2026-10-10)**: Upstream hat die Desktop-Seite als tauri-apps/plugins-workspace#3671 übernommen
+  (Commit `46381516b7bd7b6915ded698d93e92760b4221d7` auf Zweig `v2`); holzi nimmt das Plugin seitdem von dort statt
+  aus dem Fork, bis ein Release nach 2.5.1 es enthält. Abweichungen zum Fork: Unter Linux und den BSDs hört eine
+  eigene D-Bus-Verbindung (`zbus`) auf die Signale aller Benachrichtigungen statt `notify-rust`s `handle_action` je
+  Benachrichtigung, und Knöpfe erscheinen nur, solange ein Handler oder Listener existiert (holzi registriert
+  `on_action` beim Start). Die Prüfung unter COSMIC oben galt dem Fork.
 
 ## R21 — Passwörter, entfernter Speicher, Mail, Shell (L5)
 
