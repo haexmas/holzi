@@ -52,9 +52,10 @@ pub fn fits(size: Option<u64>, free: Option<u64>) -> bool {
 }
 
 /// The free space of the disk `dir` lies on: the mounted disk with the longest mount point that
-/// holds `dir`.
+/// holds `dir`. On Windows `std::fs::canonicalize` names the path `\\?\C:\…`, which never starts
+/// with a mount point `C:\`; `dunce` keeps the plain form.
 pub fn free_bytes(dir: &Path) -> Option<u64> {
-    let dir = dir.canonicalize().ok()?;
+    let dir = dunce::canonicalize(dir).ok()?;
     let disks = sysinfo::Disks::new_with_refreshed_list();
     disks
         .list()
