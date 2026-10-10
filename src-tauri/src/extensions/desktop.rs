@@ -1,7 +1,8 @@
 //! holzi's [`Desktop`] for extensions in the running app (spec 017, US8): the system's browser
 //! through `tauri-plugin-opener`, and system notifications through `tauri-plugin-notification` on
 //! every platform. Clicks come back through the plugin's `on_action` (research R20, T099); the
-//! plugin is pinned to a fork that reports them on desktop too (Cargo.toml `[patch.crates-io]`).
+//! plugin is pinned to an upstream commit that reports them on desktop too, until a release after
+//! 2.5.1 contains it (Cargo.toml `[patch.crates-io]`).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
