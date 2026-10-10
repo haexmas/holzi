@@ -13,21 +13,52 @@ const { t } = useI18n()
 const queue = ref<FilesAgentPermissionRequest[]>([])
 const current = computed(() => queue.value[0])
 let unlisten: UnlistenFn | undefined
+const requestTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+const PERMISSION_REQUEST_TIMEOUT_MS = 60_000
+
+const emit = defineEmits<{
+  ready: []
+}>()
+
+function removeRequest(requestId: string): void {
+  const timeout = requestTimeouts.get(requestId)
+  if (timeout) clearTimeout(timeout)
+  requestTimeouts.delete(requestId)
+  queue.value = queue.value.filter((request) => request.requestId !== requestId)
+}
 
 onMounted(async () => {
-  unlisten = await listen<FilesAgentPermissionRequest>(
-    'files-agent-permission-request',
-    (event) => {
-      queue.value.push(event.payload)
-    },
-  )
+  try {
+    unlisten = await listen<FilesAgentPermissionRequest>(
+      'files-agent-permission-request',
+      (event) => {
+        const request = event.payload
+        queue.value.push(request)
+        requestTimeouts.set(
+          request.requestId,
+          setTimeout(() => removeRequest(request.requestId), PERMISSION_REQUEST_TIMEOUT_MS),
+        )
+      },
+    )
+  } catch (error) {
+    console.error('[files] listening for agent permission requests failed', error)
+  } finally {
+    emit('ready')
+  }
 })
 
-onBeforeUnmount(() => unlisten?.())
+onBeforeUnmount(() => {
+  unlisten?.()
+  for (const timeout of requestTimeouts.values()) clearTimeout(timeout)
+  requestTimeouts.clear()
+})
 
 async function answerAsync(choice: FilesAgentChoice): Promise<void> {
   const request = queue.value.shift()
   if (!request) return
+  const timeout = requestTimeouts.get(request.requestId)
+  if (timeout) clearTimeout(timeout)
+  requestTimeouts.delete(request.requestId)
   await invoke('files_agent_permission_answer', {
     args: { requestId: request.requestId, choice },
   }).catch((error: unknown) => {

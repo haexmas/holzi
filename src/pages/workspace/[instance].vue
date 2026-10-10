@@ -34,6 +34,12 @@ const language = useLanguage()
 const background = useWorkspaceBackground()
 const dock = useDock()
 
+// The permission dialog must have its event listener before Rust can publish an agent request.
+let resolvePermissionDialogReady!: () => void
+const permissionDialogReady = new Promise<void>((resolve) => {
+  resolvePermissionDialogReady = resolve
+})
+
 // The color scheme is a vault preference: another device or window can change it.
 onVaultTablesChanged(['preferences'], colorScheme.refreshAsync)
 // The appearance (spec 035) is a vault preference too.
@@ -138,6 +144,7 @@ onMounted(async () => {
   // like the sync listener; without it the chat simply has no holzi tools. Wait for the initial
   // registration so the first chat turn cannot race the action list being installed in Rust.
   try {
+    await permissionDialogReady
     await agentActions.startAsync()
   } catch (error: unknown) {
     console.error('[agent] offering the actions to the model failed', error)
@@ -174,7 +181,7 @@ async function consumeDeepLink(): Promise<void> {
     :class="{ 'holzi-keyboard-room': wm.compact }"
   >
     <SyncCopyNotice />
-    <FilesAgentPermissionDialog />
+    <FilesAgentPermissionDialog @ready="resolvePermissionDialogReady" />
     <WmDesktop class="min-h-0 flex-1" />
   </div>
 </template>

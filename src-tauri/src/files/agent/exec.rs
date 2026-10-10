@@ -173,7 +173,7 @@ impl<E: AgentEnv> FilesAgent<E> {
                     .env
                     .known()
                     .iter()
-                    .filter(|place| !own.contains(Path::new(&place.path)))
+                    .filter(|place| !own.contains_resolved(Path::new(&place.path)))
                     .map(|place| json!({ "name": place.name, "path": place.path }))
                     .collect::<Vec<_>>(),
             });
