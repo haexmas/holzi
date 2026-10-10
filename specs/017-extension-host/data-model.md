@@ -168,17 +168,17 @@ Ringpuffer: höchstens 5.000 Einträge je Erweiterung, älteste fallen weg.
 
 ### `sync_parked_groups_no_sync` — geparkte Sync-Gruppe
 
-| Spalte             | Typ                      | Bedeutung                                                                                                  |
-| ------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `id`               | INTEGER PK AUTOINCREMENT |                                                                                                            |
-| `origin`           | TEXT                     | Ursprungsgerät                                                                                             |
-| `hlc`              | TEXT                     | HLC der Gruppe                                                                                             |
-| `extension_prefix` | TEXT                     | `<publicKey>__<name>__`                                                                                    |
-| `tables`           | TEXT                     | JSON-Liste der berührten Tabellen                                                                          |
-| `group_blob`       | BLOB                     | die Gruppe, wie sie ankam                                                                                  |
-| `bytes`            | INTEGER                  | Grenze je Erweiterung 256 MiB; an der Grenze hält der Empfang an, nichts wird verworfen (R10)              |
-| `reason`           | TEXT                     | `missing_table` \| `missing_column` \| `after_parked` \| `awaiting_purge` \| `dev_version` (R10, R11, R16) |
-| `parked_at`        | INTEGER                  |                                                                                                            |
+| Spalte             | Typ                      | Bedeutung                                                                                                               |
+| ------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`               | INTEGER PK AUTOINCREMENT |                                                                                                                         |
+| `origin`           | TEXT                     | Ursprungsgerät                                                                                                          |
+| `hlc`              | TEXT                     | HLC der Gruppe                                                                                                          |
+| `extension_prefix` | TEXT                     | `<publicKey>__<name>__`                                                                                                 |
+| `tables`           | TEXT                     | JSON-Liste der berührten Tabellen                                                                                       |
+| `group_blob`       | BLOB                     | die Gruppe, wie sie ankam                                                                                               |
+| `bytes`            | INTEGER                  | Grenze je Erweiterung 256 MiB; an der Grenze hält der Empfang an, nichts wird verworfen (R10)                           |
+| `reason`           | TEXT                     | `missing_table` \| `missing_column` \| `after_parked` \| `awaiting_purge` \| `dev_version` \| `refetch` (R10, R11, R16) |
+| `parked_at`        | INTEGER                  |                                                                                                                         |
 
 ### `extension_purges_applied_no_sync` — ausgeführtes Aufräumen (lokal)
 

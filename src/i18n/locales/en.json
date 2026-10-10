@@ -835,6 +835,8 @@
       "revoke": "Revoke",
       "devices": "On your devices",
       "unnamedDevice": "Unnamed device",
+      "deviceVersion": "Version {version}",
+      "deviceBehind": "Version {version}, older than here: some data from this device arrives only after it updates",
       "manage": "Manage",
       "enabled": "Enabled",
       "enabledHint": "Applies on all your devices. When disabled its tabs close; the data stays.",
@@ -1346,12 +1348,31 @@
       "guardrails": "Guardrails (user only)",
       "passwords": {
         "read": "Search passwords"
+      },
+      "files": {
+        "read": "Read files",
+        "write": "Change files"
       }
     },
     "passwords": {
       "items": {
         "search": "Search the password manager (titles and tags only)"
       }
+    },
+    "files": {
+      "sources": "List places for files",
+      "list": "List a folder",
+      "stat": "Details of a file",
+      "search": "Search files",
+      "read": "Read a file",
+      "folder": {
+        "create": "Create a folder"
+      },
+      "copy": "Copy files",
+      "rename": "Rename a file",
+      "move": "Move files",
+      "delete": "Delete files",
+      "show": "Show a file in the file browser"
     }
   },
   "passwords": {
@@ -1937,6 +1958,16 @@
         "remoteStorage": "Remote storage",
         "mail": "Mail",
         "shell": "Run programs"
+      },
+      "everyMethod": "all requests",
+      "everything": {
+        "filesystem": "All files and folders",
+        "web": "Every website and server on the internet",
+        "passwords": "All passwords",
+        "remoteStorage": "All storages",
+        "remoteStorageAdd": "Storages on any server",
+        "mail": "All mail servers",
+        "shell": "Any program"
       }
     },
     "permissionRequest": {
@@ -2166,6 +2197,15 @@
       "invalidName": "This name is not allowed.",
       "credentials": "The storage's credentials are missing or were refused.",
       "unreachable": "The storage cannot be reached."
+    },
+    "agentPermission": {
+      "title": "Access to a storage",
+      "read": "The agent in the chat wants to read files in the storage “{name}”.",
+      "readWrite": "The agent in the chat wants to read and change files in the storage “{name}”.",
+      "hint": "holzi remembers your answer for this storage.",
+      "allowRead": "Allow reading",
+      "allowReadWrite": "Allow reading and writing",
+      "deny": "Deny"
     }
   }
 }

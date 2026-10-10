@@ -36,6 +36,7 @@ use std::sync::Arc;
 
 use haex_crdt::{MigrationName, StaticMigrationSource};
 
+use super::migrations_agent_files::AGENT_FILES_0029;
 use super::migrations_extensions::DEV_EXTENSION_KV_0024;
 use super::migrations_extensions::EXTENSIONS_0023;
 use super::migrations_extensions::SYNC_PARKING_0025;
@@ -85,7 +86,9 @@ use super::migrations_storage::STORAGE_0028;
 ///   `haex_passwords_passkey_links`.
 /// - 17: `0027_passwords_owner` (spec 038) added `owner` to `haex_passwords_item_details`.
 /// - 18: `0028_storage_connections` (spec 038) introduced two new CRDT-tracked tables.
-pub const HOLZI_TRIGGER_VERSION: i32 = 18;
+/// - 19: `0029_agent_file_permissions` (spec 044) introduced the CRDT-tracked
+///   `agent_file_permissions`.
+pub const HOLZI_TRIGGER_VERSION: i32 = 19;
 
 /// Returns the frozen holzi migration set at the pinned haex-crdt revision.
 pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
@@ -614,6 +617,10 @@ pub fn holzi_migration_source() -> Arc<StaticMigrationSource> {
     m.insert(
         MigrationName::from("0028_storage_connections"),
         STORAGE_0028.to_owned(),
+    );
+    m.insert(
+        MigrationName::from("0029_agent_file_permissions"),
+        AGENT_FILES_0029.to_owned(),
     );
 
     Arc::new(StaticMigrationSource(m))

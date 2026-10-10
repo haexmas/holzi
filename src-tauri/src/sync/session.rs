@@ -18,6 +18,7 @@ use tokio_util::sync::CancellationToken;
 use crate::sync::content_keys;
 use crate::sync::device_list;
 use crate::sync::handshake::Peer;
+use crate::sync::inbound::park::refetch::Floor;
 use crate::sync::inbound::Inbox;
 use crate::sync::keys::DeviceKeys;
 use crate::sync::outbound::{serve, Served};
@@ -275,13 +276,14 @@ async fn pull_when_behind(
     loop {
         let their_vector = theirs.borrow_and_update().clone();
         changed.mark_unchanged();
-        let own = own_progress(&ctx.replica).await?;
+        // Lowered for parked groups to fetch again ([`Replica::pull_vector`]).
+        let (own, floors) = pull_vector(&ctx.replica).await?;
         // A pull that leaves this device's progress below theirs on purpose (a group not parked
         // at the parking limit, research R10) is not repeated until either side moved: the same
         // pages would otherwise come again at once, over and over.
         let at = (their_vector, own);
         if progress::has_more(&at.0, &at.1) && pulled_at.as_ref() != Some(&at) {
-            pull(ctx, connection, at.1.clone()).await?;
+            pull(ctx, connection, at.1.clone(), floors).await?;
             // The pull may have brought a list that removes the peer.
             ensure_listed(ctx, peer).await?;
             pulled_at = Some(at);
@@ -300,10 +302,11 @@ async fn pull(
     ctx: &SessionContext,
     connection: &Connection,
     own: Vector,
+    floors: Vec<Floor>,
 ) -> Result<(), SessionError> {
-    if !pull_pages(ctx, connection, own, false).await? {
+    if !pull_pages(ctx, connection, own, false, floors.clone()).await? {
         log::info!("sync: this device is too far behind, replacing from a snapshot");
-        if !pull_pages(ctx, connection, Vector::new(), true).await? {
+        if !pull_pages(ctx, connection, Vector::new(), true, floors).await? {
             return Err(SessionError::Protocol("a resync answered a snapshot pull"));
         }
     }
@@ -312,12 +315,14 @@ async fn pull(
 
 /// Sends one `Pull` and applies the pages it is answered with; `false` when
 /// the answer is `Resync` instead. A snapshot (`replace`) also removes the
-/// local rows it did not carry once its last page is applied.
+/// local rows it did not carry once its last page is applied. `floors` are the
+/// parked groups `own` asks for again.
 async fn pull_pages(
     ctx: &SessionContext,
     connection: &Connection,
     own: Vector,
     replace: bool,
+    floors: Vec<Floor>,
 ) -> Result<bool, SessionError> {
     let (mut send, mut recv) = connection.open_bi().await?;
     let request = Message::Pull {
@@ -332,7 +337,8 @@ async fn pull_pages(
         Inbox::for_snapshot()
     } else {
         Inbox::new()
-    };
+    }
+    .refetching(floors);
     let mut tables = BTreeSet::new();
     loop {
         let page = match expect_frame(&mut recv, FRAME_LIMIT).await? {
@@ -409,6 +415,11 @@ async fn serve_pulls(
         send.finish()
             .map_err(|e| SessionError::Stream(e.to_string()))?;
     }
+}
+
+async fn pull_vector(replica: &Arc<Replica>) -> Result<(Vector, Vec<Floor>), SessionError> {
+    let replica = Arc::clone(replica);
+    Ok(tokio::task::spawn_blocking(move || replica.pull_vector()).await??)
 }
 
 async fn own_progress(replica: &Arc<Replica>) -> Result<Vector, SessionError> {

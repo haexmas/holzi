@@ -4,11 +4,13 @@
 //! (`local`, [`FilesError`]).
 
 pub mod access;
+pub mod agent;
 pub mod browser_commands;
 pub mod commands;
 pub mod kind;
 pub mod local;
 pub mod media;
+pub mod permissions;
 pub mod picked;
 pub mod search;
 pub mod state;

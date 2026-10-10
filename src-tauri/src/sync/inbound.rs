@@ -32,8 +32,6 @@ use uuid::Uuid;
 
 use crate::storage::query;
 use crate::sync::change::{group_bytes, join_parts, Change, ChangeError, Page};
-use crate::sync::device_list;
-use crate::sync::keys;
 use crate::sync::progress::{self, Vector};
 use crate::sync::replica::Replica;
 use crate::sync::resync::RowKey;
@@ -49,6 +47,10 @@ use park::{Context, Sorted};
 #[path = "inbound_receive_park.rs"]
 mod receive_park;
 use receive_park::Parking;
+
+#[path = "inbound_removal.rs"]
+mod removal;
+use removal::{is_removed_at, removal_limits};
 
 /// haex-crdt's delete log, a synced table like any other.
 const DELETED_ROWS_TABLE: &str = "haex_deleted_rows";
@@ -133,6 +135,8 @@ pub struct Inbox {
     park_limit: Option<usize>,
     /// Removals applied in earlier pages; a held group may not be written yet.
     noted: Vec<park::Noted>,
+    /// Parked groups this pull asked for again ([`park::refetch`]).
+    refetch: Vec<park::refetch::Floor>,
 }
 
 /// What a snapshot pull carried, for pruning what it did not
@@ -324,6 +328,7 @@ impl Inbox {
                     .map(|c| (c.table_name.clone(), c.row_pks.clone()))
             }));
         }
+        let mut refetched = self.refetched(!page.more, &page.served);
         if !page.more {
             // An origin with a group not parked at the limit is not served
             // completely: its progress stays below that group.
@@ -384,10 +389,12 @@ impl Inbox {
         }
         // Parked groups count as received: stored in the write that moves
         // progress past them, with the state of an extension at its limit.
+        refetched.retain(|(origin, _)| !again.contains(origin));
         if !updates.is_empty()
             || !parking.parked.is_empty()
             || !parking.newly_full.is_empty()
             || !self.full_prefixes.is_empty()
+            || !refetched.is_empty()
         {
             let now_ms = crate::passwords::clock::unix_millis(std::time::SystemTime::now());
             let full_prefixes: Vec<String> = self.full_prefixes.iter().cloned().collect();
@@ -397,6 +404,7 @@ impl Inbox {
                 // parking limit. Re-check every prefix already full in this Inbox so that page
                 // boundaries do not lose the status update.
                 park::note_full(tx, &full_prefixes, db.device_id(), now_ms)?;
+                park::refetch::forget(tx, &refetched)?;
                 progress::advance(tx, &updates)
             })?;
         }
@@ -460,39 +468,6 @@ fn groups(changes: Vec<Change>) -> Result<Vec<(String, Vec<Change>)>, InboundErr
         }
     }
     Ok(groups)
-}
-
-/// Per removed origin its limit in the effective list. Only that list's
-/// removals count (FR-043, FR-005): it carries forward every removal of the
-/// lists it builds on, and a same-generation fork that lost the tie-break has
-/// no say. Two main devices that removed each other each hold such a fork;
-/// counting the losing one would reject everything the remaining main device
-/// writes from then on.
-fn removal_limits(q: &mut impl query::Query) -> haex_crdt::Result<HashMap<Uuid, String>> {
-    let Some(vault) = keys::vault_pubkey(q)? else {
-        return Ok(HashMap::new());
-    };
-    let valid = device_list::valid_lists(&device_list::load_all(q)?, &vault);
-    let Some(effective) = device_list::effective(&valid) else {
-        return Ok(HashMap::new());
-    };
-    let mut limits: HashMap<Uuid, String> = HashMap::new();
-    for removed in &effective.list.removed {
-        let limit = limits
-            .entry(removed.vault_device_uuid)
-            .or_insert_with(|| removed.limit_hlc.clone());
-        if compare_hlc_strings(&removed.limit_hlc, limit) == Ordering::Less {
-            *limit = removed.limit_hlc.clone();
-        }
-    }
-    Ok(limits)
-}
-
-/// Whether a group of `origin` at `hlc` lies beyond its removal limit.
-fn is_removed_at(limits: &HashMap<Uuid, String>, origin: Uuid, hlc: &str) -> bool {
-    limits
-        .get(&origin)
-        .is_some_and(|limit| compare_hlc_strings(hlc, limit) == Ordering::Greater)
 }
 
 #[cfg(test)]

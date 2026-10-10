@@ -41,6 +41,9 @@ export type ActionDefinition = {
   /** `false`: external agents (spec 021) may call the action, the built-in agent may not, because
    * it would re-enter the running chat turn (spec 032, ADR-0006). Absent means `true`. */
   builtinAgentCallable?: boolean
+  /** `native`: runs in Rust without a window (ADR 0011); the frontend registers no handler, the
+   * runner of the window never calls it. Absent: a handler of the window runs it. */
+  runner?: 'native'
   /** `global`: handler registered at startup; `tab`: registered by the mounted app instance
    * (research R19), and the runner opens `appId` first if needed. */
   binding: 'global' | 'tab'

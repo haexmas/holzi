@@ -48,11 +48,11 @@ function onUpdateOpen(open: boolean) {
   >
     <template #content>
       <div class="space-y-3" data-testid="extension-permission-request">
-        <p class="text-sm">
-          {{ t(`extensions.permissions.kinds.${store.shown.kind}`) }} ·
-          {{ store.shown.action }}
-        </p>
-        <p class="font-mono text-xs break-all">{{ store.shown.target }}</p>
+        <ExtensionsPermissionSummary
+          :kind="store.shown.kind"
+          :action="store.shown.action"
+          :target="store.shown.target"
+        />
         <p v-if="!store.shown.declared" class="text-xs text-muted-foreground">
           {{ t('extensions.permissionRequest.notDeclared') }}
         </p>

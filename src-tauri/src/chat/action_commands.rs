@@ -12,11 +12,17 @@ use uuid::Uuid;
 use super::session::ChatState;
 use super::tools::action_bridge::ActionOutcomeWire;
 use super::tools::action_tool::{
-    is_valid_tool_name, schema_in_subset, ActionTool, AgentActionDef, ACTION_SOURCE,
+    is_valid_tool_name, schema_in_subset, ActionRunner, ActionTool, AgentActionDef, ACTION_SOURCE,
 };
 use super::tools::ask_user::{AskUserTool, ASK_USER_TOOL_NAME};
 use super::tools::find_actions::{FindActionsTool, FIND_ACTIONS_TOOL_NAME};
+use super::tools::native_action::NativeActionTool;
+use super::tools::Tool;
 use crate::error::{HolziError, Result};
+
+#[cfg(test)]
+#[path = "action_commands_tests.rs"]
+mod tests;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,9 +44,11 @@ pub struct RespondActionCallArgs {
 }
 
 /// Replaces every tool of the source `action` by `actions`; the host-CLI and MCP tools stay.
-/// Validates first, so a bad push leaves the registry as it was.
+/// Validates first, so a bad push leaves the registry as it was. A native action needs an executor
+/// and every executor its definition (ADR 0011).
 pub fn register_agent_actions(chat: &ChatState, actions: Vec<AgentActionDef>) -> Result<usize> {
     let mut seen = HashSet::new();
+    let mut native = HashSet::new();
     for def in &actions {
         if !is_valid_tool_name(&def.tool_name) {
             return Err(HolziError::InvalidInput {
@@ -65,6 +73,24 @@ pub fn register_agent_actions(chat: &ChatState, actions: Vec<AgentActionDef>) ->
                 ),
             });
         }
+        if def.runner == Some(ActionRunner::Native) {
+            if chat.native_actions.get(&def.action_id).is_none() {
+                return Err(HolziError::InvalidInput {
+                    reason: format!("native action without executor: {}", def.action_id),
+                });
+            }
+            native.insert(def.action_id.as_str());
+        }
+    }
+    if let Some(id) = chat
+        .native_actions
+        .ids()
+        .into_iter()
+        .find(|id| !native.contains(id))
+    {
+        return Err(HolziError::InvalidInput {
+            reason: format!("native executor without definition: {id}"),
+        });
     }
     let count = actions.len();
     let mut registry = chat
@@ -74,7 +100,13 @@ pub fn register_agent_actions(chat: &ChatState, actions: Vec<AgentActionDef>) ->
     registry.remove_source(ACTION_SOURCE);
     let search_defs = actions.clone();
     for def in actions {
-        registry.register(Arc::new(ActionTool::new(def, chat.action_bridge.clone())));
+        let tool: Arc<dyn Tool> = match chat.native_actions.get(&def.action_id) {
+            Some(executor) if def.runner == Some(ActionRunner::Native) => {
+                Arc::new(NativeActionTool::new(def, executor))
+            }
+            _ => Arc::new(ActionTool::new(def, chat.action_bridge.clone())),
+        };
+        registry.register(tool);
     }
     if !search_defs.is_empty() {
         registry.register(Arc::new(FindActionsTool::new(search_defs)));

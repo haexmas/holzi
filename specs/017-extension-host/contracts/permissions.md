@@ -38,7 +38,10 @@ Feste Regeln vor der Auswertung (keine Berechtigung ändert sie): Kerntabellen (
 
 ## Installation
 
-- Jede erklärte Berechtigung erscheint mit Art, Aktion, Ziel; Vorgabe angehakt.
+- Jede erklärte Berechtigung erscheint mit Art, Aktion, Ziel; Vorgabe angehakt. Ein Ziel `*` (außer bei
+  `notifications`, deren einziges Ziel es ist) und die Web-Aktion `*` stehen ausgeschrieben und als Warnung
+  hervorgehoben da („Alle Dateien und Ordner“, „alle Anfragen“), ebenso in der Anfrage zur Laufzeit und in den
+  Einstellungen.
 - Angehakt → `granted`, abgehakt → `ask`; beides mit `declared = 1`.
 - `shell` bekommt die Kennung dieses Geräts, jede andere Art die vault-weite (`PermissionKind::scope_on`). Der
   Dialog bietet keine Wahl; er sagt, dass die Erweiterung in der ganzen Vault installiert wird, und bei `shell`,

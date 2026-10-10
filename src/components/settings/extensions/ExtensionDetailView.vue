@@ -25,6 +25,19 @@ function stateText(status: string, error?: string | null): string {
   return `${text} · ${te(errorKey) ? t(errorKey) : error}`
 }
 
+/**
+ * A device's state and the version it runs; a device with an older version than this one says
+ * that some of its data waits for its update (research R10).
+ */
+function deviceText(device: DeviceState): string {
+  const state = stateText(device.status, device.error)
+  if (!device.version) return state
+  const key = device.behind
+    ? 'settings.extensions.deviceBehind'
+    : 'settings.extensions.deviceVersion'
+  return `${state} · ${t(key, { version: device.version })}`
+}
+
 function deviceTitle(device: DeviceState): string {
   const name = device.deviceName || t('settings.extensions.unnamedDevice')
   return device.thisDevice
@@ -83,7 +96,7 @@ function deviceTitle(device: DeviceState): string {
           v-for="device in extension.devices"
           :key="device.deviceId"
           :title="deviceTitle(device)"
-          :description="stateText(device.status, device.error)"
+          :description="deviceText(device)"
           data-testid="extension-device-state"
         />
       </SettingsGroup>

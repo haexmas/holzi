@@ -1211,5 +1211,350 @@
       "de": "Passwortmanager durchsuchen (nur Titel und Tags)",
       "en": "Search the password manager (titles and tags only)"
     }
+  },
+  {
+    "toolName": "files_sources",
+    "actionId": "files.sources",
+    "description": "Where files can be reached: the drives and known folders of this device (source \"device\") and the storages you have access to (source \"storage:<id>\"). Call it first to learn where to list or search. A storage the user names but that is not listed can be used as \"storage:<name>\"; holzi asks the user then.",
+    "inputSchema": {
+      "type": "object"
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Orte für Dateien auflisten",
+      "en": "List places for files"
+    },
+    "runner": "native"
+  },
+  {
+    "toolName": "files_list",
+    "actionId": "files.list",
+    "description": "List the entries of a folder: name, path, kind (file or dir), size in bytes and the time of the last change. At most `limit` entries (500 by default); `truncated` says there are more.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "\"device\" for the files of this device, \"storage:<id>\" or \"storage:<name>\" for a storage (see files_sources)."
+        },
+        "path": {
+          "type": "string",
+          "description": "On the device an absolute path; in a storage a path from \"/\", such as \"/Fotos/2025\"."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "At most 2000."
+        }
+      },
+      "required": ["source", "path"]
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Ordner auflisten",
+      "en": "List a folder"
+    },
+    "runner": "native"
+  },
+  {
+    "toolName": "files_stat",
+    "actionId": "files.stat",
+    "description": "Details of one file or folder.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "\"device\" for the files of this device, \"storage:<id>\" or \"storage:<name>\" for a storage (see files_sources)."
+        },
+        "path": {
+          "type": "string",
+          "description": "On the device an absolute path; in a storage a path from \"/\", such as \"/Fotos/2025\"."
+        }
+      },
+      "required": ["source", "path"]
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Angaben zu einer Datei",
+      "en": "Details of a file"
+    },
+    "runner": "native"
+  },
+  {
+    "toolName": "files_search",
+    "actionId": "files.search",
+    "description": "Search a folder and everything below it for file and folder names like `query`; small typos still match. Filters: `types`, `sizeMin`/`sizeMax` in bytes, `modifiedAfter`/`modifiedBefore` as YYYY-MM-DD. At most 500 hits, best first; the search stops after 30 seconds, and `truncated` says it did not finish. Hidden files are left out.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "\"device\" for the files of this device, \"storage:<id>\" or \"storage:<name>\" for a storage (see files_sources)."
+        },
+        "path": {
+          "type": "string",
+          "description": "Where to start. On the device an absolute path; in a storage a path from \"/\", such as \"/Fotos/2025\"."
+        },
+        "query": {
+          "type": "string",
+          "description": "Part of the name."
+        },
+        "types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["image", "video", "audio", "document", "text"]
+          }
+        },
+        "sizeMin": {
+          "type": "integer"
+        },
+        "sizeMax": {
+          "type": "integer"
+        },
+        "modifiedAfter": {
+          "type": "string"
+        },
+        "modifiedBefore": {
+          "type": "string"
+        }
+      },
+      "required": ["source", "path", "query"]
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Dateien suchen",
+      "en": "Search files"
+    },
+    "runner": "native"
+  },
+  {
+    "toolName": "files_read",
+    "actionId": "files.read",
+    "description": "Read a file: the text of a text file, at most 200 000 characters (`truncated` says the rest was cut). For other formats you get the details of the file and a `note` why there is no text.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "\"device\" for the files of this device, \"storage:<id>\" or \"storage:<name>\" for a storage (see files_sources)."
+        },
+        "path": {
+          "type": "string",
+          "description": "On the device an absolute path; in a storage a path from \"/\", such as \"/Fotos/2025\"."
+        }
+      },
+      "required": ["source", "path"]
+    },
+    "effect": "read",
+    "core": false,
+    "titles": {
+      "de": "Datei lesen",
+      "en": "Read a file"
+    },
+    "runner": "native"
+  },
+  {
+    "toolName": "files_folder_create",
+    "actionId": "files.folder.create",
+    "description": "Create a folder named `name` in the folder `path`.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "\"device\" for the files of this device, \"storage:<id>\" or \"storage:<name>\" for a storage (see files_sources)."
+        },
+        "path": {
+          "type": "string",
+          "description": "The parent folder. On the device an absolute path; in a storage a path from \"/\", such as \"/Fotos/2025\"."
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": ["source", "path", "name"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Ordner anlegen",
+      "en": "Create a folder"
+    },
+    "runner": "native"
+  },
+  {
+    "toolName": "files_copy",
+    "actionId": "files.copy",
+    "description": "Copy files and folders into the folder `to`, on the same source or onto another one (`toSource`, such as from the device into a storage). A name already taken at the target is skipped (\"skip\", the default), or the copy gets a free name such as \"name (2).txt\" (\"keepBoth\"). A copy never replaces anything.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "\"device\" for the files of this device, \"storage:<id>\" or \"storage:<name>\" for a storage (see files_sources)."
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "On the device an absolute path; in a storage a path from \"/\", such as \"/Fotos/2025\"."
+          },
+          "description": "The files and folders, by path."
+        },
+        "to": {
+          "type": "string",
+          "description": "The folder they go into."
+        },
+        "toSource": {
+          "type": "string",
+          "description": "Where `to` lies, as `source`; the same as `source` when left out."
+        },
+        "onConflict": {
+          "type": "string",
+          "enum": ["skip", "keepBoth"],
+          "description": "What happens to a name already taken at the target."
+        }
+      },
+      "required": ["source", "paths", "to"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Dateien kopieren",
+      "en": "Copy files"
+    },
+    "runner": "native"
+  },
+  {
+    "toolName": "files_rename",
+    "actionId": "files.rename",
+    "description": "Rename a file or folder; `newName` is a name, not a path.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "\"device\" for the files of this device, \"storage:<id>\" or \"storage:<name>\" for a storage (see files_sources)."
+        },
+        "path": {
+          "type": "string",
+          "description": "On the device an absolute path; in a storage a path from \"/\", such as \"/Fotos/2025\"."
+        },
+        "newName": {
+          "type": "string"
+        }
+      },
+      "required": ["source", "path", "newName"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Datei umbenennen",
+      "en": "Rename a file"
+    },
+    "runner": "native"
+  },
+  {
+    "toolName": "files_move",
+    "actionId": "files.move",
+    "description": "Move files and folders into the folder `to`, on the same source or onto another one (`toSource`). A name already taken at the target is skipped (\"skip\", the default), gets a free name (\"keepBoth\"), or is replaced (\"replace\").",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "\"device\" for the files of this device, \"storage:<id>\" or \"storage:<name>\" for a storage (see files_sources)."
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "On the device an absolute path; in a storage a path from \"/\", such as \"/Fotos/2025\"."
+          },
+          "description": "The files and folders, by path."
+        },
+        "to": {
+          "type": "string",
+          "description": "The folder they go into."
+        },
+        "toSource": {
+          "type": "string",
+          "description": "Where `to` lies, as `source`; the same as `source` when left out."
+        },
+        "onConflict": {
+          "type": "string",
+          "enum": ["skip", "keepBoth", "replace"],
+          "description": "What happens to a name already taken at the target."
+        }
+      },
+      "required": ["source", "paths", "to"]
+    },
+    "effect": "destructive",
+    "core": false,
+    "titles": {
+      "de": "Dateien verschieben",
+      "en": "Move files"
+    },
+    "runner": "native"
+  },
+  {
+    "toolName": "files_delete",
+    "actionId": "files.delete",
+    "description": "Delete files and folders. On a computer they go to the trash of the system (`trash` is true); on a phone and in a storage they are gone for good.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "\"device\" for the files of this device, \"storage:<id>\" or \"storage:<name>\" for a storage (see files_sources)."
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "On the device an absolute path; in a storage a path from \"/\", such as \"/Fotos/2025\"."
+          },
+          "description": "The files and folders, by path."
+        }
+      },
+      "required": ["source", "paths"]
+    },
+    "effect": "destructive",
+    "core": false,
+    "titles": {
+      "de": "Dateien löschen",
+      "en": "Delete files"
+    },
+    "runner": "native"
+  },
+  {
+    "toolName": "files_show",
+    "actionId": "files.show",
+    "description": "Show a file or folder to the user: opens the file browser in the folder, or with the file open in its viewer (videos and audio play there).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "\"device\" for the files of this device, \"storage:<id>\" or \"storage:<name>\" for a storage (see files_sources)."
+        },
+        "path": {
+          "type": "string",
+          "description": "On the device an absolute path; in a storage a path from \"/\", such as \"/Fotos/2025\"."
+        }
+      },
+      "required": ["source", "path"]
+    },
+    "effect": "write",
+    "core": false,
+    "titles": {
+      "de": "Datei im Dateibrowser zeigen",
+      "en": "Show a file in the file browser"
+    }
   }
 ]

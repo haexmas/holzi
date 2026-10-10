@@ -18,7 +18,6 @@ use crate::error::Result;
 use crate::extensions::remote_storage_dialog::{StorageAnswer, StorageTrial};
 use crate::passwords::service::PasswordsService;
 use crate::state::AppState;
-use crate::state_utils::active_database;
 
 /// The provider of this process: S3 with the resolver of the operating system.
 pub fn s3_store() -> Arc<dyn RemoteStore> {
@@ -27,8 +26,8 @@ pub fn s3_store() -> Arc<dyn RemoteStore> {
 }
 
 /// The service over the active vault; `VaultClosed` or `NoActiveInstance` when there is none.
-pub(crate) fn service(state: &State<'_, AppState>) -> Result<StorageService> {
-    let db = active_database(state)?;
+pub(crate) fn service(state: &AppState) -> Result<StorageService> {
+    let db = state.database()?;
     let passwords = PasswordsService::with_usage(db.clone(), state.usage());
     Ok(StorageService::new(
         db,

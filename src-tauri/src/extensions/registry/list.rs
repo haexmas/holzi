@@ -31,6 +31,13 @@ pub struct DeviceState {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Version of the bundle the device runs or is getting; none while disabled there.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// Another device with an older version than this one: what it still writes in the older
+    /// form arrives here only once it updated (research R10).
+    pub behind: bool,
 }
 
 /// One extension of the vault.
@@ -156,18 +163,32 @@ pub fn list(q: &mut impl Query, device: Uuid) -> Result<Vec<ExtensionSummary>> {
             continue;
         };
         let manifest = effective_manifest(q, id)?.map(|(_, m)| m);
+        let older = |version: &Option<String>| {
+            let theirs = version
+                .as_deref()
+                .and_then(|v| semver::Version::parse(v).ok());
+            manifest
+                .as_ref()
+                .zip(theirs)
+                .is_some_and(|(m, theirs)| theirs < m.version)
+        };
         let mut devices: Vec<DeviceState> = q.query_map(
-            "SELECT vault_device_uuid, status, error FROM extension_device_status \
-                 WHERE extension_id = ?1",
+            "SELECT s.vault_device_uuid, s.status, s.error, b.version \
+                 FROM extension_device_status s \
+                 LEFT JOIN extension_bundles b ON b.id = s.bundle_id \
+                 WHERE s.extension_id = ?1",
             &[&row.id],
             |r| {
                 let uuid: String = r.get(0)?;
+                let version: Option<String> = r.get(3)?;
                 Ok(DeviceState {
                     device_name: names.get(&uuid).cloned().unwrap_or_default(),
                     this_device: uuid == here,
+                    behind: uuid != here && older(&version),
                     device_id: uuid,
                     status: r.get(1)?,
                     error: r.get(2)?,
+                    version,
                 })
             },
         )?;

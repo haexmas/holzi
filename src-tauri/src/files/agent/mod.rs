@@ -1,0 +1,16 @@
+//! Files for agents (spec 044 US6, contracts/agent-actions.md): the native executor of the
+//! `files.*` actions, what it needs from the app, and the question for a storage permission.
+
+pub mod commands;
+pub mod env;
+pub mod exec;
+mod exec_write;
+pub mod prompt;
+mod reach;
+
+#[cfg(test)]
+mod exec_tests;
+#[cfg(test)]
+mod exec_write_tests;
+#[cfg(test)]
+mod test_env;

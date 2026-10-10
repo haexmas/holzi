@@ -71,6 +71,19 @@ impl Replica {
         Ok(vector)
     }
 
+    /// What a pull asks for: [`Self::progress`], lowered to right before every parked group to
+    /// fetch again, and those groups ([`crate::sync::inbound::park::refetch`]). The stored
+    /// progress stays; serving and presence use that.
+    pub fn pull_vector(
+        &self,
+    ) -> haex_crdt::Result<(Vector, Vec<crate::sync::inbound::park::refetch::Floor>)> {
+        let mut vector = self.progress()?;
+        let floors = query::read(&self.db, |r| {
+            crate::sync::inbound::park::refetch::floors(r, &mut vector)
+        })?;
+        Ok((vector, floors))
+    }
+
     pub fn db(&self) -> &Database {
         &self.db
     }

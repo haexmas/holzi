@@ -19,6 +19,7 @@ use crate::chat::choices::PendingChoices;
 use crate::chat::tools::action_bridge::ActionBridge;
 use crate::chat::tools::cli::CliTool;
 use crate::chat::tools::mcp::{self, McpServerConfig};
+use crate::chat::tools::native_action::NativeExecutors;
 use crate::chat::tools::{ApprovalDecision, Tool, ToolRegistry};
 use crate::storage::providers::ProviderKind;
 use crate::vault_gate::ChildRegistry;
@@ -162,6 +163,8 @@ pub struct ChatState {
     pub tool_registry: Arc<Mutex<ToolRegistry>>,
     /// The round trip to the action runner in the webview (spec 032, ADR-0006).
     pub action_bridge: ActionBridge,
+    /// The Rust executors of catalog actions with `runner: 'native'` (ADR 0011).
+    pub native_actions: NativeExecutors,
     pub pending_tool_approvals: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ApprovalDecision>>>>,
     /// Session-lifetime tombstones make late replies to cancelled prompts harmless.
     pub cancelled_tool_approvals: Arc<Mutex<HashSet<Uuid>>>,
@@ -183,6 +186,7 @@ impl Clone for ChatState {
             current_generation: Arc::clone(&self.current_generation),
             tool_registry: Arc::clone(&self.tool_registry),
             action_bridge: self.action_bridge.clone(),
+            native_actions: self.native_actions.clone(),
             pending_tool_approvals: Arc::clone(&self.pending_tool_approvals),
             cancelled_tool_approvals: Arc::clone(&self.cancelled_tool_approvals),
             pending_choices: Arc::clone(&self.pending_choices),
@@ -211,6 +215,7 @@ impl ChatState {
             current_generation: Arc::new(Mutex::new(None)),
             tool_registry: Arc::new(Mutex::new(registry)),
             action_bridge: ActionBridge::default(),
+            native_actions: NativeExecutors::default(),
             pending_tool_approvals: Arc::new(Mutex::new(HashMap::new())),
             cancelled_tool_approvals: Arc::new(Mutex::new(HashSet::new())),
             pending_choices: Arc::new(PendingChoices::default()),
