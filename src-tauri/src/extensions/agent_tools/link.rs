@@ -20,8 +20,8 @@ use rmcp::{ClientHandler, ErrorData as McpError, ServiceExt};
 use serde_json::Value;
 
 /// The client side of a tool connection. It declares no capabilities and answers every request of
-/// the extension with "method not found" (research R2): this connection carries holzi's calls of
-/// the extension's tools and nothing else. A route from an extension to the agent, with a model the
+/// the extension except `ping` with "method not found" (research R2): this connection carries
+/// holzi's calls of the extension's tools and nothing else. A route from an extension to the agent, with a model the
 /// user chose, is later work (spec 047 and after) and does not run over this connection.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ToolClient;
@@ -67,7 +67,9 @@ impl ClientHandler for ToolClient {
 pub type Link = RunningService<RoleClient, ToolClient>;
 
 /// Connects to an extension and runs the MCP handshake. Messages that are not JSON-RPC are dropped;
-/// the connection ends when `receive` ends.
+/// the connection ends when `receive` ends. The handshake has no time limit of its own: a frame
+/// that stays open but never answers `initialize` keeps this pending, so the caller bounds it
+/// (research R9).
 pub async fn connect<F>(
     send: F,
     receive: UnboundedReceiver<Value>,

@@ -66,6 +66,17 @@ async fn every_request_of_the_extension_is_refused() {
     }
 }
 
+/// `ping` is the one request holzi answers (contracts/mcp-port.md).
+#[tokio::test]
+async fn a_ping_of_the_extension_is_answered() {
+    let pipe = pipe().await;
+    let id = json!(905);
+    pipe.inject(json!({ "jsonrpc": "2.0", "id": 905, "method": "ping" }));
+    let reply = pipe.client_reply(&id).await;
+    assert_eq!(reply["result"], json!({}), "{reply}");
+    assert!(reply.get("error").is_none(), "{reply}");
+}
+
 #[tokio::test]
 async fn a_malformed_message_from_the_extension_is_dropped() {
     let pipe = pipe().await;
