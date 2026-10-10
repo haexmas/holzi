@@ -52,7 +52,8 @@ Technischer Ansatz (Begründungen und verworfene Alternativen in [research.md](.
 (strict), Vue 3.5, Nuxt 4.5.2 (SPA), Node 22.19 für Prüf- und e2e-Skripte
 
 **Primary Dependencies**: vorhanden — tauri 2.12.1, tauri-plugin-dialog 2.8.1,
-tauri-plugin-fs 2.6.0, tauri-plugin-notification (Fork `haexmas/plugins-workspace@b38883e`),
+tauri-plugin-fs 2.6.0, tauri-plugin-notification (`tauri-apps/plugins-workspace@4638151`,
+vorher Fork `haexmas/plugins-workspace@b38883e`),
 wry (Fork `haexmas/wry@47037dd`), rustls-platform-verifier 0.7.1, reqwest 0.13.5,
 haex-crdt `928d06a`, mistralrs 0.8.1, candle, cpal 0.18.2, sysinfo 0.39.6, iroh, nostr-sdk.
 **Neu**: Rust `jni` 0.22 und `ndk-context` 0.1 (nur Android); `lettre` per Patch aus

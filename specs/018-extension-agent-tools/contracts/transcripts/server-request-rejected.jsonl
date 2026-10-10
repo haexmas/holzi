@@ -1,0 +1,2 @@
+{"dir":"s2c","message":{"jsonrpc":"2.0","id":901,"method":"sampling/createMessage","params":{"messages":[{"role":"user","content":{"type":"text","text":"hi"}}],"maxTokens":10}}}
+{"dir":"c2s","message":{"jsonrpc":"2.0","id":901,"error":{"code":-32601,"message":"sampling/createMessage"}}}
