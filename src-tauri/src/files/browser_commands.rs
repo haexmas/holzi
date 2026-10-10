@@ -24,6 +24,7 @@ use crate::files::state::FilesState;
 use crate::files::storage_source::{object_key, storage_error, StorageFiles};
 use crate::files::streaming::{LocalFileSource, StorageFileSource};
 use crate::files::transfer::local::{prepare, touches_own, Job};
+use crate::files::transfer::remote::{prepare_remote, RemoteJob, Side};
 use crate::files::transfer::{
     platform_removal, same_device, ConflictChoice, TransferEvent, TransferManager, TransferOp,
 };
@@ -98,12 +99,64 @@ fn storage_of(source: &SourceRef) -> Option<&str> {
     }
 }
 
-/// The answer for what storages cannot do before the transfers across sources (PR F2).
-fn later() -> FilesError {
-    FilesError::new(
-        FilesErrorCode::Unsupported,
-        "copying to and from storages comes with a later version",
-    )
+/// One end of a transfer across sources.
+async fn side_of(state: &State<'_, AppState>, source: &SourceRef) -> Result<Side, FilesError> {
+    Ok(match storage_of(source) {
+        Some(id) => Side::Storage(Arc::new(storage_files(state, id).await?)),
+        None => Side::Device,
+    })
+}
+
+/// Copies or moves between sources (US5): the device paths are checked as for a local transfer
+/// (FR-037), then the job is listed and checked (into itself, space) before it starts.
+#[allow(clippy::too_many_arguments)]
+async fn start_remote(
+    state: &State<'_, AppState>,
+    files: &FilesState,
+    transfers: &TransferManager,
+    op: TransferOp,
+    from: &SourceRef,
+    paths: &[String],
+    to: TransferTarget,
+    channel: Channel<TransferEvent>,
+) -> Result<String, FilesError> {
+    let want = if op == TransferOp::Copy {
+        Want::Read
+    } else {
+        Want::Write
+    };
+    let sources = match storage_of(from) {
+        Some(_) => paths.to_vec(),
+        None => paths
+            .iter()
+            .map(|path| {
+                device_entry(files, from, path, want)
+                    .map(|real| real.to_string_lossy().into_owned())
+            })
+            .collect::<Result<_, _>>()?,
+    };
+    let target = match storage_of(&to.source) {
+        Some(_) => to.path.clone(),
+        None => device_path(files, &to.source, &to.path, Want::Write)?
+            .to_string_lossy()
+            .into_owned(),
+    };
+    let job = RemoteJob {
+        op,
+        from: side_of(state, from).await?,
+        sources,
+        to: side_of(state, &to.source).await?,
+        target,
+    };
+    let (job, plan) = blocking(move || {
+        let handle = tokio::runtime::Handle::current();
+        let plan = prepare_remote(&job, &handle, |path| {
+            crate::files::local::drives::space(path).map(|(_, free)| free)
+        })?;
+        Ok((job, plan))
+    })
+    .await?;
+    transfers.start_remote(state.gate(), job, plan, channel)
 }
 
 /// A change in a watched folder; the window reloads it.
@@ -457,13 +510,17 @@ pub fn files_unwatch(files: State<'_, FilesState>, id: u64) {
 
 /// Opens a file with the system's app for it (FR-014).
 #[tauri::command]
-pub fn files_open_system(
+pub async fn files_open_system(
     app: AppHandle,
+    state: State<'_, AppState>,
     files: State<'_, FilesState>,
     source: SourceRef,
     path: String,
 ) -> Result<(), FilesError> {
-    let real = device_path(&files, &source, &path, Want::Read)?;
+    let real = match storage_of(&source) {
+        Some(id) => download_to_open(&state, &files, id, &path).await?,
+        None => device_path(&files, &source, &path, Want::Read)?,
+    };
     #[cfg(desktop)]
     {
         use tauri_plugin_opener::OpenerExt;
@@ -485,6 +542,51 @@ pub fn files_open_system(
             "not on this platform yet",
         ))
     }
+}
+
+/// A file of a storage, downloaded into holzi's cache so the system's app can open it (FR-014;
+/// the copy stays until the cache is cleared).
+async fn download_to_open(
+    state: &State<'_, AppState>,
+    files: &FilesState,
+    storage_id: &str,
+    path: &str,
+) -> Result<PathBuf, FilesError> {
+    let storage = storage_files(state, storage_id).await?;
+    let entry = storage.stat(path).await?;
+    if entry.kind != EntryKind::File {
+        return Err(FilesError::invalid_path("not a file"));
+    }
+    let folder = files
+        .thumbnails
+        .parent()
+        .unwrap_or(&files.thumbnails)
+        .join("files-opened")
+        .join(uuid::Uuid::new_v4().to_string());
+    let target = folder.join(&entry.name);
+    let mut reader = storage
+        .store()
+        .get_range(
+            storage.access(),
+            &object_key(path)?,
+            0,
+            entry.size.unwrap_or(0),
+            tokio::time::Instant::now() + std::time::Duration::from_secs(60),
+        )
+        .await
+        .map_err(storage_error)?;
+    let written = async {
+        tokio::fs::create_dir_all(&folder).await?;
+        let mut file = tokio::fs::File::create(&target).await?;
+        tokio::io::copy(&mut reader, &mut file).await?;
+        Ok::<(), std::io::Error>(())
+    }
+    .await;
+    if written.is_err() {
+        let _ = tokio::fs::remove_dir_all(&folder).await;
+        return Err(storage_error(crate::remote_storage::StorageError::Network));
+    }
+    Ok(target)
 }
 
 /// Creates a folder (FR-017).
@@ -600,19 +702,18 @@ pub async fn files_transfer_start(
     to: Option<TransferTarget>,
     channel: Channel<TransferEvent>,
 ) -> Result<String, FilesError> {
-    if let Some(id) = storage_of(&from) {
+    if let (Some(id), TransferOp::Delete) = (storage_of(&from), op) {
         // A storage has no trash: the window asked before (FR-023).
-        if op != TransferOp::Delete {
-            return Err(later());
-        }
         let storage = storage_files(&state, id).await?;
         return transfers.start_storage_delete(state.gate(), storage, paths, channel);
     }
-    if to
-        .as_ref()
-        .is_some_and(|target| storage_of(&target.source).is_some())
-    {
-        return Err(later());
+    let crosses = storage_of(&from).is_some()
+        || to
+            .as_ref()
+            .is_some_and(|target| storage_of(&target.source).is_some());
+    if crosses {
+        let to = to.ok_or_else(|| FilesError::invalid_path("no target folder"))?;
+        return start_remote(&state, &files, &transfers, op, &from, &paths, to, channel).await;
     }
     start_transfer(&state, &files, &transfers, op, &from, &paths, to, channel).await
 }
@@ -628,7 +729,17 @@ pub async fn files_import_dropped(
     channel: Channel<TransferEvent>,
 ) -> Result<String, FilesError> {
     if storage_of(&to.source).is_some() {
-        return Err(later());
+        return start_remote(
+            &state,
+            &files,
+            &transfers,
+            TransferOp::Copy,
+            &SourceRef::Device,
+            &paths,
+            to,
+            channel,
+        )
+        .await;
     }
     start_transfer(
         &state,
@@ -673,7 +784,7 @@ pub fn files_transfer_retry(
 /// Searches the folder `path` and below by name (FR-027 to FR-030); hits come through `channel`.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub fn files_search_start(
+pub async fn files_search_start(
     state: State<'_, AppState>,
     files: State<'_, FilesState>,
     searches: State<'_, SearchManager>,
@@ -684,7 +795,6 @@ pub fn files_search_start(
     show_hidden: bool,
     channel: Channel<FilesSearchEvent>,
 ) -> Result<String, FilesError> {
-    let root = device_path(&files, &source, &path, Want::Read)?;
     let options = SearchOptions {
         filters,
         show_hidden,
@@ -692,6 +802,11 @@ pub fn files_search_start(
         hide_own: false,
         limits: SearchLimits::USER,
     };
+    if let Some(id) = storage_of(&source) {
+        let storage = storage_files(&state, id).await?;
+        return searches.start_storage(state.gate(), storage, path, query, options, channel);
+    }
+    let root = device_path(&files, &source, &path, Want::Read)?;
     searches.start(state.gate(), root, query, options, channel)
 }
 
