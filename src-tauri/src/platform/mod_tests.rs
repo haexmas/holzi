@@ -1,4 +1,6 @@
-use super::{capabilities, desktop, os_name, PlatformCapabilities, PlatformName, ANDROID};
+use super::{
+    capabilities, desktop, os_name, ModelPresets, PlatformCapabilities, PlatformName, ANDROID,
+};
 
 #[test]
 fn desktop_offers_every_desktop_facility() {
@@ -13,6 +15,7 @@ fn desktop_offers_every_desktop_facility() {
     assert!(table.relaunch_on_close);
     assert!(!table.screen_capture);
     assert!(!table.back_gesture);
+    assert_eq!(table.model_presets, ModelPresets::Desktop);
 }
 
 #[test]
@@ -37,6 +40,7 @@ fn android_has_none_of_the_desktop_facilities() {
             relaunch_on_close: false,
             screen_capture: true,
             back_gesture: true,
+            model_presets: ModelPresets::Phone,
         }
     );
 }

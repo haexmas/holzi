@@ -109,6 +109,9 @@ const canInstall = computed(
 
 const downloadModelId = computed(() => preview.value?.modelId ?? '')
 
+/** The question before the download (spec 043 FR-028). */
+const confirmOpen = ref(false)
+
 async function installAsync() {
   if (!preview.value || !selectedFile.value || !canInstall.value) return
   installing.value = true
@@ -303,10 +306,16 @@ onMounted(loadDetailsAsync)
             type="button"
             :disabled="!canInstall"
             :loading="installing"
-            @click="installAsync"
+            @click="confirmOpen = true"
           >
             {{ t('models.filePicker.install') }}
           </UiButton>
+          <ModelsDownloadConfirmStep
+            v-model:open="confirmOpen"
+            :target="{ kind: 'file', sizeBytes: preview.sizeBytes ?? null }"
+            :name="preview.name"
+            @confirm="installAsync"
+          />
         </template>
       </div>
     </div>

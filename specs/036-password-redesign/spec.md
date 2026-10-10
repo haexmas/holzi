@@ -160,7 +160,8 @@ Die Liste zeigt über sich die **Brotkrumen** des aktuellen Ordners („Alle Ein
 › Server“); jeder Teil außer dem letzten ist ein Ziel zum Hineinspringen. Wer mehrere
 Einträge oder Ordner markiert, sieht an Stelle der Brotkrumen die **Auswahlleiste** mit der
 Anzahl, „Alle auswählen“ und den Aktionen **Ausschneiden**, **Kopieren**, Tags, Löschen und
-(bei genau einem Eintrag) Bearbeiten. Ausgeschnittene oder kopierte Einträge liegen in der
+(bei genau einem Eintrag) Bearbeiten. Solange er Einträge zieht, stehen dort wieder die
+Brotkrumen, damit er die Auswahl auf einen ihrer Teile fallen lassen kann (Spec 043, T080). Ausgeschnittene oder kopierte Einträge liegen in der
 **Ablage** der Einträge; im Zielordner fügt der Nutzer sie mit **Einfügen** ein. Ausgeschnitten
 heißt verschieben, kopiert heißt Kopien anlegen, auch von ganzen Ordnern samt Inhalt.
 

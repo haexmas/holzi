@@ -86,6 +86,8 @@ use models::commands::{
     install_huggingface_update, list_installed_models, preview_huggingface_install,
     search_huggingface_models,
 };
+use models::download_check::model_download_check;
+use models::stand_in::e2e_stand_in_models;
 use passwords::commands::agent::passwords_agent_search;
 use passwords::commands::attachments::{
     passwords_attachment_add, passwords_attachment_preview, passwords_attachment_remove,
@@ -408,6 +410,8 @@ pub fn run() {
             refresh_provider_models,
             list_provider_models,
             download_model_from_catalog,
+            model_download_check,
+            e2e_stand_in_models,
             download_model_from_hf,
             import_model_from_file,
             list_installed_models,

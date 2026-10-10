@@ -28,6 +28,24 @@ pub struct Insets {
 #[cfg(not(target_os = "android"))]
 pub use other::HolziAndroid;
 
+pub use tauri::plugin::PermissionState;
+
+/// A runtime permission the app asks the person for (research R12).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Permission {
+    /// Recording audio for the speech input (FR-029).
+    Microphone,
+}
+
+impl Permission {
+    /// The alias the Kotlin plugin declares it under.
+    pub fn alias(self) -> &'static str {
+        match self {
+            Permission::Microphone => "microphone",
+        }
+    }
+}
+
 /// Access to the platform code from any [`Manager`].
 pub trait HolziAndroidExt<R: Runtime> {
     fn holzi_android(&self) -> &HolziAndroid<R>;

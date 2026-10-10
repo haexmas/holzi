@@ -151,27 +151,35 @@ export async function contextMenu(
 }
 
 /** Drags the element found by `from` onto the one found by `to` with the events of HTML drag and
- * drop and one shared `DataTransfer`, as the browser does (the rig has no pointer actions). */
+ * drop and one shared `DataTransfer`, as the browser does (the rig has no pointer actions). The
+ * target is looked for once the drag has started: some only show while something is dragged (the
+ * breadcrumbs of the password list during a selection). */
 export async function dragTo(
   instance: FlowInstance,
   from: string,
   to: string,
 ): Promise<void> {
   await instance.waitForDisplayed(from)
+  await instance.exec(
+    `const source = document.querySelector('[data-testid="' + arguments[0] + '"]')
+     const data = new DataTransfer()
+     window.__e2eDrag = { source, data }
+     source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: data }))
+     return true`,
+    [from],
+  )
   await instance.waitForDisplayed(to)
   await instance.exec(
-    `const find = (hook) => document.querySelector('[data-testid="' + hook + '"]')
-     const source = find(arguments[0])
-     const target = find(arguments[1])
-     const data = new DataTransfer()
+    `const { source, data } = window.__e2eDrag
+     delete window.__e2eDrag
+     const target = document.querySelector('[data-testid="' + arguments[0] + '"]')
      const fire = (el, type) => el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data }))
-     fire(source, 'dragstart')
      fire(target, 'dragenter')
      fire(target, 'dragover')
      fire(target, 'drop')
      fire(source, 'dragend')
      return true`,
-    [from, to],
+    [to],
   )
 }
 

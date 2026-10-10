@@ -25,7 +25,7 @@ export type PlatformExclusion =
     }
 
 /** False from stage 5 on: every scenario then runs or is excluded for good (SC-007). */
-export const PENDING_ALLOWED = true
+export const PENDING_ALLOWED = false
 
 /** The least share of the desktop scenarios that must run on Android (SC-007). */
 export const MINIMUM_COVERAGE = 0.8
@@ -54,14 +54,6 @@ export const EXCLUSIONS: PlatformExclusion[] = [
     reason:
       'closing the vault ends the app on Android; there is no relaunch (FR-006)',
     counterCase: 'lock-twice',
-  },
-  {
-    scenario: 'passwords-organize',
-    platform: 'android',
-    kind: 'pending',
-    stage: '2',
-    reason:
-      'drops a selection on the breadcrumbs, which hide while a selection is active (spec 036); on Linux the drop lands while they fade out, on the emulator they are already gone. To be settled in spec 036 before stage 2',
   },
 ]
 

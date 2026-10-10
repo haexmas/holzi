@@ -100,10 +100,22 @@ export function phoneControls(adb: Adb): PhoneControls {
     },
     notificationTitles: () =>
       notificationTitles(adb.shell('dumpsys', 'notification', '--noredact')),
+    // Not granted until now, so marking it decided does not end the app.
+    refuseMicrophone: () => {
+      adb.shell(
+        'pm',
+        'set-permission-flags',
+        PACKAGE,
+        MICROPHONE,
+        'user-set',
+        'user-fixed',
+      )
+    },
   }
 }
 
 const NOTIFICATIONS = 'android.permission.POST_NOTIFICATIONS'
+const MICROPHONE = 'android.permission.RECORD_AUDIO'
 
 /** The titles of the app's notifications in the output of `dumpsys notification --noredact`. */
 export function notificationTitles(dump: string): string[] {
