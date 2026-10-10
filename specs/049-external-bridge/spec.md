@@ -473,11 +473,15 @@ einen Dialog oder eine Antwort mit Daten auslöst.
   den Client laufen (Kennung des Clients aus der Verbindung, nie aus dem Inhalt einer Anfrage) und
   mit der Freigabe seiner Zulassung. Kein Weg DARF die Tabellen am Dienst vorbei lesen oder
   schreiben (034 FR-024).
-- **FR-015**: Verlangt eine Methode die Art „Lesen und Schreiben“ und hat der Client nur „Lesen“,
+- **FR-015**: Verlangt eine Methode die Art „Lesen und Schreiben“ und hat die Zulassung nur „Lesen“,
   MUSS holzi eine Anfrage wie in 017 zeigen (Erlauben, Ablehnen, Merken; Merken erweitert die
-  Freigabe der Zulassung) und die Antwort an den Client bis zu 120 Sekunden zurückhalten; danach
-  scheitert die Methode mit `PERMISSION_PROMPT_TIMEOUT`. Eine gemerkte Ablehnung MUSS ohne Anfrage
-  gelten.
+  Freigabe der Zulassung), aber nur, wenn die Handshake-Erklärung des Clients Schreiben einschließt.
+  Fehlt Schreiben in der Erklärung, MUSS holzi die Methode ohne Anfrage ablehnen; auch eine gemerkte
+  Erweiterung darf nie über die erklärte Freigabe hinausgehen. Aktiviert die Anfrage das Anlegen von
+  Einträgen, MUSS der Nutzer vor dem Zulassen einen Standard-Tag innerhalb des tag-begrenzten Bereichs
+  wählen; das gilt auch, wenn er die Erweiterung merkt. holzi MUSS die Antwort an den Client bis zu
+  120 Sekunden zurückhalten; danach scheitert die Methode mit `PERMISSION_PROMPT_TIMEOUT`. Eine
+  gemerkte Ablehnung MUSS ohne Anfrage gelten.
 - **FR-016**: Für Einträge außerhalb des Bereichs DARF holzi nie fragen; sie sind für den Client nicht
   vorhanden (034 FR-029), damit eine Frage ihr Dasein nicht verrät.
 - **FR-017**: Ein Client DARF keine Einträge löschen und weder Ordner, Tags, Papierkorb, Verlauf,

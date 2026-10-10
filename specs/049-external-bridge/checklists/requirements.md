@@ -37,8 +37,8 @@
   haex-vault (repository, full revision, path). That is the compatibility contract the feature
   exists for, in the house style of 034, 036 and 048; the requirements stay at the level of
   behaviour otherwise.
-- The answers under Clarifications are proposals of the spec, grounded in holzi's grant model
-  (034, 017) and haex-vault's behaviour; they await operator confirmation.
+- The answers under Clarifications were confirmed by the operator on 2026-10-10 and are ready
+  for planning.
 - Bookmark sync of the extension runs over the same connection but is out of scope (FR-028).
 - Passkeys need two small changes to the extension (origin, longer wait); autofill, TOTP and
   saving work with the pinned revision unchanged (section "Änderungen an haex-pass-browser").
