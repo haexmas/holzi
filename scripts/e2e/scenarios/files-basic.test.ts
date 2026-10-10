@@ -8,7 +8,8 @@ import { runAction } from '../lib/settings.ts'
 
 // Spec 044, US1, quickstart §1 (T035 part 1): the file browser lists a folder, opens a text and an
 // image, switches to the grid with a thumbnail, shows a file another program creates, goes up one
-// folder and back into the folder through the list.
+// folder and back into the folder through the list. A long folder keeps its scroll position when it
+// loads again.
 
 const textOf = (instance: FlowInstance, hook: string) =>
   instance.exec<string>(
@@ -23,6 +24,11 @@ const entryNames = (instance: FlowInstance) =>
        .map((el) => el.getAttribute('data-testid').slice('files-entry-'.length))`,
   )
 
+const scrollTop = (instance: FlowInstance) =>
+  instance.exec<number>(
+    `const el = document.querySelector('[data-testid="files-entries"]')
+     return el ? el.scrollTop : -1`,
+  )
 /** Scrolls the virtual list until the entry `name` is rendered (a busy parent folder, like a shared
  * temporary folder, can push it below the first screen). */
 const scrollTo = (instance: FlowInstance, name: string) =>
@@ -36,7 +42,12 @@ const scrollTo = (instance: FlowInstance, name: string) =>
          list.scrollTop += list.clientHeight
          requestAnimationFrame(() => requestAnimationFrame(step))
        }
-       step()
+       if (!list) return resolve(false)
+       // The folder view keeps its scroll offset while the new parent folder is loading. Start at
+       // the top so the search works in either direction, then let the virtual list render before
+       // measuring its bounds.
+       list.scrollTop = 0
+       requestAnimationFrame(() => requestAnimationFrame(step))
      })`,
     [name],
   )
@@ -87,6 +98,20 @@ scenario('files-basic', { timeoutMs: 180_000 }, async (ctx) => {
     files.write('neu.txt', 'neu')
     await instance.waitForDisplayed('files-entry-neu.txt', 15_000)
 
+    // A long folder keeps where it was scrolled to when it loads again; the virtual list mounts
+    // only the rows on screen, so the new last entry shows only if the list stayed at the end.
+    for (let i = 0; i < 80; i++) {
+      files.write(`zeile-${String(i).padStart(3, '0')}.txt`, `${i}`)
+    }
+    await instance.waitForDisplayed('files-entry-zeile-000.txt', 15_000)
+    await instance.exec(
+      `document.querySelector('[data-testid="files-entries"]').scrollTop = 1e6`,
+    )
+    await instance.waitForDisplayed('files-entry-zeile-079.txt')
+    files.write('zeile-999.txt', 'ende')
+    await instance.waitForDisplayed('files-entry-zeile-999.txt', 15_000)
+    assert.ok((await scrollTop(instance)) > 0, 'the list stayed scrolled')
+
     // Up one folder and back into the folder through the list.
     await instance.click('files-up')
     await ctx.waitFor('the folder in its parent', () =>
@@ -94,6 +119,8 @@ scenario('files-basic', { timeoutMs: 180_000 }, async (ctx) => {
     )
     await instance.click(`files-entry-${folderName}`)
     await instance.waitForDisplayed('files-entry-notiz.txt')
+    // A folder opened again starts at the top.
+    assert.equal(await scrollTop(instance), 0)
   } finally {
     files.remove()
   }
