@@ -819,7 +819,11 @@ erscheint), Entwicklermodus ausschalten (Erweiterung verschwindet).
   Zeilen für eine Tabelle oder Spalte, die eine bereits angewendete Migration entfernt oder
   umbenannt hat, stammen von einem Gerät mit älterer Fassung: Sie MÜSSEN warten, bis dieses
   Gerät aktualisiert hat, und dann in der Form übernommen werden, die seine Migration ihnen
-  gegeben hat. Sie DÜRFEN den Sync der Erweiterung nicht dauerhaft anhalten.
+  gegeben hat. Sie DÜRFEN den Sync der Erweiterung nicht dauerhaft anhalten, auch nicht,
+  wenn das Gerät sie aufbewahrt hat, bevor es selbst diese Migration anwandte. Die
+  Einstellungen der Erweiterung MÜSSEN je Gerät dessen Fassung zeigen und ein Gerät mit
+  älterer Fassung als hier so kennzeichnen, dass erkennbar ist: Daten von diesem Gerät kommen
+  teils erst nach seinem Update an.
 - **FR-038**: Kommt ein Update an, MUSS ein Gerät dessen neue Migrationen anwenden, bevor es
   die neue Fassung startet. Offene Tabs MÜSSEN neu laden oder einen Hinweis zeigen.
 - **FR-039**: Entfernen und Deaktivieren MÜSSEN auf allen eigenen Geräten wirken.
