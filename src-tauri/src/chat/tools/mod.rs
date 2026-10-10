@@ -23,6 +23,9 @@ pub mod find_actions;
 pub mod mcp;
 #[cfg(test)]
 mod mcp_tests;
+pub mod native_action;
+#[cfg(test)]
+mod native_action_tests;
 pub mod offer;
 #[cfg(test)]
 mod offer_tests;

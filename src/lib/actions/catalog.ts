@@ -4,6 +4,7 @@
 import { WM_NAVIGATION_ACTIONS, WM_OPEN_ACTIONS } from './wmActions.ts'
 import { WM_LAYOUT_ACTIONS, WM_READ_ACTIONS } from './wmLayoutActions.ts'
 import { CHAT_ACTIONS, CHAT_MODEL_ACTIONS } from './chatActions.ts'
+import { FILES_ACTIONS } from './filesActions.ts'
 import { PASSWORDS_ACTIONS } from './passwordsActions.ts'
 import { SETTINGS_ACTIONS } from './settingsActions.ts'
 import type { ActionDefinition } from './types.ts'
@@ -17,4 +18,5 @@ export const ALL_ACTIONS: readonly ActionDefinition[] = [
   ...CHAT_MODEL_ACTIONS,
   ...SETTINGS_ACTIONS,
   ...PASSWORDS_ACTIONS,
+  ...FILES_ACTIONS,
 ]

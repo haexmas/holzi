@@ -227,8 +227,9 @@ pub fn put_storage(tx: &mut CrdtTransaction<'_>, row: &StorageRow) -> Result<()>
     Ok(())
 }
 
-/// Removes a storage, its test result and every permission of an extension that names it, in the
-/// one write of `tx` (FR-007). A permission for `*` stays: it names no storage.
+/// Removes a storage, its test result and every permission of an extension or an agent that names
+/// it, in the one write of `tx` (FR-007, spec 044 R14). A permission for `*` stays: it names no
+/// storage.
 pub fn remove_storage(tx: &mut CrdtTransaction<'_>, id: &str) -> Result<()> {
     let kind = PermissionKind::RemoteStorage.as_str();
     for table in PERMISSION_TABLES {
@@ -237,6 +238,7 @@ pub fn remove_storage(tx: &mut CrdtTransaction<'_>, id: &str) -> Result<()> {
             params![kind, id],
         )?;
     }
+    crate::files::permissions::remove_storage(tx, id)?;
     tx.execute(
         "DELETE FROM storage_tests_no_sync WHERE storage_id = ?1",
         params![id],

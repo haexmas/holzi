@@ -29,6 +29,8 @@ export type AgentActionDef = {
   core: boolean
   /** Localized titles, searched by `find_actions` together with id and description. */
   titles: Record<ActionLocale, string>
+  /** `native`: Rust runs it itself (ADR 0011). */
+  runner?: 'native'
 }
 
 export type TitleOf = (titleKey: string, locale: ActionLocale) => string
@@ -89,6 +91,7 @@ export function toAgentActionDef(
       de: titleOf(def.titleKey, 'de'),
       en: titleOf(def.titleKey, 'en'),
     },
+    ...(def.runner ? { runner: def.runner } : {}),
   }
 }
 

@@ -337,6 +337,18 @@ pub fn run() {
             app.manage(files::state::FilesState::from_app(app.handle()));
             app.manage(files::transfer::TransferManager::default());
             app.manage(files::search::SearchManager::default());
+            // Spec 044 US6 (ADR 0011): the file actions of the built-in agent run here, without a
+            // window; a storage without a grant is asked for through the window.
+            let prompt = files::agent::prompt::PermissionPrompt::default();
+            app.manage(prompt.clone());
+            let files_agent: files::agent::commands::BuiltinFilesAgent =
+                std::sync::Arc::new(files::agent::exec::FilesAgent::builtin(
+                    files::agent::env::TauriEnv::new(app.handle().clone(), prompt),
+                ));
+            app.state::<ChatState>()
+                .native_actions
+                .add(files_agent.clone());
+            app.manage(files_agent);
             // Spec 017, US9: holzi's protected places, known places and dialogs for extensions.
             app.state::<AppState>()
                 .extensions()
@@ -376,6 +388,8 @@ pub fn run() {
             files::browser_commands::files_watch,
             files::browser_commands::files_unwatch,
             files::browser_commands::files_open_system,
+            files::agent::commands::files_agent_permission_answer,
+            files::agent::commands::files_agent_check,
             platform::insets::device_insets,
             privacy::screen_capture::screen_capture_protection_get,
             privacy::screen_capture::screen_capture_protection_set,

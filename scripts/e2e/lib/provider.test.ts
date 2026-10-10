@@ -169,6 +169,30 @@ describe('startProvider', () => {
     assert.equal(second.status, 402)
   })
 
+  it('a script answers each request that offers tools with its next step', async () => {
+    const provider = await withProvider({
+      kind: 'script',
+      steps: [
+        { tool: 'files_list', input: { path: '/a' } },
+        { text: 'fertig' },
+      ],
+    })
+    const send = async (tools: unknown[]) =>
+      (
+        await fetch(`${provider.baseUrl}/v1/messages`, {
+          method: 'POST',
+          body: JSON.stringify({ tools }),
+        })
+      ).text()
+    const call = await send([{ name: 'files_list' }])
+    assert.match(call, /"type":"tool_use".*"name":"files_list"/)
+    assert.match(call, /"partial_json":"\{\\"path\\":\\"\/a\\"\}"/)
+    assert.match(call, /"stop_reason":"tool_use"/)
+    assert.match(await send([]), /"text":"title"/)
+    assert.match(await send([{ name: 'files_list' }]), /"text":"fertig"/)
+    assert.match(await send([{ name: 'files_list' }]), /"text":"done"/)
+  })
+
   it('records method, path and body, and never the credential headers', async () => {
     const provider = await withProvider({ kind: 'error', status: 500 })
     const sentinel = 'sk-test-sentinel-do-not-record'

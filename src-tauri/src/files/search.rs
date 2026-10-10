@@ -185,7 +185,7 @@ pub fn search(
                 && item
                     .metadata()
                     .is_ok_and(|meta| is_hidden(&item.file_name().to_string_lossy(), &meta));
-            let off_limits = options.hide_own && options.own.contains(item.path());
+            let off_limits = options.hide_own && options.own.contains_resolved(item.path());
             !hidden && !off_limits
         });
     let mut end = SearchEnd::Done { truncated: false };

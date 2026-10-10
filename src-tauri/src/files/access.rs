@@ -150,7 +150,7 @@ fn device_granted(caller: &Caller, grants: &AgentGrants) -> bool {
 pub fn visible_to(caller: &Caller, path: &Path, own: &OwnPlaces, grants: &AgentGrants) -> bool {
     match caller {
         Caller::BuiltinAgent | Caller::ExternalAgent { .. } => {
-            !own.contains(path) && device_granted(caller, grants)
+            !own.contains_resolved(path) && device_granted(caller, grants)
         }
         _ => true,
     }

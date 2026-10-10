@@ -1348,12 +1348,31 @@
       "guardrails": "Leitplanken (nur Nutzer)",
       "passwords": {
         "read": "Passwörter durchsuchen"
+      },
+      "files": {
+        "read": "Dateien lesen",
+        "write": "Dateien ändern"
       }
     },
     "passwords": {
       "items": {
         "search": "Passwortmanager durchsuchen (nur Titel und Tags)"
       }
+    },
+    "files": {
+      "sources": "Orte für Dateien auflisten",
+      "list": "Ordner auflisten",
+      "stat": "Angaben zu einer Datei",
+      "search": "Dateien suchen",
+      "read": "Datei lesen",
+      "folder": {
+        "create": "Ordner anlegen"
+      },
+      "copy": "Dateien kopieren",
+      "rename": "Datei umbenennen",
+      "move": "Dateien verschieben",
+      "delete": "Dateien löschen",
+      "show": "Datei im Dateibrowser zeigen"
     }
   },
   "passwords": {
@@ -2178,6 +2197,15 @@
       "invalidName": "Dieser Name ist nicht erlaubt.",
       "credentials": "Die Zugangsdaten des Speichers fehlen oder wurden abgelehnt.",
       "unreachable": "Der Speicher ist nicht erreichbar."
+    },
+    "agentPermission": {
+      "title": "Zugriff auf einen Speicher",
+      "read": "Der Agent im Chat möchte Dateien im Speicher „{name}“ lesen.",
+      "readWrite": "Der Agent im Chat möchte Dateien im Speicher „{name}“ lesen und ändern.",
+      "hint": "holzi merkt sich deine Antwort für diesen Speicher.",
+      "allowRead": "Lesen erlauben",
+      "allowReadWrite": "Lesen und Schreiben erlauben",
+      "deny": "Ablehnen"
     }
   }
 }
