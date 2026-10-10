@@ -23,19 +23,25 @@ const { t } = useI18n()
 const check = ref<DownloadCheck | null>(null)
 const failed = ref(false)
 
+// Keyed by the target's content: parents pass a new object on every render, and an equal one must
+// not ask again. An answer that arrives after the question moved on to another model is dropped.
 watch(
-  () => [open.value, props.target] as const,
-  async ([isOpen, target]) => {
+  () => [open.value, JSON.stringify(props.target)] as const,
+  async ([isOpen], _previous, onCleanup) => {
+    let stale = false
+    onCleanup(() => (stale = true))
     check.value = null
     failed.value = false
+    const target = props.target
     if (!isOpen || target === null) return
     try {
-      check.value = await invoke<DownloadCheck>('model_download_check', {
+      const answer = await invoke<DownloadCheck>('model_download_check', {
         target,
       })
+      if (!stale) check.value = answer
     } catch {
       // Without the check the size stays unknown; the person can still decide.
-      failed.value = true
+      if (!stale) failed.value = true
     }
   },
   { immediate: true },
