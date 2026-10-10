@@ -242,15 +242,11 @@ watch(open, (isOpen) => {
                   v-model="choices[key(permission)]!.granted"
                   class="mt-0.5"
                 />
-                <span class="flex flex-col">
-                  <span class="text-sm">
-                    {{ t(`extensions.permissions.kinds.${permission.kind}`) }}
-                    · {{ permission.action }}
-                  </span>
-                  <span class="font-mono text-xs break-all">{{
-                    permission.target
-                  }}</span>
-                </span>
+                <ExtensionsPermissionSummary
+                  :kind="permission.kind"
+                  :action="permission.action"
+                  :target="permission.target"
+                />
               </label>
               <p
                 v-if="permission.deviceScoped && !dev"
