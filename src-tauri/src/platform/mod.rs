@@ -23,6 +23,17 @@ pub enum PlatformName {
     Ios,
 }
 
+/// Which presets of the model catalogs this device gets (spec 043 FR-027, FR-030, research R11).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "../../src/types/bindings/")]
+pub enum ModelPresets {
+    /// Every catalog model; the suggestion is the largest that fits.
+    Desktop,
+    /// The phone profiles of the model catalog and the smallest speech recognition model.
+    Phone,
+}
+
 /// The facilities of this device; fixed for the life of the process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -49,6 +60,8 @@ pub struct PlatformCapabilities {
     pub screen_capture: bool,
     /// The system has a back gesture (spec 020 FR-019).
     pub back_gesture: bool,
+    /// The presets of the model catalogs the suggestions come from.
+    pub model_presets: ModelPresets,
 }
 
 /// A desktop system; only a release build restarts at the vault picker after closing.
@@ -65,6 +78,7 @@ pub const fn desktop(platform: PlatformName, release: bool) -> PlatformCapabilit
         relaunch_on_close: release,
         screen_capture: false,
         back_gesture: false,
+        model_presets: ModelPresets::Desktop,
     }
 }
 
@@ -81,6 +95,7 @@ pub const ANDROID: PlatformCapabilities = PlatformCapabilities {
     relaunch_on_close: false,
     screen_capture: true,
     back_gesture: true,
+    model_presets: ModelPresets::Phone,
 };
 
 /// iOS is not a target yet (spec 043 is Android only); it gets the mobile limits without the

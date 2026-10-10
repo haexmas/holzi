@@ -22,6 +22,21 @@ function tierLabelKey(tier: Tier): string {
 function fitLabelKey(fit: string): string {
   return `onboarding.model.fit.${fit}`
 }
+
+/** The choice whose download waits for the confirmation (spec 043 FR-028). */
+const confirming = ref<TierRecommendation | null>(null)
+const confirmOpen = computed({
+  get: () => confirming.value !== null,
+  set: (value: boolean) => {
+    if (!value) confirming.value = null
+  },
+})
+
+function confirmed() {
+  const rec = confirming.value
+  confirming.value = null
+  if (rec) emit('choose', rec)
+}
 </script>
 
 <template>
@@ -44,7 +59,7 @@ function fitLabelKey(fit: string): string {
         type="button"
         class="flex flex-col gap-2 rounded-md border border-input p-3 text-left hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-progress"
         :disabled="downloadingId !== null"
-        @click="emit('choose', rec)"
+        @click="confirming = rec"
       >
         <span class="text-sm font-semibold uppercase tracking-wide">
           {{ t(tierLabelKey(rec.tier)) }}
@@ -65,6 +80,13 @@ function fitLabelKey(fit: string): string {
     <p v-if="downloadError" class="text-sm text-destructive" role="alert">
       {{ t('onboarding.model.downloadFailed') }}: {{ downloadError }}
     </p>
+
+    <ModelsDownloadConfirmStep
+      v-model:open="confirmOpen"
+      :target="confirming && { kind: 'catalog', id: confirming.entry.id }"
+      :name="confirming?.entry.name ?? ''"
+      @confirm="confirmed"
+    />
 
     <div class="flex items-center justify-between">
       <UiButton

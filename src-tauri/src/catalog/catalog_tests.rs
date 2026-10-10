@@ -3,6 +3,7 @@
 
 use super::{entries, recommend_tiers, CatalogEntry, Tier};
 use crate::hardware::{Backend, Fit, HardwareInfo};
+use crate::platform::ModelPresets;
 
 fn hw(backend: Backend, ram: u64, vram: Option<u64>) -> HardwareInfo {
     HardwareInfo {
@@ -22,7 +23,7 @@ fn recommend_tiers_on_large_vram_host() {
         64 * 1024 * 1024 * 1024,
         Some(24 * 1024 * 1024 * 1024),
     );
-    let tiers = recommend_tiers(&info).expect("non-empty catalog");
+    let tiers = recommend_tiers(&info, ModelPresets::Desktop).expect("non-empty catalog");
     assert_eq!(tiers[0].tier, Tier::Easy);
     assert_eq!(tiers[1].tier, Tier::Sweet);
     assert_eq!(tiers[2].tier, Tier::Max);
@@ -38,7 +39,7 @@ fn recommend_tiers_on_large_vram_host() {
 /// fewer than three chips even when several entries are TooBig.
 fn recommend_tiers_returns_three_even_when_most_are_too_big() {
     let info = hw(Backend::Cpu, 3 * 1024 * 1024 * 1024, None);
-    let tiers = recommend_tiers(&info).expect("non-empty catalog");
+    let tiers = recommend_tiers(&info, ModelPresets::Desktop).expect("non-empty catalog");
     assert_eq!(tiers.len(), 3);
     assert_eq!(tiers[0].tier, Tier::Easy);
 }
@@ -48,7 +49,7 @@ fn recommend_tiers_returns_three_even_when_most_are_too_big() {
 /// falls back to the smallest Unknown; Sweet falls back to the median.
 fn recommend_tiers_falls_back_when_hardware_unknown() {
     let info = hw(Backend::Cuda, 32 * 1024 * 1024 * 1024, None);
-    let tiers = recommend_tiers(&info).expect("non-empty catalog");
+    let tiers = recommend_tiers(&info, ModelPresets::Desktop).expect("non-empty catalog");
     assert_eq!(tiers[0].fit, Fit::Unknown);
     // Easy is the smallest entry when nothing fits; the deterministic
     // sort by (size, id) puts it first.

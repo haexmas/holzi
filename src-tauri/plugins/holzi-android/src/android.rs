@@ -5,7 +5,9 @@ use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::plugin::{PluginApi, PluginHandle};
 use tauri::{AppHandle, Runtime};
 
-use crate::Insets;
+use std::collections::HashMap;
+
+use crate::{Insets, Permission, PermissionState};
 
 const PLUGIN_IDENTIFIER: &str = "space.haex.holzi.android";
 
@@ -50,6 +52,11 @@ struct DeviceName {
     name: Option<String>,
 }
 
+#[derive(Serialize)]
+struct PermissionArgs {
+    permissions: [&'static str; 1],
+}
+
 impl<R: Runtime> HolziAndroid<R> {
     /// The name a document provider shows for a `content://` address; `None` if it names none.
     pub fn display_name(&self, uri: &str) -> Option<String> {
@@ -79,7 +86,10 @@ impl<R: Runtime> HolziAndroid<R> {
     }
 
     /// Calls `on_change` whenever the device moves to another network (FR-019).
-    pub fn watch_network(&self, on_change: impl Fn() + Send + Sync + 'static) -> Result<(), String> {
+    pub fn watch_network(
+        &self,
+        on_change: impl Fn() + Send + Sync + 'static,
+    ) -> Result<(), String> {
         let channel = Channel::new(move |_| {
             on_change();
             Ok(())
@@ -97,10 +107,42 @@ impl<R: Runtime> HolziAndroid<R> {
             .name
     }
 
+    /// The state of `permission` without asking.
+    pub fn check_permission(&self, permission: Permission) -> Result<PermissionState, String> {
+        let states = self
+            .0
+            .run_mobile_plugin::<HashMap<String, PermissionState>>("checkPermissions", ())
+            .map_err(|error| error.to_string())?;
+        state_of(states, permission)
+    }
+
+    /// Asks the person for `permission` unless it was decided before; blocks until they answer.
+    pub fn request_permission(&self, permission: Permission) -> Result<PermissionState, String> {
+        let states = self
+            .0
+            .run_mobile_plugin::<HashMap<String, PermissionState>>(
+                "requestPermissions",
+                PermissionArgs {
+                    permissions: [permission.alias()],
+                },
+            )
+            .map_err(|error| error.to_string())?;
+        state_of(states, permission)
+    }
+
     /// Hides the window from screenshots, screen recordings and the recent apps view (FR-011a).
     pub fn set_secure(&self, enabled: bool) -> Result<(), String> {
         self.0
             .run_mobile_plugin::<()>("setSecure", SecureArgs { enabled })
             .map_err(|error| error.to_string())
     }
+}
+
+fn state_of(
+    mut states: HashMap<String, PermissionState>,
+    permission: Permission,
+) -> Result<PermissionState, String> {
+    states
+        .remove(permission.alias())
+        .ok_or_else(|| format!("no state for the permission {}", permission.alias()))
 }

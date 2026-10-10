@@ -90,6 +90,21 @@ async function activateAsync(catalogId: string) {
   }
 }
 
+/** The model whose download waits for the confirmation (spec 043 FR-028). */
+const confirming = ref<SttCatalogEntry | null>(null)
+const confirmOpen = computed({
+  get: () => confirming.value !== null,
+  set: (value: boolean) => {
+    if (!value) confirming.value = null
+  },
+})
+
+function confirmed() {
+  const entry = confirming.value
+  confirming.value = null
+  if (entry) void activateAsync(entry.id)
+}
+
 onMounted(() => reloadAsync())
 onVaultTablesChanged(['preferences'], () => {
   if (!busyId.value) return reloadAsync(true)
@@ -142,7 +157,7 @@ onVaultTablesChanged(['preferences'], () => {
             size="sm"
             :loading="busyId === entry.id"
             :disabled="busyId !== null"
-            @click="activateAsync(entry.id)"
+            @click="confirming = entry"
           >
             {{
               busyId === entry.id
@@ -152,6 +167,13 @@ onVaultTablesChanged(['preferences'], () => {
           </UiButton>
         </SettingsRow>
       </SettingsGroup>
+
+      <ModelsDownloadConfirmStep
+        v-model:open="confirmOpen"
+        :target="confirming && { kind: 'stt', id: confirming.id }"
+        :name="confirming?.name ?? ''"
+        @confirm="confirmed"
+      />
 
       <p v-if="savedFlash" class="px-1 text-xs text-success" role="status">
         {{ t('settings.sttModel.saved') }}

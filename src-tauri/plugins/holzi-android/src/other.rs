@@ -27,13 +27,32 @@ impl<R: Runtime> HolziAndroid<R> {
     }
 
     /// The network changes the sync notices by itself here.
-    pub fn watch_network(&self, _on_change: impl Fn() + Send + Sync + 'static) -> Result<(), String> {
+    pub fn watch_network(
+        &self,
+        _on_change: impl Fn() + Send + Sync + 'static,
+    ) -> Result<(), String> {
         Ok(())
     }
 
     /// The host name is the device's name here.
     pub fn device_name(&self) -> Option<String> {
         None
+    }
+
+    /// Desktop systems ask for no permission of their own here; the system decides on its own.
+    pub fn check_permission(
+        &self,
+        _permission: crate::Permission,
+    ) -> Result<crate::PermissionState, String> {
+        Ok(crate::PermissionState::Granted)
+    }
+
+    /// As [`HolziAndroid::check_permission`]: nothing to ask here.
+    pub fn request_permission(
+        &self,
+        _permission: crate::Permission,
+    ) -> Result<crate::PermissionState, String> {
+        Ok(crate::PermissionState::Granted)
     }
 
     /// Screen capture protection exists only on Android.
