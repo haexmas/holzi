@@ -1,0 +1,2 @@
+{"dir":"c2s","message":{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"_meta":{"progressToken":0},"name":"slow","arguments":{"text":"x"}}}}
+{"dir":"c2s","message":{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":1,"reason":"the turn was stopped"}}}

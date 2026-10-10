@@ -1,7 +1,8 @@
 # Vertrag: MCP über den Port einer Erweiterung
 
-holzi ist MCP-Client (`rmcp`), die Erweiterung Server (vault-sdk `sdk.tools`). Protokollversion: die von
-`rmcp` 3.5.0 angebotene; der Server antwortet in `initialize` mit derselben Version.
+holzi ist MCP-Client (`rmcp` 3.5, `extensions/agent_tools/link.rs`), die Erweiterung Server (vault-sdk
+`sdk.tools`). Protokollversion fest **`2025-11-25`** (die neueste mit dem `initialize`-Handshake; holzi fragt
+sie an, der Server antwortet mit derselben). `clientInfo` ist `{name: "holzi", version: <holzi>}`.
 
 ## Transport
 
@@ -37,7 +38,23 @@ der Meldung. holzi verbindet Textblöcke, kürzt auf 64 KiB, und reicht dem Mode
 
 ## Mitschnitte
 
-`contracts/transcripts/*.jsonl`: je Zeile eine JSON-RPC-Nachricht mit Richtung (`c2s`/`s2c`). Aufgezeichnet
-von einem Rust-Test (rmcp-Client gegen In-Memory-Server), abgespielt in vault-sdk (vitest) gegen
-`sdk.tools`. Pflicht-Mitschnitte: `handshake`, `list`, `call-ok`, `call-invalid-input`, `call-error`,
-`call-cancelled`, `server-request-rejected`.
+`contracts/transcripts/*.jsonl`: je Zeile `{"dir": "c2s" | "s2c", "message": <JSON-RPC>}`. Aufgezeichnet von
+`src-tauri/src/extensions/agent_tools/contract_tests.rs` (holzis Client gegen einen In-Memory-Server mit den
+Werkzeugen `echo`, `slow`, `fail`, verbunden über JSON wie das Frontend-Relay); `HOLZI_WRITE_MCP_TRANSCRIPTS=1`
+schreibt sie neu, sonst scheitert der Test, wenn sie veraltet sind. Versionen in `clientInfo` und `serverInfo`
+stehen als `<version>`.
+
+| Datei                           | Inhalt                                                                 |
+| ------------------------------- | ---------------------------------------------------------------------- |
+| `handshake.jsonl`               | `initialize`, Ergebnis, `notifications/initialized`                    |
+| `list.jsonl`                    | `tools/list` und Ergebnis                                              |
+| `call-ok.jsonl`                 | `tools/call` `echo` mit Ergebnis                                       |
+| `call-invalid-input.jsonl`      | `tools/call` ohne Pflichtfeld → `isError: true` mit Meldung            |
+| `call-error.jsonl`              | Werkzeugfehler → `isError: true`                                       |
+| `call-cancelled.jsonl`          | `tools/call` `slow`, dann `notifications/cancelled` (nur holzis Seite) |
+| `server-request-rejected.jsonl` | `sampling/createMessage` vom Server → `-32601`                         |
+
+Regeln für das Abspielen in vault-sdk: Der Server muss jede `c2s`-Nachricht annehmen, auch das von `rmcp`
+gesetzte `params._meta.progressToken`, und auf Anfragen Antworten liefern, die den `s2c`-Zeilen entsprechen,
+wobei `serverInfo` frei ist und Texte von `echo`/`fail` die Test-Werkzeuge des Abspielers bestimmen. Auf einen
+abgebrochenen Aufruf darf der Server antworten oder schweigen.
