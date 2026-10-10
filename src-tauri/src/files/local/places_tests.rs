@@ -37,6 +37,7 @@ fn a_link_into_an_own_place_resolves_into_it() {
     let own = OwnPlaces::new(vec![real.join("holzi")]);
     let target = resolve(&real.join("innocent").join("instances")).unwrap();
     assert!(own.contains(&target));
+    assert!(own.contains_resolved(&real.join("innocent")));
 }
 
 #[test]

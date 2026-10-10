@@ -44,6 +44,15 @@ impl OwnPlaces {
         self.roots.iter().any(|root| below(path, root))
     }
 
+    /// Whether `path` is an own place, also when the path itself is a symbolic link into one.
+    pub fn contains_resolved(&self, path: &Path) -> bool {
+        self.contains(path)
+            || std::fs::symlink_metadata(path).is_ok_and(|metadata| {
+                metadata.file_type().is_symlink()
+                    && std::fs::canonicalize(path).is_ok_and(|resolved| self.contains(&resolved))
+            })
+    }
+
     /// Whether a call on `path` touches an own place: `path` lies in one, or, for a call on the
     /// whole tree (`tree`), holds one.
     pub fn touches(&self, path: &Path, tree: bool) -> bool {

@@ -70,6 +70,35 @@ async fn a_list_leaves_holzis_own_places_out() {
     assert_eq!(list["truncated"], true);
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn links_to_holzis_own_data_are_hidden_from_list_and_search() {
+    let scene = Scene::new(None);
+    std::os::unix::fs::symlink(scene.path("holzi/vault.db"), scene.path("link-to-vault.db"))
+        .unwrap();
+    std::os::unix::fs::symlink(scene.path("holzi"), scene.path("link-to-holzi")).unwrap();
+
+    let list = scene
+        .run(
+            "files.list",
+            json!({ "source": "device", "path": scene.at("") }),
+        )
+        .await
+        .expect("list");
+    assert!(!names(&list, "entries")
+        .iter()
+        .any(|name| { name == "link-to-vault.db" || name == "link-to-holzi" }));
+
+    let found = scene
+        .run(
+            "files.search",
+            json!({ "source": "device", "path": scene.at(""), "query": "link-to" }),
+        )
+        .await
+        .expect("search");
+    assert!(names(&found, "hits").is_empty());
+}
+
 #[tokio::test]
 async fn text_is_read_up_to_its_limit_and_other_files_get_a_note() {
     let scene = Scene::new(None);
