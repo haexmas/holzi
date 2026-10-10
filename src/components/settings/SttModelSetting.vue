@@ -74,7 +74,10 @@ async function reloadAsync(quiet = false) {
 
 /** Activates a model; `setStt` downloads it first when it is not installed. */
 async function activateAsync(catalogId: string) {
-  if (catalogId === activeId.value || busyId.value) return
+  // The default counts as active before it is installed; downloading it still has to run.
+  const alreadyActive =
+    catalogId === activeId.value && installedIds.value.has(catalogId)
+  if (alreadyActive || busyId.value) return
   busyId.value = catalogId
   savedFlash.value = false
   opError.value = null
