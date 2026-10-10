@@ -4,6 +4,7 @@
 //! This module grows with the deliveries of the spec (research R1). The foundation holds the
 //! identifiers, the error codes of the bridge and the pure permission model.
 
+pub mod agent_tools;
 pub mod bridge;
 pub mod bundle;
 pub mod commands;
