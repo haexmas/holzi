@@ -194,6 +194,9 @@ tokio-util = { version = "0.7", features = ["rt", "io"] }
 # `sysinfo` and `reqwest` are unconditional — hardware info and provider
 # list are surfaced even in `--no-default-features` builds.
 sysinfo = "0.39"
+# Canonical paths without the `\\?\` prefix on Windows, comparable with the mount points of
+# `sysinfo::Disks` (the free space before a model download, spec 043 FR-028).
+dunce = "1"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream", "json", "query"] }
 
 # S3 of holzi's storage connections (spec 038, research R1). Sans-IO: it only

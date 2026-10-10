@@ -1006,6 +1006,16 @@
       "select": "Auswählen",
       "noGgufFiles": "Keine installierbaren GGUF-Dateien in diesem Repository."
     },
+    "downloadConfirm": {
+      "title": "{name} herunterladen?",
+      "size": "Größe: {size}",
+      "free": "Freier Speicher: {free}",
+      "short": "Der freie Speicher reicht dafür wahrscheinlich nicht. Der Download kann mittendrin abbrechen.",
+      "unknown": "unbekannt",
+      "cancel": "Abbrechen",
+      "start": "Herunterladen",
+      "startAnyway": "Trotzdem laden"
+    },
     "filePicker": {
       "size": "Größe",
       "sizeUnknown": "unbekannt",
@@ -1093,6 +1103,7 @@
     "noSpeechDetected": "Keine Sprache erkannt",
     "error": {
       "deviceUnavailable": "Kein Mikrofon verfügbar",
+      "microphoneDenied": "holzi darf das Mikrofon nicht benutzen. Du kannst es in den Android-Einstellungen unter Apps › holzi › Berechtigungen › Mikrofon erlauben.",
       "alreadyRecording": "Es läuft bereits eine Aufnahme",
       "transcriptionFailed": "Transkription fehlgeschlagen",
       "generic": "Sprachaufnahme fehlgeschlagen"
@@ -2005,6 +2016,7 @@
       "count": "{count} Treffer | {count} Treffer",
       "truncated": "– nur die ersten, genauer suchen für mehr",
       "none": "Keine Treffer.",
+      "dirs": "· {count} Ordner durchsucht | · {count} Ordner durchsucht",
       "reveal": "Im Ordner zeigen"
     },
     "filter": {

@@ -8,6 +8,12 @@
 //! group, its later groups are parked behind it, so they are replayed in HLC order.
 //! [`replay_ready`] applies parked groups as soon as their tables and columns exist.
 //!
+//! A table or column that an extension ready or disabled on this device lacks is one a later
+//! migration dropped or renamed, written by a device that still has the older version. Such a
+//! group is not parked: it could never apply. It waits instead, with the progress of its origin
+//! below it, and comes again in later pulls; once that device updated, its own migration shaped
+//! the rows, and they arrive in the new form.
+//!
 //! Changes to the tables of an extension removed with "delete data" that are older than its
 //! `purge_hlc` are dropped (R11). Newer ones are parked until this device has cleared up for that
 //! removal, so the clear-up cannot drop them: they belong to a reinstall. Groups for the prefix of
@@ -37,6 +43,8 @@ pub(super) const MISSING_COLUMN: &str = "missing_column";
 pub(super) const AFTER_PARKED: &str = "after_parked";
 pub(super) const AWAITING_PURGE: &str = "awaiting_purge";
 pub(super) const DEV_VERSION: &str = "dev_version";
+/// Not a reason to park: the group waits for its origin to update the extension.
+pub(super) const OUTDATED_ORIGIN: &str = "outdated_origin";
 
 #[path = "inbound_park_context.rs"]
 mod context;
@@ -152,11 +160,7 @@ pub(super) fn sort(
             continue;
         };
         let prefix = table.prefix.to_string();
-        let reason = match context.extension_tables.get(&name.to_ascii_lowercase()) {
-            // Newer than a removal this device has not cleared up for: the clear-up would drop it.
-            _ if context.pending.contains(&prefix) => Some(AWAITING_PURGE),
-            // A development version owns that prefix here until it is unloaded.
-            _ if context.dev.contains(&prefix) => Some(DEV_VERSION),
+        let lacking = match context.extension_tables.get(&name.to_ascii_lowercase()) {
             None => Some(MISSING_TABLE),
             Some(Some(known))
                 if change.table_name != DELETED_ROWS_TABLE
@@ -165,6 +169,15 @@ pub(super) fn sort(
                 Some(MISSING_COLUMN)
             }
             Some(_) => None,
+        };
+        let reason = match lacking {
+            // Newer than a removal this device has not cleared up for: the clear-up would drop it.
+            _ if context.pending.contains(&prefix) => Some(AWAITING_PURGE),
+            // A development version owns that prefix here until it is unloaded.
+            _ if context.dev.contains(&prefix) => Some(DEV_VERSION),
+            // Dropped or renamed by a migration this device applied: the origin is behind.
+            Some(_) if context.settled.contains(&prefix) => Some(OUTDATED_ORIGIN),
+            lacking => lacking,
         };
         if let Some(reason) = reason {
             tables.insert(name.to_ascii_lowercase());

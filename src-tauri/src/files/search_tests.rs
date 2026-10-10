@@ -247,3 +247,107 @@ fn the_first_hit_goes_out_before_the_walk_ends() {
     assert_eq!(batches, [1]);
     assert_eq!(end, SearchEnd::Cancelled, "the walk went on after the hit");
 }
+
+mod storage {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::files::storage_source::StorageFiles;
+    use crate::remote_storage::test_support::{access, FakeStore};
+
+    fn files(keys: &[&str]) -> StorageFiles {
+        let fake = Arc::new(FakeStore::new());
+        for key in keys {
+            fake.insert("b", key, b"x");
+        }
+        StorageFiles::new(fake, access("b"))
+    }
+
+    async fn run(
+        files: &StorageFiles,
+        root: &str,
+        query: &str,
+        options: &SearchOptions,
+        cancel: &CancellationToken,
+    ) -> (Vec<String>, Vec<u64>, SearchEnd) {
+        let mut names = Vec::new();
+        let mut dirs = Vec::new();
+        let end = search_storage(
+            files,
+            root,
+            query,
+            options,
+            cancel,
+            &mut |batch| names.extend(batch.into_iter().map(|hit| hit.entry.path)),
+            &mut |count| dirs.push(count),
+        )
+        .await;
+        names.sort();
+        (names, dirs, end)
+    }
+
+    #[tokio::test]
+    async fn a_typo_finds_files_and_folders_in_every_prefix_below() {
+        let files = files(&[
+            "Urlaub/2026/notiz.txt",
+            "Urlaub/Notizen/",
+            "anderes.md",
+            "x/notiz.md",
+        ]);
+        let (names, dirs, end) =
+            run(&files, "/", "noitz", &user(), &CancellationToken::new()).await;
+        assert_eq!(
+            names,
+            ["/Urlaub/2026/notiz.txt", "/Urlaub/Notizen", "/x/notiz.md"],
+            "one typo also finds the folder Notizen"
+        );
+        assert_eq!(end, SearchEnd::Done { truncated: false });
+        assert_eq!(
+            dirs.last(),
+            Some(&5),
+            "/, Urlaub, Urlaub/2026, Urlaub/Notizen, x"
+        );
+        let (names, _, _) = run(
+            &files,
+            "/Urlaub",
+            "notizen",
+            &user(),
+            &CancellationToken::new(),
+        )
+        .await;
+        assert_eq!(names, ["/Urlaub/2026/notiz.txt", "/Urlaub/Notizen"]);
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_storage_search_stops() {
+        let files = files(&["a/notiz.txt"]);
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        let (names, _, end) = run(&files, "/", "notiz", &user(), &cancel).await;
+        assert!(names.is_empty());
+        assert_eq!(end, SearchEnd::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn filters_and_the_hit_limit_hold_on_storages_too() {
+        let keys: Vec<String> = (0..12).map(|i| format!("bild-{i:02}.jpg")).collect();
+        let mut all: Vec<&str> = keys.iter().map(String::as_str).collect();
+        all.push("bild.txt");
+        let files = files(&all);
+        let images = SearchOptions {
+            filters: SearchFilters {
+                types: Some(vec![FileCategory::Image]),
+                ..SearchFilters::default()
+            },
+            limits: SearchLimits {
+                max_hits: 10,
+                max_time: None,
+            },
+            ..user()
+        };
+        let (names, _, end) = run(&files, "/", "bild", &images, &CancellationToken::new()).await;
+        assert_eq!(names.len(), 10);
+        assert!(names.iter().all(|name| name.ends_with(".jpg")));
+        assert_eq!(end, SearchEnd::Done { truncated: true });
+    }
+}

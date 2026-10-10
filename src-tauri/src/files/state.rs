@@ -66,4 +66,15 @@ impl FilesState {
             false
         }
     }
+
+    /// Ends every watch: the page that asked for them is gone (reloaded), and its channels lead
+    /// nowhere.
+    pub fn unwatch_all(&self) {
+        #[cfg(not(target_os = "ios"))]
+        self.watches().clear();
+    }
 }
+
+#[cfg(all(test, not(target_os = "ios")))]
+#[path = "state_tests.rs"]
+mod tests;

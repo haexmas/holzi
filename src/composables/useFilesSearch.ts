@@ -20,6 +20,8 @@ export function useFilesSearch(
   const hits = shallowRef<SearchHit[]>([])
   const running = ref(false)
   const truncated = ref(false)
+  /** Folders of a storage searched so far (a storage shows its progress, FR-030). */
+  const dirs = ref(0)
   const error = ref<string | null>(null)
   let generation = 0
   let current: Promise<string | null> | null = null
@@ -39,6 +41,7 @@ export function useFilesSearch(
     stop()
     hits.value = []
     truncated.value = false
+    dirs.value = 0
     error.value = null
     const text = query.value.trim()
     const folder = path.value
@@ -57,6 +60,8 @@ export function useFilesSearch(
           hits.value = [...hits.value, ...event.hits].sort(
             (a, b) => b.score - a.score,
           )
+        } else if (event.kind === 'progress') {
+          dirs.value = event.dirs
         } else {
           truncated.value = event.truncated
           running.value = false
@@ -89,5 +94,5 @@ export function useFilesSearch(
   )
   onBeforeUnmount(stop)
 
-  return { hits, running, truncated, error }
+  return { hits, running, truncated, dirs, error }
 }

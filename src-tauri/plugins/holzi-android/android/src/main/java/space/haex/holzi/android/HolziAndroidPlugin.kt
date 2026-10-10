@@ -1,5 +1,6 @@
 package space.haex.holzi.android
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.net.ConnectivityManager
@@ -14,6 +15,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
+import app.tauri.annotation.Permission
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Channel
 import app.tauri.plugin.Invoke
@@ -40,8 +42,13 @@ class NetworkArgs {
     lateinit var channel: Channel
 }
 
-/** holzi's Android platform code (spec 043, ADR-0010); the core calls it directly. */
-@TauriPlugin
+/**
+ * holzi's Android platform code (spec 043, ADR-0010); the core calls it directly. The core asks for
+ * the microphone through the plugin's own `checkPermissions`/`requestPermissions` (FR-029).
+ */
+@TauriPlugin(
+    permissions = [Permission(strings = [Manifest.permission.RECORD_AUDIO], alias = "microphone")]
+)
 class HolziAndroidPlugin(private val activity: Activity) : Plugin(activity) {
     @Volatile private var insetsChannel: Channel? = null
     @Volatile private var lastInsets: JSObject? = null

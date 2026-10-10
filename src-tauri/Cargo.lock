@@ -4355,6 +4355,7 @@ dependencies = [
  "ciborium",
  "cpal",
  "csv",
+ "dunce",
  "ed25519-dalek",
  "either",
  "eventsource-stream",

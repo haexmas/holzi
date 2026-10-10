@@ -38,8 +38,10 @@ pub async fn list_stt_catalog() -> Result<Vec<SttCatalogEntryWithFit>> {
 #[tauri::command]
 pub async fn stt_recommend_tiers() -> Result<[SttTierRecommendation; 3]> {
     let hw = hardware::probe_async().await;
-    catalog::recommend_tiers(&hw)?.ok_or_else(|| HolziError::CatalogEntryNotFound {
-        id: "<empty stt catalog>".to_string(),
+    catalog::recommend_tiers(&hw, crate::platform::capabilities().model_presets)?.ok_or_else(|| {
+        HolziError::CatalogEntryNotFound {
+            id: "<empty stt catalog>".to_string(),
+        }
     })
 }
 

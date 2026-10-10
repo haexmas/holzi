@@ -107,13 +107,19 @@ export function deviceFiles(
     },
     read: (name) => pull(name).toString(),
     readBytes: pull,
+    // One shell loop for the whole tree (a push per file would take minutes), opened up for the
+    // app as `write` does.
     tree: (sub, folders, files) =>
       void adb.shell(
         'sh',
         '-c',
-        `mkdir -p ${quote(folder)} && cd ${quote(folder)} && i=0; while [ $i -lt ${folders}; do ` +
-          `mkdir -p ${quote(sub)}/d$i && j=0; while [ $j -lt ${files}; do ` +
-          `: > ${quote(sub)}/d$i/f$i-$j.txt; j=$((j+1)); done; i=$((i+1)); done`,
+        quote(
+          `mkdir -p ${quote(folder)} && cd ${quote(folder)} && i=0; while [ $i -lt ${folders} ]; do ` +
+            `mkdir -p ${quote(sub)}/d$i && j=0; while [ $j -lt ${files} ]; do ` +
+            `: > ${quote(sub)}/d$i/f$i-$j.txt; j=$((j+1)); done; i=$((i+1)); done; ` +
+            `chmod a+rwx ${quote(ANDROID_FILES)} ${quote(ANDROID_DOWNLOADS)} 2>/dev/null; ` +
+            `chmod -R a+rwX ${quote(folder)} 2>/dev/null; true`,
+        ),
       ),
     remove: () => void adb.shell('rm', '-rf', quote(folder)),
   }

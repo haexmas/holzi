@@ -86,6 +86,8 @@ use models::commands::{
     install_huggingface_update, list_installed_models, preview_huggingface_install,
     search_huggingface_models,
 };
+use models::download_check::model_download_check;
+use models::stand_in::e2e_stand_in_models;
 use passwords::commands::agent::passwords_agent_search;
 use passwords::commands::attachments::{
     passwords_attachment_add, passwords_attachment_preview, passwords_attachment_remove,
@@ -306,6 +308,14 @@ pub fn run() {
             let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), &window)?
                 // The frame shim for development pages, which holzi does not serve (R16).
                 .initialization_script_for_all_frames(extensions::protocol::shim::dev_init_script())
+                // Spec 044: a reloaded page cannot end the folder watches of the page before it.
+                .on_page_load(|window, payload| {
+                    if payload.event() == tauri::webview::PageLoadEvent::Started {
+                        if let Some(files) = window.try_state::<files::state::FilesState>() {
+                            files.unwatch_all();
+                        }
+                    }
+                })
                 .on_web_resource_request(move |request, response| {
                     extensions::dev_csp::adjust(&host, request, response);
                     #[cfg(feature = "platform-probe")]
@@ -386,6 +396,8 @@ pub fn run() {
             refresh_provider_models,
             list_provider_models,
             download_model_from_catalog,
+            model_download_check,
+            e2e_stand_in_models,
             download_model_from_hf,
             import_model_from_file,
             list_installed_models,

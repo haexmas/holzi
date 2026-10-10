@@ -4,6 +4,8 @@
 //! a transfer through a [`Channel`] and answers a name conflict with [`TransferManager::answer`].
 
 pub mod local;
+pub mod remote;
+mod remote_plan;
 
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -19,6 +21,7 @@ use crate::files::storage_source::StorageFiles;
 use crate::files::{FilesError, FilesErrorCode};
 use crate::vault_gate::VaultGate;
 use local::{Hooks, Job, Outcome, Removal, Totals};
+use remote::{Plan, RemoteJob};
 
 /// What a transfer does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -95,6 +98,8 @@ enum Work {
         files: Arc<StorageFiles>,
         paths: Vec<String>,
     },
+    /// Copy or move between sources (spec 044 US5): up, down, within or between storages.
+    Remote { job: RemoteJob, plan: Arc<Plan> },
 }
 
 /// A transfer the manager knows: running, or failed and able to start again.
@@ -152,6 +157,23 @@ impl TransferManager {
         Ok(id)
     }
 
+    /// Starts a prepared transfer across sources; returns its id.
+    pub fn start_remote(
+        &self,
+        gate: &VaultGate,
+        job: RemoteJob,
+        plan: Plan,
+        channel: Channel<TransferEvent>,
+    ) -> Result<String, FilesError> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let work = Work::Remote {
+            job,
+            plan: Arc::new(plan),
+        };
+        self.launch(gate, &id, work, channel)?;
+        Ok(id)
+    }
+
     fn launch(
         &self,
         gate: &VaultGate,
@@ -180,6 +202,16 @@ impl TransferManager {
             } => gate
                 .spawn_blocking(move || {
                     let outcome = work_local(&job, &totals, removal, &cancel, &channel, &answered);
+                    manager.finish(&owned_id, outcome, &channel);
+                })
+                .map(drop),
+            Work::Remote { job, plan } => gate
+                .spawn_blocking(move || {
+                    let handle = tokio::runtime::Handle::current();
+                    let outcome =
+                        with_hooks(Removal::Permanent, &cancel, &channel, &answered, |hooks| {
+                            remote::run_remote(&job, &plan, &handle, &remote::RETRIES, hooks)
+                        });
                     manager.finish(&owned_id, outcome, &channel);
                 })
                 .map(drop),
@@ -271,8 +303,7 @@ async fn delete_on_storage(
     Outcome::Done
 }
 
-/// The blocking part: runs the job, sends progress at most every [`PROGRESS_EVERY`] and asks the
-/// window about conflicts.
+/// The blocking part of a local job.
 fn work_local(
     job: &Job,
     totals: &Totals,
@@ -280,6 +311,20 @@ fn work_local(
     cancel: &CancellationToken,
     channel: &Channel<TransferEvent>,
     answered: &Receiver<(ConflictChoice, bool)>,
+) -> Outcome {
+    with_hooks(removal, cancel, channel, answered, |hooks| {
+        local::run(job, totals, hooks)
+    })
+}
+
+/// Runs `work` with the hooks of a running transfer: progress at most every [`PROGRESS_EVERY`],
+/// and the window asked about conflicts.
+fn with_hooks(
+    removal: Removal,
+    cancel: &CancellationToken,
+    channel: &Channel<TransferEvent>,
+    answered: &Receiver<(ConflictChoice, bool)>,
+    work: impl FnOnce(Hooks<'_>) -> Outcome,
 ) -> Outcome {
     let mut last = Instant::now() - PROGRESS_EVERY;
     let mut progress = |progress: TransferProgress| {
@@ -301,17 +346,13 @@ fn work_local(
             }
         }
     };
-    local::run(
-        job,
-        totals,
-        Hooks {
-            cancel,
-            ask: &mut ask,
-            progress: &mut progress,
-            removal,
-            rename: &|from, to| std::fs::rename(from, to),
-        },
-    )
+    work(Hooks {
+        cancel,
+        ask: &mut ask,
+        progress: &mut progress,
+        removal,
+        rename: &|from, to| std::fs::rename(from, to),
+    })
 }
 
 /// How a delete removes on this platform: the trash on desktops, for good on mobiles (FR-023).

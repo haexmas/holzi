@@ -32,7 +32,7 @@ pub fn replay_ready(db: &Database, stop: &dyn Fn() -> bool) -> haex_crdt::Result
         .unwrap_or_else(PoisonError::into_inner);
     let mut replayed = Replayed::default();
     loop {
-        let context = query::read(db, |r| Context::read(r))?;
+        let context = query::read(db, |r| Context::read(r, db.device_id()))?;
         // Up to the parking limit per extension: each group's changes are read when it is tried.
         let rows: Vec<(i64, String, String)> = query::read(db, |r| {
             r.query_map(
