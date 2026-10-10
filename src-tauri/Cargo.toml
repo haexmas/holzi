@@ -371,13 +371,13 @@ opt-level = 3
 # HTML on Android. Remove this patch once a wry release contains the fix (upstream PR to
 # tauri-apps/wry from branch fix/main-frame-only-scripts-dev, 226fd46).
 # Spec 017 US8 (T099, research R20): tauri-plugin-notification reports clicks on notifications only
-# on mobile. haexmas/plugins-workspace @ b38883e (branch feat/notification-desktop-actions, on tag
+# on mobile. tauri-apps/plugins-workspace @ 4638151 (merge of their #3671 into branch v2, after
 # notification-v2.5.1) reports them on desktop too and adds `Notification::on_action` for every
-# platform, so holzi has one way to show notifications and hear clicks. Remove once a release
-# contains it (upstream PR to tauri-apps/plugins-workspace, closes their #2150).
+# platform, so holzi has one way to show notifications and hear clicks. Remove once a
+# tauri-plugin-notification release after 2.5.1 contains it.
 [patch.crates-io]
 wry = { git = "https://github.com/haexmas/wry", rev = "47037ddc888b1576d0a558aa2a6d68346ce00735" }
-tauri-plugin-notification = { git = "https://github.com/haexmas/plugins-workspace", rev = "b38883e0e80889d411e3139881f01ea7a670c06e" }
+tauri-plugin-notification = { git = "https://github.com/tauri-apps/plugins-workspace", rev = "46381516b7bd7b6915ded698d93e92760b4221d7" }
 # Spec 043 (research R2): lettre 0.11.23 calls `Verifier::new_with_extra_roots`, which
 # rustls-platform-verifier does not offer on Android, so lettre does not compile there.
 # haexmas/lettre @ 993d98c (branch fix/android-platform-verifier, on tag v0.11.23) uses
