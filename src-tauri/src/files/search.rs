@@ -132,6 +132,21 @@ pub fn max_typos(needle: &str) -> u16 {
     }
 }
 
+/// The typo-tolerant, case-blind matcher of a query (research R6).
+fn matcher_for(query: &str) -> Matcher {
+    let pattern = Pattern::new(
+        query,
+        PatternConfig::default().max_typos(Some(max_typos(query))),
+    );
+    Matcher::new(
+        pattern,
+        &Config {
+            casing: frizbee::CaseMatching::Ignore,
+            ..Config::default()
+        },
+    )
+}
+
 /// How often hits go out at most.
 const BATCH_EVERY: Duration = Duration::from_millis(100);
 
@@ -147,17 +162,7 @@ pub fn search(
     if query.is_empty() {
         return SearchEnd::Done { truncated: false };
     }
-    let pattern = Pattern::new(
-        query,
-        PatternConfig::default().max_typos(Some(max_typos(query))),
-    );
-    let mut matcher = Matcher::new(
-        pattern,
-        &Config {
-            casing: frizbee::CaseMatching::Ignore,
-            ..Config::default()
-        },
-    );
+    let mut matcher = matcher_for(query);
     let started = Instant::now();
     // `None` until the first hit went out: that one goes at once (SC-004).
     let mut last: Option<Instant> = None;
@@ -234,6 +239,79 @@ pub fn search(
     end
 }
 
+/// Searches a storage from the folder `root` down (spec 044 US5, FR-030): folder by folder through
+/// its listings, with the same matching, filters and limits as on the device. `progress` hears how
+/// many folders are searched.
+pub async fn search_storage(
+    files: &crate::files::storage_source::StorageFiles,
+    root: &str,
+    query: &str,
+    options: &SearchOptions,
+    cancel: &CancellationToken,
+    emit: &mut (dyn FnMut(Vec<SearchHit>) + Send),
+    progress: &mut (dyn FnMut(u64) + Send),
+) -> SearchEnd {
+    let query = query.trim();
+    if query.is_empty() {
+        return SearchEnd::Done { truncated: false };
+    }
+    let started = Instant::now();
+    let mut folders = std::collections::VecDeque::from([root.to_owned()]);
+    let mut searched = 0;
+    let mut found = 0;
+    while let Some(folder) = folders.pop_front() {
+        if cancel.is_cancelled() {
+            return SearchEnd::Cancelled;
+        }
+        if options
+            .limits
+            .max_time
+            .is_some_and(|limit| started.elapsed() >= limit)
+        {
+            return SearchEnd::Done { truncated: true };
+        }
+        // A folder that cannot be listed is skipped, as one without access on the device.
+        let Ok(entries) = files.list(&folder).await else {
+            continue;
+        };
+        if cancel.is_cancelled() {
+            return SearchEnd::Cancelled;
+        }
+        searched += 1;
+        progress(searched);
+        let mut batch = Vec::new();
+        let mut matcher = matcher_for(query);
+        for entry in entries {
+            if !options.show_hidden && entry.hidden {
+                continue;
+            }
+            if entry.kind == EntryKind::Dir {
+                folders.push_back(entry.path.clone());
+            }
+            let Some(matched) = matcher.match_one(entry.name.as_str(), 0) else {
+                continue;
+            };
+            if !options.filters.admits(&entry) {
+                continue;
+            }
+            batch.push(SearchHit {
+                entry,
+                score: matched.score,
+            });
+            found += 1;
+            if found >= options.limits.max_hits {
+                emit(batch);
+                return SearchEnd::Done { truncated: true };
+            }
+        }
+        drop(matcher);
+        if !batch.is_empty() {
+            emit(batch);
+        }
+    }
+    SearchEnd::Done { truncated: false }
+}
+
 /// What the window hears of a search.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -241,6 +319,11 @@ pub fn search(
 pub enum FilesSearchEvent {
     Hits {
         hits: Vec<SearchHit>,
+    },
+    /// How many folders of a storage are searched so far (FR-030: a storage shows its progress).
+    Progress {
+        #[ts(type = "number")]
+        dirs: u64,
     },
     /// The walk is through, or a limit stopped it (`truncated`).
     Done {
@@ -283,6 +366,53 @@ impl SearchManager {
             let end = search(&root, &query, &options, &cancel, &mut |hits| {
                 let _ = channel.send(FilesSearchEvent::Hits { hits });
             });
+            manager.running().remove(&owned_id);
+            if let SearchEnd::Done { truncated } = end {
+                let _ = channel.send(FilesSearchEvent::Done { truncated });
+            }
+        });
+        if let Err(error) = spawned {
+            self.running().remove(&id);
+            log::warn!("files: a search could not start: {error}");
+            return Err(crate::files::FilesError::new(
+                crate::files::FilesErrorCode::Unsupported,
+                "the vault is closing",
+            ));
+        }
+        Ok(id)
+    }
+
+    /// Starts a search of a storage as tracked session work; returns its id.
+    pub fn start_storage(
+        &self,
+        gate: &crate::vault_gate::VaultGate,
+        files: crate::files::storage_source::StorageFiles,
+        root: String,
+        query: String,
+        options: SearchOptions,
+        channel: tauri::ipc::Channel<FilesSearchEvent>,
+    ) -> Result<String, crate::files::FilesError> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let cancel = gate.token().child_token();
+        self.running().insert(id.clone(), cancel.clone());
+        let manager = self.clone();
+        let owned_id = id.clone();
+        let spawned = gate.spawn(async move {
+            let (hits, steps) = (channel.clone(), channel.clone());
+            let end = search_storage(
+                &files,
+                &root,
+                &query,
+                &options,
+                &cancel,
+                &mut |found| {
+                    let _ = hits.send(FilesSearchEvent::Hits { hits: found });
+                },
+                &mut |dirs| {
+                    let _ = steps.send(FilesSearchEvent::Progress { dirs });
+                },
+            )
+            .await;
             manager.running().remove(&owned_id);
             if let SearchEnd::Done { truncated } = end {
                 let _ = channel.send(FilesSearchEvent::Done { truncated });

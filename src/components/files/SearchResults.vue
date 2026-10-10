@@ -16,6 +16,8 @@ const props = defineProps<{
   hits: SearchHit[]
   running: boolean
   truncated: boolean
+  /** Folders of a storage searched so far. */
+  dirs: number
   error: string | null
 }>()
 
@@ -57,6 +59,9 @@ const errorText = computed(() => {
         t('files.search.count', { count: hits.length }, hits.length)
       }}</span>
       <span v-if="truncated">{{ t('files.search.truncated') }}</span>
+      <span v-if="running && dirs" data-testid="files-search-dirs">{{
+        t('files.search.dirs', { count: dirs }, dirs)
+      }}</span>
     </div>
     <p v-if="error" class="p-6 text-center text-sm text-muted-foreground">
       {{ errorText }}

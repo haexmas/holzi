@@ -25,17 +25,19 @@ use super::{
     RemoteStore, StorageError,
 };
 
+pub use super::s3_ext::copy_source;
+
 /// How long a signed address stays valid; longer than any deadline of a call.
-const SIGNED_FOR: Duration = Duration::from_secs(15 * 60);
+pub(super) const SIGNED_FOR: Duration = Duration::from_secs(15 * 60);
 
 /// The largest page of a listing holzi reads (1000 keys of at most 1024 bytes and their data).
-const MAX_LIST_PAGE: usize = 8 * 1024 * 1024;
+pub(super) const MAX_LIST_PAGE: usize = 8 * 1024 * 1024;
 
 /// The part of an error answer holzi reads for its code.
 const MAX_ERROR_BODY: usize = 64 * 1024;
 
 /// Keys per page holzi asks for (the S3 maximum).
-const PAGE: usize = 1000;
+pub(super) const PAGE: usize = 1000;
 
 /// The S3 implementation of [`RemoteStore`].
 pub struct S3Store {
@@ -77,7 +79,7 @@ impl S3Store {
 
     /// Sends one signed request and returns the answer when its status is a success. `headers`
     /// must be the ones the address was signed with.
-    async fn send(
+    pub(super) async fn send(
         &self,
         access: &Access,
         method: Method,
@@ -125,7 +127,7 @@ impl S3Store {
 
 /// Builds the signing bucket from the validated endpoint, region and addressing style.
 /// Invalid endpoint or bucket configuration becomes a network error.
-fn bucket(access: &Access) -> Result<Bucket, StorageError> {
+pub(super) fn bucket(access: &Access) -> Result<Bucket, StorageError> {
     let location = &access.location;
     let endpoint = address::endpoint_url(location).map_err(|_| StorageError::Network)?;
     let style = match location.addressing {
@@ -142,7 +144,7 @@ fn bucket(access: &Access) -> Result<Bucket, StorageError> {
 }
 
 /// Builds signing credentials, including the session token when present.
-fn signing(credentials: &Credentials) -> rusty_s3::Credentials {
+pub(super) fn signing(credentials: &Credentials) -> rusty_s3::Credentials {
     let key = credentials.access_key_id.clone();
     let secret = credentials.secret_access_key.as_str();
     match &credentials.session_token {
@@ -152,7 +154,7 @@ fn signing(credentials: &Credentials) -> rusty_s3::Credentials {
 }
 
 /// Reads `response` up to `max` bytes before `deadline`; more is [`StorageError::TooLarge`].
-async fn read_body(
+pub(super) async fn read_body(
     mut response: reqwest::Response,
     max: usize,
     deadline: Instant,
@@ -392,53 +394,10 @@ impl RemoteStore for S3Store {
         max: usize,
         deadline: Instant,
     ) -> Result<DirListing, StorageError> {
-        let bucket = bucket(access)?;
-        let credentials = signing(&access.credentials);
-        let mut listing = DirListing::default();
-        let mut token: Option<String> = None;
-        loop {
-            let mut action = bucket.list_objects_v2(Some(&credentials));
-            action.with_prefix(prefix.to_owned());
-            action.with_delimiter("/");
-            action.with_max_keys(PAGE);
-            if let Some(token) = token.take() {
-                action.with_continuation_token(token);
-            }
-            let url = action.sign(SIGNED_FOR);
-            let response = self
-                .send(access, Method::GET, url, None, &[], deadline)
-                .await?;
-            let body = read_body(response, MAX_LIST_PAGE, deadline).await?;
-            let text = std::str::from_utf8(&body).map_err(|_| StorageError::Network)?;
-            let page = ListObjectsV2::parse_response(text).map_err(|_| {
-                log::warn!("remote storage: a listing did not parse");
-                StorageError::Network
-            })?;
-            listing.objects.extend(
-                page.contents
-                    .into_iter()
-                    .filter(|object| object.key != prefix)
-                    .map(|object| ObjectInfo {
-                        key: object.key,
-                        size: object.size,
-                        last_modified: object.last_modified,
-                    }),
-            );
-            listing
-                .prefixes
-                .extend(page.common_prefixes.into_iter().map(|common| common.prefix));
-            if listing.objects.len() + listing.prefixes.len() > max {
-                return Err(StorageError::TooLarge);
-            }
-            match page.next_continuation_token {
-                Some(next) if !next.is_empty() => token = Some(next),
-                _ => return Ok(listing),
-            }
-        }
+        super::s3_ext::list_dir(self, access, prefix, max, deadline).await
     }
 
-    /// A server-side copy: a signed PUT of `to` with a signed `x-amz-copy-source` (rusty-s3 0.10
-    /// has no `CopyObject` of its own).
+    /// A server-side copy (`s3_ext::copy`).
     async fn copy(
         &self,
         access: &Access,
@@ -446,40 +405,48 @@ impl RemoteStore for S3Store {
         to: &str,
         deadline: Instant,
     ) -> Result<(), StorageError> {
-        let bucket = bucket(access)?;
-        let credentials = signing(&access.credentials);
-        let source = copy_source(&access.location.bucket, from);
-        let mut action = bucket.put_object(Some(&credentials), to);
-        action
-            .headers_mut()
-            .insert("x-amz-copy-source", source.clone());
-        let url = action.sign(SIGNED_FOR);
-        self.send(
-            access,
-            Method::PUT,
-            url,
-            None,
-            &[("x-amz-copy-source", source)],
-            deadline,
-        )
-        .await
-        .map(drop)
+        super::s3_ext::copy(self, access, from, to, deadline).await
     }
-}
 
-/// The `x-amz-copy-source` of `key` in `bucket`: `/bucket/key`, each part percent-encoded, the
-/// slashes of the key kept.
-pub fn copy_source(bucket: &str, key: &str) -> String {
-    use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
-    const PART: &AsciiSet = &NON_ALPHANUMERIC
-        .remove(b'-')
-        .remove(b'_')
-        .remove(b'.')
-        .remove(b'~')
-        .remove(b'/');
-    format!(
-        "/{}/{}",
-        utf8_percent_encode(bucket, PART),
-        utf8_percent_encode(key, PART)
-    )
+    async fn create_multipart(
+        &self,
+        access: &Access,
+        key: &str,
+        deadline: Instant,
+    ) -> Result<String, StorageError> {
+        super::s3_multipart::create(self, access, key, deadline).await
+    }
+
+    async fn upload_part(
+        &self,
+        access: &Access,
+        key: &str,
+        upload_id: &str,
+        number: u16,
+        body: Vec<u8>,
+        deadline: Instant,
+    ) -> Result<String, StorageError> {
+        super::s3_multipart::upload_part(self, access, key, upload_id, number, body, deadline).await
+    }
+
+    async fn complete_multipart(
+        &self,
+        access: &Access,
+        key: &str,
+        upload_id: &str,
+        etags: &[String],
+        deadline: Instant,
+    ) -> Result<(), StorageError> {
+        super::s3_multipart::complete(self, access, key, upload_id, etags, deadline).await
+    }
+
+    async fn abort_multipart(
+        &self,
+        access: &Access,
+        key: &str,
+        upload_id: &str,
+        deadline: Instant,
+    ) -> Result<(), StorageError> {
+        super::s3_multipart::abort(self, access, key, upload_id, deadline).await
+    }
 }

@@ -19,8 +19,10 @@ pub mod probe;
 #[cfg(test)]
 mod probe_tests;
 pub mod s3;
+mod s3_ext;
 #[cfg(test)]
 mod s3_ext_tests;
+mod s3_multipart;
 #[cfg(test)]
 mod s3_tests;
 pub mod service;
@@ -330,6 +332,43 @@ pub trait RemoteStore: Send + Sync {
         access: &Access,
         from: &str,
         to: &str,
+        deadline: Instant,
+    ) -> Result<(), StorageError>;
+    /// Starts an upload in parts of `key` (spec 044 FR-020); returns its id.
+    async fn create_multipart(
+        &self,
+        access: &Access,
+        key: &str,
+        deadline: Instant,
+    ) -> Result<String, StorageError>;
+
+    /// Uploads part `number` (from 1) of an upload; returns the part's ETag.
+    async fn upload_part(
+        &self,
+        access: &Access,
+        key: &str,
+        upload_id: &str,
+        number: u16,
+        body: Vec<u8>,
+        deadline: Instant,
+    ) -> Result<String, StorageError>;
+
+    /// Joins the parts (their ETags in order) into the object.
+    async fn complete_multipart(
+        &self,
+        access: &Access,
+        key: &str,
+        upload_id: &str,
+        etags: &[String],
+        deadline: Instant,
+    ) -> Result<(), StorageError>;
+
+    /// Drops an upload and its parts, so nothing half stays at the provider (FR-020).
+    async fn abort_multipart(
+        &self,
+        access: &Access,
+        key: &str,
+        upload_id: &str,
         deadline: Instant,
     ) -> Result<(), StorageError>;
 }

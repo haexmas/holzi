@@ -4,4 +4,4 @@ import type { SearchHit } from "./SearchHit";
 /**
  * What the window hears of a search.
  */
-export type FilesSearchEvent = { "kind": "hits", hits: Array<SearchHit>, } | { "kind": "done", truncated: boolean, };
+export type FilesSearchEvent = { "kind": "hits", hits: Array<SearchHit>, } | { "kind": "progress", dirs: number, } | { "kind": "done", truncated: boolean, };

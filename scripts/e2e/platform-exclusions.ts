@@ -56,14 +56,6 @@ export const EXCLUSIONS: PlatformExclusion[] = [
     counterCase: 'lock-twice',
   },
   {
-    scenario: 'files-manage',
-    platform: 'android',
-    kind: 'pending',
-    stage: '044 US7',
-    reason:
-      "the scenario changes files, and the only folder `run-as` can fill on the phone is in holzi's own app storage, which is read-only for the user (spec 044 FR-037); it moves to shared storage once all-files access (spec 044 US7, PR H) is there",
-  },
-  {
     scenario: 'passwords-organize',
     platform: 'android',
     kind: 'pending',

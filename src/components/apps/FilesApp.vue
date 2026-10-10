@@ -551,6 +551,7 @@ watch(tabActive, (active) => {
           :hits="search.hits.value"
           :running="search.running.value"
           :truncated="search.truncated.value"
+          :dirs="search.dirs.value"
           :error="search.error.value"
           @open="openHit"
           @reveal="go"
@@ -558,7 +559,7 @@ watch(tabActive, (active) => {
         <FilesDropTarget
           v-else
           class="flex-1"
-          :disabled="folderOwned || !path || storageId !== null"
+          :disabled="folderOwned || !path"
           @drop="importDropped"
         >
           <FilesMenu :entries="menuEntries" @run="runMenu">
