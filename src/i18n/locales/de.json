@@ -835,6 +835,8 @@
       "revoke": "Widerrufen",
       "devices": "Auf deinen Geräten",
       "unnamedDevice": "Gerät ohne Namen",
+      "deviceVersion": "Version {version}",
+      "deviceBehind": "Version {version}, älter als hier: Daten von diesem Gerät kommen teils erst nach seinem Update an",
       "manage": "Verwalten",
       "enabled": "Aktiviert",
       "enabledHint": "Gilt auf allen deinen Geräten. Deaktiviert schließen sich ihre Tabs, die Daten bleiben.",

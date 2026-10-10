@@ -835,6 +835,8 @@
       "revoke": "Revoke",
       "devices": "On your devices",
       "unnamedDevice": "Unnamed device",
+      "deviceVersion": "Version {version}",
+      "deviceBehind": "Version {version}, older than here: some data from this device arrives only after it updates",
       "manage": "Manage",
       "enabled": "Enabled",
       "enabledHint": "Applies on all your devices. When disabled its tabs close; the data stays.",
