@@ -53,6 +53,16 @@ nicht doppelt.
   Wiederverbindungslauf anstoßen; beim Netzwechsel zusätzlich `Endpoint::network_change()`.
   Während der Tresor schließt, geschieht nichts.
 
+## Umsetzung in Stufe 5
+
+- `request_permission(Permission::Microphone)` und `check_permission` über die eigenen Befehle
+  `requestPermissions`/`checkPermissions` des Tauri-Plugins: Die Crate erklärt `RECORD_AUDIO` im
+  Manifest und in `@TauriPlugin(permissions = …)` unter dem Alias `microphone`. Die Anfrage
+  blockiert, bis die Person antwortet; der Kern ruft sie vor jeder Aufnahme
+  (`voice::ensure_microphone`), nach einer Entscheidung antwortet Android sofort. Am Desktop gilt
+  die Berechtigung als erteilt. Eine Ablehnung ist `HolziError::MicrophoneDenied` (vorher das nie
+  erzeugte `PermissionDenied`), und das Eingabefeld erklärt, wo man sie später erteilt.
+
 ## Seite (Kotlin → WebView)
 
 In `load(webView)` setzt die Crate einen `OnApplyWindowInsetsListener` und schreibt bei jeder

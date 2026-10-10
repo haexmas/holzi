@@ -155,3 +155,18 @@ Abdeckungsrechnung der Desktop-Fälle.
   (`presence_loop`, `SyncNode::addr_changes`). Das betrifft echte Geräte hinter NAT genauso.
 - Die Fehlerunterlagen des Telefons enthalten zusätzlich `logcat.txt` (die letzten 20 000 Zeilen):
   Die Logdatei der App bricht auf dem Gerät manchmal früh ab.
+
+## Umsetzung in Stufe 5
+
+- `models-download-confirm` (Desktop und Telefon) braucht kein echtes Modell: Der Debug-Befehl
+  `e2e_stand_in_models` legt Ersatz-Einträge neben den Katalog und schickt HuggingFace-Anfragen an
+  einen Server auf dem Gerät (`models/stand_in.rs`; ein Release-Build lehnt ab, nur `127.0.0.1`
+  und `localhost`). Als Server dient der Ersatz-Anbieter, der jede Anfrage festhält. Geprüft wird:
+  Größe und freier Speicher im Bestätigungsschritt, vor der Bestätigung keine Anfrage, bei einem
+  Eintrag von einem Petabyte die Warnung und „Trotzdem laden“, nach der Bestätigung die Anfrage.
+- `android-microphone`: Die Telefon-Steuerung `refuseMicrophone()` legt die Ablehnung fest wie ein
+  zweites „Nicht zulassen“ (`pm set-permission-flags … user-set user-fixed`); der Diktierknopf
+  zeigt dann die Erklärung, und `start_voice_recording` antwortet mit `MicrophoneDenied`. Die
+  Frage des Systems selbst lässt sich nicht bedienen.
+- Texte prüfen die Szenarien sprachunabhängig über `lib/translations.ts` (der Text eines
+  Schlüssels in allen Sprachen); Szenarien selbst lesen keine Dateien (SC-005).
