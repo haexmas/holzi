@@ -4,14 +4,16 @@
  * search text of the place (`?q=`), in the boxed list style of the other holzi views. While the
  * overview has not been loaded once it shows a spinner instead of the empty state.
  *
- * Spec 036 (US3, US4): above it the breadcrumbs, or the selection bar while rows are selected, and
- * the bar of the Ablage; the subfolders of the open folder as rows that are selected together with
+ * Spec 036 (US3, US4): above it the breadcrumbs, or the selection bar while rows are selected (the
+ * breadcrumbs again while entries are dragged, so a selection can be dropped on them), and the bar
+ * of the Ablage; the subfolders of the open folder as rows that are selected together with
  * entries; the context menus of the rows and of the empty area; one tab stop that the arrow keys
  * move; and the list shortcuts, which the frame hands over while the list shows.
  */
 import type { GroupRow } from '@bindings/GroupRow'
 import type { CopyRequest } from '~/composables/usePasswordsActions'
 import type { BreadcrumbPlace } from '~/lib/passwords/breadcrumb'
+import { ITEMS_MIME } from '~/lib/passwords/dnd'
 import { buildMenu, type MenuCommand } from '~/lib/passwords/menus'
 import { filterHeaders, sortByTitle } from '~/lib/passwords/search'
 import {
@@ -27,6 +29,14 @@ const store = usePasswordsStore()
 const selection = usePasswordsSelectionStore()
 const clipboard = usePasswordsClipboardStore()
 const actions = usePasswordsActions()
+
+/** Entries or folders are being dragged: the breadcrumbs take the selection bar's place as targets. */
+const dragging = ref(false)
+useEventListener(document, 'dragstart', (event: DragEvent) => {
+  dragging.value = event.dataTransfer?.types.includes(ITEMS_MIME) ?? false
+})
+useEventListener(document, 'dragend', () => (dragging.value = false))
+useEventListener(document, 'drop', () => (dragging.value = false))
 
 /** The open folder (`/folder/:id`), or `null` for the top level. */
 const folderId = computed(() => router.route.params.id ?? null)
@@ -300,7 +310,7 @@ watch(focusedId, (id) => {
             leave-to-class="opacity-0"
           >
             <div
-              v-if="selection.active"
+              v-if="selection.active && !dragging"
               key="selection"
               class="flex min-w-0 flex-1"
             >
