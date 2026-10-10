@@ -74,7 +74,10 @@ async function reloadAsync(quiet = false) {
 
 /** Activates a model; `setStt` downloads it first when it is not installed. */
 async function activateAsync(catalogId: string) {
-  if (catalogId === activeId.value || busyId.value) return
+  // The default counts as active before it is installed; downloading it still has to run.
+  const alreadyActive =
+    catalogId === activeId.value && installedIds.value.has(catalogId)
+  if (alreadyActive || busyId.value) return
   busyId.value = catalogId
   savedFlash.value = false
   opError.value = null
@@ -88,6 +91,21 @@ async function activateAsync(catalogId: string) {
   } finally {
     busyId.value = null
   }
+}
+
+/** The model whose download waits for the confirmation (spec 043 FR-028). */
+const confirming = ref<SttCatalogEntry | null>(null)
+const confirmOpen = computed({
+  get: () => confirming.value !== null,
+  set: (value: boolean) => {
+    if (!value) confirming.value = null
+  },
+})
+
+function confirmed() {
+  const entry = confirming.value
+  confirming.value = null
+  if (entry) void activateAsync(entry.id)
 }
 
 onMounted(() => reloadAsync())
@@ -142,7 +160,7 @@ onVaultTablesChanged(['preferences'], () => {
             size="sm"
             :loading="busyId === entry.id"
             :disabled="busyId !== null"
-            @click="activateAsync(entry.id)"
+            @click="confirming = entry"
           >
             {{
               busyId === entry.id
@@ -152,6 +170,13 @@ onVaultTablesChanged(['preferences'], () => {
           </UiButton>
         </SettingsRow>
       </SettingsGroup>
+
+      <ModelsDownloadConfirmStep
+        v-model:open="confirmOpen"
+        :target="confirming && { kind: 'stt', id: confirming.id }"
+        :name="confirming?.name ?? ''"
+        @confirm="confirmed"
+      />
 
       <p v-if="savedFlash" class="px-1 text-xs text-success" role="status">
         {{ t('settings.sttModel.saved') }}

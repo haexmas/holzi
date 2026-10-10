@@ -19,7 +19,7 @@ interface Thread {
 
 /** Anything with a page to call backend commands on: a device of a group. */
 export interface ThreadDevice {
-  instance: Pick<Page, 'invoke'>
+  instance: Pick<Page, 'invoke' | 'exec'>
 }
 
 /** Only the test relay: the built-in servers, which would need a network, are switched off. */
@@ -160,13 +160,17 @@ export async function runLink(
   ctx.step('linked', link.deviceName, link.device)
 }
 
-/** The titles of a device's threads, sorted. */
+/**
+ * The titles of a device's threads, sorted. Taken from the threads on the page and carried through the
+ * driver as one string: whole threads of a large list (10,000 in `sync-lock-during-sync`) are over a
+ * megabyte, which the phone's driver lost as "Unable to receive message from renderer".
+ */
 export async function threadTitles(device: ThreadDevice): Promise<string[]> {
-  const threads = unwrap<Thread[]>(
-    'list_threads',
-    await device.instance.invoke('list_threads'),
+  const titles = await device.instance.exec<string>(
+    `return window.__TAURI_INTERNALS__.invoke('list_threads')
+       .then((threads) => JSON.stringify(threads.map((thread) => thread.title)))`,
   )
-  return threads.map((thread) => thread.title).sort()
+  return (JSON.parse(titles) as string[]).sort()
 }
 
 /** How many threads the device holds. Counted on the page, so a large list is not carried through the driver. */

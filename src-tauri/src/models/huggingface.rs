@@ -711,8 +711,9 @@ impl HfClient {
         })
     }
 
+    /// HuggingFace, or the e2e suite's stand-in server (`stand_in.rs`).
     pub fn production() -> Result<Self> {
-        Self::new(DEFAULT_BASE_URL)
+        Self::new(super::stand_in::hf_base_url())
     }
 
     async fn search(&self, query: Option<&str>, limit: usize) -> Result<Vec<RawModelInfo>> {

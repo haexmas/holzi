@@ -126,8 +126,32 @@ mod imp {
         }
     }
 
+    /// Asks for the microphone before a recording (spec 043 FR-029): on Android the system asks
+    /// the person the first time and answers from then on; elsewhere it is always granted here.
+    async fn ensure_microphone(app: &AppHandle) -> Result<()> {
+        use tauri_plugin_holzi_android::{HolziAndroidExt, Permission, PermissionState};
+        let app = app.clone();
+        // The request blocks until the person answers the system's question.
+        let state = tauri::async_runtime::spawn_blocking(move || {
+            app.holzi_android()
+                .request_permission(Permission::Microphone)
+        })
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|state| state)
+        .map_err(|reason| {
+            log::warn!("microphone permission: {reason}");
+            HolziError::DeviceUnavailable
+        })?;
+        match state {
+            PermissionState::Granted => Ok(()),
+            _ => Err(HolziError::MicrophoneDenied),
+        }
+    }
+
     #[tauri::command]
     pub async fn start_voice_recording(app: AppHandle, voice: State<'_, VoiceState>) -> Result<()> {
+        ensure_microphone(&app).await?;
         let app_for_watcher = app.clone();
         app.state::<VaultGate>()
             .run(async move {
@@ -138,9 +162,8 @@ mod imp {
                 let capture = crate::audio::Capture::start().map_err(|e| match e {
                     crate::audio::AudioError::DeviceUnavailable => HolziError::DeviceUnavailable,
                     // cpal does not surface a distinct OS-permission-denied error
-                    // uniformly across desktop backends; a dedicated
-                    // `PermissionDenied` UX needs real platform permission
-                    // integration (tracked with the T032/T033 mobile gate).
+                    // uniformly across desktop backends; Android asks before this
+                    // (`ensure_microphone`).
                     crate::audio::AudioError::ConfigUnavailable { .. }
                     | crate::audio::AudioError::StartFailed { .. } => HolziError::DeviceUnavailable,
                 })?;

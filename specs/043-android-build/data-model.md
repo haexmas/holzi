@@ -25,19 +25,20 @@ Speichern-Knopf).
 
 Statische Tabelle pro Zielplattform, kein gespeicherter Zustand. ts-rs-Typ:
 
-| Feld              | Typ  | Desktop                   | Android   | Bedeutung                                     |
-| ----------------- | ---- | ------------------------- | --------- | --------------------------------------------- |
-| `platform`        | enum | `linux`/`macos`/`windows` | `android` | Plattform                                     |
-| `cliDelegates`    | bool | ja                        | nein      | Delegates claude/codex                        |
-| `commandTool`     | bool | ja                        | nein      | Werkzeug `run_command` im Chat                |
-| `terminal`        | bool | ja                        | nein      | Terminal für Erweiterungen                    |
-| `folderWatch`     | bool | ja                        | nein      | Ordner beobachten                             |
-| `freePaths`       | bool | ja                        | nein      | freie Dateipfade für Erweiterungen            |
-| `folderPick`      | bool | ja                        | nein      | Ordnerauswahl                                 |
-| `gpuDetection`    | bool | ja                        | nein      | Grafikkarten-Erkennung                        |
-| `relaunchOnClose` | bool | Release: ja               | nein      | Neustart zur Tresorauswahl nach dem Schließen |
-| `screenCapture`   | bool | nein                      | ja        | Bildschirmschutz einstellbar                  |
-| `backGesture`     | bool | nein                      | ja        | System-Zurück-Geste vorhanden                 |
+| Feld              | Typ  | Desktop                   | Android   | Bedeutung                                      |
+| ----------------- | ---- | ------------------------- | --------- | ---------------------------------------------- |
+| `platform`        | enum | `linux`/`macos`/`windows` | `android` | Plattform                                      |
+| `cliDelegates`    | bool | ja                        | nein      | Delegates claude/codex                         |
+| `commandTool`     | bool | ja                        | nein      | Werkzeug `run_command` im Chat                 |
+| `terminal`        | bool | ja                        | nein      | Terminal für Erweiterungen                     |
+| `folderWatch`     | bool | ja                        | nein      | Ordner beobachten                              |
+| `freePaths`       | bool | ja                        | nein      | freie Dateipfade für Erweiterungen             |
+| `folderPick`      | bool | ja                        | nein      | Ordnerauswahl                                  |
+| `gpuDetection`    | bool | ja                        | nein      | Grafikkarten-Erkennung                         |
+| `relaunchOnClose` | bool | Release: ja               | nein      | Neustart zur Tresorauswahl nach dem Schließen  |
+| `screenCapture`   | bool | nein                      | ja        | Bildschirmschutz einstellbar                   |
+| `backGesture`     | bool | nein                      | ja        | System-Zurück-Geste vorhanden                  |
+| `modelPresets`    | enum | `desktop`                 | `phone`   | Vorschläge der Modellkataloge (FR-027, FR-030) |
 
 ## Gewählte Datei (FR-015, FR-022, FR-002a; Vertrag [picked-file.md](./contracts/picked-file.md))
 

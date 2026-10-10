@@ -1006,6 +1006,16 @@
       "select": "Select",
       "noGgufFiles": "No installable GGUF files in this repository."
     },
+    "downloadConfirm": {
+      "title": "Download {name}?",
+      "size": "Size: {size}",
+      "free": "Free space: {free}",
+      "short": "There is probably not enough free space. The download may stop partway.",
+      "unknown": "unknown",
+      "cancel": "Cancel",
+      "start": "Download",
+      "startAnyway": "Download anyway"
+    },
     "filePicker": {
       "size": "Size",
       "sizeUnknown": "unknown",
@@ -1093,6 +1103,7 @@
     "noSpeechDetected": "No speech detected",
     "error": {
       "deviceUnavailable": "No microphone available",
+      "microphoneDenied": "holzi may not use the microphone. You can allow it in the Android settings under Apps › holzi › Permissions › Microphone.",
       "alreadyRecording": "A recording is already in progress",
       "transcriptionFailed": "Transcription failed",
       "generic": "Voice recording failed"

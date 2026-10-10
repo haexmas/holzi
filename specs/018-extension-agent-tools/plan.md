@@ -43,7 +43,8 @@ Laufzeitabhängigkeit
 
 **Testing**: `cargo test` (neu `extensions/agent_tools/*_tests.rs`, `chat/tools/extension_offer_tests.rs`,
 Erweiterungen in `offer_tests.rs`, `install_tests.rs`, `manifest_tests.rs`, `eval/*_tests.rs`; Integration
-`tests/extension_agent_tools.rs`; Vertrag und Mitschnitte in `extensions/agent_tools/contract_tests.rs`),
+`tests/extension_agent_tools.rs`; Vertrag und Mitschnitte in `extensions/agent_tools/contract_tests.rs`
+(T005: `HOLZI_WRITE_MCP_TRANSCRIPTS=1 cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --lib agent_tools`),
 `pnpm check:extensions`, `check:chat-state`, `check:wm-state`, `check:agent-actions`, E2E-Szenario
 `extension-agent-tools.test.ts`; vault-sdk: vitest (Mitschnitte, Schema-Prüfer, Vektoren)
 
@@ -138,10 +139,6 @@ src/
 ├── components/settings/extensions/PermissionsView.vue  # Werkzeuge, Schalter
 ├── components/chat/PermissionPrompt.vue, MessageList.vue  # toolOrigin anzeigen
 └── lib/chat/prompts.ts               # toolSource 'haextension', ToolOrigin
-
-src-tauri/tests/
-├── extension_agent_tools.rs          # Integration: Installation → Angebot → Aufruf
-└── fixtures/extension_e2e/agent-tools.xt (+ Quellen)
 
 scripts/e2e/scenarios/extension-agent-tools.test.ts
 

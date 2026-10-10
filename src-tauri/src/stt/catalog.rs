@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::hardware::tiers::{pick_three, Tier};
 use crate::hardware::{classify, Fit, HardwareInfo, ModelFitInputs};
+use crate::platform::ModelPresets;
 
 const STT_CATALOG_JSON: &str = include_str!("stt_catalog.json");
 
@@ -116,11 +117,14 @@ pub fn entries_with_fit(
 
 /// Picks three tier-labelled model suggestions for the onboarding wizard's
 /// STT step, using the same generic algorithm the LLM catalog uses (see
-/// `hardware::tiers::pick_three`). Returns `None` only when the catalog is
-/// empty (never happens in production — the built-in JSON always has three
-/// entries).
+/// `hardware::tiers::pick_three`). Under the phone presets the suggestion
+/// (`Sweet`) is the smallest model, `whisper-tiny` (spec 043 FR-030); the
+/// larger ones stay choosable as `Max` and in the settings. Returns `None`
+/// only when the catalog is empty (never happens in production — the
+/// built-in JSON always has three entries).
 pub fn recommend_tiers(
     hw: &HardwareInfo,
+    presets: ModelPresets,
 ) -> Result<Option<[SttTierRecommendation; 3]>, crate::stt::SttError> {
     let candidates: Vec<(SttCatalogEntry, Fit)> = entries()?
         .iter()
@@ -130,9 +134,21 @@ pub fn recommend_tiers(
             (entry, fit)
         })
         .collect();
-    let Some(picked) = pick_three(candidates, |e| e.approx_size_bytes, |e| e.id.as_str()) else {
+    let smallest = candidates
+        .iter()
+        .min_by(|a, b| {
+            a.0.approx_size_bytes
+                .cmp(&b.0.approx_size_bytes)
+                .then_with(|| a.0.id.cmp(&b.0.id))
+        })
+        .cloned();
+    let Some(mut picked) = pick_three(candidates, |e| e.approx_size_bytes, |e| e.id.as_str())
+    else {
         return Ok(None);
     };
+    if let (ModelPresets::Phone, Some((entry, fit))) = (presets, smallest) {
+        picked[1] = (Tier::Sweet, entry, fit);
+    }
     Ok(Some(picked.map(|(tier, entry, fit)| {
         SttTierRecommendation { tier, entry, fit }
     })))

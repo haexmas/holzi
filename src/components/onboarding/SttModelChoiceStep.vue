@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TierRecommendation, Tier } from '~/composables/useCatalog'
 import type { SttCatalogEntry } from '~/composables/useSttCatalog'
+import { humanBytes } from '~/lib/models/format'
 
 const { t } = useI18n()
 
@@ -24,12 +25,19 @@ function fitLabelKey(fit: string): string {
   return `onboarding.model.fit.${fit}`
 }
 
-// ponytail: fixed three-tier catalog only; use localized Intl.NumberFormat
-// when the catalog becomes user-configurable or exposes additional units.
-function formatSize(bytes: number): string {
-  const mb = bytes / (1024 * 1024)
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
-  return `${Math.round(mb)} MB`
+/** The choice whose download waits for the confirmation (spec 043 FR-028). */
+const confirming = ref<TierRecommendation<SttCatalogEntry> | null>(null)
+const confirmOpen = computed({
+  get: () => confirming.value !== null,
+  set: (value: boolean) => {
+    if (!value) confirming.value = null
+  },
+})
+
+function confirmed() {
+  const rec = confirming.value
+  confirming.value = null
+  if (rec) emit('choose', rec)
 }
 </script>
 
@@ -53,14 +61,14 @@ function formatSize(bytes: number): string {
         type="button"
         class="flex flex-col gap-2 rounded-md border border-input p-3 text-left hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-progress"
         :disabled="downloadingId !== null"
-        @click="emit('choose', rec)"
+        @click="confirming = rec"
       >
         <span class="text-sm font-semibold uppercase tracking-wide">
           {{ t(tierLabelKey(rec.tier)) }}
         </span>
         <span class="text-base font-medium">{{ rec.entry.name }}</span>
         <span class="text-xs text-muted-foreground">
-          {{ formatSize(rec.entry.approxSizeBytes) }}
+          {{ humanBytes(rec.entry.approxSizeBytes) }}
         </span>
         <span class="text-xs">
           {{ t(fitLabelKey(rec.fit)) }}
@@ -74,6 +82,13 @@ function formatSize(bytes: number): string {
     <p v-if="downloadError" class="text-sm text-destructive" role="alert">
       {{ t('onboarding.sttModel.downloadFailed') }}: {{ downloadError }}
     </p>
+
+    <ModelsDownloadConfirmStep
+      v-model:open="confirmOpen"
+      :target="confirming && { kind: 'stt', id: confirming.entry.id }"
+      :name="confirming?.entry.name ?? ''"
+      @confirm="confirmed"
+    />
 
     <div class="flex items-center justify-between">
       <UiButton

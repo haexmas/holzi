@@ -3,6 +3,7 @@
 use super::catalog::{entries, get, recommend_tiers};
 use crate::hardware::tiers::Tier;
 use crate::hardware::{Backend, HardwareInfo};
+use crate::platform::ModelPresets;
 
 fn hw(backend: Backend, ram: u64, vram: Option<u64>) -> HardwareInfo {
     HardwareInfo {
@@ -68,7 +69,7 @@ fn catalog_entry_serializes_with_frontend_field_names() {
 /// still be exactly three chips (Easy = smallest, Sweet/Max = largest).
 fn recommend_tiers_on_roomy_host_prefers_smallest_for_easy() {
     let info = hw(Backend::Cpu, 16 * 1024 * 1024 * 1024, None);
-    let tiers = recommend_tiers(&info)
+    let tiers = recommend_tiers(&info, ModelPresets::Desktop)
         .expect("catalog should parse")
         .expect("non-empty catalog");
     assert_eq!(tiers[0].tier, Tier::Easy);
@@ -83,8 +84,25 @@ fn recommend_tiers_returns_three_even_on_a_tiny_host() {
     // Even a very constrained host still gets three tier chips — Whisper
     // sizes are small enough that this is mostly a defensive check.
     let info = hw(Backend::Cpu, 256 * 1024 * 1024, None);
-    let tiers = recommend_tiers(&info)
+    let tiers = recommend_tiers(&info, ModelPresets::Desktop)
         .expect("catalog should parse")
         .expect("non-empty catalog");
     assert_eq!(tiers.len(), 3);
+}
+
+#[test]
+fn a_phone_is_offered_the_smallest_model_and_keeps_the_larger_ones() {
+    // Room for every model: on a desktop the suggestion would be the largest.
+    let info = hw(Backend::Cpu, 16 * 1024 * 1024 * 1024, None);
+    let tiers = recommend_tiers(&info, ModelPresets::Phone)
+        .expect("catalog should parse")
+        .expect("non-empty catalog");
+    assert_eq!(tiers[1].tier, Tier::Sweet);
+    assert_eq!(tiers[1].entry.id, "whisper-tiny");
+    assert_eq!(tiers[2].entry.id, "whisper-small");
+
+    let desktop = recommend_tiers(&info, ModelPresets::Desktop)
+        .expect("catalog should parse")
+        .expect("non-empty catalog");
+    assert_eq!(desktop[1].entry.id, "whisper-small");
 }
