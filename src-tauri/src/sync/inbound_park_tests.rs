@@ -532,3 +532,6 @@ mod split;
 
 #[path = "inbound_park_edge_tests.rs"]
 mod edges;
+
+#[path = "inbound_park_schema_change_tests.rs"]
+mod schema_changes;

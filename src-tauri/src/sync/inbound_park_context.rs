@@ -1,19 +1,24 @@
 //! What this device has for the parking decisions of one page (spec 017, research R10, R11): its
-//! synced and extension tables, the groups it parked, and the removals it knows of. Part of
-//! [`super`].
+//! synced and extension tables, the groups it parked, the removals it knows of, and the extensions
+//! it is up to date with. Part of [`super`].
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
+use haex_crdt::rusqlite::params;
 use haex_crdt::{compare_hlc_strings, ColumnChange};
+use uuid::Uuid;
 
 use super::{columns_of, prefix_of, PARKED_TABLE};
 use crate::extensions::ids::ExtensionTable;
+use crate::extensions::registry::status::DeviceStatus;
 use crate::storage::query::Query;
 use crate::sync::replica::synced_tables;
 
 /// The registry table whose `purge_hlc` column records a removal.
 const EXTENSIONS_TABLE: &str = "extensions";
+/// The registry table of an extension's migrations.
+const MIGRATIONS_TABLE: &str = "extension_migrations";
 
 /// What this device has, read once per page.
 #[derive(Debug, Default)]
@@ -38,12 +43,24 @@ pub(in crate::sync::inbound) struct Context {
     applied: HashMap<String, String>,
     /// Prefixes of development versions on this device: their tables are not the synced ones.
     pub(super) dev: HashSet<String>,
+    /// Prefixes of the extensions that are ready or disabled on this device with every migration
+    /// it knows of applied, none arriving in this pull: a table or column such an extension lacks
+    /// is one a device with an older version still writes.
+    pub(super) settled: HashSet<String>,
+}
+
+/// What a group that was applied changed for the groups after it.
+#[derive(Debug, Clone)]
+pub(in crate::sync::inbound) enum Noted {
+    Removal(Removal),
+    /// Migrations of the extension with this prefix arrived: this device has not applied them.
+    Migrations(String),
 }
 
 /// A removal read from a group that was applied: the `purge_hlc` of `prefix` and whether it
 /// deletes data.
 #[derive(Debug, Clone)]
-pub(in crate::sync::inbound) struct Noted {
+pub(in crate::sync::inbound) struct Removal {
     prefix: String,
     extension_id: String,
     purge_hlc: String,
@@ -51,7 +68,10 @@ pub(in crate::sync::inbound) struct Noted {
 }
 
 impl Context {
-    pub(in crate::sync::inbound) fn read(q: &mut impl Query) -> haex_crdt::Result<Self> {
+    pub(in crate::sync::inbound) fn read(
+        q: &mut impl Query,
+        device: Uuid,
+    ) -> haex_crdt::Result<Self> {
         let synced = synced_tables(q)?.into_iter().collect();
         // The read connection allows no PRAGMA; SQLite keeps the CREATE statement current
         // (an added column is appended to it).
@@ -98,12 +118,31 @@ impl Context {
             .iter()
             .map(|(id, purge_hlc, _)| (id.clone(), purge_hlc.clone()))
             .collect();
+        let settled: Vec<(String, String)> = q.query_map(
+            &format!(
+                "SELECT e.public_key, e.name FROM extensions e \
+                 JOIN extension_device_status s ON s.extension_id = e.id \
+                 WHERE s.vault_device_uuid = ?1 AND s.status IN ('{}', '{}') \
+                 AND NOT EXISTS (SELECT 1 FROM {MIGRATIONS_TABLE} m \
+                   WHERE m.extension_id = e.id AND NOT EXISTS ( \
+                     SELECT 1 FROM extension_migrations_applied_no_sync a \
+                     WHERE a.extension_id = m.extension_id AND a.name = m.name))",
+                DeviceStatus::Ready.as_str(),
+                DeviceStatus::Disabled.as_str()
+            ),
+            params![device.to_string()],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
         let mut context = Self {
             synced,
             extension_tables,
             parked,
             applied,
             dev: crate::extensions::dev::prefixes(q)?,
+            settled: settled
+                .iter()
+                .filter_map(|(key, name)| prefix_of(key, name))
+                .collect(),
             ..Self::default()
         };
         for (id, key, name, purge_data, purge_hlc) in registered {
@@ -114,7 +153,7 @@ impl Context {
                 .registry
                 .insert(id.clone(), (prefix.clone(), purge_data));
             if let Some(purge_hlc) = purge_hlc {
-                context.set_purge(Noted {
+                context.set_purge(Removal {
                     prefix,
                     extension_id: id,
                     purge_hlc,
@@ -136,7 +175,7 @@ impl Context {
 
     /// Records a removal of an extension. The filter keeps the highest "delete data" removal;
     /// only the newest removal of either kind decides whether a clear-up is still pending.
-    fn set_purge(&mut self, removal: Noted) {
+    fn set_purge(&mut self, removal: Removal) {
         if removal.purge_data {
             self.raise_purge(&removal.prefix, &removal.purge_hlc);
         }
@@ -171,8 +210,9 @@ impl Context {
         }
     }
 
-    /// Reads the removals an applied group writes, so later groups of the same pull already obey
-    /// them (the clear-up runs only after the pull); returns them for the pages still to come.
+    /// Reads the removals and migrations an applied group writes, so later groups of the same pull
+    /// already obey them (the clear-up and the migrations run only after the pull); returns them
+    /// for the pages still to come.
     pub(in crate::sync::inbound) fn note(&mut self, columns: &[ColumnChange]) -> Vec<Noted> {
         let cell = |row: &str, column: &str| {
             columns.iter().find(|c| {
@@ -181,6 +221,18 @@ impl Context {
         };
         let mut noted = Vec::new();
         for change in columns {
+            if change.table_name == MIGRATIONS_TABLE && change.column_name == "extension_id" {
+                let prefix = change
+                    .value
+                    .as_str()
+                    .and_then(|id| self.registry.get(id))
+                    .map(|(prefix, _)| prefix.clone());
+                if let Some(prefix) = prefix {
+                    self.settled.remove(&prefix);
+                    noted.push(Noted::Migrations(prefix));
+                }
+                continue;
+            }
             if change.table_name != EXTENSIONS_TABLE || change.column_name != "purge_hlc" {
                 continue;
             }
@@ -206,22 +258,27 @@ impl Context {
             let (Some(prefix), Some(purge_data)) = (prefix, purge_data) else {
                 continue;
             };
-            let removal = Noted {
+            let removal = Removal {
                 prefix,
                 extension_id: id,
                 purge_hlc: purge_hlc.to_owned(),
                 purge_data,
             };
             self.set_purge(removal.clone());
-            noted.push(removal);
+            noted.push(Noted::Removal(removal));
         }
         noted
     }
 
-    /// Takes over the removals earlier pages of the same pull noted.
+    /// Takes over what earlier pages of the same pull noted.
     pub(in crate::sync::inbound) fn extend_noted(&mut self, noted: &[Noted]) {
-        for removal in noted {
-            self.set_purge(removal.clone());
+        for noted in noted {
+            match noted {
+                Noted::Removal(removal) => self.set_purge(removal.clone()),
+                Noted::Migrations(prefix) => {
+                    self.settled.remove(prefix);
+                }
+            }
         }
     }
 
