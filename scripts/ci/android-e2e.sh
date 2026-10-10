@@ -28,4 +28,31 @@ curl -fsSL -o "$RUNNER_TEMP/chromedriver.zip" "$url"
 unzip -q -o "$RUNNER_TEMP/chromedriver.zip" -d "$RUNNER_TEMP"
 export E2E_CHROMEDRIVER="$RUNNER_TEMP/chromedriver-linux64/chromedriver"
 
+# The emulator's own state, written on this machine for the whole run: when the emulator stops
+# answering (adb "device offline", a web view renderer lost under load), a scenario's material can no
+# longer read logcat from the phone. Uploaded with the failure material.
+health="src-tauri/target/e2e/android-shard-$shard"
+mkdir -p "$health"
+(
+  # A new logcat after a reconnect starts at the newest line instead of repeating the buffer.
+  since=()
+  while true; do
+    adb logcat -v time "${since[@]}" '*:I' || true
+    echo "== logcat ended $(date -u +%FT%TZ)"
+    since=(-T 1)
+    sleep 2
+  done
+) >"$health/logcat.txt" 2>&1 &
+logcat_loop=$!
+(
+  while true; do
+    echo "== $(date -u +%FT%TZ)"
+    timeout 10 adb shell 'head -3 /proc/meminfo; cat /proc/pressure/memory /proc/loadavg 2>/dev/null; ps -A -o RSS,NAME | sort -rn | head -5' 2>&1 ||
+      echo "adb: no answer"
+    sleep 5
+  done
+) >"$health/emulator-health.txt" 2>&1 &
+health_loop=$!
+trap 'pkill -P "$logcat_loop" 2>/dev/null; kill "$logcat_loop" "$health_loop" 2>/dev/null || true' EXIT
+
 corepack pnpm test:e2e --platform android --apk "$apk" --shard "$shard/$shards"
