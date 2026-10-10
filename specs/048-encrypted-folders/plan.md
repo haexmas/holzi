@@ -84,7 +84,7 @@ _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 | graphify vor neuen Artefakten                      | ✅ Recherche über graphify; vorhandene Bausteine (`content_keys`, `random_bytes`, `StreamingSource`, `PermissionRequestDialog`, `files/access.rs`, `FakeStore`) werden erweitert statt dupliziert |
 | Eine Umsetzung je Regel                            | ✅ ein Format-Modul für Dateibrowser, Agents und Erweiterungen; Sync-Regeln und Umbau 027/029 nutzen es später (FR-041)                                                                           |
 | 500 Zeilen je Datei                                | ⚠️ `browser_commands.rs` hat 817 Zeilen; Teilen ist Lieferung B0, bevor 048 dort ergänzt                                                                                                          |
-| ADR bei Prinzip-relevanten Entscheidungen          | ✅ ADR 0012 „Format verschlüsselter Ordner“ im Docs-PR, weil Sync-Regeln und Spaces darauf bauen                                                                                                  |
+| ADR bei Prinzip-relevanten Entscheidungen          | ✅ ADR 0013 „Format verschlüsselter Ordner“ im Docs-PR, weil Sync-Regeln und Spaces darauf bauen                                                                                                  |
 | Keine Agent-Attribution in Commits                 | ✅                                                                                                                                                                                                |
 
 Nach dem Entwurf erneut geprüft: keine Verstöße; die Überlänge von `browser_commands.rs` ist Altlast aus
@@ -108,7 +108,7 @@ specs/048-encrypted-folders/
 │   └── bridge.md           # Funktionen für Erweiterungen, vault-sdk
 ├── checklists/requirements.md
 └── tasks.md                # /speckit-tasks
-docs/adr/0012-encrypted-folder-format.md
+docs/adr/0013-encrypted-folder-format.md
 docs/formats/encrypted-folder-v1.md        # ab PR B
 ```
 
@@ -162,7 +162,7 @@ ohne Ein- und Ausgabe, damit Sync-Regeln und Spaces es ohne den Dateibrowser nut
 
 Jeder PR ist für sich prüfbar und lauffähig.
 
-1. **PR A (Docs)**: Spec, Plan, Research, Data Model, Contracts, Quickstart, Tasks, ADR 0012, Zeile in
+1. **PR A (Docs)**: Spec, Plan, Research, Data Model, Contracts, Quickstart, Tasks, ADR 0013, Zeile in
    `plans/README.md`.
 2. **PR B0 (Refactor)**: `browser_commands.rs` in `files/commands/` teilen, ohne Verhaltensänderung.
 3. **PR B (Format)**: `files/encrypted/format/`, Testvektoren, `docs/formats/encrypted-folder-v1.md`,
