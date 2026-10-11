@@ -331,9 +331,14 @@ export async function runScenario(
 
   if (failure !== undefined) {
     const failedStep = failedStepFor(failure, steps, pendingStep)
+    const message = failure instanceof Error ? failure.message : String(failure)
     return finish({
       status: 'failed',
-      error: failure instanceof Error ? failure.message : String(failure),
+      // A teardown that failed too is part of the picture (it can leave the device to the next one).
+      error:
+        teardownErrors.length > 0
+          ? `${message}\nteardown failed: ${teardownErrors.join('; ')}`
+          : message,
       failedStep,
       material: join(env.runDir, name),
     })
